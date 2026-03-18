@@ -10,8 +10,8 @@ import (
 
 func (w *Wallet) GetTokenChainByTokenID(tokenID string) ([]models.TokenChain, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
-		`SELECT token_id, transaction_id, role, height, created_at, updated_at
-		 FROM tokenchain WHERE token_id = $1 ORDER BY height`, tokenID,
+		`SELECT token_id, transaction_id, role, position, created_at, updated_at
+		 FROM tokenchain WHERE token_id = $1 ORDER BY position`, tokenID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("GetTokenChainByTokenID: %w", err)
@@ -20,23 +20,23 @@ func (w *Wallet) GetTokenChainByTokenID(tokenID string) ([]models.TokenChain, er
 	return pgx.CollectRows(rows, pgx.RowToStructByName[models.TokenChain])
 }
 
-// GetTokenChainByTokenIDAndChainHeight fetches the token chain from the input height, with a limit of 100 transactions  
-func (w *Wallet) GetTokenChainByTokenIDAndChainHeight(tokenID string, chainHeight int) ([]models.TokenChain, error) {
-	// 1. `unnest(...)` : expands the subarray into individual rows
-	// 2. `WITH ORDINALITY` : adds an `ord` column tracking the original position in the array
-	// 3. `JOIN tokenchain tc ON tc.id = u.id` : fetches the full row for each id
-	// 4. `ORDER BY u.ord` : returns rows in the same order as the subarray
+// GetTokenChainByTokenIDAndPrevTxnId fetches the token chain from the input transaction id, with a limit of 100 transactions
+func (w *Wallet) GetTokenChainByTokenIDAndPrevTxnId(tokenID string, txnID string) ([]models.TokenChain, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
 		`SELECT tc.*
-			FROM tokenchain_index tci
-			JOIN LATERAL unnest(tci.index[$1:array_length(tci.index, 1)]) WITH ORDINALITY AS u(id, ord) ON true
-			JOIN tokenchain tc ON tc.id = u.id
-			WHERE tci.token_id = $2
-			ORDER BY u.ord
-			LIMIT 100`, chainHeight, tokenID,
+			FROM tokenchain tc
+			WHERE tc.token_id = $1
+			AND tc.position >= (
+				SELECT position
+				FROM tokenchain
+				WHERE token_id = $1
+				AND prev_txn_id = $2
+				)
+			ORDER BY tc.position
+			LIMIT 100`, tokenID, txnID,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("GetTokenChainByTokenIDAndChainHeight: %w", err)
+		return nil, fmt.Errorf("GetTokenChainByTokenIDAndPrevTxnId: %w", err)
 	}
 
 	return pgx.CollectRows(rows, pgx.RowToStructByName[models.TokenChain])
@@ -126,25 +126,25 @@ func (w *Wallet) GetRoleOfTokenIdInLatestTxn(tokenID string) (int16, error) {
 
 func (w *Wallet) AddTokenChainEntry(entry *models.TokenChain) error {
 	_, err := w.db.Pool().Exec(w.Ctx, `
-		INSERT INTO tokenchain (token_id, transaction_id, role, height, created_at, updated_at)
+		INSERT INTO tokenchain (token_id, transaction_id, role, position, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, NOW(), NOW())
-	`, entry.TokenID, entry.TransactionID, entry.Role, entry.Height)
+	`, entry.TokenID, entry.TransactionID, entry.Role, entry.Position)
 	if err != nil {
 		return fmt.Errorf("AddTokenChainEntry: %w", err)
 	}
 	return nil
 }
 
-func (w *Wallet) GetTransactionAndRoleAtHeight(tokenID string, height int64) (*models.Transactions, int16, error) {
+func (w *Wallet) GetTransactionAndRoleAtHeight(tokenID string, position int64) (*models.Transactions, int16, error) {
 	row := w.db.Pool().QueryRow(w.Ctx, `
-		SELECT transaction_id,role FROM tokenchain WHERE token_id = $1 AND height = $2 
-		ORDER BY created_at DESC LIMIT 1`, tokenID, height,
+		SELECT transaction_id,role FROM tokenchain WHERE token_id = $1 AND position = $2 
+		ORDER BY created_at DESC LIMIT 1`, tokenID, position,
 	)
 	var txID string
 	var tokenRoleInTx int16
 	if err := row.Scan(&txID, &tokenRoleInTx); err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, -1, fmt.Errorf("transaction not found at height %d for token %s", height, tokenID)
+			return nil, -1, fmt.Errorf("transaction not found at position %d for token %s", position, tokenID)
 		}
 		return nil, -1, fmt.Errorf("GetTransactionAtHeight scan: %w", err)
 	}
@@ -158,13 +158,14 @@ func (w *Wallet) GetTransactionAndRoleAtHeight(tokenID string, height int64) (*m
 }
 
 // GetAllTransactionInfoInBytesByTokenId fetches entire token chain, fetches each transaction by transactionId and
-// converts into bytes, and returns the chain of transactions in byte array
-func (w *Wallet) GetAllTransactionInfoInBytesByTokenId(tokenID string, initialChainHeight int) ([][]byte, error) {
+// converts into bytes, and returns the chain of ordered transactions in byte array with a limit of 100 transactions, 
+// and the last transaction id of the array in order
+func (w *Wallet) GetAllTransactionInfoInBytesByTokenId(tokenID string, txnId string) ([][]byte, string, error) {
 	txnChain := make([][]byte, 0)
-	// get entire token chain of the token
-	tokenChain, err := w.GetTokenChainByTokenIDAndChainHeight(tokenID, initialChainHeight)
+	// get token chain of the token with height limit of 100
+	tokenChain, err := w.GetTokenChainByTokenIDAndPrevTxnId(tokenID, txnId)
 	if err != nil {
-		return nil, fmt.Errorf("GetAllTransactionsInBytesByTokenId: failed to get token chain; error: %v ", err)
+		return nil, "", fmt.Errorf("GetAllTransactionsInBytesByTokenId: failed to get token chain; error: %v ", err)
 	}
 
 	// process each txn in the chain in a loop
@@ -172,15 +173,15 @@ func (w *Wallet) GetAllTransactionInfoInBytesByTokenId(tokenID string, initialCh
 		// fetch the txn by txnId
 		txn, err := w.GetTransactionByID(txnInfo.TransactionID)
 		if err != nil {
-			return nil, fmt.Errorf("GetAllTransactionsInBytesByTokenId: failed to get transaction by id; error: %v ", err)
+			return nil, "", fmt.Errorf("GetAllTransactionsInBytesByTokenId: failed to get transaction by id; error: %v ", err)
 		}
 
 		// convert txn to bytes
 		txnBytes, err := util.TransactionToBytes(txn)
 		if err != nil {
-			return nil, fmt.Errorf("GetAllTransactionsInBytesByTokenId: failed to convert transaction into bytes; error: %v ", err)
+			return nil, "", fmt.Errorf("GetAllTransactionsInBytesByTokenId: failed to convert transaction into bytes; error: %v ", err)
 		}
 		txnChain = append(txnChain, txnBytes)
 	}
-	return txnChain, nil
+	return txnChain, tokenChain[len(tokenChain)-1].TransactionID, nil
 }
