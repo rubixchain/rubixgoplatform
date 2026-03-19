@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -187,7 +188,7 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 	nftTokenDetails := wallet.NFT{
 		TokenID:     deployReq.NFT,
 		DID:         deployReq.DID,
-		TokenStatus: wallet.TokenIsFree,
+		TokenStatus: constants.TokenStatus_Free,
 		TokenValue:  floatPrecision(deployReq.NFTValue, MaxDecimalPlaces),
 		Metadata:    deployReq.NFTMetadata,
 		Filename:    deployReq.NFTFileName,
@@ -384,7 +385,7 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 		}
 	}
 
-	err = c.w.UpdateNFTStatus(executeReq.NFT, wallet.TokenIsTransferred, local, executeReq.Receiver, executeReq.NFTValue)
+	err = c.w.UpdateNFTStatus(executeReq.NFT, constants.TokenStatus_Transferred, local, executeReq.Receiver, executeReq.NFTValue)
 	if err != nil {
 		c.log.Error("Failed to update NFT status after transferring", err)
 	}
@@ -490,9 +491,9 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 	var tokenStatus int
 	// Add check for receiverDid . In case of self-execution, it will be empty
 	if !c.w.IsDIDExist(receiverDid) {
-		tokenStatus = wallet.TokenIsTransferred
+		tokenStatus = constants.TokenStatus_Transferred
 	} else {
-		tokenStatus = wallet.TokenIsFree
+		tokenStatus = constants.TokenStatus_Free
 	}
 
 	err = c.w.CreateNFT(&wallet.NFT{TokenID: nft, DID: currentOwner, TokenStatus: tokenStatus, TokenValue: newEvent.NFTValue, Metadata: newEvent.NFTMetadata, Filename: newEvent.NFTFileName}, c.w.IsNFTExists(nft))
