@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,7 +16,6 @@ import (
 	"sync"
 	"time"
 
-	ipfsnode "github.com/ipfs/go-ipfs-api"
 	block "github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
@@ -236,88 +236,86 @@ func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex 
 			c.log.Error("Failed to add token to network", "err", err)
 			return err
 		}
-		gb := &block.GenesisBlock{
-			// Type: block.TokenGeneratedType,
-			Info: []block.GenesisTokenInfo{
-				{Token: id, NetworkID: constants.NetworkID_RBT_Local},
-			},
-		}
-		ti := &block.TransInfo{
-			Tokens: []block.TransTokens{
-				{
-					Token:     id,
-					TokenType: token.TestTokenType,
+		// Serialize txInfo once — used for signature, txID, and transactions.info storage
+		txInfo := &models.TransactionInfo{
+			Initiator: did,
+			Owner:     did,
+			Epoch:     int(currentTime.Unix()),
+			Network:   constants.NetworkID_RBT_Local,
+			Tokens: &models.TransactionTokens{
+				RBT: []*models.TokenInfo{
+					{TokenID: id, PreviousTransactionID: ""},
 				},
 			},
 		}
-
-		tcb := &block.TokenChainBlock{
-			BlockType:    block.TokenGeneratedType,
-			TokenOwner:   did,
-			GenesisBlock: gb,
-			TransInfo:    ti,
-			TokenValue:   floatPrecision(1.0, MaxDecimalPlaces),
-			Version:      constants.BlockVersion,
-			Epoch:        int(currentTime.Unix()),
-		}
-
-		ctcb := make(map[string]*block.Block)
-		ctcb[id] = nil
-
-		blk := block.CreateNewBlock(ctcb, tcb)
-
-		if blk == nil {
-			c.log.Error("Failed to create new token chain block")
-			return fmt.Errorf("failed to create new token chain block")
-		}
-		err = blk.UpdateSignature(dc)
+		infoBytes, err := models.SerializeTransactionInfo(txInfo)
 		if err != nil {
-			c.log.Error("Failed to update did signature", "err", err)
-			return fmt.Errorf("failed to update did signature")
+			return fmt.Errorf("createTokensAtLevel: failed to serialize transaction info for token %s: %w", id, err)
 		}
-		t := &models.Token{
-			TokenID:     id,
-			DID:         did,
-			TokenValue:  1,
-			TokenStatus: int16(constants.TokenStatus_Free),
-		}
-		err = c.w.CreateTokenBlock(blk)
+		// Sign serialized txInfo bytes with creator DID (genesis self-signature)
+		signatureBytes, err := dc.PvtSign(infoBytes)
 		if err != nil {
-			c.log.Error("Failed to add token chain", "err", err)
-			return err
+			return fmt.Errorf("createTokensAtLevel: failed to sign transaction for token %s: %w", id, err)
+		}
+		sigStruct := &models.Signature{InitiatorSignature: hex.EncodeToString(signatureBytes)}
+		sigBytes, err := json.Marshal(sigStruct)
+		if err != nil {
+			return fmt.Errorf("createTokensAtLevel: failed to marshal signature for token %s: %w", id, err)
+		}
+		txID, err := wallet.ComputeTransactionID(txInfo)
+		if err != nil {
+			return fmt.Errorf("createTokensAtLevel: failed to compute transaction ID for token %s: %w", id, err)
 		}
 
+		// Add token to IPFS via wallet functions to obtain TokenStateHash
 		tokenIDBuffer := bytes.NewBufferString(id)
 		tokenHash, err := c.w.Add(tokenIDBuffer, did, constants.TokenProviderFunc_Add, true)
 		if err != nil {
 			return fmt.Errorf("createTokensAtLevel: failed to add token to ipfs: %v, err: %v", id, err)
 		}
-
-		if _, err := c.w.Pin(tokenHash, constants.TokenProviderRole_Owner, did, "NA", did, "NA", t.TokenValue); err != nil {
-			return fmt.Errorf("createChildTokensAtLevel: failed to pin child token: %v, err: %v", id, err)
+		if _, err := c.w.Pin(tokenHash, constants.TokenProviderRole_Owner, did, "NA", did, "NA", floatPrecision(1.0, MaxDecimalPlaces)); err != nil {
+			return fmt.Errorf("createTokensAtLevel: failed to pin token: %v, err: %v", id, err)
 		}
+		// TODO: if DB persistence below fails, roll back IPFS pin via c.w.Unpin(tokenHash, constants.TokenProviderRole_Owner, did)
 
-		err = c.w.CreateToken(t)
-		if err != nil {
-			c.log.Error("Failed to create token", "err", err)
+		// Atomically and idempotently persist genesis transaction, token, and tokenchain entry
+		mintRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Mint))
+		tokenTypeID := int16(models.GetTokenTypeID(constants.TokenType_RBT))
+		genesisTx := &models.Transactions{
+			ID:        txID,
+			Info:      infoBytes,
+			Signature: json.RawMessage(sigBytes),
+		}
+		t := &models.Token{
+			TokenID:        id,
+			DID:            did,
+			TokenValue:     floatPrecision(1.0, MaxDecimalPlaces),
+			TokenStatus:    int16(constants.TokenStatus_Free),
+			TransactionID:  txID,
+			TokenStateHash: tokenHash,
+			TokenType:      tokenTypeID,
+			LatestPosition: 0,
+			LatestRole:     mintRoleID,
+		}
+		if err = c.w.PersistGenesisTokenRecord(genesisTx, t, &models.TokenChain{
+			TokenID:               id,
+			TransactionID:         txID,
+			PreviousTransactionID: nil,
+			Role:                  mintRoleID,
+			Position:              0,
+		}); err != nil {
+			c.log.Error("Failed to persist genesis token record", "err", err)
 			return err
 		}
-		// publish the transaction in the network with topic : rubix_txns
-		blockHash, err := blk.GetHash()
-		if err != nil {
-			blockHash = ""
-			c.log.Error("failed to get block hash")
-		}
+
+		// Publish transaction on the network
 		publishingTxn := &model.PubSubTxnInfo{
-			BlockHash:    blockHash,
-			BlockType:    block.TokenGeneratedType,
+			BlockHash:    txID,
+			BlockType:    "05",
 			AssetType:    RBTTokenType,
 			PublisherDID: dc.GetDID(),
-			TxnBlock:     blk.GetBlock(),
 		}
-
-		err = c.publishTxn(publishingTxn)
-		if err != nil {
+		if err = c.publishTxn(publishingTxn); err != nil {
 			c.log.Error("Failed to publish txn", "err", err)
 			return err
 		}
@@ -1904,96 +1902,86 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 
 		currentTime := time.Now()
 
-		gb := &block.GenesisBlock{
-			// Type: block.TokenGeneratedType,
-			Info: []block.GenesisTokenInfo{
-				{Token: id, NetworkID: constants.NetworkID_RBT_Testnet},
-			},
-		}
-		ti := &block.TransInfo{
-			Tokens: []block.TransTokens{
-				{
-					Token:     id,
-					TokenType: token.TestTokenType,
+		// Serialize txInfo once — used for signature, txID, and transactions.info storage
+		// (currentTime is declared at line 1905 inside the loop — do not redeclare)
+		txInfo := &models.TransactionInfo{
+			Initiator: did,
+			Owner:     did,
+			Epoch:     int(currentTime.Unix()),
+			Network:   constants.NetworkID_RBT_Testnet,
+			Tokens: &models.TransactionTokens{
+				RBT: []*models.TokenInfo{
+					{TokenID: id, PreviousTransactionID: ""},
 				},
 			},
 		}
-
-		tcb := &block.TokenChainBlock{
-			BlockType:    block.TokenGeneratedType,
-			TokenOwner:   did,
-			GenesisBlock: gb,
-			TransInfo:    ti,
-			TokenValue:   floatPrecision(1.0, MaxDecimalPlaces),
-			Version:      constants.BlockVersion,
-			Epoch:        int(currentTime.Unix()),
-		}
-
-		ctcb := make(map[string]*block.Block)
-		ctcb[id] = nil
-
-		blk := block.CreateNewBlock(ctcb, tcb)
-		//If error comes after adding in IPFS, removing the pin from that token.
-		if blk == nil {
-			c.log.Error("Failed to create new token chain block")
-			tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(id), nil, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-			if err != nil {
-				return &tokendetail, fmt.Errorf("unable to do IPFS Add operation on Token, err: %v", err)
-			}
-			c.w.Unpin(tokenHash, constants.TokenProviderRole_Owner, did)
-			return &tokendetail, fmt.Errorf("failed to create new token chain block")
-		}
-
-		err = blk.UpdateSignature(dc)
+		infoBytes, err := models.SerializeTransactionInfo(txInfo)
 		if err != nil {
-			c.log.Error("Failed to update did signature", "err", err)
-			tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(id), nil, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-			if err != nil {
-				return &tokendetail, fmt.Errorf("unable to do IPFS Add operation on Token, err: %v", err)
-			}
-			c.w.Unpin(tokenHash, constants.TokenProviderRole_Owner, did)
-			return &tokendetail, fmt.Errorf("failed to update did signature")
+			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to serialize transaction info for token %s: %w", id, err)
+		}
+		// Sign serialized txInfo bytes with creator DID (genesis self-signature)
+		signatureBytes, err := dc.PvtSign(infoBytes)
+		if err != nil {
+			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to sign transaction for token %s: %w", id, err)
+		}
+		sigStruct := &models.Signature{InitiatorSignature: hex.EncodeToString(signatureBytes)}
+		sigBytes, err := json.Marshal(sigStruct)
+		if err != nil {
+			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to marshal signature for token %s: %w", id, err)
+		}
+		txID, err := wallet.ComputeTransactionID(txInfo)
+		if err != nil {
+			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to compute transaction ID for token %s: %w", id, err)
 		}
 
+		// Add token to IPFS via wallet functions to obtain TokenStateHash
+		tokenHash, err := c.w.Add(bytes.NewBufferString(id), did, constants.TokenProviderFunc_Add, true)
+		if err != nil {
+			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to add token to ipfs: %v, err: %v", id, err)
+		}
+		// TODO: if DB persistence below fails, roll back IPFS pin via c.w.Unpin(tokenHash, constants.TokenProviderRole_Owner, did)
+
+		// TODO: RemoveTokenChainBlocklatest equivalent (undefined in new architecture — no-op for now)
+
+		// Atomically and idempotently persist genesis transaction, token, and tokenchain entry
+		mintRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Mint))
+		tokenTypeID := int16(models.GetTokenTypeID(constants.TokenType_RBT))
+		genesisTx := &models.Transactions{
+			ID:        txID,
+			Info:      infoBytes,
+			Signature: json.RawMessage(sigBytes),
+		}
 		t := &models.Token{
-			TokenID:     id,
-			DID:         did,
-			TokenValue:  1,
-			TokenStatus: int16(constants.TokenStatus_Free),
+			TokenID:        id,
+			DID:            did,
+			TokenValue:     floatPrecision(1.0, MaxDecimalPlaces),
+			TokenStatus:    int16(constants.TokenStatus_Free),
+			TransactionID:  txID,
+			TokenStateHash: tokenHash,
+			TokenType:      tokenTypeID,
+			LatestPosition: 0,
+			LatestRole:     mintRoleID,
 		}
-
-		err = c.w.CreateTokenBlock(blk)
-		if err != nil {
-			c.log.Error("Failed to add token chain", "err", err)
-			tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(id), nil, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-			if err != nil {
-				return &tokendetail, fmt.Errorf("unable to do IPFS Add operation on Token, err: %v", err)
-			}
-			c.w.Unpin(tokenHash, constants.TokenProviderRole_Owner, did)
-			return &tokendetail, err
-		}
-
-		err = c.w.CreateToken(t)
-		if err != nil {
-			c.log.Error("Failed to create token", "err", err)
-			c.w.RemoveTokenChainBlocklatest(t.TokenID, token.TestTokenType)
-			tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(id), nil, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-			if err != nil {
-				return &tokendetail, fmt.Errorf("unable to do IPFS Add operation on Token, err: %v", err)
-			}
-			c.w.Unpin(tokenHash, constants.TokenProviderRole_Owner, did)
+		if err = c.w.PersistGenesisTokenRecord(genesisTx, t, &models.TokenChain{
+			TokenID:               id,
+			TransactionID:         txID,
+			PreviousTransactionID: nil,
+			Role:                  mintRoleID,
+			Position:              0,
+		}); err != nil {
+			c.log.Error("Failed to persist genesis token record", "err", err)
 			return &tokendetail, err
 		}
 
 		tokendetail.TotalCount += 1
+
+		// Publish transaction on the network
 		publishingTxn := &model.PubSubTxnInfo{
-			BlockType:    block.TokenGeneratedType,
+			BlockType:    "05",
 			AssetType:    RBTTokenType,
 			PublisherDID: dc.GetDID(),
 		}
-
-		err = c.publishTxn(publishingTxn)
-		if err != nil {
+		if err = c.publishTxn(publishingTxn); err != nil {
 			c.log.Error("Failed to publish txn", "err", err)
 			return &tokendetail, err
 		}

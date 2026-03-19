@@ -1,5 +1,7 @@
 package models
 
+import "encoding/json"
+
 type TransactionInfo struct {
 	Initiator       string             `json:"initiator"`
 	Owner           string             `json:"owner"`
@@ -88,4 +90,13 @@ type PledgeTokenResponse struct {
 
 type SendTokensRequest struct {
 	Tokens *TransactionTokens `json:"tokens"`
+}
+
+// SerializeTransactionInfo produces a deterministic JSON encoding of txInfo.
+// TransactionInfo and all nested types (TransactionTokens, TokenInfo, QuorumInfo) use only
+// struct/slice/primitive fields — no map fields — so json.Marshal output is field-order-deterministic.
+// This is the single source of truth for all hashing, signing, and persistence of TransactionInfo.
+// Struct field order MUST NOT change; do NOT introduce map fields into TransactionInfo or its nested types.
+func SerializeTransactionInfo(txInfo *TransactionInfo) ([]byte, error) {
+	return json.Marshal(txInfo)
 }

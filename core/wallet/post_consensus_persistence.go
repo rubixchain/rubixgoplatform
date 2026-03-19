@@ -3,6 +3,7 @@ package wallet
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -129,7 +130,7 @@ func buildTransactionRecord(req *PostConsensusPersistenceRequest) (*models.Trans
 			}
 		}
 		if req.TransactionInfo != nil {
-			txID, err := computeTransactionID(req.TransactionInfo)
+			txID, err := ComputeTransactionID(req.TransactionInfo)
 			if err != nil {
 				return nil, fmt.Errorf("post-consensus persistence: compute transaction id: %w", err)
 			}
@@ -151,12 +152,12 @@ func buildTransactionRecordFromPayload(txInfo *models.TransactionInfo, signature
 		return nil, fmt.Errorf("post-consensus persistence: transaction signature is required")
 	}
 
-	txID, err := computeTransactionID(txInfo)
+	txID, err := ComputeTransactionID(txInfo)
 	if err != nil {
 		return nil, fmt.Errorf("post-consensus persistence: compute transaction id: %w", err)
 	}
 
-	infoBytes, err := json.Marshal(txInfo)
+	infoBytes, err := models.SerializeTransactionInfo(txInfo)
 	if err != nil {
 		return nil, fmt.Errorf("post-consensus persistence: marshal transaction info: %w", err)
 	}
@@ -173,14 +174,17 @@ func buildTransactionRecordFromPayload(txInfo *models.TransactionInfo, signature
 	}, nil
 }
 
-func computeTransactionID(txInfo *models.TransactionInfo) (string, error) {
-	txInfoBytes, err := json.Marshal(txInfo)
+// ComputeTransactionID computes a deterministic hex-encoded SHA3-256 transaction ID from txInfo
+// using models.SerializeTransactionInfo as the canonical encoding.
+// Returns hex string (not raw bytes) for DB and cross-node compatibility.
+func ComputeTransactionID(txInfo *models.TransactionInfo) (string, error) {
+	txInfoBytes, err := models.SerializeTransactionInfo(txInfo)
 	if err != nil {
 		return "", err
 	}
 
 	hash := sha3.Sum256(txInfoBytes)
-	return string(hash[:]), nil
+	return hex.EncodeToString(hash[:]), nil
 }
 
 func validatePostConsensusRequest(req *PostConsensusPersistenceRequest, transactionID string) error {
