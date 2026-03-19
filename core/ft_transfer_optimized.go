@@ -10,6 +10,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
 // OptimizedFTTransferLocking handles efficient locking of FT tokens for large transfers
@@ -60,7 +61,7 @@ func (c *Core) OptimizedFTTransferLocking(ftsForTxn []wallet.FTToken, did string
 			for job := range jobs {
 				// Lock the token
 				job.token.TokenStatus = constants.TokenStatus_Locked
-				err := c.s.Update(wallet.FTTokenStorage, &job.token, "token_id=?", job.token.TokenID)
+				err := c.w.LockTokenByID(job.token.TokenID)
 				if err != nil {
 					errors <- fmt.Errorf("failed to lock FT token %s: %v", job.token.TokenID, err)
 					continue
@@ -156,8 +157,7 @@ func (c *Core) rollbackFTLocking(ftsForTxn []wallet.FTToken) {
 		go func(idx int) {
 			defer wg.Done()
 			token := ftsForTxn[idx]
-			token.TokenStatus = constants.TokenStatus_Free
-			err := c.s.Update(wallet.FTTokenStorage, &token, "token_id=?", token.TokenID)
+			err := c.w.UpdateToken(&models.Token{TokenID: token.TokenID, TokenStatus: int16(constants.TokenStatus_Free)})
 			if err != nil {
 				c.log.Error("Failed to rollback FT token lock", 
 					"token_id", token.TokenID, 

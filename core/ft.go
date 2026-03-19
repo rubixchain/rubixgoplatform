@@ -21,6 +21,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 
@@ -341,66 +342,15 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		c.log.Debug("burnt token block published ")
 	}
 
-	// --- Batch Write FTs to Storage using WriteBatch ---
-	var batch []*wallet.FTToken
-	for i := range newFTs {
-		if newFTs[i].DID == did {
-			newFTs[i].CreatorDID = did
-		} else {
-			tt := c.TokenType(FTString)
-			blk := c.w.GetGenesisTokenBlock(newFTs[i].TokenID, tt)
-			if blk == nil {
-				c.log.Error("failed to get genesis block for Parent DID updation, invalid token chain")
-				return fmt.Errorf("failed to get genesis block for Parent DID updation, invalid token chain")
-			}
-			FTOwner := blk.GetOwner()
-			newFTs[i].CreatorDID = FTOwner
-			c.log.Debug("adding new ft to table with count ", i)
-		}
-		batch = append(batch, &newFTs[i])
-	}
-	batchSize := 1000 // or tune as needed
-	// 1. Write to SQL DB first
-	err = c.w.S().WriteBatch(wallet.FTTokenStorage, batch, batchSize)
-	if err != nil {
-		c.log.Error("Failed to batch write FT tokens (SQL phase)", "err", err)
-		return err
-	}
-
-	// 2. Write all token chain blocks to LevelDB in a batch
-	var blockPairs []struct {
-		Token string
-		Block *block.Block
-	}
+	// --- Write FT tokens to PostgreSQL ---
 	for i := range newFTs {
 		ft := &newFTs[i]
-		blockObj := c.w.GetLatestTokenBlock(ft.TokenID, c.TokenType(FTString))
-		if blockObj == nil {
-			c.log.Error("Failed to get latest token block for FT", "token_id", ft.TokenID)
-			// Rollback SQL writes
-			for _, rollbackFT := range newFTs {
-				errDel := c.w.S().Delete(wallet.FTTokenStorage, &rollbackFT, "token_id=?", rollbackFT.TokenID)
-				if errDel != nil {
-					c.log.Error("Rollback failed: could not delete FT from SQL after LevelDB failure", "token_id", rollbackFT.TokenID, "err", errDel)
-				}
-			}
-			return fmt.Errorf("failed to get latest token block for FT %s", ft.TokenID)
-		}
-		blockPairs = append(blockPairs, struct {
-			Token string
-			Block *block.Block
-		}{Token: ft.TokenID, Block: blockObj})
-	}
-	if err := c.w.BatchAddTokenBlocksFT(blockPairs); err != nil {
-		c.log.Error("Failed to batch add token blocks to LevelDB after SQL write", "err", err)
-		// Rollback SQL writes
-		for _, rollbackFT := range newFTs {
-			errDel := c.w.S().Delete(wallet.FTTokenStorage, &rollbackFT, "token_id=?", rollbackFT.TokenID)
-			if errDel != nil {
-				c.log.Error("Rollback failed: could not delete FT from SQL after LevelDB failure", "token_id", rollbackFT.TokenID, "err", errDel)
-			}
-		}
-		return fmt.Errorf("failed to batch add token blocks to LevelDB: %v", err)
+		_ = c.w.CreateToken(&models.Token{
+			TokenID:     ft.TokenID,
+			TokenValue:  ft.TokenValue,
+			TokenStatus: int16(ft.TokenStatus),
+			DID:         ft.DID,
+		})
 	}
 
 	// After all workers finish, batch add provider details
@@ -627,8 +577,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		// Original logic for small transfers
 		TokenInfo = make([]contract.TokenInfo, 0)
 		for i := range FTsForTxn {
-			FTsForTxn[i].TokenStatus = constants.TokenStatus_Locked
-			lockFTErr := c.s.Update(wallet.FTTokenStorage, &FTsForTxn[i], "token_id=?", FTsForTxn[i].TokenID)
+			lockFTErr := c.w.LockTokenByID(FTsForTxn[i].TokenID)
 			if lockFTErr != nil {
 				c.log.Error("Failed to update FT token status", "err", lockFTErr)
 				resp.Message = "Failed to update FT token status"
@@ -711,8 +660,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 					continue
 				}
 
-				ftToken := &wallet.FTToken{}
-				ReadFTErr := c.s.Read(wallet.FTTokenStorage, ftToken, "token_id=?", token.Token)
+				readToken, ReadFTErr := c.w.ReadToken(token.Token)
 				if ReadFTErr != nil {
 					c.log.Error("Failed to read FT token", "token", token.Token, "err", ReadFTErr)
 					resp.Message = "Failed to read FT token"
@@ -721,9 +669,8 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 					return
 				}
 
-				if ftToken.TokenStatus == constants.TokenStatus_Locked {
-					ftToken.TokenStatus = constants.TokenStatus_Free
-					updateFTErr := c.s.Update(wallet.FTTokenStorage, ftToken, "token_id=?", token.Token)
+				if readToken.TokenStatus == int16(constants.TokenStatus_Locked) {
+					updateFTErr := c.w.UpdateToken(&models.Token{TokenID: token.Token, TokenStatus: int16(constants.TokenStatus_Free)})
 					if updateFTErr != nil {
 						c.log.Error("Failed to update FT token status", "token", token.Token, "err", updateFTErr)
 						resp.Message = "Failed to update FT token status"
@@ -892,43 +839,7 @@ func (c *Core) GetPresiceFractionalValue(a, b int) (float64, error) {
 }
 
 func (c *Core) updateFTTable() error {
-	AllFTs, err := c.w.GetAllFTsAndCount()
-	// If no records are found, remove all entries from the FT table
-	if err != nil {
-		fetchErr := fmt.Sprint(err)
-		if strings.Contains(fetchErr, "no records found") {
-			err = c.s.Delete(wallet.FTStorage, &wallet.FT{}, "ft_name!=?", "")
-			if err != nil {
-				deleteErr := fmt.Sprint(err)
-				if strings.Contains(deleteErr, "no records found") {
-					c.log.Info("FT table is empty")
-				} else {
-					c.log.Error("Failed to delete all entries from FT table:", err)
-					return err
-				}
-			}
-			return nil
-		} else {
-			c.log.Error("Failed to get FTs and Count")
-			return err
-		}
-	}
-	err = c.s.Delete(wallet.FTStorage, &wallet.FT{}, "ft_name!=?", "")
-	ReadErr := fmt.Sprint(err)
-	if err != nil {
-		if strings.Contains(ReadErr, "no records found") {
-			c.log.Info("FT table is empty")
-		}
-		c.log.Error("Failed to remove current FTs from storage to add new:", err)
-		return err
-	}
-	for _, Ft := range AllFTs {
-		addErr := c.s.Write(wallet.FTStorage, &Ft)
-		if addErr != nil {
-			c.log.Error("Failed to add new FT:", Ft.FTName, "Error:", addErr)
-			return addErr
-		}
-	}
+	// TODO(phase09): implement via PostgreSQL
 	return nil
 }
 
@@ -944,19 +855,9 @@ func (c *Core) UnlockFTs() error {
 			continue
 		}
 
-		ft.TokenStatus = constants.TokenStatus_Free
-
-		// First, delete the token
-		err := c.s.Delete(wallet.FTTokenStorage, &wallet.FT{}, "token_id=?", ft.TokenID)
+		err := c.w.UpdateToken(&models.Token{TokenID: ft.TokenID, TokenStatus: int16(constants.TokenStatus_Free)})
 		if err != nil {
-			c.log.Error("Failed to delete FT", "token_id", ft.TokenID, "err", err)
-			continue
-		}
-
-		// Then, re-insert the same token — this moves it to the bottom (new rowid)
-		err = c.s.Write(wallet.FTTokenStorage, &ft)
-		if err != nil {
-			c.log.Error("Failed to re-insert FT", "token_id", ft.TokenID, "err", err)
+			c.log.Error("Failed to unlock FT", "token_id", ft.TokenID, "err", err)
 			continue
 		}
 	}
