@@ -63,26 +63,26 @@ func (w *Wallet) GetFreeRBTTokens(ownerDid string) ([]models.Token, []string, er
 	return freeTokens, freeTokenIDs, nil
 }
 
-func (w *Wallet) GetRBTToken(tokenID string) (models.Token, error) {
+func (w *Wallet) GetTokenByTokenID(tokenID string) (models.Token, error) {
 	row := w.db.Pool().QueryRow(w.Ctx,
 		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
 		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
 		 FROM tokens WHERE token_id=$1`, tokenID,
 	)
 
-	var rbtToken models.Token
+	var token models.Token
 	if err := row.Scan(
-		&rbtToken.TokenID, &rbtToken.ParentTokenID, &rbtToken.TokenValue, &rbtToken.TokenStatus,
-		&rbtToken.DID, &rbtToken.TransactionID, &rbtToken.TokenStateHash, &rbtToken.TokenType,
-		&rbtToken.LatestPosition, &rbtToken.LatestRole, &rbtToken.CreatedAt, &rbtToken.UpdatedAt,
+		&token.TokenID, &token.ParentTokenID, &token.TokenValue, &token.TokenStatus,
+		&token.DID, &token.TransactionID, &token.TokenStateHash, &token.TokenType,
+		&token.LatestPosition, &token.LatestRole, &token.CreatedAt, &token.UpdatedAt,
 	); err != nil {
 		if err == pgx.ErrNoRows {
-			return models.Token{}, fmt.Errorf("GetRBTToken: token with id %v not found", tokenID)
+			return models.Token{}, fmt.Errorf("GetTokenByTokenID: token with id %v not found", tokenID)
 		}
-		return models.Token{}, fmt.Errorf("GetLatestTransactionByTokenID scan: %w", err)
+		return models.Token{}, fmt.Errorf("GetTokenByTokenID scan: %w", err)
 	}
 
-	return rbtToken, nil
+	return token, nil
 }
 
 func (w *Wallet) GetRBTTokenByStatus(tokenID string, tokenStatus int) (models.Token, error) {
@@ -232,6 +232,21 @@ func (w *Wallet) GetTokensFromDenomMap(denomMap map[types.DenomValue]types.Denom
 	}
 
 	return tokens, nil
+}
+
+func (w *Wallet) UpdateToken(token models.Token) error {
+	if _, err := w.db.Pool().Exec(w.Ctx,
+		`UPDATE tokens SET did=$1, transaction_id=$2, token_state_hash=$3,
+		 token_status=$4, latest_position=$5, latest_role=$6, updated_at=NOW()
+		 WHERE token_id=$7`,
+		token.DID, token.TransactionID, token.TokenStateHash,
+		token.TokenStatus, token.LatestPosition, token.LatestRole,
+		token.TokenID,
+	); err != nil {
+		return fmt.Errorf("failed to update token %v: %w", token.TokenID, err)
+	}
+
+	return nil
 }
 
 func (w *Wallet) ReadToken(tokenID string) (*models.Token, error) {

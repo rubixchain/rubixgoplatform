@@ -115,10 +115,10 @@ func performTokenSplit(w *wallet.Wallet, dc types.DIDCrypto,
 	if cachedToken, exists := tokenCache[parentTokenIndexedID]; exists {
 		parentToken = cachedToken
 	} else {
-		var fetchErr error
-		parentToken, fetchErr = w.GetRBTToken(parentTokenIndexedID)
-		if fetchErr != nil {
-			return nil, nil, nil, nil, fmt.Errorf("performTokenSplit: unable to get parent token: %v with id: %v; indexid: %v, err: %v", splitOp.HierarchicalTokenID.String(), parentTokenIndexedID, parentTokenIndexedID, fetchErr)
+		var err error
+		parentToken, err = w.GetTokenByTokenID(parentTokenIndexedID)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("performTokenSplit: unable to get parent token: %v with id: %v; indexid: %v, err: %v", splitOp.HierarchicalTokenID.String(), parentTokenIndexedID, parentTokenIndexedID, err)
 		}
 
 		if lockErr := w.LockToken(parentToken); lockErr != nil {
