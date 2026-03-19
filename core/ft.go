@@ -511,7 +511,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	}
 	// Get all available FT tokens
 	var AllFTs []wallet.FTToken
-	var TokenInfo []contract.TokenInfo
+	var TokenInfo []ContractTokenInfo
 	var lockingErr error
 
 	if req.CreatorDID != "" {
@@ -563,7 +563,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	}
 	defer receiverPeerID.Close()
 
-	TokenInfo = make([]contract.TokenInfo, 0)
+	TokenInfo = make([]ContractTokenInfo, 0)
 	for i := range FTsForTxn {
 		lockFTErr := c.w.LockTokenByID(FTsForTxn[i].TokenID)
 		if lockFTErr != nil {
@@ -584,7 +584,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			resp.Message = "failed to get block id, " + err.Error()
 			return resp
 		}
-		ti := contract.TokenInfo{
+		ti := ContractTokenInfo{
 			Token:      FTsForTxn[i].TokenID,
 			TokenType:  tt,
 			TokenValue: FTsForTxn[i].TokenValue,
@@ -600,10 +600,10 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	for i := range TokenInfo {
 		FTTokenIDs = append(FTTokenIDs, TokenInfo[i].Token)
 	}
-	sct := &contract.ContractType{
-		Type:       contract.SCFTType,
-		PledgeMode: contract.PeriodicPledgeMode,
-		TransInfo: &contract.TransInfo{
+	sct := &ContractTypeInfo{
+		Type:       SCFTType,
+		PledgeMode: PeriodicPledgeMode,
+		TransInfo: &ContractTransInfo{
 			SenderDID:   did,
 			ReceiverDID: rdid,
 			Comment:     req.Comment,
@@ -615,7 +615,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		FTName:  req.FTName,
 		FTCount: req.FTCount,
 	}
-	sc := contract.CreateNewContract(sct)
+	sc := CreateNewConsensusContract(sct)
 	err = sc.UpdateSignature(dc)
 	if err != nil {
 		c.log.Error(err.Error())
