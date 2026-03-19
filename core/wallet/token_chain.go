@@ -9,8 +9,8 @@ import (
 
 func (w *Wallet) GetTokenChainByTokenID(tokenID string) ([]models.TokenChain, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
-		`SELECT token_id, transaction_id, role, position, created_at, updated_at
-		 FROM tokenchain WHERE token_id = $1 ORDER BY position`, tokenID,
+		`SELECT id, token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at
+		 FROM tokenchain WHERE token_id = $1 ORDER BY position ASC`, tokenID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("GetTokenChainByTokenID: %w", err)
