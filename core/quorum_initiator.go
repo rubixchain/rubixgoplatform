@@ -125,6 +125,17 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 	// This is just a placeholder function, the actual consensus logic will be implemented in the consensus package and this function will call that logic.
 	response := model.BasicResponse{Status: false}
 	c.log.Info("Initiate consensus called")
+	var consensusRequest models.ConsensusRequest
+	err := c.l.ParseJSON(request, &consensusRequest)
+	if err != nil {
+		c.log.Error("initiateConsensusHandler : Failed to parse json request", "err", err)
+		response.Message = "initiateConsensusHandler : Invalid request body"
+		return c.l.RenderJSON(request, &response, http.StatusBadRequest)
+	}
+	c.log.Info("Consensus request parsed successfully", "request", consensusRequest)
+
+	// This initiateConsensus needs to be edited to accept all the necessary params
+	consensus.InitiateConsensus(consensusRequest)
 	// Call the consensus logic here and handle the response accordingly.
 	// For now, we will just return a success response.
 	response.Status = true

@@ -46,7 +46,7 @@ func ReqPledgeToken(
 
 	return pledgeResponse, nil
 }
-func initiateConsensus() {
+func InitiateConsensus(consensusRequest models.ConsensusRequest) {
 	//This must be called at the end of initiateConsensus
 
 	// c.w.AddTokenStateHashes( < current token state hash>)
