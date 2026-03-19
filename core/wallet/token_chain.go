@@ -84,3 +84,55 @@ func (w *Wallet) GetTokenChainByTransactionID(transactionID string) ([]models.To
 	}
 	return pgx.CollectRows(rows, pgx.RowToStructByName[models.TokenChain])
 }
+
+// PersistGenesisTokenRecord atomically inserts a genesis transaction, token, and tokenchain
+// entry in a single PostgreSQL transaction. All inserts are idempotent (ON CONFLICT DO NOTHING).
+// Rollback is automatic on any failure via deferred Rollback.
+func (w *Wallet) PersistGenesisTokenRecord(
+	txRecord *models.Transactions,
+	token *models.Token,
+	entry *models.TokenChain,
+) error {
+	tx, err := w.BeginTx(w.Ctx)
+	if err != nil {
+		return fmt.Errorf("PersistGenesisTokenRecord: begin tx: %w", err)
+	}
+	defer tx.Rollback(w.Ctx) //nolint:errcheck
+
+	if _, err = tx.Exec(w.Ctx,
+		`INSERT INTO transactions (id, info, signature, created_at, updated_at)
+		 VALUES ($1, $2, $3, NOW(), NOW())
+		 ON CONFLICT (id) DO NOTHING`,
+		txRecord.ID, txRecord.Info, txRecord.Signature,
+	); err != nil {
+		return fmt.Errorf("PersistGenesisTokenRecord: insert transaction: %w", err)
+	}
+
+	if _, err = tx.Exec(w.Ctx,
+		`INSERT INTO tokens (token_id, parent_token_id, token_value, token_status, did, transaction_id,
+		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+		 ON CONFLICT (token_id) DO UPDATE SET
+		   transaction_id = EXCLUDED.transaction_id,
+		   token_state_hash = EXCLUDED.token_state_hash,
+		   latest_position = EXCLUDED.latest_position,
+		   latest_role = EXCLUDED.latest_role,
+		   updated_at = NOW()`,
+		token.TokenID, token.ParentTokenID, token.TokenValue, token.TokenStatus,
+		token.DID, token.TransactionID, token.TokenStateHash, token.TokenType,
+		token.LatestPosition, token.LatestRole,
+	); err != nil {
+		return fmt.Errorf("PersistGenesisTokenRecord: insert token: %w", err)
+	}
+
+	if _, err = tx.Exec(w.Ctx,
+		`INSERT INTO tokenchain (token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+		 ON CONFLICT (token_id, position) DO NOTHING`,
+		entry.TokenID, entry.TransactionID, entry.PreviousTransactionID, entry.Role, entry.Position,
+	); err != nil {
+		return fmt.Errorf("PersistGenesisTokenRecord: insert tokenchain: %w", err)
+	}
+
+	return tx.Commit(w.Ctx)
+}
