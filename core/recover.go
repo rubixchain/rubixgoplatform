@@ -7,12 +7,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	signModule "github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
@@ -169,16 +170,16 @@ func (c *Core) initiateRecoverRBT(reqID string, req *model.RBTRecoverRequest) *m
 
 		}
 
-		tokenDetails := wallet.Token{
+		tokenDetails := &models.Token{
 			TokenID:       token,
-			ParentTokenID: pt,
+			ParentTokenID: pgtype.Text{String: pt, Valid: pt != ""},
 			TokenValue:    tokenInfo.TokenValue,
 			DID:           tokenInfo.OwnerDID,
-			TokenStatus:   constants.TokenStatus_Free,
+			TokenStatus:   int16(constants.TokenStatus_Free),
 			CreatedAt:     time.Now(),
 			UpdatedAt:     time.Now(),
 		}
-		c.w.CreateToken(&tokenDetails)
+		c.w.CreateToken(tokenDetails)
 	}
 
 	c.log.Info("Tokens recovered successfully")

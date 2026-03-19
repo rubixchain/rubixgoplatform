@@ -275,11 +275,11 @@ func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex 
 			c.log.Error("Failed to update did signature", "err", err)
 			return fmt.Errorf("failed to update did signature")
 		}
-		t := &wallet.Token{
+		t := &models.Token{
 			TokenID:     id,
 			DID:         did,
 			TokenValue:  1,
-			TokenStatus: constants.TokenStatus_Free,
+			TokenStatus: int16(constants.TokenStatus_Free),
 		}
 		err = c.w.CreateTokenBlock(blk)
 		if err != nil {
@@ -1779,7 +1779,7 @@ func (c *Core) UpdatePledgedTokenInfo(tokenstatehash string) error {
 	return nil
 }
 
-func (c *Core) GetpinnedTokens(did string) ([]wallet.Token, error) {
+func (c *Core) GetpinnedTokens(did string) ([]models.Token, error) {
 	requiredTokens, err := c.w.GetAllPinnedTokens(did)
 	if err != nil {
 		c.log.Error("Error retrieving pinned tokens from database :", err)
@@ -1955,11 +1955,11 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			return &tokendetail, fmt.Errorf("failed to update did signature")
 		}
 
-		t := &wallet.Token{
+		t := &models.Token{
 			TokenID:     id,
 			DID:         did,
 			TokenValue:  1,
-			TokenStatus: constants.TokenStatus_Free,
+			TokenStatus: int16(constants.TokenStatus_Free),
 		}
 
 		err = c.w.CreateTokenBlock(blk)

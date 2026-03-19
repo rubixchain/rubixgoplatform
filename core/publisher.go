@@ -8,6 +8,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
 const txnBatchSize = 500
@@ -137,7 +138,7 @@ func (c *Core) PublishTransactionHistory() {
 	)
 }
 
-func (c *Core) prepareTokenDetailsForRBT(tokens []wallet.Token) []model.SendTokenDetailsInfo {
+func (c *Core) prepareTokenDetailsForRBT(tokens []models.Token) []model.SendTokenDetailsInfo {
 	var result []model.SendTokenDetailsInfo
 	for _, token := range tokens {
 		tokenType := c.TokenType(RBTString)
@@ -166,7 +167,7 @@ func (c *Core) prepareTokenDetailsForRBT(tokens []wallet.Token) []model.SendToke
 	return result
 }
 
-func (c *Core) prepareTokenDetailsForFT(tokens []wallet.FTToken) []model.SendTokenDetailsInfo {
+func (c *Core) prepareTokenDetailsForFT(tokens []models.Token) []model.SendTokenDetailsInfo {
 	var result []model.SendTokenDetailsInfo
 	for _, token := range tokens {
 		tokenType := c.TokenType(FTString)
@@ -216,25 +217,25 @@ func (c *Core) prepareTokenDetailsForNFT(tokens []wallet.NFT) []model.SendTokenD
 	return result
 }
 
-func (c *Core) prepareTokenDetailsForSC(tokens []wallet.SmartContract) []model.SendTokenDetailsInfo {
+func (c *Core) prepareTokenDetailsForSC(tokens []models.Token) []model.SendTokenDetailsInfo {
 	var result []model.SendTokenDetailsInfo
 	for _, token := range tokens {
 		tokenType := c.TokenType(SmartContractString)
-		latestBlock := c.w.GetLatestTokenBlock(token.SmartContractHash, tokenType)
+		latestBlock := c.w.GetLatestTokenBlock(token.TokenID, tokenType)
 		if latestBlock == nil {
 			c.log.Error("Failed to get latest block for token", "token", token)
 			continue
 		}
-		blockHeight, err := latestBlock.GetBlockNumber(token.SmartContractHash)
+		blockHeight, err := latestBlock.GetBlockNumber(token.TokenID)
 		if err != nil {
 			c.log.Error("Failed to get latest block height of token", "token", token, "error", err)
 			continue
 		}
 		result = append(result, model.SendTokenDetailsInfo{
-			Token:            token.SmartContractHash,
+			Token:            token.TokenID,
 			TokenChainLength: blockHeight,
 			TokenType:        tokenType,
-			Did:              token.Deployer,
+			Did:              token.DID,
 			AssetType:        SmartContractTokenType,
 		})
 	}

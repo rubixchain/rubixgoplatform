@@ -8,13 +8,14 @@ import (
 	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -81,7 +82,7 @@ func (c *Core) TokenChainValidation(userDID string, tokenId string, blockCount i
 }
 
 // Validates tokenchain for the given token upto the specified block height
-func (c *Core) ValidateTokenChain(userDID string, tokenInfo *wallet.Token, tokenType int, blockCount int) (*model.BasicResponse, error) {
+func (c *Core) ValidateTokenChain(userDID string, tokenInfo *models.Token, tokenType int, blockCount int) (*model.BasicResponse, error) {
 	c.log.Info("--------validating tokenchain", tokenInfo.TokenID, "---------")
 	response := &model.BasicResponse{
 		Status: false,
@@ -303,7 +304,7 @@ func (c *Core) ValidateRBTTransferBlock(b *block.Block, tokenId string, calculat
 }
 
 // validate block of type : TokenBurntType = "08"
-func (c *Core) ValidateRBTBurntBlock(b *block.Block, tokenInfo wallet.Token, calculatedPrevBlockId string, userDID string) (*model.BasicResponse, error) {
+func (c *Core) ValidateRBTBurntBlock(b *block.Block, tokenInfo models.Token, calculatedPrevBlockId string, userDID string) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{}
 
 	//Validate block hash
@@ -353,7 +354,7 @@ func (c *Core) ValidatePledgedUnpledgedBlock(b *block.Block, tokenId string, cal
 }
 
 // genesis block validation : validate block of type: TokenGeneratedType = "05"
-func (c *Core) ValidateGenesisBlock(b *block.Block, tokenInfo wallet.Token, tokenType int, userDID string) (*model.BasicResponse, error) {
+func (c *Core) ValidateGenesisBlock(b *block.Block, tokenInfo models.Token, tokenType int, userDID string) (*model.BasicResponse, error) {
 	response := &model.BasicResponse{}
 
 	//Validate block hash of genesis block
@@ -373,7 +374,7 @@ func (c *Core) ValidateGenesisBlock(b *block.Block, tokenInfo wallet.Token, toke
 
 	//if part token, validate parent token chain
 	if tokenType == token.TestPartTokenType {
-		response, err = c.ValidateParentTokenLatestBlock(tokenInfo.ParentTokenID, userDID)
+		response, err = c.ValidateParentTokenLatestBlock(tokenInfo.ParentTokenID.String, userDID)
 		if err != nil {
 			c.log.Error("msg", response.Message, "err", err)
 			return response, err
@@ -442,10 +443,10 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 			ownerDID = genesisBlock.GetOwner()
 		}
 
-		parentTokenInfo = &wallet.Token{
+		parentTokenInfo = &models.Token{
 			TokenID:     parentTokenId,
 			TokenValue:  tv,
-			TokenStatus: constants.TokenStatus_Burnt,
+			TokenStatus: int16(constants.TokenStatus_Burnt),
 			DID:         ownerDID,
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
@@ -475,16 +476,16 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 
 	//if parent token is also a part token, then validate it's parent token latest block
 	if parentTokenType == c.TokenType(PartString) {
-		if parentTokenInfo.ParentTokenID == "" {
+		if !parentTokenInfo.ParentTokenID.Valid || parentTokenInfo.ParentTokenID.String == "" {
 			genesisBlock := c.w.GetGenesisTokenBlock(parentTokenId, parentTokenType)
 			parentToken, err := genesisBlock.GetParentDetials(parentTokenId)
 			if err != nil {
 				c.log.Error("failed to get grand parent tokens to validate")
 			}
 			c.log.Debug("grand parent token:", parentToken)
-			parentTokenInfo.ParentTokenID = parentToken
+			parentTokenInfo.ParentTokenID = pgtype.Text{String: parentToken, Valid: parentToken != ""}
 		}
-		response, err = c.ValidateParentTokenLatestBlock(parentTokenInfo.ParentTokenID, userDID)
+		response, err = c.ValidateParentTokenLatestBlock(parentTokenInfo.ParentTokenID.String, userDID)
 		if err != nil {
 			c.log.Error("msg", response.Message, "err", err)
 			return response, err
