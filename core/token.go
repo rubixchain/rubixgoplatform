@@ -344,44 +344,58 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 			Message: "Failed to parse request",
 		}, http.StatusBadRequest)
 	}
-	var tcbr TCBSyncReply
-	tcbr.Message = "Sent all blocks"
 
-	// Fetch token blocks
-	blks, nextID, err := c.w.GetAllTokenBlocks(tr.Token, tr.TokenType, tr.BlockID)
+	// Fetch token chain from PostgreSQL
+	chain, err := c.w.GetTokenChainByTokenID(tr.Token)
 	if err != nil {
-		c.log.Error("Error fetching token blocks", "error", err)
+		c.log.Error("Error fetching token chain", "error", err)
 		return c.l.RenderJSON(req, &TCBSyncReply{
 			Status:  false,
-			Message: "Error fetching token blocks",
+			Message: "Error fetching token chain",
 		}, http.StatusInternalServerError)
-		// blks, nextID, err = c.w.GetAllTokenBlocks(tr.Token, tr.TokenType, "")
-		// if err != nil {
-
-		// } else {
-		// 	tcbr.Message = "Sent all blocks"
-		// }
 	}
 
-	c.log.Debug("no.of blocks sending through sync token chain API ", len(blks))
-	/* // Handle case where both error occurred and blocks are nil
-	if err != nil && blks == nil {
-		c.log.Warn("Token blocks missing and error occurred, falling back to role-based logic", "token", tr.Token)
-		return c.handleRoleBasedLogic(tr.Token, req)
-	} */
+	// Validate chain: empty check
+	if len(chain) == 0 {
+		c.log.Warn("Token chain is empty", "token", tr.Token)
+		return c.l.RenderJSON(req, &TCBSyncReply{
+			Status:  false,
+			Message: "Token chain is empty for token: " + tr.Token,
+		}, http.StatusNotFound)
+	}
 
-	// Handle other errors
-	// if err != nil {
-	// 	respMsg := "token block not found for token: " + tr.Token + " and block: " + tr.BlockID
-	// 	return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: respMsg}, http.StatusInternalServerError)
-	// }
+	// Validate chain: linkage check
+	for i := 1; i < len(chain); i++ {
+		prev := chain[i].PreviousTransactionID
+		if prev == nil || *prev != chain[i-1].TransactionID {
+			c.log.Warn("Token chain linkage broken", "token", tr.Token, "position", chain[i].Position)
+			// Log but do not abort — chain may have gaps in legacy data
+			// TODO: decide if broken linkage should be a hard error
+		}
+	}
+
+	// Serialize each models.TokenChain entry as JSON bytes for wire compatibility
+	tcBlocks := make([][]byte, len(chain))
+	for i, entry := range chain {
+		b, err := json.Marshal(entry)
+		if err != nil {
+			c.log.Error("Failed to marshal token chain entry", "error", err, "position", entry.Position)
+			return c.l.RenderJSON(req, &TCBSyncReply{
+				Status:  false,
+				Message: "Failed to serialize token chain",
+			}, http.StatusInternalServerError)
+		}
+		tcBlocks[i] = b
+	}
+
+	c.log.Debug("no.of chain entries sending through sync token chain API ", len(chain))
 
 	// Success response
 	return c.l.RenderJSON(req, &TCBSyncReply{
 		Status:      true,
-		Message:     tcbr.Message,
-		TCBlock:     blks,
-		NextBlockID: nextID,
+		Message:     "Sent all token chain entries",
+		TCBlock:     tcBlocks,
+		NextBlockID: "",
 	}, http.StatusOK)
 }
 
