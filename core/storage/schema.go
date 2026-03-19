@@ -6,29 +6,49 @@ import (
 
 func (r *RubixDB) InitSchema(ctx context.Context) error {
 	_, err := r.pool.Exec(ctx, `
-        CREATE TABLE IF NOT EXISTS transactions (
-            id          TEXT PRIMARY KEY,
-            info        JSON NOT NULL,
-            signature   JSONB NOT NULL,
-            created_at  TIMESTAMPTZ DEFAULT NOW(),
-            updated_at  TIMESTAMPTZ DEFAULT NOW()
-        );
+	        CREATE TABLE IF NOT EXISTS transactions (
+	            id          TEXT PRIMARY KEY,
+	            info        JSON NOT NULL,
+	            signature   JSONB NOT NULL,
+	            created_at  TIMESTAMPTZ DEFAULT NOW(),
+	            updated_at  TIMESTAMPTZ DEFAULT NOW()
+	        );
 
-        CREATE TABLE IF NOT EXISTS did_algo (
-            id SMALLINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-            name TEXT NOT NULL UNIQUE,
+	        CREATE TABLE IF NOT EXISTS did_algo (
+	            id SMALLINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+	            name TEXT NOT NULL UNIQUE,
             is_active BOOLEAN DEFAULT TRUE
         );
 
-        CREATE TABLE IF NOT EXISTS dids (
-            did         TEXT PRIMARY KEY,
-            peer_id    TEXT,
-            local       BOOLEAN DEFAULT TRUE,
-            algo_id     SMALLINT,
+	        CREATE TABLE IF NOT EXISTS dids (
+	            did         TEXT PRIMARY KEY,
+	            peer_id    TEXT,
+	            local       BOOLEAN DEFAULT TRUE,
+	            algo_id     SMALLINT,
             CONSTRAINT algo_id_fk 
             FOREIGN KEY (algo_id) 
-            REFERENCES did_algo(id)
-        );
+	            REFERENCES did_algo(id)
+	        );
+
+	        CREATE TABLE IF NOT EXISTS transaction_units (
+	            transaction_id  TEXT NOT NULL,
+	            did             TEXT NOT NULL,
+	            execution_role  TEXT NOT NULL CHECK (execution_role IN ('initiator', 'quorum', 'receiver')),
+	            status          TEXT NOT NULL CHECK (status = 'committed'),
+	            created_at      TIMESTAMPTZ DEFAULT NOW(),
+	            updated_at      TIMESTAMPTZ DEFAULT NOW(),
+	            PRIMARY KEY (transaction_id, did),
+	            CONSTRAINT fk_tu_transaction
+	                FOREIGN KEY (transaction_id)
+	                REFERENCES transactions(id)
+	                DEFERRABLE INITIALLY DEFERRED,
+	            CONSTRAINT fk_tu_did
+	                FOREIGN KEY (did)
+	                REFERENCES dids(did)
+	                DEFERRABLE INITIALLY DEFERRED
+	        );
+
+	        CREATE INDEX IF NOT EXISTS idx_transaction_units_did ON transaction_units(did);
 
         CREATE TABLE IF NOT EXISTS token_role (
             id SMALLINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -71,35 +91,37 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
 
         -- moving tokenchain below so that all referenced tables are defined before it. tokenchain has FKs to transactions, token_role, and tokens.
 CREATE TABLE IF NOT EXISTS tokenchain (
-            id             INT         GENERATED ALWAYS AS IDENTITY,
-            token_id       TEXT       NOT NULL,
-            transaction_id TEXT       NOT NULL,
-            previous_transaction_id    TEXT       NOT NULL,
-            role           SMALLINT   NOT NULL,
-            position       BIGINT     NOT NULL,
-            created_at     TIMESTAMPTZ DEFAULT NOW(),
-            updated_at     TIMESTAMPTZ DEFAULT NOW(),
+	            id             INT        GENERATED ALWAYS AS IDENTITY,
+	            token_id       TEXT       NOT NULL,
+	            transaction_id TEXT       NOT NULL,
+	            previous_transaction_id TEXT,
+	            role           SMALLINT   NOT NULL,
+	            position       BIGINT     NOT NULL,
+	            created_at     TIMESTAMPTZ DEFAULT NOW(),
+	            updated_at     TIMESTAMPTZ DEFAULT NOW(),
             PRIMARY KEY (token_id, position),
-            UNIQUE (id),  -- enforce uniqueness without being PK
+            UNIQUE (id),
             -- No constraint prevents orphaned tokenchain entries pointing to non-existent transactions
-            CONSTRAINT fk_tc_tx 
-                FOREIGN KEY (transaction_id) 
-                REFERENCES transactions(id) 
-                DEFERRABLE INITIALLY DEFERRED,
-            -- role is SMALLINT but has no FK to token_role(id). Invalid role IDs can be inserted silently.
-            CONSTRAINT fk_tc_role 
-                FOREIGN KEY (role) 
-                REFERENCES token_role(id),
+	            CONSTRAINT fk_tc_tx 
+	                FOREIGN KEY (transaction_id) 
+	                REFERENCES transactions(id) 
+	                DEFERRABLE INITIALLY DEFERRED,
+	            CONSTRAINT fk_tc_prev_tx
+	                FOREIGN KEY (previous_transaction_id)
+	                REFERENCES transactions(id)
+	                DEFERRABLE INITIALLY DEFERRED,
+	            -- role is SMALLINT but has no FK to token_role(id). Invalid role IDs can be inserted silently.
+	            CONSTRAINT fk_tc_role 
+	                FOREIGN KEY (role) 
+	                REFERENCES token_role(id),
             -- A tokenchain entry can reference a token_id that doesn't exist in tokens
             CONSTRAINT fk_tc_token 
                 FOREIGN KEY (token_id) 
                 REFERENCES tokens(token_id) 
                 DEFERRABLE INITIALLY DEFERRED
 
-        );
-
-
-        CREATE TABLE IF NOT EXISTS tokenchain_index (
+	        );
+	        CREATE TABLE IF NOT EXISTS tokenchain_index (
             token_id   TEXT PRIMARY KEY,
             index      INTEGER[] NOT NULL,
             created_at TIMESTAMPTZ DEFAULT NOW(),

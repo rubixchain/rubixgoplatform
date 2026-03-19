@@ -8,11 +8,12 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
 // DynamicTxnProcessor handles adaptive concurrent transaction processing
 type DynamicTxnProcessor struct {
-	txnQueue      chan *model.PubSubTxnInfo
+	txnQueue      chan *models.EventTransaction
 	processedTxns sync.Map
 	ctx           context.Context
 	cancel        context.CancelFunc
