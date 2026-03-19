@@ -87,8 +87,14 @@ Progress: [███░░░░░░░] 33% (phases 01, 02, 04, 05, 06 comple
 - core/fullnode.go block import removed (quick task 260320-4ok); processSingleTransaction stubbed with TODO; StoreFailedTransaction/GetAllFailedToSyncTokens/AddTransactionsToFullNodeTransactionHistoryTable/ReadFullNodeTransactionHistoryTable/UpdateFullNodeTransactionHistoryTable added as no-op stubs in ft_stubs.go; EventTransaction.BlockHash/AssetType fields added to types/models/events.go
 - core/parts/genesis_transaction.go:46 still has json.Marshal(txInfo) — out of scope for Phase 08 pre-work but needs fixing before Phase 08 complete (grep check: grep -rn "json.Marshal(txInfo)" core/ should return 0)
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260320-4ok | Fix core/fullnode.go: eliminate block package dependency without introducing new logic | 2026-03-20 | 02ba77d | [260320-4ok-fix-core-fullnode-go-eliminate-block-pac](./quick/260320-4ok-fix-core-fullnode-go-eliminate-block-pac/) |
+
 ## Session Continuity
 
 Last session: 2026-03-20
-Stopped at: Phase 06 complete; Phase 08 pre-work (PersistGenesisTokenRecord + genesis token paths) implemented out-of-band
+Stopped at: Quick task 260320-4ok complete — core/fullnode.go block import removed; secondary compile errors fixed
 Resume file: None

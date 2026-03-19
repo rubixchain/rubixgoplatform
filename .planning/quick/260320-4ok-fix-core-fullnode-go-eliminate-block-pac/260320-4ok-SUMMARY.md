@@ -14,6 +14,8 @@ key_files:
   created: []
   modified:
     - core/fullnode.go
+    - types/models/events.go
+    - core/wallet/ft_stubs.go
 decisions:
   - "processSingleTransaction stubbed with TODO rather than deleted — it is the entry point called by processTxnWithRetry which is in turn called from fullnode_txn_processor.go; stub preserves the call chain intact"
   - "5 private helper functions (processTransferTransaction, processTransferToken, processRegularTransfer, processContractTransaction, processContractExecution) deleted entirely — all were called only from processSingleTransaction which is now a stub"
@@ -80,9 +82,19 @@ Net: 9 insertions, 380 deletions.
 
 ## Deviations from Plan
 
-None — plan executed exactly as written.
+### Post-execution fix: revealed secondary compile errors
+
+After removing the block import, 6 additional compile errors surfaced that were previously masked:
+
+1. `models.EventTransaction` missing `BlockHash string` and `AssetType int` fields — used at 4 sites in `TxnCallBack` for dedup and logging
+2. 5 missing wallet methods referenced by kept functions: `StoreFailedTransaction`, `GetAllFailedToSyncTokens`, `AddTransactionsToFullNodeTransactionHistoryTable`, `ReadFullNodeTransactionHistoryTable`, `UpdateFullNodeTransactionHistoryTable`
+
+**Fix:** Added `BlockHash`/`AssetType` to `types/models/events.go`; added 5 no-op stubs with TODO to `core/wallet/ft_stubs.go`. `core/wallet` builds clean post-fix.
+
+**Commit:** `02ba77d`
 
 ## Self-Check: PASSED
 
 - `core/fullnode.go` exists and contains no block references
-- Commit `83222b2` exists in git log
+- `core/wallet` builds with `go build ./core/wallet/` — exit 0
+- Commits `83222b2` (block removal) and `02ba77d` (secondary fixes) in git log
