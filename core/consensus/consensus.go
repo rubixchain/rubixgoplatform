@@ -7,6 +7,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
@@ -46,8 +47,41 @@ func ReqPledgeToken(
 
 	return pledgeResponse, nil
 }
-func InitiateConsensus(consensusRequest models.ConsensusRequest) {
-	//This must be called at the end of initiateConsensus
+func InitiateConsensus(consensusRequest models.ConsensusRequest, dc types.DIDCrypto, w wallet.Wallet, log logger.Logger) (models.ConsensusResponse, error) {
 
-	// c.w.AddTokenStateHashes( < current token state hash>)
+	isTransactionInfoValidatded, err := ValidateTransaction()
+	if err != nil {
+		log.Error("InitiateConsensus : Failed to validate transaction info", "err", err)
+
+		return models.ConsensusResponse{}, err
+	}
+
+	if !isTransactionInfoValidatded {
+		log.Error("InitiateConsensus : Transaction info validation failed")
+		return models.ConsensusResponse{}, fmt.Errorf("transaction info validation failed")
+	}
+	// This is the pledgeTokenInformation we need to pass to the PledgeTokens function.
+	// This needs to be convered to []Tstring basically the list of token ids which are pledged for this transaction.
+	pledgeDetails := consensusRequest.TransactionInfo.Quorums
+	// Here we are assuming there is only one quorum
+	// This will change when multple quorums are involved
+	pledgeTokenDetails := pledgeDetails[0].Tokens
+	pledgeTokenList := util.ExtractTokenIDs(pledgeTokenDetails) // Need to ensure this function logic is not existing at th emoment
+	quorumSignature, err := util.SignTransaction(dc, consensusRequest.TransactionInfo)
+	if err != nil {
+		log.Error("InitiateConsensus : Failed to sign transaction info", "err", err)
+		return models.ConsensusResponse{}, err
+	}
+
+	consensusResponse := models.ConsensusResponse{
+		ReferenceId:     consensusRequest.ReferenceId,
+		QuorumSignature: quorumSignature,
+		Message:         "Transaction Information verified succesfully. Consensus Complete.",
+		Status:          true,
+	}
+	//List of Pledge token ids
+	// The incoming TransactionInfo with the signature of both initiator and quorumSignature
+	w.PledgeTokens(pledgeTokenList)
+
+	return consensusResponse, nil
 }

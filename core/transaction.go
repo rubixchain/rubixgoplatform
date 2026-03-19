@@ -25,7 +25,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	resp := &model.BasicResponse{
 		Status: false,
 	}
-	ctx := context.TODO()
+	ctx := context.Background()
 	initiatorDID := request.Initiator
 	nextOwnerDID := request.Owner
 
