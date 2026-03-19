@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/rubixchain/rubixgoplatform/core/parts"
@@ -66,11 +67,27 @@ func InitiateConsensus(consensusRequest models.ConsensusRequest, dc types.DIDCry
 	// Here we are assuming there is only one quorum
 	// This will change when multple quorums are involved
 	pledgeTokenDetails := pledgeDetails[0].Tokens
-	pledgeTokenList := util.ExtractTokenIDs(pledgeTokenDetails) // Need to ensure this function logic is not existing at th emoment
+	// pledgeTokenList := util.ExtractTokenIDs(pledgeTokenDetails) // Need to ensure this function logic is not existing at th emoment
 	quorumSignature, err := util.SignTransaction(dc, consensusRequest.TransactionInfo)
 	if err != nil {
 		log.Error("InitiateConsensus : Failed to sign transaction info", "err", err)
 		return models.ConsensusResponse{}, err
+	}
+	transactionId, err := util.GetTransactionID(&consensusRequest.TransactionInfo)
+	if err != nil {
+		log.Error("InitiateConsensus : Failed to get transaction ID", "err", err)
+		return models.ConsensusResponse{}, err
+	}
+	transactionInfoBytes, err := json.Marshal(consensusRequest.TransactionInfo)
+	if err != nil {
+		log.Error("InitiateConsensus : Failed to marshal transaction info", "err", err)
+		return models.ConsensusResponse{}, err
+	}
+
+	transactions := &models.Transactions{
+		ID:        transactionId,
+		Info:      json.RawMessage(transactionInfoBytes),
+		Signature: json.RawMessage(quorumSignature),
 	}
 
 	consensusResponse := models.ConsensusResponse{
@@ -81,7 +98,7 @@ func InitiateConsensus(consensusRequest models.ConsensusRequest, dc types.DIDCry
 	}
 	//List of Pledge token ids
 	// The incoming TransactionInfo with the signature of both initiator and quorumSignature
-	w.PledgeTokens(pledgeTokenList)
+	w.PledgeTokens(pledgeTokenDetails, transactions)
 
 	return consensusResponse, nil
 }
