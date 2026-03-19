@@ -39,6 +39,7 @@ const (
 	APIConfirmTokenTransfer         string = "/api/confirm-token-transfer"
 	APIRollbackTransaction          string = "/api/rollback-transaction"
 	APISyncTokenChain               string = "/api/sync-token-chain"
+	APISyncTransactionChain         string = "/api/sync-transaction-chain"
 	APIDhtProviderCheck             string = "/api/dht-provider-check"
 	APIMapDIDArbitration            string = "/api/map-did-arbitration"
 	APICheckDIDArbitration          string = "/api/check-did-arbitration"
