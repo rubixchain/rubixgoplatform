@@ -47,10 +47,11 @@ type TCBSyncRequest struct {
 }
 
 type TCBSyncReply struct {
-	Status      bool     `json:"status"`
-	Message     string   `json:"message"`
-	NextBlockID string   `json:"next_block_id"`
-	TCBlock     [][]byte `json:"tc_block"`
+	Status      bool                `json:"status"`
+	Message     string              `json:"message"`
+	NextBlockID string              `json:"next_block_id"`
+	TCBlock     [][]byte            `json:"tc_block"`
+	TokenChain  []models.TokenChain `json:"token_chain,omitempty"`
 }
 
 type TCBSyncGenesisAndLatestBlockReply struct {
@@ -374,28 +375,13 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 		}
 	}
 
-	// Serialize each models.TokenChain entry as JSON bytes for wire compatibility
-	tcBlocks := make([][]byte, len(chain))
-	for i, entry := range chain {
-		b, err := json.Marshal(entry)
-		if err != nil {
-			c.log.Error("Failed to marshal token chain entry", "error", err, "position", entry.Position)
-			return c.l.RenderJSON(req, &TCBSyncReply{
-				Status:  false,
-				Message: "Failed to serialize token chain",
-			}, http.StatusInternalServerError)
-		}
-		tcBlocks[i] = b
-	}
-
 	c.log.Debug("no.of chain entries sending through sync token chain API ", len(chain))
 
-	// Success response
+	// Success response — TokenChain carries structured data; serialization happens at API boundary via RenderJSON
 	return c.l.RenderJSON(req, &TCBSyncReply{
-		Status:      true,
-		Message:     "Sent all token chain entries",
-		TCBlock:     tcBlocks,
-		NextBlockID: "",
+		Status:     true,
+		Message:    "Sent all token chain entries",
+		TokenChain: chain,
 	}, http.StatusOK)
 }
 

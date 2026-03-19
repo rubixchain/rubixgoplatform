@@ -96,9 +96,10 @@ Progress: [███░░░░░░░] 33% (phases 01, 02, 04, 05, 06 comple
 | 260320-4zf | Fix missing contract package: create contract/ stub satisfying all 11 importers | 2026-03-20 | f3c3fb2 | [260320-4zf-fix-missing-contract-package-in-core-ft-](./quick/260320-4zf-fix-missing-contract-package-in-core-ft-/) |
 | 260320-59w | Remove core/ft_transfer_optimized.go and dead pool types (TokenInfoPool, TokenSlicePool) | 2026-03-20 | 4e991da | [260320-59w-evaluate-and-remove-core-ft-transfer-opt](./quick/260320-59w-evaluate-and-remove-core-ft-transfer-opt/) |
 | 260320-5ix | Eliminate contract package: internalize types to core, delete contract/ directory | 2026-03-20 | d3bd38b | [260320-5ix-eliminate-contract-package-dependency-cl](./quick/260320-5ix-eliminate-contract-package-dependency-cl/) |
+| 260320-6jw | Refactor syncTokenChain: replace GetAllTokenBlocks with GetTokenChainByTokenID (PostgreSQL) | 2026-03-20 | 871dd58 | [260320-6jw-refactor-first-getalltokenblocks-usage-i](./quick/260320-6jw-refactor-first-getalltokenblocks-usage-i/) |
 
 ## Session Continuity
 
 Last session: 2026-03-20
-Stopped at: Quick task 260320-5ix complete — contract/ directory deleted; ContractTokenInfo/ConsensusContract types internalized into core/contract_types.go; zero files import contract package
+Stopped at: Quick task 260320-6jw complete — syncTokenChain refactored to use GetTokenChainByTokenID; first GetAllTokenBlocks call site eliminated from core/token.go
 Resume file: None
