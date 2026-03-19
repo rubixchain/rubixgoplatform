@@ -3,12 +3,52 @@ package parts
 import (
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
+
+// get level, token number and part index from the RBT token id
+func (id TokenID) GetRbtIDElements() (types.RbtIDElements, error) {
+	var err error
+	rbtElems := types.RbtIDElements{}
+
+	// check if token id is ft id, by checking if the length of the id is more than legth of DID (59)
+	if len(id) > 59 {
+		return types.RbtIDElements{}, fmt.Errorf("invalid token id format for rbt: %s, id length should be <= 15 (<max 2 digits level>_<max 7 digits token number>_<max 4 digits part index>)", id)
+	}
+
+	idElems := strings.Split(id.String(), "_")
+	if len(idElems) < 2 || len(idElems) > 3 { // ensure id is in proper RBT id format
+		return types.RbtIDElements{}, fmt.Errorf("invalid token id format for rbt: %s, id elements should be 2 (whole) or 3 (part)", id)
+	}
+
+	rbtElems.Level, err = strconv.Atoi(idElems[0])
+	if err != nil {
+		return types.RbtIDElements{}, fmt.Errorf("failed to convert level into int for rbt: %s, error: %v", id, err)
+	}
+	rbtElems.TokenNumber, err = strconv.Atoi(idElems[1])
+	if err != nil {
+		return types.RbtIDElements{}, fmt.Errorf("failed to convert token number into int for rbt: %s, error: %v", id, err)
+	}
+
+	switch len(idElems) {
+	case 2:
+		rbtElems.PartIndex = 0 // Case for whole token
+	case 3:
+		rbtElems.PartIndex, err = strconv.Atoi(idElems[2]) // Case for part token
+		if err != nil {
+			return types.RbtIDElements{}, fmt.Errorf("failed to convert part index into int for rbt: %s, error: %v", id, err)
+		}
+	default:
+		return types.RbtIDElements{}, fmt.Errorf("invalid token id format for rbt: %s, id elements should be 2 (whole) or 3 (part)", id)
+	}
+	return rbtElems, nil
+}
 
 // GetMaxDenomTreeLevel gets the max level of a Denom Tree
 func GetMaxDenomTreeLevel() int {
@@ -16,7 +56,7 @@ func GetMaxDenomTreeLevel() int {
 }
 
 func getLowestPossibleDenom() float64 {
-	return rubixmath.FloatPrecision(math.Pow10(-constants.MaxSupportedDecimalPlaces))
+	return rubixmath.FloatPrecision(math.Pow10(-(constants.MaxSupportedDecimalPlaces)))
 }
 
 // getLevelStart returns the BFS start index for the given level.
@@ -206,10 +246,10 @@ func GetTokenIdFromPath(pathStr string) (int, error) {
 }
 
 func GetSplitAndNonsplitTokenDenom(
-	inputTokenDenom map[types.DenomValue]types.DenomCount, 
+	inputTokenDenom map[types.DenomValue]types.DenomCount,
 	transferAmount float64,
 ) (targetDenomArr map[types.DenomValue]types.DenomCount, updatedDenomArr map[types.DenomValue]types.DenomCount, remaining float64, err error) {
-		
+
 	targetDenomArr = make(map[types.DenomValue]types.DenomCount)
 	updatedDenomArr = make(map[types.DenomValue]types.DenomCount)
 
@@ -239,4 +279,84 @@ func GetSplitAndNonsplitTokenDenom(
 	}
 
 	return targetDenomArr, updatedDenomArr, remaining, nil
+}
+
+// GetParentToken derives the parent TokenID from a child's part index.
+//
+// Steps:
+//  1. x          = PartIndex
+//  2. Lx         = GetTreeLevelFromPartIndex(x)
+//  3. childLevelIndex = x - Min(Lx)
+//  4. Lp         = Lx - 1                          (parent level)
+//  5. numChildren= GetNumberOfChildren(Lp)
+//  6. parentLevelIndex = childLevelIndex / numChildren   (integer division)
+//  7. parentPartIndex= Min(Lp) + parentLevelIndex
+func (id TokenID) GetParentToken() (string, error) {
+	child, err := id.GetRbtIDElements()
+	if err != nil {
+		return "", err
+	}
+
+	// x: child part index
+	x := child.PartIndex
+
+	// lx: child level on tree
+	lx, err := util.GetTreeLevelFromPartIndex(x)
+	if err != nil {
+		return "", fmt.Errorf("invalid token: %s, error: %v", id, err)
+	}
+	// if child has tree level 1, then the parent is the whole token, which does not have any part index in tokenID
+	if lx == 1 {
+		parentToken := fmt.Sprintf("%d_%d", child.Level, child.TokenNumber)
+		return parentToken, nil
+	}
+
+	childLevelIndex := x - util.LevelMin(lx)
+
+	// lp: parent level on tree
+	lp := lx - 1
+	numChildren := util.GetNumberOfChildren(lp)
+
+	// parent position in the level
+	parentLevelIndex := childLevelIndex / numChildren
+	parentPartIndex := util.LevelMin(lp) + parentLevelIndex
+
+	return fmt.Sprintf("%d_%d_%d", child.Level, child.TokenNumber, parentPartIndex), nil
+}
+
+// GetChildrenIndexRange returns the part-index range [first, last] of the children
+// of the node identified by parentPartIndex.
+//
+// Steps:
+//  1. x          = parentPartIndex
+//  2. Lx         = GetTreeLevelFromTreeMap(x)
+//  3. levelIndex = x - Min(Lx)
+//  4. numChildren= GetNumberOfChildren(Lx)
+//  5. firstChild = (levelIndex * numChildren) + Min(Lx+1)
+//  6. lastChild  = firstChild + (numChildren - 1)
+func (id TokenID) GetChildrenIndexRange() (types.ChildrenRange, error) {
+	parent, err := id.GetRbtIDElements()
+	if err != nil {
+		return types.ChildrenRange{}, err
+	}
+
+	// part index of parent token
+	x := parent.PartIndex
+
+	// tree level of parent token
+	lx, err := util.GetTreeLevelFromPartIndex(x)
+	if err != nil {
+		return types.ChildrenRange{}, err
+	}
+	if lx == 6 {
+		return types.ChildrenRange{}, fmt.Errorf("part index %d is at level 6 — leaf nodes have no children", x)
+	}
+
+	// parent position in the level
+	levelIndex := x - util.LevelMin(lx)
+	numChildren := util.GetNumberOfChildren(lx)
+	firstChild := (levelIndex * numChildren) + util.LevelMin(lx+1)
+	lastChild := firstChild + (numChildren - 1)
+
+	return types.ChildrenRange{First: firstChild, Last: lastChild}, nil
 }
