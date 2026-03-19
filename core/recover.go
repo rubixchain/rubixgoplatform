@@ -10,7 +10,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	signModule "github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/types/models"
@@ -112,8 +111,8 @@ func (c *Core) initiateRecoverRBT(reqID string, req *model.RBTRecoverRequest) *m
 	if !ok {
 		c.log.Debug("Failed to retrieve slice from interface")
 	}
-	// Convert []interface{} to []TokenInfo
-	var tokenInfos []contract.TokenInfo
+	// Convert []interface{} to []ContractTokenInfo
+	var tokenInfos []ContractTokenInfo
 	for _, item := range retrieved {
 		if m, ok := item.(map[string]interface{}); ok {
 			tokenInfo := mapToTokenInfo(m)
@@ -221,7 +220,7 @@ func (c *Core) recoverPinnedToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to verify signature of sender, Unable to recover tokens"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	tis := make([]contract.TokenInfo, 0)
+	tis := make([]ContractTokenInfo, 0)
 	for i := range recoveredTokens {
 		tts := "rbt"
 		if recoveredTokens[i].TokenValue != 1 {
@@ -238,7 +237,7 @@ func (c *Core) recoverPinnedToken(req *ensweb.Request) *ensweb.Result {
 			c.log.Error("failed to get block id", "err", err)
 			crep.Message = "failed to get block id, " + err.Error()
 		}
-		ti := contract.TokenInfo{
+		ti := ContractTokenInfo{
 			Token:      recoveredTokens[i].TokenID,
 			TokenType:  tt,
 			TokenValue: recoveredTokens[i].TokenValue,
@@ -265,7 +264,7 @@ func (c *Core) requestSigningHash(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
-func mapToTokenInfo(m map[string]interface{}) contract.TokenInfo {
+func mapToTokenInfo(m map[string]interface{}) ContractTokenInfo {
 	tokenType, err := m["tokenType"].(json.Number)
 	if !err {
 		fmt.Println("invalid type for tokenType :", err)
@@ -282,7 +281,7 @@ func mapToTokenInfo(m map[string]interface{}) contract.TokenInfo {
 	if err3 != nil {
 		fmt.Println("failed to convert tokenValue to float64:", err3)
 	}
-	return contract.TokenInfo{
+	return ContractTokenInfo{
 		Token:      m["token"].(string),
 		TokenType:  int(tokenTypeInt64),
 		TokenValue: tokenValueFloat64,
