@@ -82,6 +82,10 @@ type PledgeTokenRequest struct {
 }
 
 type PledgeTokenResponse struct {
-	ReferenceId  string      `json:"referenceId"`
-	PledgeTokens []TokenInfo `json:"pledgeTokens"`
+	ReferenceId  string       `json:"referenceId"`
+	PledgeTokens []*TokenInfo `json:"pledgeTokens"`
+}
+
+type SendTokensRequest struct {
+	Tokens *TransactionTokens `json:"tokens"`
 }
