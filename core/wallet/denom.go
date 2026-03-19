@@ -51,9 +51,9 @@ func (w *Wallet) UpdateTokenDenomArray(did string, denomMap map[types.DenomValue
 	_, err := w.db.Pool().Exec(w.Ctx, `
 		UPDATE token_denom t
 		SET
-			count = v.count
+			count = v.count,
 			updated_at = NOW()
-		FROM unset($2::numeric[], $3::bigint[]) AS v(denom, count)
+		FROM unnest($2::numeric[], $3::bigint[]) AS v(denom, count)
 		WHERE
 			t.did = $1
 		AND t.denom = v.denom
@@ -65,7 +65,11 @@ func (w *Wallet) UpdateTokenDenomArray(did string, denomMap map[types.DenomValue
 }
 
 // The following function should only used when a new DID is created
-func (w *Wallet) InitNewTokenDenomArrayForDID(did string, denomMap map[types.DenomValue]types.DenomCount) error
+func (w *Wallet) InitNewTokenDenomArrayForDID(did string, denomMap map[types.DenomValue]types.DenomCount) error {
+	// TODO: dev-team -- implement initial INSERT of denom rows for new DID
+	return nil
+}
+
 func (w *Wallet) GetRBTBalanceFromDenomArr(did string) (float64, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
 		`SELECT denom, count

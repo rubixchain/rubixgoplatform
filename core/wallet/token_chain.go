@@ -9,8 +9,8 @@ import (
 
 func (w *Wallet) GetTokenChainByTokenID(tokenID string) ([]models.TokenChain, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
-		`SELECT token_id, transaction_id, role, height, created_at, updated_at
-		 FROM tokenchain WHERE token_id = $1 ORDER BY height`, tokenID,
+		`SELECT token_id, transaction_id, role, position, created_at, updated_at
+		 FROM tokenchain WHERE token_id = $1 ORDER BY position`, tokenID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("GetTokenChainByTokenID: %w", err)
@@ -21,7 +21,7 @@ func (w *Wallet) GetTokenChainByTokenID(tokenID string) ([]models.TokenChain, er
 
 func (w *Wallet) GetLatestTransactionAndRoleByTokenID(tokenID string) (*models.Transactions, int16, error) {
 	row := w.db.Pool().QueryRow(w.Ctx,
-		`SELECT transaction_id, role FROM tokenchain WHERE token_id = $1 ORDER BY height DESC LIMIT 1`, tokenID,
+		`SELECT transaction_id, role FROM tokenchain WHERE token_id = $1 ORDER BY position DESC LIMIT 1`, tokenID,
 	)
 
 	var txID string
@@ -43,9 +43,9 @@ func (w *Wallet) GetLatestTransactionAndRoleByTokenID(tokenID string) (*models.T
 
 func (w *Wallet) AddTokenChainEntry(entry *models.TokenChain) error {
 	_, err := w.db.Pool().Exec(w.Ctx, `
-		INSERT INTO tokenchain (token_id, transaction_id, role, height, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, NOW(), NOW())
-	`, entry.TokenID, entry.TransactionID, entry.Role, entry.Height)
+		INSERT INTO tokenchain (token_id, transaction_id,previous_transaction_id, role, position, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+	`, entry.TokenID, entry.TransactionID, entry.PreviousTransactionID, entry.Role, entry.Position)
 	if err != nil {
 		return fmt.Errorf("AddTokenChainEntry: %w", err)
 	}
@@ -54,7 +54,7 @@ func (w *Wallet) AddTokenChainEntry(entry *models.TokenChain) error {
 
 func (w *Wallet) GetTransactionAndRoleAtHeight(tokenID string, height int64) (*models.Transactions, int16, error) {
 	row := w.db.Pool().QueryRow(w.Ctx, `
-		SELECT transaction_id,role FROM tokenchain WHERE token_id = $1 AND height = $2 
+		SELECT transaction_id,role FROM tokenchain WHERE token_id = $1 AND position = $2
 		ORDER BY created_at DESC LIMIT 1`, tokenID, height,
 	)
 	var txID string
