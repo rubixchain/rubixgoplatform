@@ -14,7 +14,6 @@ import (
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
-	"github.com/rubixchain/rubixgoplatform/core/pubsub"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
@@ -111,7 +110,7 @@ type Core struct {
 	didDir               string
 	pm                   *ipfsport.PeerManager
 	l                    *ipfsport.Listener
-	ps                   *pubsub.PubSub
+	ps                   *types.PubSub
 	started              bool
 	ipfsApp              string
 	testnet              bool
@@ -130,9 +129,7 @@ type Core struct {
 	ipfsProviderStore    *IPFSProviderStore
 	asyncPinManager      *AsyncPinManager
 	perfTracker          *PerformanceTracker
-	tokenPool            *TokenInfoPool
 	batchSyncTokenPool   *BatchSyncTokenInfoPool
-	tokenSlicePool       *TokenSlicePool
 	pendingTokenMonitor  *PendingTokenMonitor
 	publishTokenChain    bool
 	fullNode             bool
@@ -241,9 +238,7 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 	}
 
 	// Initialize token pools for memory optimization
-	c.tokenPool = NewTokenInfoPool()
 	c.batchSyncTokenPool = NewBatchSyncTokenInfoPool()
-	c.tokenSlicePool = NewTokenSlicePool()
 
 	// Initialize pending token monitor for self-healing
 	// Check every 5 minutes for tokens pending > 10 minutes
