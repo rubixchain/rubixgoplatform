@@ -73,3 +73,14 @@ func (w *Wallet) GetTransactionAndRoleAtHeight(tokenID string, height int64) (*m
 
 	return tx, tokenRoleInTx, nil
 }
+
+func (w *Wallet) GetTokenChainByTransactionID(transactionID string) ([]models.TokenChain, error) {
+	rows, err := w.db.Pool().Query(w.Ctx,
+		`SELECT token_id, transaction_id, role, position, created_at, updated_at
+		 FROM tokenchain WHERE transaction_id = $1 ORDER BY position`, transactionID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetTokenChainByTransactionID: %w", err)
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByName[models.TokenChain])
+}

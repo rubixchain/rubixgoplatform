@@ -234,6 +234,185 @@ func (w *Wallet) GetTokensFromDenomMap(denomMap map[types.DenomValue]types.Denom
 	return tokens, nil
 }
 
+func (w *Wallet) ReadToken(tokenID string) (*models.Token, error) {
+	row := w.db.Pool().QueryRow(w.Ctx,
+		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
+		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+		 FROM tokens WHERE token_id=$1`, tokenID,
+	)
+	var t models.Token
+	if err := row.Scan(
+		&t.TokenID, &t.ParentTokenID, &t.TokenValue, &t.TokenStatus,
+		&t.DID, &t.TransactionID, &t.TokenStateHash, &t.TokenType,
+		&t.LatestPosition, &t.LatestRole, &t.CreatedAt, &t.UpdatedAt,
+	); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("ReadToken: token %v not found", tokenID)
+		}
+		return nil, fmt.Errorf("ReadToken scan: %w", err)
+	}
+	return &t, nil
+}
+
+func (w *Wallet) GetAllTokens(did string) ([]models.Token, error) {
+	rows, err := w.db.Pool().Query(w.Ctx,
+		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
+		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+		 FROM tokens WHERE did=$1`, did,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetAllTokens: %w", err)
+	}
+	defer rows.Close()
+	var tokens []models.Token
+	for rows.Next() {
+		var t models.Token
+		if err := rows.Scan(
+			&t.TokenID, &t.ParentTokenID, &t.TokenValue, &t.TokenStatus,
+			&t.DID, &t.TransactionID, &t.TokenStateHash, &t.TokenType,
+			&t.LatestPosition, &t.LatestRole, &t.CreatedAt, &t.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("GetAllTokens scan: %w", err)
+		}
+		tokens = append(tokens, t)
+	}
+	return tokens, rows.Err()
+}
+
+func (w *Wallet) CreateToken(t *models.Token) error {
+	if _, err := w.db.Pool().Exec(w.Ctx,
+		`INSERT INTO tokens(token_id, parent_token_id, token_value, token_status, did, transaction_id,
+		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+		t.TokenID, t.ParentTokenID, t.TokenValue, t.TokenStatus,
+		t.DID, t.TransactionID, t.TokenStateHash, t.TokenType,
+		t.LatestPosition, t.LatestRole, t.CreatedAt, t.UpdatedAt,
+	); err != nil {
+		return fmt.Errorf("CreateToken: %w", err)
+	}
+	return nil
+}
+
+func (w *Wallet) UpdateToken(t *models.Token) error {
+	if _, err := w.db.Pool().Exec(w.Ctx,
+		`UPDATE tokens SET token_status=$1, did=$2, transaction_id=$3, token_state_hash=$4,
+		 latest_position=$5, latest_role=$6, updated_at=NOW()
+		 WHERE token_id=$7`,
+		t.TokenStatus, t.DID, t.TransactionID, t.TokenStateHash,
+		t.LatestPosition, t.LatestRole, t.TokenID,
+	); err != nil {
+		return fmt.Errorf("UpdateToken: %w", err)
+	}
+	return nil
+}
+
+func (w *Wallet) GetRBTTokensChunk(did string, limit, offset int) ([]models.Token, error) {
+	rows, err := w.db.Pool().Query(w.Ctx,
+		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
+		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+		 FROM tokens WHERE did=$1 AND token_type=(SELECT id FROM token_type WHERE name=$2)
+		 LIMIT $3 OFFSET $4`,
+		did, constants.TokenType_RBT, limit, offset,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetRBTTokensChunk: %w", err)
+	}
+	defer rows.Close()
+	var tokens []models.Token
+	for rows.Next() {
+		var t models.Token
+		if err := rows.Scan(
+			&t.TokenID, &t.ParentTokenID, &t.TokenValue, &t.TokenStatus,
+			&t.DID, &t.TransactionID, &t.TokenStateHash, &t.TokenType,
+			&t.LatestPosition, &t.LatestRole, &t.CreatedAt, &t.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("GetRBTTokensChunk scan: %w", err)
+		}
+		tokens = append(tokens, t)
+	}
+	return tokens, rows.Err()
+}
+
+func (w *Wallet) GetFTTokensChunk(did string, limit, offset int) ([]models.Token, error) {
+	rows, err := w.db.Pool().Query(w.Ctx,
+		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
+		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+		 FROM tokens WHERE did=$1 AND token_type=(SELECT id FROM token_type WHERE name=$2)
+		 LIMIT $3 OFFSET $4`,
+		did, constants.TokenType_FT, limit, offset,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetFTTokensChunk: %w", err)
+	}
+	defer rows.Close()
+	var tokens []models.Token
+	for rows.Next() {
+		var t models.Token
+		if err := rows.Scan(
+			&t.TokenID, &t.ParentTokenID, &t.TokenValue, &t.TokenStatus,
+			&t.DID, &t.TransactionID, &t.TokenStateHash, &t.TokenType,
+			&t.LatestPosition, &t.LatestRole, &t.CreatedAt, &t.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("GetFTTokensChunk scan: %w", err)
+		}
+		tokens = append(tokens, t)
+	}
+	return tokens, rows.Err()
+}
+
+func (w *Wallet) GetSmartContractTokensChunk(did string, limit, offset int) ([]models.Token, error) {
+	rows, err := w.db.Pool().Query(w.Ctx,
+		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
+		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+		 FROM tokens WHERE did=$1 AND token_type=(SELECT id FROM token_type WHERE name=$2)
+		 LIMIT $3 OFFSET $4`,
+		did, constants.TokenType_SmartContract, limit, offset,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetSmartContractTokensChunk: %w", err)
+	}
+	defer rows.Close()
+	var tokens []models.Token
+	for rows.Next() {
+		var t models.Token
+		if err := rows.Scan(
+			&t.TokenID, &t.ParentTokenID, &t.TokenValue, &t.TokenStatus,
+			&t.DID, &t.TransactionID, &t.TokenStateHash, &t.TokenType,
+			&t.LatestPosition, &t.LatestRole, &t.CreatedAt, &t.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("GetSmartContractTokensChunk scan: %w", err)
+		}
+		tokens = append(tokens, t)
+	}
+	return tokens, rows.Err()
+}
+
+func (w *Wallet) GetAllPinnedTokens(did string) ([]models.Token, error) {
+	rows, err := w.db.Pool().Query(w.Ctx,
+		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
+		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+		 FROM tokens WHERE did=$1 AND token_status=$2`,
+		did, constants.TokenStatus_PinnedAsService,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetAllPinnedTokens: %w", err)
+	}
+	defer rows.Close()
+	var tokens []models.Token
+	for rows.Next() {
+		var t models.Token
+		if err := rows.Scan(
+			&t.TokenID, &t.ParentTokenID, &t.TokenValue, &t.TokenStatus,
+			&t.DID, &t.TransactionID, &t.TokenStateHash, &t.TokenType,
+			&t.LatestPosition, &t.LatestRole, &t.CreatedAt, &t.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("GetAllPinnedTokens scan: %w", err)
+		}
+		tokens = append(tokens, t)
+	}
+	return tokens, rows.Err()
+}
+
 func (w *Wallet) CreateRBTToken(token models.Token) error {
 	if _, err := w.db.Pool().Exec(w.Ctx,
 		`INSERT INTO tokens(token_id, parent_token_id, token_value, token_status, did, transaction_id,
