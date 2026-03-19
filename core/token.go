@@ -378,6 +378,18 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 		}
 	}
 
+	// Validate chain: position contiguity — positions must be strictly sequential (0, 1, 2, ...)
+	for i := 1; i < len(chain); i++ {
+		if chain[i].Position != chain[i-1].Position+1 {
+			c.log.Error("Token chain position gap", "token", tr.Token,
+				"position", chain[i].Position, "prev_position", chain[i-1].Position)
+			return c.l.RenderJSON(req, &TCBSyncReply{
+				Status:  false,
+				Message: fmt.Sprintf("invalid tokenchain: position gap at index %d (got %d, expected %d) for token %s", i, chain[i].Position, chain[i-1].Position+1, tr.Token),
+			}, http.StatusInternalServerError)
+		}
+	}
+
 	c.log.Debug("no.of chain entries sending through sync token chain API ", len(chain))
 
 	// Success response — TokenChain carries structured data; serialization happens at API boundary via RenderJSON
