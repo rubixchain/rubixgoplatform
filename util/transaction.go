@@ -58,6 +58,14 @@ func VerifySignature(dc types.DIDCrypto, txInfo *models.TransactionInfo, signatu
 	return nil
 }
 
+func BytesToTransaction(data []byte) *models.Transactions {
+	var tx models.Transactions
+	if err := json.Unmarshal(data, &tx); err != nil {
+		return nil
+	}
+	return &tx
+}
+
 func PublishTransaction(pubsub *types.PubSub, tx *models.TransactionInfo, signature *models.Signature) (*models.Transactions, error) {
 	txID, err := GetTransactionID(tx)
 	if err != nil {
