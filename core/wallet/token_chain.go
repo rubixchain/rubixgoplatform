@@ -5,7 +5,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/types/models"
-	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 func (w *Wallet) GetTokenChainByTokenID(tokenID string) ([]models.TokenChain, error) {
@@ -40,79 +39,6 @@ func (w *Wallet) GetTokenChainByTokenIDAndPrevTxnId(tokenID string, txnID string
 	}
 
 	return pgx.CollectRows(rows, pgx.RowToStructByName[models.TokenChain])
-}
-
-// get latest transaction id of the given token id
-func (w *Wallet) GetGenesisTransactionIdByTokenId(tokenID string, isFullNode bool) (string, error) {
-	var tableName string
-	if isFullNode {
-		tableName = "fullnode_tokenchain_index"
-	} else {
-		tableName = "tokenchain_index"
-	}
-	query := fmt.Sprintf(`SELECT index[1] FROM %s WHERE token_id = $1 AND previous_transaction_id = ''`, pgx.Identifier{tableName}.Sanitize())
-
-	row, err := w.db.Pool().Query(w.Ctx, query, tokenID)
-	if err != nil {
-		return "", fmt.Errorf("GetGenesisTransactionIdByTokenId: %w", err)
-	}
-	var genesisTxnIdIndex int
-	if err := row.Scan(&genesisTxnIdIndex); err != nil {
-		if err == pgx.ErrNoRows {
-			return "", fmt.Errorf("latest transaction id not found for token %s", tokenID)
-		}
-		return "", fmt.Errorf("GetLatestTransactionIdByTokenId scan: %w", err)
-	}
-
-	return w.GetTransactionIdByIndex(int16(genesisTxnIdIndex), isFullNode)
-}
-
-// get latest transaction id of the given token id
-func (w *Wallet) GetLatestTransactionIdByTokenId(tokenID string, isFullNode bool) (string, error) {
-	var tableName string
-	if isFullNode {
-		tableName = "fullnode_tokenchain_index"
-	} else {
-		tableName = "tokenchain_index"
-	}
-	query := fmt.Sprintf(`SELECT index[array_upper(index, 1)] FROM %s WHERE token_id = $1`, pgx.Identifier{tableName}.Sanitize())
-
-	row, err := w.db.Pool().Query(w.Ctx, query, tokenID)
-	if err != nil {
-		return "", fmt.Errorf("GetLatestTransactionIdByTokenId: %w", err)
-	}
-	var latestTxnIdIndex int
-	if err := row.Scan(&latestTxnIdIndex); err != nil {
-		if err == pgx.ErrNoRows {
-			return "", fmt.Errorf("latest transaction id not found for token %s", tokenID)
-		}
-		return "", fmt.Errorf("GetLatestTransactionIdByTokenId scan: %w", err)
-	}
-
-	return w.GetTransactionIdByIndex(int16(latestTxnIdIndex), isFullNode)
-}
-
-// get transaction id by Index id
-func (w *Wallet) GetTransactionIdByIndex(index int16, isFullNode bool) (string, error) {
-	var tableName string
-	if isFullNode {
-		tableName = "fullnode_tokenchain"
-	} else {
-		tableName = "tokenchain"
-	}
-	query := fmt.Sprintf(`SELECT transaction_id FROM %s WHERE id = $1`, pgx.Identifier{tableName}.Sanitize())
-	row, err := w.db.Pool().Query(w.Ctx, query, index)
-	if err != nil {
-		return "", fmt.Errorf("GetTransactionIdByIndex: %w", err)
-	}
-	var txnId string
-	if err := row.Scan(&txnId); err != nil {
-		if err == pgx.ErrNoRows {
-			return "", fmt.Errorf("transaction id not found for the index %d", index)
-		}
-		return "", fmt.Errorf("GetTransactionIdByIndex scan: %w", err)
-	}
-	return txnId, nil
 }
 
 // get token role in latest transaction of the given token id
@@ -172,10 +98,10 @@ func (w *Wallet) GetTransactionAndRoleAtHeight(tokenID string, position int64) (
 }
 
 // GetAllTransactionInfoInBytesByTokenId fetches entire token chain, fetches each transaction by transactionId and
-// converts into bytes, and returns the chain of ordered transactions in byte array with a limit of 100 transactions,
+// converts into bytes, and returns the chain of ordered transactions with a limit of 100 transactions,
 // and the last transaction id of the array in order
-func (w *Wallet) GetAllTransactionInfoInBytesByTokenId(tokenID string, txnId string) ([][]byte, string, error) {
-	txnChain := make([][]byte, 0)
+func (w *Wallet) GetAllTransactionInfoByTokenId(tokenID string, txnId string) ([]models.Transactions, string, error) {
+	txnChain := make([]models.Transactions, 0)
 	// get token chain of the token with height limit of 100
 	tokenChain, err := w.GetTokenChainByTokenIDAndPrevTxnId(tokenID, txnId)
 	if err != nil {
@@ -189,13 +115,7 @@ func (w *Wallet) GetAllTransactionInfoInBytesByTokenId(tokenID string, txnId str
 		if err != nil {
 			return nil, "", fmt.Errorf("GetAllTransactionsInBytesByTokenId: failed to get transaction by id; error: %v ", err)
 		}
-
-		// convert txn to bytes
-		txnBytes, err := util.TransactionToBytes(txn)
-		if err != nil {
-			return nil, "", fmt.Errorf("GetAllTransactionsInBytesByTokenId: failed to convert transaction into bytes; error: %v ", err)
-		}
-		txnChain = append(txnChain, txnBytes)
+		txnChain = append(txnChain, *txn)
 	}
 	return txnChain, tokenChain[len(tokenChain)-1].TransactionID, nil
 }
