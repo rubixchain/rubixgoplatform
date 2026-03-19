@@ -185,7 +185,7 @@ func (c *Core) IsParentTokenBurnt(isFullNode bool, tokenID string) (error, bool)
 			}
 		}
 	} else {
-		tokenDetails, err := c.w.GetRBTToken(tokenID)
+		tokenDetails, err := c.w.GetTokenByTokenID(tokenID)
 		if err == nil {
 			if tokenDetails.ParentTokenID.Valid && tokenDetails.ParentTokenID.String != "" {
 				parentTokenID = tokenDetails.ParentTokenID.String
