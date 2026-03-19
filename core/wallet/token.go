@@ -119,7 +119,7 @@ func (w *Wallet) LockTokensByID(tokenIDs []string) error {
 
 func (w *Wallet) LockTokenByID(tokenID string) error {
 	if _, err := w.db.Pool().Exec(w.Ctx,
-		`UPDATE tokens SET token_status=$1 where token_id = 2`, constants.TokenStatus_Locked, tokenID,
+		`UPDATE tokens SET token_status=$1 where token_id = $2`, constants.TokenStatus_Locked, tokenID,
 	); err != nil {
 		return fmt.Errorf("unable to lock tokens, err: %v", err)
 	}
@@ -211,7 +211,7 @@ func (w *Wallet) GetTokensFromDenomMap(denomMap map[types.DenomValue]types.Denom
 		rows, _ := w.db.Pool().Query(w.Ctx,
 			`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
 			 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
-			 FROM tokens WHERE token_value=$1 AND did=$2 AND token_status=$3 LIMIT=$4 `,
+			 FROM tokens WHERE token_value=$1 AND did=$2 AND token_status=$3 LIMIT $4 `,
 			denomValue,
 			did,
 			constants.TokenStatus_Free,
