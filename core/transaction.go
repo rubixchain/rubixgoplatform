@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -202,6 +203,32 @@ func (c *Core) TransactionSetup() {
 	c.l.AddRoute(APISendTokens, "POST", c.SendTokens)
 }
 
+// This function has been added here since the other corresponding sync functions has not been added yet.
+// Once the other sync functions and all are added, we can move this along with that.
+func (c *Core) syncTransactionTokens(peer *ipfsport.Peer, tokens *models.TransactionTokens) error {
+	tokenGroups := [][]*models.TokenInfo{
+		tokens.RBT,
+		tokens.NFT,
+		tokens.FT,
+		tokens.SmartContract,
+	}
+
+	for _, group := range tokenGroups {
+		for _, token := range group {
+			if token == nil {
+				continue
+			}
+
+			err := c.syncTokenChainFrom(peer, token.PreviousTransactionID, token.TokenID)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 	did := c.l.GetQuery(request, "did")
 	crep := model.BasicResponse{Status: false}
@@ -218,20 +245,12 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 		c.log.Error("InitiateTransaction: Failed to get peer for receiver", "err", err)
 	}
 	defer peer.Close()
-	// This will be the base logic, further changes can be added on top of this.
-	// These will be added
-	var syncTokenRequest models.SyncTransactionChainRequest
-	var syncTokenResponse model.BasicResponse
-	syncTokenRequest.Did = did
-	// Here we need to manage this according to the new APISyncTransactionChain api
-	err = peer.SendJSONRequest(
-		"POST",
-		APISyncTransactionChain,
-		nil,
-		&syncTokenRequest,
-		&syncTokenResponse,
-		true,
-	)
+	err = c.syncTransactionTokens(peer, sendTokensRequest.Tokens)
+	if err != nil {
+		c.log.Error("SendTokens: Failed to sync transaction tokens", "err", err)
+		crep.Message = "SendTokens: Failed to sync transaction tokens"
+		return c.l.RenderJSON(request, &crep, http.StatusBadRequest)
+	}
 
 	return c.l.RenderJSON(request, &crep, http.StatusBadRequest)
 }
