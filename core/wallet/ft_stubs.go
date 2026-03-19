@@ -256,3 +256,35 @@ func (w *Wallet) AddFailedTokensToTable(info interface{}) error {
 func (w *Wallet) DeleteFailedToSyncTokenFromTable(tokenID string) error {
 	return fmt.Errorf("DeleteFailedToSyncTokenFromTable: not implemented")
 }
+
+// ── Fullnode-specific stubs ────────────────────────────────────────────────────
+
+// StoreFailedTransaction stubs storing a permanently-failed transaction for review.
+// TODO: implement using PostgreSQL failed_transactions table.
+func (w *Wallet) StoreFailedTransaction(txn *model.FailedTransaction) error {
+	return nil
+}
+
+// GetAllFailedToSyncTokens stubs retrieval of tokens that failed to sync.
+// TODO: implement using PostgreSQL.
+func (w *Wallet) GetAllFailedToSyncTokens() ([]model.FailedToSyncTokenDetailsInfo, error) {
+	return nil, nil
+}
+
+// AddTransactionsToFullNodeTransactionHistoryTable stubs inserting a fullnode txn history record.
+// TODO: implement using PostgreSQL.
+func (w *Wallet) AddTransactionsToFullNodeTransactionHistoryTable(t *model.FullNodeTxnHistoryInfo) error {
+	return nil
+}
+
+// ReadFullNodeTransactionHistoryTable stubs reading a fullnode txn history record by ID.
+// TODO: implement using PostgreSQL.
+func (w *Wallet) ReadFullNodeTransactionHistoryTable(transactionID string) (*model.FullNodeTxnHistoryInfo, error) {
+	return nil, fmt.Errorf("ReadFullNodeTransactionHistoryTable: not implemented")
+}
+
+// UpdateFullNodeTransactionHistoryTable stubs updating a fullnode txn history record.
+// TODO: implement using PostgreSQL.
+func (w *Wallet) UpdateFullNodeTransactionHistoryTable(t *model.FullNodeTxnHistoryInfo) error {
+	return nil
+}
