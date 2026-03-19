@@ -65,17 +65,17 @@ func (w *Wallet) GetAllTransactionsByOffset(limit, offset int) ([]models.Transac
 }
 
 // GetGenesisTransaction retrieves genesis transaction info for the given token id
-func (w *Wallet) GetGenesisTransaction(tokenId string) (*models.Transactions, error) {
-	genesisTxnId, err := w.GetGenesisTransactionIdByTokenId(tokenId)
+func (w *Wallet) GetGenesisTransaction(tokenId string, isFullNode bool) (*models.Transactions, error) {
+	genesisTxnId, err := w.GetGenesisTransactionIdByTokenId(tokenId, isFullNode)
 	if err != nil {
-
+		return nil, fmt.Errorf("GetGenesisTransaction: %v", err)
 	}
 	return w.GetTransactionByID(genesisTxnId) 
 }
 
 // GetLatestTransaction retrieves genesis transaction info for the given token id
-func (w *Wallet) GetLatestTransaction(tokenId string) (*models.Transactions, error) {
-	latestTxnId, err := w.GetLatestTransactionIdByTokenId(tokenId)
+func (w *Wallet) GetLatestTransaction(tokenId string, isFullNode bool) (*models.Transactions, error) {
+	latestTxnId, err := w.GetLatestTransactionIdByTokenId(tokenId, isFullNode)
 	if err != nil {
 
 	}

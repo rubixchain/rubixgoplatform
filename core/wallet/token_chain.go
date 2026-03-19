@@ -43,12 +43,16 @@ func (w *Wallet) GetTokenChainByTokenIDAndPrevTxnId(tokenID string, txnID string
 }
 
 // get latest transaction id of the given token id
-func (w *Wallet) GetGenesisTransactionIdByTokenId(tokenID string) (string, error) {
-	row, err := w.db.Pool().Query(w.Ctx,
-		`SELECT index[1]
-			FROM tokenchain_index
-			WHERE token_id = $1`, tokenID,
-	)
+func (w *Wallet) GetGenesisTransactionIdByTokenId(tokenID string, isFullNode bool) (string, error) {
+	var tableName string
+	if isFullNode {
+		tableName = "fullnode_tokenchain_index"
+	} else {
+		tableName = "tokenchain_index"
+	}
+	query := fmt.Sprintf(`SELECT index[1] FROM %s WHERE token_id = $1 AND previous_transaction_id = ''`, pgx.Identifier{tableName}.Sanitize())
+
+	row, err := w.db.Pool().Query(w.Ctx, query, tokenID)
 	if err != nil {
 		return "", fmt.Errorf("GetGenesisTransactionIdByTokenId: %w", err)
 	}
@@ -60,16 +64,20 @@ func (w *Wallet) GetGenesisTransactionIdByTokenId(tokenID string) (string, error
 		return "", fmt.Errorf("GetLatestTransactionIdByTokenId scan: %w", err)
 	}
 
-	return w.GetTransactionIdByIndex(int16(genesisTxnIdIndex))
+	return w.GetTransactionIdByIndex(int16(genesisTxnIdIndex), isFullNode)
 }
 
 // get latest transaction id of the given token id
-func (w *Wallet) GetLatestTransactionIdByTokenId(tokenID string) (string, error) {
-	row, err := w.db.Pool().Query(w.Ctx,
-		`SELECT index[array_upper(index, 1)]
-			FROM tokenchain_index
-			WHERE token_id = $1`, tokenID,
-	)
+func (w *Wallet) GetLatestTransactionIdByTokenId(tokenID string, isFullNode bool) (string, error) {
+	var tableName string
+	if isFullNode {
+		tableName = "fullnode_tokenchain_index"
+	} else {
+		tableName = "tokenchain_index"
+	}
+	query := fmt.Sprintf(`SELECT index[array_upper(index, 1)] FROM %s WHERE token_id = $1`, pgx.Identifier{tableName}.Sanitize())
+
+	row, err := w.db.Pool().Query(w.Ctx, query, tokenID)
 	if err != nil {
 		return "", fmt.Errorf("GetLatestTransactionIdByTokenId: %w", err)
 	}
@@ -81,16 +89,19 @@ func (w *Wallet) GetLatestTransactionIdByTokenId(tokenID string) (string, error)
 		return "", fmt.Errorf("GetLatestTransactionIdByTokenId scan: %w", err)
 	}
 
-	return w.GetTransactionIdByIndex(int16(latestTxnIdIndex))
+	return w.GetTransactionIdByIndex(int16(latestTxnIdIndex), isFullNode)
 }
 
 // get transaction id by Index id
-func (w *Wallet) GetTransactionIdByIndex(index int16) (string, error) {
-	row, err := w.db.Pool().Query(w.Ctx,
-		`SELECT transaction_id
-		FROM tokenchain
-		WHERE id = $1`, index,
-	)
+func (w *Wallet) GetTransactionIdByIndex(index int16, isFullNode bool) (string, error) {
+	var tableName string
+	if isFullNode {
+		tableName = "fullnode_tokenchain"
+	} else {
+		tableName = "tokenchain"
+	}
+	query := fmt.Sprintf(`SELECT transaction_id FROM %s WHERE id = $1`, pgx.Identifier{tableName}.Sanitize())
+	row, err := w.db.Pool().Query(w.Ctx, query, index)
 	if err != nil {
 		return "", fmt.Errorf("GetTransactionIdByIndex: %w", err)
 	}
@@ -105,12 +116,15 @@ func (w *Wallet) GetTransactionIdByIndex(index int16) (string, error) {
 }
 
 // get token role in latest transaction of the given token id
-func (w *Wallet) GetRoleOfTokenIdInLatestTxn(tokenID string) (int16, error) {
-	row, err := w.db.Pool().Query(w.Ctx,
-		`SELECT role
-		FROM tokenchain
-		WHERE token_id = $1`, tokenID,
-	)
+func (w *Wallet) GetRoleOfTokenIdInLatestTxn(tokenID string, isFullNode bool) (int16, error) {
+	var tableName string
+	if isFullNode {
+		tableName = "fullnode_tokenchain"
+	} else {
+		tableName = "tokenchain"
+	}
+	query := fmt.Sprintf(`SELECT role FROM %s WHERE token_id = $1`, pgx.Identifier{tableName}.Sanitize())
+	row, err := w.db.Pool().Query(w.Ctx, query, tokenID)
 	if err != nil {
 		return -1, fmt.Errorf("GetRoleOfTokenIdInLatestTxn: %w", err)
 	}
@@ -158,7 +172,7 @@ func (w *Wallet) GetTransactionAndRoleAtHeight(tokenID string, position int64) (
 }
 
 // GetAllTransactionInfoInBytesByTokenId fetches entire token chain, fetches each transaction by transactionId and
-// converts into bytes, and returns the chain of ordered transactions in byte array with a limit of 100 transactions, 
+// converts into bytes, and returns the chain of ordered transactions in byte array with a limit of 100 transactions,
 // and the last transaction id of the array in order
 func (w *Wallet) GetAllTransactionInfoInBytesByTokenId(tokenID string, txnId string) ([][]byte, string, error) {
 	txnChain := make([][]byte, 0)

@@ -152,7 +152,7 @@ func (c *Core) IsparentTokenBurnt(isFullNode bool, tokenID string) (error, bool)
 		}
 
 		// TODO: replace with proper fullnode genesis txnID retrieval once available
-		genesisTx, err := c.w.GetGenesisTransaction(tokenID)
+		genesisTx, err := c.w.GetGenesisTransaction(tokenID, c.fullNode)
 		if err != nil {
 			return fmt.Errorf("failed to get genesis transaction for token %s: %w", tokenID, err), false
 		}
