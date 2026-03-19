@@ -13,6 +13,7 @@ import (
 	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/contract"
@@ -21,6 +22,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -163,11 +165,11 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, err
 	}
 	td, err := c.w.ReadToken(parentTokenID)
 	if err != nil {
-		td = &wallet.Token{
+		td = &models.Token{
 			TokenID:     parentTokenID,
 			TokenValue:  tv,
 			DID:         p.GetPeerDID(),
-			TokenStatus: constants.TokenStatus_Burnt,
+			TokenStatus: int16(constants.TokenStatus_Burnt),
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
 		}
@@ -182,11 +184,11 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, err
 				c.log.Error("failed to get genesis token chain block", "token", parentTokenID, "err", err)
 				return -1, fmt.Errorf("failed to get genesis token chain block")
 			}
-			td.ParentTokenID = ppt
+			td.ParentTokenID = pgtype.Text{String: ppt, Valid: ppt != ""}
 		}
 		c.w.CreateToken(td)
 	} else {
-		td.TokenStatus = constants.TokenStatus_Burnt
+		td.TokenStatus = int16(constants.TokenStatus_Burnt)
 		c.w.UpdateToken(td)
 	}
 	// update sync status to incomplete
@@ -323,13 +325,12 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 
 	tokenInfo, err := c.w.ReadToken(ti.Token)
 	if err != nil || tokenInfo.TokenID == "" {
-		tokenInfo = &wallet.Token{
-			TokenID:       ti.Token,
-			TokenValue:    ti.TokenValue,
-			ParentTokenID: "",
-			DID:           ti.OwnerDID,
-			CreatedAt:     time.Now(),
-			UpdatedAt:     time.Now(),
+		tokenInfo = &models.Token{
+			TokenID:    ti.Token,
+			TokenValue: ti.TokenValue,
+			DID:        ti.OwnerDID,
+			CreatedAt:  time.Now(),
+			UpdatedAt:  time.Now(),
 		}
 		dbWriteSem <- struct{}{}
 		err := util.RetrySQLiteWrite(func() error {
@@ -343,7 +344,7 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 	}
 
 	tokenInfo.DID = sc.GetSenderDID()
-	tokenInfo.TokenStatus = constants.TokenStatus_QuorumPledged
+	tokenInfo.TokenStatus = int16(constants.TokenStatus_QuorumPledged)
 	tokenInfo.TransactionID = b.GetTid()
 	tokenInfo.SyncStatus = constants.SyncStatus_Incomplete
 	dbWriteSem <- struct{}{}
