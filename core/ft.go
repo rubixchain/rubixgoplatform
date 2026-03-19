@@ -191,7 +191,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			ft := wallet.FTToken{
 				TokenID:     ftID,
 				FTName:      FTName,
-				TokenStatus: wallet.TokenIsFree,
+				TokenStatus: constants.TokenStatus_Free,
 				TokenValue:  fractionalValue,
 				DID:         did,
 				CreatedAt:   time.Now(),
@@ -310,7 +310,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			return err
 		}
 		c.log.Debug("burnt token block added ")
-		wholeTokens[i].TokenStatus = wallet.TokenIsBurntForFT
+		wholeTokens[i].TokenStatus = constants.TokenStatus_BurntForFT
 		err = c.w.UpdateToken(&wholeTokens[i])
 		if err != nil {
 			c.log.Error("FT token creation failed, failed to update token status", "err", err)
@@ -627,7 +627,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 		// Original logic for small transfers
 		TokenInfo = make([]contract.TokenInfo, 0)
 		for i := range FTsForTxn {
-			FTsForTxn[i].TokenStatus = wallet.TokenIsLocked
+			FTsForTxn[i].TokenStatus = constants.TokenStatus_Locked
 			lockFTErr := c.s.Update(wallet.FTTokenStorage, &FTsForTxn[i], "token_id=?", FTsForTxn[i].TokenID)
 			if lockFTErr != nil {
 				c.log.Error("Failed to update FT token status", "err", lockFTErr)
@@ -721,8 +721,8 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 					return
 				}
 
-				if ftToken.TokenStatus == wallet.TokenIsLocked {
-					ftToken.TokenStatus = wallet.TokenIsFree
+				if ftToken.TokenStatus == constants.TokenStatus_Locked {
+					ftToken.TokenStatus = constants.TokenStatus_Free
 					updateFTErr := c.s.Update(wallet.FTTokenStorage, ftToken, "token_id=?", token.Token)
 					if updateFTErr != nil {
 						c.log.Error("Failed to update FT token status", "token", token.Token, "err", updateFTErr)
@@ -944,7 +944,7 @@ func (c *Core) UnlockFTs() error {
 			continue
 		}
 
-		ft.TokenStatus = wallet.TokenIsFree
+		ft.TokenStatus = constants.TokenStatus_Free
 
 		// First, delete the token
 		err := c.s.Delete(wallet.FTTokenStorage, &wallet.FT{}, "token_id=?", ft.TokenID)
