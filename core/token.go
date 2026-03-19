@@ -365,13 +365,16 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 		}, http.StatusNotFound)
 	}
 
-	// Validate chain: linkage check
+	// Validate chain: linkage check — broken linkage is a hard error; tokenchain integrity is a strict invariant
 	for i := 1; i < len(chain); i++ {
 		prev := chain[i].PreviousTransactionID
 		if prev == nil || *prev != chain[i-1].TransactionID {
-			c.log.Warn("Token chain linkage broken", "token", tr.Token, "position", chain[i].Position)
-			// Log but do not abort — chain may have gaps in legacy data
-			// TODO: decide if broken linkage should be a hard error
+			c.log.Error("Token chain linkage broken", "token", tr.Token, "position", chain[i].Position,
+				"expected_prev", chain[i-1].TransactionID, "got_prev", prev)
+			return c.l.RenderJSON(req, &TCBSyncReply{
+				Status:  false,
+				Message: fmt.Sprintf("invalid tokenchain: broken linkage at position %d for token %s", chain[i].Position, tr.Token),
+			}, http.StatusInternalServerError)
 		}
 	}
 
