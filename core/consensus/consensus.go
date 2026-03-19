@@ -1,69 +1,53 @@
 package consensus
 
 import (
-	"net/http"
+	"fmt"
 
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
-	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
+	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
-func (c *Core) reqPledgeToken(request *ensweb.Request) *ensweb.Result {
-	did := c.l.GetQuery(request, "did")
+// The input can be made into a struct. Right now added all inputs separately to get a clear picture
+func ReqPledgeToken(
+	dc types.DIDCrypto,
+	w *wallet.Wallet,
+	transactionValue float64,
+	networkMode string,
+	log logger.Logger,
+	pubsub *types.PubSub,
+	referenceId string,
+) (models.PledgeTokenResponse, error) {
 
-	var pledgeTokenRequest models.PledgeTokenRequest
-	err := c.l.ParseJSON(request, &pledgeTokenRequest)
-
-	crep := model.BasicResponse{Status: false}
-
-	c.log.Debug("Request for pledge tokens", "did", did)
-
-	if err != nil {
-		c.log.Error("Failed to parse json request", "err", err)
-		crep.Message = "Invalid request body"
-		return c.l.RenderJSON(request, &crep, http.StatusBadRequest)
-	}
-
-	_, ok := c.qc[did]
-	if !ok {
-		c.log.Error("Quorum is not setup", "did", did)
-		crep.Message = "Quorum is not setup"
-		return c.l.RenderJSON(request, &crep, http.StatusNotFound)
-	}
-
-	dc := c.pqc[did]
-
-	pledgeTokenDetails, err := parts.CollectRBTTokens(
+	pledgeTokenDetails, _, err := parts.CollectRBTTokens(
 		dc,
-		c.w,
-		pledgeTokenRequest.TokensRequired,
-		c.testnet,
-		c.log,
-		c.publishTxn,
+		w,
+		transactionValue,
+		networkMode,
+		log,
+		pubsub,
 	)
 
 	if err != nil {
-		c.log.Error("Failed to get tokens", "err", err)
-		crep.Message = "Failed to get tokens"
-		return c.l.RenderJSON(request, &crep, http.StatusInternalServerError)
+		log.Error("Failed to get tokens", "err", err)
+		return models.PledgeTokenResponse{}, err
 	}
 
 	if len(pledgeTokenDetails) == 0 {
-		crep.Message = "No tokens left to pledge"
-		return c.l.RenderJSON(request, &crep, http.StatusConflict)
+		return models.PledgeTokenResponse{}, fmt.Errorf("no tokens left to pledge")
 	}
-
-	pledgeTokens := BuildTokenInfos(pledgeTokenDetails)
 
 	pledgeResponse := models.PledgeTokenResponse{
-		ReferenceId:  request.ReferenceId,
-		PledgeTokens: pledgeTokens,
+		ReferenceId:  referenceId,
+		PledgeTokens: pledgeTokenDetails,
 	}
 
-	return c.l.RenderJSON(request, &pledgeResponse, http.StatusOK)
+	return pledgeResponse, nil
 }
+func initiateConsensus() {
+	//This must be called at the end of initiateConsensus
 
-func (c *Core) initiateConsensus(request *ensweb.Request) *ensweb.Result {
-	
+	// c.w.AddTokenStateHashes( < current token state hash>)
 }
