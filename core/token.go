@@ -1352,62 +1352,16 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 }
 
 func (c *Core) syncMissingBlocks(p *ipfsport.Peer, tokenSyncInfo TokenSyncInfo) error {
-	// read the level db and check the block number sequence and return the block numbers that needs to be synced
-	// if all blocks are synced then mark the token sync status as completed
-	minMissingBlockId, maxMissingblockId, err := c.GetMissingBlockSequence(tokenSyncInfo)
-	if err != nil {
-		c.log.Error("failed to fetch missing block sequence", "error", err)
+	// Validate the full PostgreSQL tokenchain; nil means chain is complete and consistent.
+	if err := c.GetMissingBlockSequence(tokenSyncInfo); err != nil {
+		c.log.Error("Token chain validation failed", "token", tokenSyncInfo.TokenID, "error", err)
 		return err
 	}
 
-	if minMissingBlockId == "" && maxMissingblockId == "" {
-		c.log.Debug("token chain is completely synced")
-		// update token sync status
-		err = c.w.UpdateTokenSyncStatus(tokenSyncInfo.TokenID, constants.SyncStatus_Completed)
-		if err != nil {
-			c.log.Error("failed to update token sync status for token ", tokenSyncInfo.TokenID)
-			return err
-		}
-		return nil
-	}
-	//prepare sync request
-	syncReq := TCBSyncRequest{
-		Token:     tokenSyncInfo.TokenID,
-		TokenType: int(tokenSyncInfo.TokenType),
-		BlockID:   minMissingBlockId,
-	}
-
-	for {
-		var trep TCBSyncReply
-		err := p.SendJSONRequest("POST", APISyncTokenChain, nil, &syncReq, &trep, false)
-		if err != nil {
-			c.log.Error("Failed to sync token chain block", "err", err)
-		}
-		if !trep.Status {
-			c.log.Error("Failed to sync token chain block", "msg", trep.Message)
-		}
-		for _, bb := range trep.TCBlock {
-			blk := block.InitBlock(bb, nil)
-			if blk == nil {
-				c.log.Error("Failed to initiate token chain block, invalid block, sync failed", "err", err)
-			}
-			blkId, err := blk.GetBlockID(tokenSyncInfo.TokenID)
-			if err != nil {
-				c.log.Error("failed to get block Id ")
-			}
-			if blkId == maxMissingblockId {
-				break
-			}
-			err = c.w.AddMissingTokenBlock(syncReq.Token, blk)
-			if err != nil {
-				c.log.Error("Failed to add token chain block, syncing failed", "err", err)
-				return err
-			}
-		}
-		if trep.NextBlockID == maxMissingblockId || trep.NextBlockID == "" {
-			break
-		}
-		syncReq.BlockID = trep.NextBlockID
+	c.log.Debug("Token chain is completely synced", "token", tokenSyncInfo.TokenID)
+	if err := c.w.UpdateTokenSyncStatus(tokenSyncInfo.TokenID, constants.SyncStatus_Completed); err != nil {
+		c.log.Error("Failed to update token sync status", "token", tokenSyncInfo.TokenID, "error", err)
+		return err
 	}
 	return nil
 }
@@ -2202,77 +2156,41 @@ func VerifyTokens(serverURL string, tokens []string) (TokenVerificationResponse,
 
 }
 
-func (c *Core) GetMissingBlockSequence(tokenSyncInfo TokenSyncInfo) (string, string, error) {
-	blockId := ""
+// GetMissingBlockSequence validates the full PostgreSQL tokenchain for the given token.
+// Returns nil if the chain is complete and consistent; returns an error describing the first
+// detected gap or linkage break. The block-based min/max ID concept has been removed —
+// chain integrity is now defined by position sequentiality and previous_transaction_id linkage.
+func (c *Core) GetMissingBlockSequence(tokenSyncInfo TokenSyncInfo) error {
+	chain, err := c.w.GetTokenChainByTokenID(tokenSyncInfo.TokenID)
+	if err != nil {
+		c.log.Error("Failed to fetch token chain", "token", tokenSyncInfo.TokenID, "error", err)
+		return fmt.Errorf("failed to fetch token chain for %s: %w", tokenSyncInfo.TokenID, err)
+	}
 
-	var blocks [][]byte
-	var nextBlockID string
-	var minMissingBlockId string
-	var maxMissingBlockId string
-	var err error
+	if len(chain) == 0 {
+		c.log.Error("Token chain is empty", "token", tokenSyncInfo.TokenID)
+		return fmt.Errorf("missing token chain for token: %s", tokenSyncInfo.TokenID)
+	}
 
-	//This for loop ensures that we fetch all the blocks in the token chain
-	//starting from genesis block to latest block
-	for {
-		//GetAllTokenBlocks returns next 100 blocks and nextBlockID of the 100th block,
-		//starting from the given block Id, in the direction: genesis to latest block
-		blocks, nextBlockID, err = c.w.GetAllTokenBlocks(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType, blockId)
-		if err != nil {
-			c.log.Error("Failed to get token chain block")
-			return "", "", err
+	for i := 1; i < len(chain); i++ {
+		// Position must be strictly sequential
+		if chain[i].Position != chain[i-1].Position+1 {
+			c.log.Error("Token chain position gap", "token", tokenSyncInfo.TokenID,
+				"position", chain[i].Position, "prev_position", chain[i-1].Position)
+			return fmt.Errorf("tokenchain gap at position %d (expected %d) for token %s",
+				chain[i].Position, chain[i-1].Position+1, tokenSyncInfo.TokenID)
 		}
-		//the nextBlockID of the latest block is empty string
-		blockId = nextBlockID
-		if nextBlockID == "" {
-			break
+		// previous_transaction_id must match the prior entry's transaction_id
+		prev := chain[i].PreviousTransactionID
+		if prev == nil || *prev != chain[i-1].TransactionID {
+			c.log.Error("Token chain linkage broken", "token", tokenSyncInfo.TokenID,
+				"position", chain[i].Position, "expected_prev", chain[i-1].TransactionID, "got_prev", prev)
+			return fmt.Errorf("broken tokenchain linkage at position %d for token %s",
+				chain[i].Position, tokenSyncInfo.TokenID)
 		}
 	}
 
-	if len(blocks) == 0 {
-		c.log.Error("invalid token chain of token ", tokenSyncInfo.TokenID)
-		return "", "", fmt.Errorf("missing token chain of token: %v", tokenSyncInfo.TokenID)
-	}
-
-	// calculate all the missing block numbers
-	for i, blockByte := range blocks {
-		if len(blocks) == i+1 {
-			break
-		}
-		blk := block.InitBlock(blockByte, nil)
-		blockHeight, err := blk.GetBlockNumber(tokenSyncInfo.TokenID)
-		if err != nil {
-			c.log.Error("failed to fetch block height")
-			return "", "", err
-			// TODO : handle
-		}
-		if blocks[i+1] == nil {
-			c.log.Error("invalid block at height ", i+1)
-			return "", "", fmt.Errorf("invalid block at height %v", i+1)
-		}
-		nextBlk := block.InitBlock(blocks[i+1], nil)
-		nextBlockHeight, err := nextBlk.GetBlockNumber(tokenSyncInfo.TokenID)
-		if err != nil {
-			c.log.Error("failed to fetch next block height")
-			return "", "", err
-		}
-
-		// if the block height difference between consecutive blocks is more than 1, that means there are a few blocks missing
-		if nextBlockHeight-blockHeight > 1 {
-			minMissingBlockId, err = blk.GetBlockID(tokenSyncInfo.TokenID)
-			if err != nil {
-				c.log.Error("failed to get min block id")
-				return "", "", err
-			}
-			maxMissingBlockId, err = nextBlk.GetBlockID(tokenSyncInfo.TokenID)
-			if err != nil {
-				c.log.Error("failed to get max block id")
-				return "", "", err
-			}
-			return minMissingBlockId, maxMissingBlockId, nil
-		}
-	}
-
-	return "", "", nil
+	return nil
 }
 
 func (c *Core) RestartIncompleteTokenChainSyncs() {
