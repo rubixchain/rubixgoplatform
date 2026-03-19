@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -126,8 +125,8 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 		return resp
 	}
 
-	nftInfoArray := make([]contract.TokenInfo, 0)
-	nftInfo := contract.TokenInfo{
+	nftInfoArray := make([]ContractTokenInfo, 0)
+	nftInfo := ContractTokenInfo{
 		Token:      deployReq.NFT,
 		TokenType:  c.TokenType(NFTString),
 		TokenValue: deployReq.NFTValue,
@@ -135,11 +134,11 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 	}
 	nftInfoArray = append(nftInfoArray, nftInfo)
 
-	consensusContractDetails := &contract.ContractType{
-		Type:       contract.NFTDeployType,
-		PledgeMode: contract.PeriodicPledgeMode,
+	consensusContractDetails := &ContractTypeInfo{
+		Type:       NFTDeployType,
+		PledgeMode: PeriodicPledgeMode,
 		TotalRBTs:  float64(deployReq.NFTValue),
-		TransInfo: &contract.TransInfo{
+		TransInfo: &ContractTransInfo{
 			DeployerDID: did,
 			NFT:         deployReq.NFT,
 			NFTData:     deployReq.NFTData,
@@ -148,7 +147,7 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 		},
 		ReqID: reqID,
 	}
-	consensusContract := contract.CreateNewContract(consensusContractDetails)
+	consensusContract := CreateNewConsensusContract(consensusContractDetails)
 	if consensusContract == nil {
 		c.log.Error("Failed to create Consensus contract while deploying nft")
 		resp.Message = "Failed to create Consensus contract while deploying nft"
@@ -308,8 +307,8 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 		receiver = executeReq.Receiver
 	}
 
-	nftInfoArray := make([]contract.TokenInfo, 0)
-	nftInfo := contract.TokenInfo{
+	nftInfoArray := make([]ContractTokenInfo, 0)
+	nftInfo := ContractTokenInfo{
 		Token:      executeReq.NFT,
 		TokenType:  c.TokenType(NFTString),
 		TokenValue: float64(currentNFTValue),
@@ -318,11 +317,11 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 	nftInfoArray = append(nftInfoArray, nftInfo)
 
 	//create teh consensuscontract
-	consensusContractDetails := &contract.ContractType{
-		Type:       contract.NFTExecuteType,
-		PledgeMode: contract.PeriodicPledgeMode,
+	consensusContractDetails := &ContractTypeInfo{
+		Type:       NFTExecuteType,
+		PledgeMode: PeriodicPledgeMode,
 		TotalRBTs:  float64(currentNFTValue),
-		TransInfo: &contract.TransInfo{
+		TransInfo: &ContractTransInfo{
 			ExecutorDID: did,
 			ReceiverDID: receiver,
 			Comment:     executeReq.Comment,
@@ -334,7 +333,7 @@ func (c *Core) executeNFT(reqID string, executeReq *model.ExecuteNFTRequest) *mo
 		ReqID: reqID,
 	}
 
-	consensusContract := contract.CreateNewContract(consensusContractDetails)
+	consensusContract := CreateNewConsensusContract(consensusContractDetails)
 	if consensusContract == nil {
 		c.log.Error("Failed to create Consensus contract")
 		resp.Message = "Failed to create Consensus contract"

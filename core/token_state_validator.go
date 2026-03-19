@@ -10,7 +10,6 @@ import (
 	"time"
 	
 	ipfsnode "github.com/ipfs/go-ipfs-api"
-	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
@@ -59,7 +58,7 @@ func NewTokenStateValidator(core *Core) *TokenStateValidator {
 
 // ValidateTokenStates validates multiple token states with resource management
 func (tsv *TokenStateValidator) ValidateTokenStates(
-	ti []contract.TokenInfo,
+	ti []ContractTokenInfo,
 	did string,
 	quorumList []string,
 ) []TokenStateCheckResult {
@@ -79,7 +78,7 @@ func (tsv *TokenStateValidator) ValidateTokenStates(
 	// Create channels for work distribution
 	type workItem struct {
 		index int
-		info  contract.TokenInfo
+		info  ContractTokenInfo
 	}
 	
 	workChan := make(chan workItem, workers*2)
@@ -106,7 +105,7 @@ func (tsv *TokenStateValidator) ValidateTokenStates(
 			// Process items in batches to reduce memory pressure
 			batch := make([]struct {
 				index int
-				info  contract.TokenInfo
+				info  ContractTokenInfo
 			}, 0, tsv.batchSize)
 			
 			for item := range workChan {
@@ -157,7 +156,7 @@ func (tsv *TokenStateValidator) ValidateTokenStates(
 func (tsv *TokenStateValidator) processBatch(
 	batch []struct {
 		index int
-		info  contract.TokenInfo
+		info  ContractTokenInfo
 	},
 	did string,
 	results []TokenStateCheckResult,

@@ -16,7 +16,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -210,7 +209,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, err
 	}
 	return tt, nil
 }
-func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, quorumDID string, ti contract.TokenInfo, p *ipfsport.Peer, address, receiverAddress string) (error, bool) {
+func (c *Core) validateSingleToken(cr *ConensusRequest, sc *ConsensusContract, quorumDID string, ti ContractTokenInfo, p *ipfsport.Peer, address, receiverAddress string) (error, bool) {
 	// Skip DHT check in trusted network mode
 	if !c.cfg.CfgData.TrustedNetwork {
 
@@ -360,8 +359,8 @@ func (c *Core) validateSingleToken(cr *ConensusRequest, sc *contract.Contract, q
 	return nil, false
 }
 
-func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract, quorumDID string) (bool, error, []string) {
-	var ti []contract.TokenInfo
+func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *ConsensusContract, quorumDID string) (bool, error, []string) {
+	var ti []ContractTokenInfo
 	var address, receiverAddress string
 
 	if cr.Mode == SmartContractDeployMode || cr.Mode == NFTDeployMode {
@@ -395,7 +394,7 @@ func (c *Core) validateTokenOwnership(cr *ConensusRequest, sc *contract.Contract
 	for _, tokenInfo := range ti {
 		wg.Add(1)
 		sem <- struct{}{}
-		go func(t contract.TokenInfo) {
+		go func(t ContractTokenInfo) {
 			defer wg.Done()
 			defer func() { <-sem }()
 
@@ -524,7 +523,7 @@ type BlockValidationResult struct {
 }
 
 // validateTokenOwnershipOptimized groups tokens by their latest block and validates each unique block only once
-func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract.Contract, quorumDID string) (bool, error, []string) {
+func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *ConsensusContract, quorumDID string) (bool, error, []string) {
 	// Track overall validation time
 	defer c.TrackOperation("quorum.validate_token_ownership.total", map[string]interface{}{
 		"transaction_id": cr.TransactionID,
@@ -532,7 +531,7 @@ func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract
 		"token_count":    len(sc.GetTransTokenInfo()),
 	})(nil)
 
-	var ti []contract.TokenInfo
+	var ti []ContractTokenInfo
 	var address string
 
 	if cr.Mode == SmartContractDeployMode || cr.Mode == NFTDeployMode {
@@ -916,7 +915,7 @@ func (c *Core) validateTokenOwnershipOptimized(cr *ConensusRequest, sc *contract
 }
 
 // validateTokenOwnershipWrapper chooses between optimized and regular validation based on configuration
-func (c *Core) validateTokenOwnershipWrapper(cr *ConensusRequest, sc *contract.Contract, quorumDID string) (bool, error, []string) {
+func (c *Core) validateTokenOwnershipWrapper(cr *ConensusRequest, sc *ConsensusContract, quorumDID string) (bool, error, []string) {
 	// Check if optimized validation is enabled (you can add this to config later)
 	useOptimizedValidation := true // TODO: Make this configurable
 
