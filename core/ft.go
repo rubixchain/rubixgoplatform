@@ -15,12 +15,11 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
@@ -84,9 +83,9 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	}
 
 	// Fetch whole tokens
-	wholeTokens, err := parts.CollectRBTTokens(
+	wholeTokens, _, err := parts.CollectRBTTokens(
 		dc, c.w, rubixmath.FloatPrecision(float64(numWholeTokens)),
-		c.testnet, c.log, c.publishTxn,
+		constants.NetworkMode_Testnet, c.log, &types.PubSub{},
 	)
 	if err != nil || wholeTokens == nil {
 		c.log.Error("Failed to fetch whole token for FT creation")
@@ -564,47 +563,35 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	}
 	defer receiverPeerID.Close()
 
-	// Use optimized locking for transfers > 100 tokens
-	if c.shouldUseOptimizedFTLocking(req.FTCount) {
-		c.log.Info("Using optimized FT locking", "ft_count", req.FTCount)
-		TokenInfo, lockingErr = c.OptimizedFTTransferLocking(FTsForTxn, did, req.FTCount)
-		if lockingErr != nil {
-			c.log.Error("Failed to lock FT tokens optimized", "err", lockingErr)
-			resp.Message = "Failed to lock FT tokens: " + lockingErr.Error()
+	TokenInfo = make([]contract.TokenInfo, 0)
+	for i := range FTsForTxn {
+		lockFTErr := c.w.LockTokenByID(FTsForTxn[i].TokenID)
+		if lockFTErr != nil {
+			c.log.Error("Failed to update FT token status", "err", lockFTErr)
+			resp.Message = "Failed to update FT token status"
 			return resp
 		}
-	} else {
-		// Original logic for small transfers
-		TokenInfo = make([]contract.TokenInfo, 0)
-		for i := range FTsForTxn {
-			lockFTErr := c.w.LockTokenByID(FTsForTxn[i].TokenID)
-			if lockFTErr != nil {
-				c.log.Error("Failed to update FT token status", "err", lockFTErr)
-				resp.Message = "Failed to update FT token status"
-				return resp
-			}
-			tt := c.TokenType(FTString)
-			blk := c.w.GetLatestTokenBlock(FTsForTxn[i].TokenID, tt)
-			if blk == nil {
-				c.log.Error("failed to get latest block, invalid token chain")
-				resp.Message = "failed to get latest block, invalid token chain"
-				return resp
-			}
-			bid, err := blk.GetBlockID(FTsForTxn[i].TokenID)
-			if err != nil {
-				c.log.Error("failed to get block id", "err", err)
-				resp.Message = "failed to get block id, " + err.Error()
-				return resp
-			}
-			ti := contract.TokenInfo{
-				Token:      FTsForTxn[i].TokenID,
-				TokenType:  tt,
-				TokenValue: FTsForTxn[i].TokenValue,
-				OwnerDID:   did,
-				BlockID:    bid,
-			}
-			TokenInfo = append(TokenInfo, ti)
+		tt := c.TokenType(FTString)
+		blk := c.w.GetLatestTokenBlock(FTsForTxn[i].TokenID, tt)
+		if blk == nil {
+			c.log.Error("failed to get latest block, invalid token chain")
+			resp.Message = "failed to get latest block, invalid token chain"
+			return resp
 		}
+		bid, err := blk.GetBlockID(FTsForTxn[i].TokenID)
+		if err != nil {
+			c.log.Error("failed to get block id", "err", err)
+			resp.Message = "failed to get block id, " + err.Error()
+			return resp
+		}
+		ti := contract.TokenInfo{
+			Token:      FTsForTxn[i].TokenID,
+			TokenType:  tt,
+			TokenValue: FTsForTxn[i].TokenValue,
+			OwnerDID:   did,
+			BlockID:    bid,
+		}
+		TokenInfo = append(TokenInfo, ti)
 	}
 
 	// Extract token IDs for later use
