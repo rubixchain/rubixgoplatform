@@ -2,8 +2,10 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/types/models"
@@ -26,7 +28,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	resp := &model.BasicResponse{
 		Status: false,
 	}
-	ctx := context.TODO()
+	ctx := context.Background()
 	initiatorDID := request.Initiator
 	nextOwnerDID := request.Owner
 
@@ -35,15 +37,12 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		resp.Message = "InitiateTransaction:Failed to setup DID: " + err.Error()
 		return resp
 	}
-	// This needs to be passed to the BuildTransactionInfoFromRequest to be given as an input to the function CollectRBTTokens
-	// Can't call this inside BuildTransactionInfoFromRequest since it is a standalone function not a methiod of Core.
 	networkMode, err := util.GetNetworkMode(c.testnet, c.mainnet, c.localnet)
 	if err != nil {
 		resp.Message = "InitiateTransaction:Failed to determine network mode: " + err.Error()
 		return resp
 	}
 	// Build transaction info
-	//Here the c.publishTxn must be verified because the input type is *model.PubSubTxnInfo which need to be updated
 	transactionInfo, transactionValue, err := BuildTransactionInfoFromRequest(ctx, c.w, request, dc, networkMode, c.log, c.ps)
 	if err != nil {
 		c.log.Error("InitiateTransaction: Failed to build transaction info", "err", err)
@@ -51,8 +50,26 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		return resp
 	}
 
-	// Fetch the listt if dids from quorum_m,anager tavble
-	//	We then loop over that list and queried from did table and pfetch the peerid
+	// Validate each selected RBT token: must exist, belong to initiator, and be free
+	if transactionInfo.Tokens != nil {
+		for _, ti := range transactionInfo.Tokens.RBT {
+			tok, err := c.w.ReadToken(ti.TokenID)
+			if err != nil {
+				resp.Message = "InitiateTransaction: token not found: " + ti.TokenID
+				return resp
+			}
+			if tok.DID != initiatorDID {
+				resp.Message = "InitiateTransaction: token " + ti.TokenID + " does not belong to initiator"
+				return resp
+			}
+			if tok.TokenStatus != int16(constants.TokenStatus_Free) {
+				resp.Message = "InitiateTransaction: token " + ti.TokenID + " is not free (status=" + fmt.Sprint(tok.TokenStatus) + ")"
+				return resp
+			}
+		}
+	}
+
+	// Fetch quorum addresses
 	quorumAddresses, err := c.GetAllQuorum()
 	if err != nil {
 		c.log.Error("InitiateTransaction: Failed to get quorum address", "err", err)
@@ -64,7 +81,6 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		return resp
 	}
 
-	// this will be a list of *ipfsport.Peer since we can have multiple quorums, we need to loop over them
 	p, err := c.getPeer(quorumAddresses[0])
 	if err != nil {
 		resp.Message = err.Error()
@@ -104,14 +120,14 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		Tokens: pledgeTokenPtrs,
 	}
 	transactionInfo.Quorums = []*models.QuorumInfo{pledegTokenInfo}
-	transactionId, err := util.GetTransactionID(transactionInfo)
+	txID, err := wallet.ComputeTransactionID(transactionInfo)
 	if err != nil {
-		c.log.Error("InitiateTransaction: Failed to get transaction ID", "err", err)
-		resp.Message = "InitiateTransaction: Failed to get transaction ID: " + err.Error()
+		c.log.Error("InitiateTransaction: Failed to compute transaction ID", "err", err)
+		resp.Message = "InitiateTransaction: Failed to compute transaction ID: " + err.Error()
 		return resp
 	}
 
-	c.log.Info("Transaction ID created", "hash", transactionId)
+	c.log.Info("Transaction ID created", "txID", txID)
 
 	// Signature done by the initiator on the  transactionInfo
 	initiatorSignature, err := util.SignTransaction(dc, transactionInfo)
@@ -148,9 +164,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		resp.Message = consensusResponse.Message
 		return resp
 	}
-	// When multiple transaction situation comes into picture this quorum signature part will change.
-	// We have kept this as an array to accomodate multiple quorums in future.
-	// Right now we are only accomodating a single quorum.
+	// TODO: support multiple quorums (currently single quorum only)
 	err = util.VerifySignature(dc, transactionInfo, consensusResponse.QuorumSignature)
 	if err != nil {
 		c.log.Error("InitiateTransaction: Failed to verify quorum signature", "err", err)
