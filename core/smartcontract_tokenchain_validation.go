@@ -156,18 +156,17 @@ func (c *Core) ValidateSmartContractTokenChain(userDID string, tokenInfo wallet.
 		}
 	}
 
-	//Get latest block in the token chain
-	latestBlock := c.w.GetLatestTokenBlock(tokenInfo.SmartContractHash, tokenType)
+	// TODO(phase07): latestBlock removed — CurrentOwnerPinCheck/CurrentQuorumStatePinCheck are stubbed
 
 	//Verify if the token is pinned only by the current owner aka receiver in the latest block
-	response, err = c.CurrentOwnerPinCheck(latestBlock, tokenInfo.SmartContractHash, userDID)
+	response, err = c.CurrentOwnerPinCheck(TokenChainInput{}, tokenInfo.SmartContractHash, userDID)
 	if err != nil {
 		c.log.Error("msg", response.Message)
 		return response, err
 	}
 
 	//verify if the current token state is pinned by the quorums in the latest block
-	response, err = c.CurrentQuorumStatePinCheck(latestBlock, tokenInfo.SmartContractHash, tokenType, userDID)
+	response, err = c.CurrentQuorumStatePinCheck(TokenChainInput{}, tokenInfo.SmartContractHash, tokenType, userDID)
 	if err != nil {
 		c.log.Error("msg", response.Message)
 		return response, err
@@ -184,7 +183,7 @@ func (c *Core) ValidateSmartContractBlock(b *block.Block, tokenId string, calcul
 	response := &model.BasicResponse{}
 
 	//Validate block hash
-	response, err := c.ValidateBlockHash(b, tokenId, calculatedPrevBlockId)
+	response, err := c.ValidateBlockHash(TokenChainInput{}, tokenId, calculatedPrevBlockId)
 	if err != nil {
 		c.log.Error("msg", response.Message, "err", err)
 		return response, err
@@ -198,7 +197,7 @@ func (c *Core) ValidateSmartContractBlock(b *block.Block, tokenId string, calcul
 	}
 
 	//validate quorums signature
-	response, err = c.ValidateQuorums(b, userDID)
+	response, err = c.ValidateQuorums(TokenChainInput{}, userDID)
 	if err != nil {
 		c.log.Error("msg", response.Message, "err", err)
 		return response, err

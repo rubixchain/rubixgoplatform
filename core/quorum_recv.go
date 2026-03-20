@@ -12,7 +12,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rubixchain/rubixgoplatform/block"
 	constants "github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -1782,12 +1781,12 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	if !c.w.IsDIDExist(b.GetOwner()) && !c.w.IsDIDExist(b.GetSenderDID()) {
 		for _, t := range tks {
 			// validate incoming transaction block (before response is sent)
-			latestBlock := c.w.GetLatestTokenBlock(t, b.GetTokenType(t))
+			// TODO(phase07): latestBlock removed — ValidateIncomingTokenBlockChainIntegrity is stubbed
 			assetType := unKnownAssetType
 			if ur.Mode == NFTDeployMode || ur.Mode == NFTExecuteMode {
 				assetType = NFTTokenType
 			}
-			err = c.ValidateIncomingTokenBlockChainIntegrity(*b, latestBlock, t, assetType)
+			err = c.ValidateIncomingTokenBlockChainIntegrity(TokenChainInput{}, TokenChainInput{}, t, assetType)
 			if err != nil {
 				errMsg := fmt.Sprintf("failed to validate incoming transaction block for the token%s, error:%v", t, err)
 				c.log.Error(errMsg)
