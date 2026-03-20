@@ -4,14 +4,14 @@ milestone: v1.0
 milestone_name: milestone
 status: completed
 stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-03-20T06:30:39.673Z"
-last_activity: 2026-03-20 — PersistGenesisTokenRecord implemented; generateTestTokens + generateTestTokensFaucet fixed (CreateTokenBlock removed from both)
+last_updated: "2026-03-20T06:36:16.198Z"
+last_activity: 2026-03-20 — PersistPostConsensus call site added to core/transaction.go (08-01)
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 9
   completed_plans: 6
-  percent: 50
+  percent: 67
 ---
 
 # Project State
