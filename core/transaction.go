@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -163,6 +164,15 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	signatureTobePublished := &models.Signature{
 		InitiatorSignature: initiatorSignature,
 		Quorums:            quorumSignature,
+	}
+	// Persist post-consensus state to PostgreSQL (soft-fail: log error, do not block transaction)
+	if err := c.w.PersistPostConsensus(ctx, &wallet.PostConsensusPersistenceRequest{
+		TransactionInfo: transactionInfo,
+		Signature:       signatureTobePublished,
+		DID:             initiatorDID,
+		ExecutionRole:   wallet.ExecutionRoleInitiator,
+	}); err != nil {
+		c.log.Error("InitiateTransaction: failed to persist post-consensus state", "err", err)
 	}
 	//Publish transaction to the network
 	util.PublishTransaction(c.ps, transactionInfo, signatureTobePublished)
