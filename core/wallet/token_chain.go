@@ -49,6 +49,25 @@ func (w *Wallet) AddTokenChainEntry(entry *models.TokenChain) error {
 	if err != nil {
 		return fmt.Errorf("AddTokenChainEntry: %w", err)
 	}
+
+	// Keep tokenchain_index in sync after inserting a new tokenchain row.
+	var index []int32
+	if err := w.db.Pool().QueryRow(w.Ctx,
+		`SELECT array_agg(id ORDER BY position) FROM tokenchain WHERE token_id = $1`,
+		entry.TokenID,
+	).Scan(&index); err != nil {
+		return fmt.Errorf("AddTokenChainEntry: query tokenchain_index: %w", err)
+	}
+	if _, err := w.db.Pool().Exec(w.Ctx, `
+		INSERT INTO tokenchain_index (token_id, index, created_at, updated_at)
+		VALUES ($1, $2, NOW(), NOW())
+		ON CONFLICT (token_id) DO UPDATE SET
+		  index = EXCLUDED.index,
+		  updated_at = NOW()
+	`, entry.TokenID, index); err != nil {
+		return fmt.Errorf("AddTokenChainEntry: upsert tokenchain_index: %w", err)
+	}
+
 	return nil
 }
 
@@ -134,5 +153,45 @@ func (w *Wallet) PersistGenesisTokenRecord(
 		return fmt.Errorf("PersistGenesisTokenRecord: insert tokenchain: %w", err)
 	}
 
+	// Upsert tokenchain_index atomically within the same transaction.
+	var index []int32
+	if err = tx.QueryRow(w.Ctx,
+		`SELECT array_agg(id ORDER BY position) FROM tokenchain WHERE token_id = $1`,
+		entry.TokenID,
+	).Scan(&index); err != nil {
+		return fmt.Errorf("PersistGenesisTokenRecord: query tokenchain_index: %w", err)
+	}
+	if _, err = tx.Exec(w.Ctx, `
+		INSERT INTO tokenchain_index (token_id, index, created_at, updated_at)
+		VALUES ($1, $2, NOW(), NOW())
+		ON CONFLICT (token_id) DO UPDATE SET
+		  index = EXCLUDED.index,
+		  updated_at = NOW()
+	`, entry.TokenID, index); err != nil {
+		return fmt.Errorf("PersistGenesisTokenRecord: upsert tokenchain_index: %w", err)
+	}
+
 	return tx.Commit(w.Ctx)
+}
+
+// GetTokenchainIndex returns the tokenchain_index row for the given tokenID.
+// Returns nil, nil if no row exists.
+func (w *Wallet) GetTokenchainIndex(tokenID string) (*models.TokenchainIndex, error) {
+	var idx models.TokenchainIndex
+	var rawIndex []int32
+	err := w.db.Pool().QueryRow(w.Ctx,
+		`SELECT token_id, index, created_at, updated_at FROM tokenchain_index WHERE token_id = $1`,
+		tokenID,
+	).Scan(&idx.TokenID, &rawIndex, &idx.CreatedAt, &idx.UpdatedAt)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("GetTokenchainIndex: %w", err)
+	}
+	idx.Index = make([]int, len(rawIndex))
+	for i, v := range rawIndex {
+		idx.Index[i] = int(v)
+	}
+	return &idx, nil
 }
