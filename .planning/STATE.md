@@ -104,9 +104,10 @@ Progress: [███░░░░░░░] 33% (phases 01, 02, 04, 05, 06 comple
 | 260320-7vr | Stub all 14 functions in token_chain_validation.go; remove block package dependency | 2026-03-20 | 6e77069 | [260320-7vr-refactor-token-chain-validation-go-remov](./quick/260320-7vr-refactor-token-chain-validation-go-remov/) |
 | 260320-85w | Replace interface{} with TokenChainInput typed placeholder; add util.StrToHex | 2026-03-20 | a3b8dc2 | — |
 | 260320-8kl | Refactor core/ft.go to remove block package: PersistGenesisTokenRecord + ReadToken | 2026-03-20 | 60db81d | [260320-8kl-refactor-core-ft-go-to-remove-block-base](./quick/260320-8kl-refactor-core-ft-go-to-remove-block-base/) |
+| 260320-a78 | Stub core/quorum_validation.go; remove block package dependency (13 functions) | 2026-03-20 | 8887b35 | [260320-a78-stub-core-quorum-validation-go-remove-bl](./quick/260320-a78-stub-core-quorum-validation-go-remove-bl/) |
 
 ## Session Continuity
 
 Last session: 2026-03-20
-Stopped at: Quick task 260320-8kl complete — core/ft.go all block references removed; FT genesis uses PersistGenesisTokenRecord; FT transfer uses ReadToken; wallet.ReleaseTokens added
+Stopped at: Quick task 260320-a78 complete — core/quorum_validation.go block package dependency removed; 13 functions stubbed with TODO(phase07); TokenChainNotSynced const preserved for quorum_recv.go
 Resume file: None
