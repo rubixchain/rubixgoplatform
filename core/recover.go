@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	signModule "github.com/rubixchain/rubixgoplatform/did"
@@ -139,39 +138,14 @@ func (c *Core) initiateRecoverRBT(reqID string, req *model.RBTRecoverRequest) *m
 			c.log.Error("Failed to sync token chain block", "msg", trep.Message)
 		}
 
-		for _, bb := range trep.TCBlock {
-			blk := block.InitBlock(bb, nil)
-			if blk == nil {
-				c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
-			}
-			err = c.w.AddTokenBlock(token, blk)
-			if err != nil {
-				c.log.Error("Failed to add token chain block, syncing failed", "err", err)
-			}
-		}
-		var pt string
-		if c.TokenType(PartString) == tokenType {
-			gb := c.w.GetGenesisTokenBlock(token, tokenType)
-			if gb == nil {
-				c.log.Error("failed to get genesis block for token ", token)
-			} else {
-				pt, err = gb.GetParentDetials(token)
-				if err != nil {
-					c.log.Error("failed to get parent details for token ", token, "err : ", err)
-					pt = "" // Ensure pt is reset to empty string if an error occurs
-				}
-			}
-			_, err = c.syncParentToken(p, pt)
-			if err != nil {
-				c.log.Error("Failed to sync parent token chain while recovering token", err)
+		// TODO(phase07): implement DB-based token chain sync (block-based sync removed)
+		c.log.Info("[STUB] skipping block-based token chain sync for token", "token", token)
 
-			}
-
-		}
+		// TODO(phase07): implement parent token sync for part tokens using DB
 
 		tokenDetails := &models.Token{
 			TokenID:       token,
-			ParentTokenID: pgtype.Text{String: pt, Valid: pt != ""},
+			ParentTokenID: pgtype.Text{String: "", Valid: false},
 			TokenValue:    tokenInfo.TokenValue,
 			DID:           tokenInfo.OwnerDID,
 			TokenStatus:   int16(constants.TokenStatus_Free),
@@ -227,16 +201,8 @@ func (c *Core) recoverPinnedToken(req *ensweb.Request) *ensweb.Result {
 			tts = "part"
 		}
 		tt := c.TokenType(tts)
-		blk := c.w.GetLatestTokenBlock(recoveredTokens[i].TokenID, tt)
-		if blk == nil {
-			c.log.Error("failed to get latest block, invalid token chain")
-			crep.Message = "failed to get latest block, invalid token chain"
-		}
-		bid, err := blk.GetBlockID(recoveredTokens[i].TokenID)
-		if err != nil {
-			c.log.Error("failed to get block id", "err", err)
-			crep.Message = "failed to get block id, " + err.Error()
-		}
+		// TODO(phase07): implement DB-based block ID lookup for recovered tokens
+		bid := "" // BlockID unavailable without block package
 		ti := ContractTokenInfo{
 			Token:      recoveredTokens[i].TokenID,
 			TokenType:  tt,
