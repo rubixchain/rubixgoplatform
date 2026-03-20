@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed quick task 260320-w86
-last_updated: "2026-03-20T09:20:00.000Z"
-last_activity: 2026-03-20 — Extended dev runner with DID insert + 3 genesis RBT token seeds + read-back verification; added GetWallet() accessor to Core (260320-w86)
+stopped_at: Completed quick task 260321-16f
+last_updated: "2026-03-21T00:00:00.000Z"
+last_activity: 2026-03-21 — Wired tokenchain_index upsert into PersistGenesisTokenRecord + AddTokenChainEntry; added GetTokenchainIndex accessor + dev runner assertions (260321-16f)
 progress:
   total_phases: 6
   completed_phases: 3
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 
 Phase: 08 in progress; Plan 08-01 complete
 Status: Phase 08-01 complete — PersistPostConsensus wired in initiateTransaction (PERSIST-04 satisfied)
-Last activity: 2026-03-20 - Completed quick task 260320-w86: Extended dev runner with DID insert + 3 genesis RBT token seeds + read-back verification; added GetWallet() accessor to Core
+Last activity: 2026-03-21 - Completed quick task 260321-16f: Wired tokenchain_index upsert into PersistGenesisTokenRecord + AddTokenChainEntry; GetTokenchainIndex accessor + dev runner Step C2/F6b assertions
 
 Progress: [███████░░░] 67% (phases 01, 02, 04, 05, 06, 07 complete; 08 in progress; 09-10 pending)
 
@@ -120,10 +120,12 @@ Progress: [███████░░░] 67% (phases 01, 02, 04, 05, 06, 07 co
 | 260320-ig1 | Remove gRPC layer completely from build: delete grpcserver/, grpcclient/, protos/; clean go.mod | 2026-03-20 | effc8cd | Verified | [260320-ig1-remove-grpc-layer-completely-from-build](./quick/260320-ig1-remove-grpc-layer-completely-from-build/) |
 | 260320-j25 | Write runner setup reference document: Core init, genesis token creation, token read/lock paths, schema/FK order, constants, bypass notes | 2026-03-20 | addbc9d | Complete | [260320-j25-provide-core-initialization-and-token-cr](./quick/260320-j25-provide-core-initialization-and-token-cr/) |
 | 260320-rva | Create minimal dev runner cmd/dev/main.go exercising full Core init chain (config parse, RubixConfig, logger, NewCore) | 2026-03-20 | d215b0a | Complete | [260320-rva-create-minimal-runner-cmd-dev-main-go-to](./quick/260320-rva-create-minimal-runner-cmd-dev-main-go-to/) |
-| 260320-w86 | Extend dev runner: DID insert + 3 genesis RBT token seeds + read-back verification; add GetWallet() accessor to Core | 2026-03-20 | e4dc1ac | Complete | [260320-w86-extend-dev-runner-to-create-did-seed-tok](./quick/260320-w86-extend-dev-runner-to-create-did-seed-tok/) |
+| 260320-w86 | Extend dev runner: DID insert + 3 genesis RBT token seeds + read-back verification; add GetWallet() accessor to Core | 2026-03-20 | e4dc1ac | Verified | [260320-w86-extend-dev-runner-to-create-did-seed-tok](./quick/260320-w86-extend-dev-runner-to-create-did-seed-tok/) |
+| 260320-wx1 | Extend dev runner Step F: PersistPostConsensus transfer simulation + tokenchain/transaction verification | 2026-03-21 | dbf892e | Verified | [260320-wx1-extend-dev-runner-to-simulate-transfer-v](./quick/260320-wx1-extend-dev-runner-to-simulate-transfer-v/) |
+| 260321-16f | Ensure tokenchain_index is updated: upsert in PersistGenesisTokenRecord + AddTokenChainEntry; GetTokenchainIndex accessor; dev runner Step C2/F6b assertions | 2026-03-21 | 38d4c99 | Verified | [260321-16f-ensure-tokenchain-index-table-is-updated](./quick/260321-16f-ensure-tokenchain-index-table-is-updated/) |
 
 ## Session Continuity
 
-Last session: 2026-03-20T09:20:00Z
-Stopped at: Completed quick task 260320-w86
+Last session: 2026-03-21T00:00:00Z
+Stopped at: Completed quick task 260320-wx1
 Resume file: None
