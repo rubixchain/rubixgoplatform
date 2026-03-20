@@ -16,13 +16,13 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/client"
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/did"
 	_ "github.com/rubixchain/rubixgoplatform/docs"
 	"github.com/rubixchain/rubixgoplatform/server"
 	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/util"
 	srvcfg "github.com/rubixchain/rubixgoplatform/wrapper/config"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
@@ -37,25 +37,25 @@ const (
 	version string = "0.1_keys"
 )
 const (
-	VersionCmd                     string = "-v"
-	HelpCmd                        string = "-h"
-	RunCmd                         string = "run"
-	PingCmd                        string = "ping"
-	AddBootStrapCmd                string = "addbootstrap"
-	RemoveBootStrapCmd             string = "removebootstrap"
-	RemoveAllBootStrapCmd          string = "removeallbootstrap"
-	GetAllBootStrapCmd             string = "getallbootstrap"
-	CreateDIDCmd                   string = "createdid"
-	GetAllDIDCmd                   string = "getalldid"
-	AddQuorumCmd                   string = "addquorum"
-	GetAllQuorumCmd                string = "getallquorum"
-	RemoveAllQuorumCmd             string = "removeallquorum"
-	SetupQuorumCmd                 string = "setupquorum"
-	GenerateTestRBTCmd             string = "generatetestrbt"
-	TransferRBTCmd                 string = "transferrbt"
-	GetAccountInfoCmd              string = "getaccountinfo"
-	DumpTokenChainCmd              string = "dumptokenchain"
-	DecodeTokenChainCmd            string = "decodetokenchain"
+	VersionCmd            string = "-v"
+	HelpCmd               string = "-h"
+	RunCmd                string = "run"
+	PingCmd               string = "ping"
+	AddBootStrapCmd       string = "addbootstrap"
+	RemoveBootStrapCmd    string = "removebootstrap"
+	RemoveAllBootStrapCmd string = "removeallbootstrap"
+	GetAllBootStrapCmd    string = "getallbootstrap"
+	CreateDIDCmd          string = "createdid"
+	GetAllDIDCmd          string = "getalldid"
+	AddQuorumCmd          string = "addquorum"
+	GetAllQuorumCmd       string = "getallquorum"
+	RemoveAllQuorumCmd    string = "removeallquorum"
+	SetupQuorumCmd        string = "setupquorum"
+	GenerateTestRBTCmd    string = "generatetestrbt"
+	TransferRBTCmd        string = "transferrbt"
+	GetAccountInfoCmd     string = "getaccountinfo"
+	//DumpTokenChainCmd              string = "dumptokenchain"
+	//DecodeTokenChainCmd            string = "decodetokenchain"
 	RegsiterDIDCmd                 string = "registerdid"
 	SetupDIDCmd                    string = "setupdid"
 	ShutDownCmd                    string = "shutdown"
@@ -135,8 +135,8 @@ var commands = []string{VersionCmd,
 	GenerateTestRBTCmd,
 	TransferRBTCmd,
 	GetAccountInfoCmd,
-	DumpTokenChainCmd,
-	DecodeTokenChainCmd,
+	//DumpTokenChainCmd,
+	//DecodeTokenChainCmd,
 	RegsiterDIDCmd,
 	SetupDBCmd,
 	ShutDownCmd,
@@ -262,9 +262,9 @@ var commandsHelp = []string{"To get tool version",
 }
 
 type Command struct {
-	cfg                          types.RubixConfig
-	c                            *client.Client
-	sc                           *contract.Contract
+	cfg types.RubixConfig
+	c   *client.Client
+	//sc                           *contract.Contract
 	encKey                       string
 	start                        bool
 	node                         uint
@@ -317,9 +317,6 @@ type Command struct {
 	txnID                        string
 	role                         string
 	date                         time.Time
-	grpcAddr                     string
-	grpcPort                     int
-	grpcSecure                   bool
 	deployerAddr                 string
 	binaryCodePath               string
 	rawCodePath                  string
@@ -563,7 +560,7 @@ func (cmd *Command) runApp() {
 
 	sc := make(chan bool, 1)
 
-	networkMode, err := getNetworkMode(cmd.testnet, cmd.mainnet, cmd.localnet)
+	networkMode, err := util.GetNetworkMode(cmd.testnet, cmd.mainnet, cmd.localnet)
 	if err != nil {
 		cmd.log.Error(fmt.Sprintf("failed to get the network mode: %v", err.Error()))
 		return
@@ -724,9 +721,6 @@ func Run(args []string) {
 	flag.IntVar(&timeout, "timeout", 0, "Timeout for the server")
 	flag.StringVar(&cmd.txnID, "txnID", "", "Transaction ID")
 	flag.StringVar(&cmd.role, "role", "", "Sender/Receiver")
-	// flag.StringVar(&cmd.grpcAddr, "grpcAddr", "localhost", "GRPC server address")
-	// flag.IntVar(&cmd.grpcPort, "grpcPort", 10500, "GRPC server port")
-	// flag.BoolVar(&cmd.grpcSecure, "grpcSecure", false, "GRPC enable security")
 	flag.StringVar(&cmd.deployerAddr, "deployerAddr", "", "Smart contract Deployer Address")
 	flag.StringVar(&cmd.binaryCodePath, "binCode", "", "Binary code path")
 	flag.StringVar(&cmd.rawCodePath, "rawCode", "", "Raw code path")
@@ -871,10 +865,10 @@ func Run(args []string) {
 		cmd.TransferRBT()
 	case GetAccountInfoCmd:
 		cmd.GetAccountInfo()
-	case DumpTokenChainCmd:
-		cmd.dumpTokenChain()
-	case DecodeTokenChainCmd:
-		cmd.decodeTokenChain()
+	//case DumpTokenChainCmd:
+	//	cmd.dumpTokenChain()
+	//case DecodeTokenChainCmd:
+	//	cmd.decodeTokenChain()
 	case RegsiterDIDCmd:
 		cmd.RegsiterDIDCmd()
 	case SetupDIDCmd:
@@ -897,18 +891,18 @@ func Run(args []string) {
 		cmd.generateSmartContractToken()
 	case FetchSmartContract:
 		cmd.fetchSmartContract()
-	case DumpSmartContractTokenChainCmd:
-		cmd.dumpSmartContractTokenChain()
-	case GetTokenBlock:
-		cmd.getTokenBlock()
-	case GetSmartContractData:
-		cmd.getSmartContractData()
+	//case DumpSmartContractTokenChainCmd:
+	//	cmd.dumpSmartContractTokenChain()
+	//case GetTokenBlock:
+	//	cmd.getTokenBlock()
+	//case GetSmartContractData:
+	//	cmd.getSmartContractData()
 	case ExecuteSmartcontractCmd:
 		cmd.executeSmartcontract()
 	case GetPeerID:
 		cmd.peerIDCmd()
-	case ReleaseAllLockedTokensCmd:
-		cmd.releaseAllLockedTokens()
+	//case ReleaseAllLockedTokensCmd:
+	//	cmd.releaseAllLockedTokens()
 	case CheckQuorumStatusCmd:
 		cmd.checkQuorumStatus()
 	case AddPeerDetailsCmd:
@@ -935,8 +929,8 @@ func Run(args []string) {
 		cmd.FaucetTokenCheck()
 	case CreateFTCmd:
 		cmd.createFT()
-	case DumpFTTokenChainCmd:
-		cmd.dumpFTTokenchain()
+	//case DumpFTTokenChainCmd:
+	//	cmd.dumpFTTokenchain()
 	case TransferFTCmd:
 		cmd.transferFT()
 	case GetFTInfoCmd:
@@ -947,8 +941,8 @@ func Run(args []string) {
 		cmd.executeNFT()
 	case DeployNFTCmd:
 		cmd.deployNFT()
-	case DumpNFTTokenChainCmd:
-		cmd.dumpNFTTokenChain()
+	//case DumpNFTTokenChainCmd:
+	//	cmd.dumpNFTTokenChain()
 	case SubscribeNFTCmd:
 		cmd.SubscribeNFT()
 	case FetchNftCmd:

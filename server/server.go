@@ -9,7 +9,6 @@ import (
 
 	"github.com/gorilla/sessions"
 	"github.com/rubixchain/rubixgoplatform/core"
-	"github.com/rubixchain/rubixgoplatform/grpcserver"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
@@ -18,11 +17,10 @@ import (
 // Server defines server handle
 type Server struct {
 	ensweb.Server
-	cfg  *Config
-	log  logger.Logger
-	c    *core.Core
-	sc   chan bool
-	grpc *grpcserver.ServerGRPC
+	cfg *Config
+	log logger.Logger
+	c   *core.Core
+	sc  chan bool
 }
 
 // NewServer create new server instances
