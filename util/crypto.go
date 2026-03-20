@@ -8,6 +8,11 @@ import (
 	"github.com/rubixchain/rubixgoplatform/constants"
 )
 
+// HexToStr encodes a raw byte slice to a lowercase hex string.
+func HexToStr(b []byte) string {
+	return hex.EncodeToString(b)
+}
+
 // StrToHex decodes a hex-encoded string to a raw byte slice.
 // Returns nil if the input is not valid hex.
 func StrToHex(s string) []byte {
