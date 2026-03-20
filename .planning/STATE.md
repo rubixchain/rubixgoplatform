@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed quick task 260320-j25
-last_updated: "2026-03-20T09:00:00.000Z"
-last_activity: 2026-03-20 — Created runner setup reference document (RUNNER-REF.md, 797 lines) covering Core init chain, genesis token creation, token read/lock paths, schema/FK order, constants, bypass notes (260320-j25)
+stopped_at: Completed quick task 260320-rva
+last_updated: "2026-03-20T09:10:00.000Z"
+last_activity: 2026-03-20 — Created minimal dev runner cmd/dev/main.go exercising full Core init chain (config parse, RubixConfig, logger, NewCore) as compile smoke test (260320-rva)
 progress:
   total_phases: 6
   completed_phases: 3
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 
 Phase: 08 in progress; Plan 08-01 complete
 Status: Phase 08-01 complete — PersistPostConsensus wired in initiateTransaction (PERSIST-04 satisfied)
-Last activity: 2026-03-20 - Completed quick task 260320-j25: Write runner setup reference document (RUNNER-REF.md, 797 lines)
+Last activity: 2026-03-20 - Completed quick task 260320-rva: Create minimal dev runner cmd/dev/main.go (Core init chain smoke test)
 
 Progress: [███████░░░] 67% (phases 01, 02, 04, 05, 06, 07 complete; 08 in progress; 09-10 pending)
 
@@ -119,9 +119,10 @@ Progress: [███████░░░] 67% (phases 01, 02, 04, 05, 06, 07 co
 | 260320-hvl | Remove dead route registrations (APIInitiateRBTTransfer, APIInitiatePinRBT) from server/server.go | 2026-03-20 | 3af2a4b | [260320-hvl-remove-dead-server-route-registrations-p](./quick/260320-hvl-remove-dead-server-route-registrations-p/) |
 | 260320-ig1 | Remove gRPC layer completely from build: delete grpcserver/, grpcclient/, protos/; clean go.mod | 2026-03-20 | effc8cd | Verified | [260320-ig1-remove-grpc-layer-completely-from-build](./quick/260320-ig1-remove-grpc-layer-completely-from-build/) |
 | 260320-j25 | Write runner setup reference document: Core init, genesis token creation, token read/lock paths, schema/FK order, constants, bypass notes | 2026-03-20 | addbc9d | Complete | [260320-j25-provide-core-initialization-and-token-cr](./quick/260320-j25-provide-core-initialization-and-token-cr/) |
+| 260320-rva | Create minimal dev runner cmd/dev/main.go exercising full Core init chain (config parse, RubixConfig, logger, NewCore) | 2026-03-20 | d215b0a | Complete | [260320-rva-create-minimal-runner-cmd-dev-main-go-to](./quick/260320-rva-create-minimal-runner-cmd-dev-main-go-to/) |
 
 ## Session Continuity
 
-Last session: 2026-03-20T09:00:00Z
-Stopped at: Completed quick task 260320-j25
+Last session: 2026-03-20T09:10:00Z
+Stopped at: Completed quick task 260320-rva
 Resume file: None
