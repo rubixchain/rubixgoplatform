@@ -123,6 +123,23 @@ func main() {
 		fmt.Printf("Token %s seeded successfully (txID: %s).\n", tokenID, txID)
 	}
 
+	// Step C2: Verify tokenchain_index exists for each genesis token (1 entry each)
+	fmt.Println("\n--- Step C2: tokenchain_index verification after genesis ---")
+	for i := 1; i <= 3; i++ {
+		tokenID := fmt.Sprintf("QmTestToken%03d", i)
+		idx, err := w.GetTokenchainIndex(tokenID)
+		if err != nil {
+			log.Fatalf("GetTokenchainIndex failed for %s: %v", tokenID, err)
+		}
+		if idx == nil {
+			log.Fatalf("ASSERTION FAILED: tokenchain_index is nil for genesis token %s", tokenID)
+		}
+		if len(idx.Index) != 1 {
+			log.Fatalf("ASSERTION FAILED: expected 1 tokenchain_index entry for %s, got %d", tokenID, len(idx.Index))
+		}
+		fmt.Printf("tokenchain_index for %s: %v\n", tokenID, idx.Index)
+	}
+
 	// Step D: Verify by reading back free tokens for the test DID
 	tokens, tokenIDs, err := w.GetFreeRBTTokens("bafybmidtest1234")
 	if err != nil {
@@ -233,6 +250,20 @@ func main() {
 	if chain[0].Position != 0 || chain[1].Position != 1 {
 		log.Fatalf("ASSERTION FAILED: expected positions [0,1], got [%d,%d]", chain[0].Position, chain[1].Position)
 	}
+
+	// F6b: Verify tokenchain_index for QmTestToken001 after transfer (genesis + transfer = 2 entries)
+	fmt.Println("\n--- Step F6b: tokenchain_index verification after transfer ---")
+	transferIdx, err := w.GetTokenchainIndex("QmTestToken001")
+	if err != nil {
+		log.Fatalf("GetTokenchainIndex(QmTestToken001) failed after transfer: %v", err)
+	}
+	if transferIdx == nil {
+		log.Fatalf("ASSERTION FAILED: tokenchain_index is nil for QmTestToken001 after transfer")
+	}
+	if len(transferIdx.Index) != 2 {
+		log.Fatalf("ASSERTION FAILED: expected 2 tokenchain_index entries for QmTestToken001, got %d", len(transferIdx.Index))
+	}
+	fmt.Printf("tokenchain_index for QmTestToken001: %v\n", transferIdx.Index)
 
 	// F7: Verify -- transfer transaction exists in transactions table
 	txRecord, err := w.GetTransactionByID(transferTxID)
