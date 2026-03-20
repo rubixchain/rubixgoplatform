@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed quick task 260320-ig1
-last_updated: "2026-03-20T08:00:00.000Z"
-last_activity: 2026-03-20 — Deleted grpcserver/, grpcclient/, protos/; removed gRPC dependencies from go.mod (260320-ig1)
+stopped_at: Completed quick task 260320-j25
+last_updated: "2026-03-20T09:00:00.000Z"
+last_activity: 2026-03-20 — Created runner setup reference document (RUNNER-REF.md, 797 lines) covering Core init chain, genesis token creation, token read/lock paths, schema/FK order, constants, bypass notes (260320-j25)
 progress:
   total_phases: 6
   completed_phases: 3
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 
 Phase: 08 in progress; Plan 08-01 complete
 Status: Phase 08-01 complete — PersistPostConsensus wired in initiateTransaction (PERSIST-04 satisfied)
-Last activity: 2026-03-20 - Completed quick task 260320-hvl: Remove dead route registrations (APIInitiateRBTTransfer, APIInitiatePinRBT) from server/server.go
+Last activity: 2026-03-20 - Completed quick task 260320-j25: Write runner setup reference document (RUNNER-REF.md, 797 lines)
 
 Progress: [███████░░░] 67% (phases 01, 02, 04, 05, 06, 07 complete; 08 in progress; 09-10 pending)
 
@@ -93,8 +93,8 @@ Progress: [███████░░░] 67% (phases 01, 02, 04, 05, 06, 07 co
 
 ### Quick Tasks Completed
 
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
+| # | Description | Date | Commit | Status | Directory |
+|---|-------------|------|--------|--------|-----------|
 | 260320-4ok | Fix core/fullnode.go: eliminate block package dependency without introducing new logic | 2026-03-20 | 02ba77d | [260320-4ok-fix-core-fullnode-go-eliminate-block-pac](./quick/260320-4ok-fix-core-fullnode-go-eliminate-block-pac/) |
 | 260320-4zf | Fix missing contract package: create contract/ stub satisfying all 11 importers | 2026-03-20 | f3c3fb2 | [260320-4zf-fix-missing-contract-package-in-core-ft-](./quick/260320-4zf-fix-missing-contract-package-in-core-ft-/) |
 | 260320-59w | Remove core/ft_transfer_optimized.go and dead pool types (TokenInfoPool, TokenSlicePool) | 2026-03-20 | 4e991da | [260320-59w-evaluate-and-remove-core-ft-transfer-opt](./quick/260320-59w-evaluate-and-remove-core-ft-transfer-opt/) |
@@ -117,10 +117,11 @@ Progress: [███████░░░] 67% (phases 01, 02, 04, 05, 06, 07 co
 | 260320-h3o | Analyze missing config types causing build failure (NO CODE CHANGES) | 2026-03-20 | 34f1344 | [260320-h3o-analyze-missing-config-types-causing-bui](./quick/260320-h3o-analyze-missing-config-types-causing-bui/) |
 | 260320-hf8 | Delete dead client/config.go + client/services.go; remove APISetupDB route from server.go | 2026-03-20 | d758f82 | [260320-hf8-remove-dead-client-config-service-files-](./quick/260320-hf8-remove-dead-client-config-service-files-/) |
 | 260320-hvl | Remove dead route registrations (APIInitiateRBTTransfer, APIInitiatePinRBT) from server/server.go | 2026-03-20 | 3af2a4b | [260320-hvl-remove-dead-server-route-registrations-p](./quick/260320-hvl-remove-dead-server-route-registrations-p/) |
-| 260320-ig1 | Remove gRPC layer completely from build: delete grpcserver/, grpcclient/, protos/; clean go.mod | 2026-03-20 | effc8cd | [260320-ig1-remove-grpc-layer-completely-from-build](./quick/260320-ig1-remove-grpc-layer-completely-from-build/) |
+| 260320-ig1 | Remove gRPC layer completely from build: delete grpcserver/, grpcclient/, protos/; clean go.mod | 2026-03-20 | effc8cd | Verified | [260320-ig1-remove-grpc-layer-completely-from-build](./quick/260320-ig1-remove-grpc-layer-completely-from-build/) |
+| 260320-j25 | Write runner setup reference document: Core init, genesis token creation, token read/lock paths, schema/FK order, constants, bypass notes | 2026-03-20 | addbc9d | Complete | [260320-j25-provide-core-initialization-and-token-cr](./quick/260320-j25-provide-core-initialization-and-token-cr/) |
 
 ## Session Continuity
 
-Last session: 2026-03-20T08:00:00Z
-Stopped at: Completed quick task 260320-ig1
+Last session: 2026-03-20T09:00:00Z
+Stopped at: Completed quick task 260320-j25
 Resume file: None
