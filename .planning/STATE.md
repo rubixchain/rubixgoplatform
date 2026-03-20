@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Phase 06 complete; Phase 08 pre-work done (CreateTokenBlock replaced in genesis paths)
+stopped_at: Phase 07 complete (via quick tasks); Phase 08 pre-work done
 last_updated: "2026-03-20T00:00:00.000Z"
-last_activity: 2026-03-20 — Phase 06 complete; PersistGenesisTokenRecord + SerializeTransactionInfo added; generateTestTokens/Faucet fixed
+last_activity: 2026-03-20 -- Phase 07 contract removal complete (quick-260320-5ix); GSD state reconciled
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 3
   completed_plans: 8
-  percent: 33
+  percent: 50
 ---
 
 # Project State
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Every dev can build `release-v1` without errors — PostgreSQL is the only persistence layer
-**Current focus:** Phase 07 — Contract Removal (next phase to plan)
+**Current focus:** Phase 08 -- Persistence Wiring (next phase to plan)
 
 ## Current Position
 
-Phase: 06 complete; Phase 07 not started
-Status: Phase 06 UAT passed; Phase 08 pre-work done out-of-band
+Phase: 07 complete; Phase 08 not started
+Status: Phase 07 complete via quick tasks; Phase 08 pre-work done out-of-band
 Last activity: 2026-03-20 — PersistGenesisTokenRecord implemented; generateTestTokens + generateTestTokensFaucet fixed (CreateTokenBlock removed from both)
 
-Progress: [███░░░░░░░] 33% (phases 01, 02, 04, 05, 06 complete; 07-10 pending)
+Progress: [█████░░░░░] 50% (phases 01, 02, 04, 05, 06, 07 complete; 08-10 pending)
 
 ## Performance Metrics
 
@@ -49,6 +49,7 @@ Progress: [███░░░░░░░] 33% (phases 01, 02, 04, 05, 06 comple
 | Phase 05 P02 | 64s | 2 tasks | 3 files | Complete |
 | Phase 05 P03 | 113s | 2 tasks | 4 files | Complete |
 | Phase 06 | ~25min | 4 plans | 14 files | Complete |
+| Phase 07 | ~2hrs | 17 quick tasks | multiple files | Complete |
 | Phase 08 pre-work | ~30min | out-of-band | 4 files | SerializeTransactionInfo + PersistGenesisTokenRecord + genesis token paths |
 
 ## Accumulated Context
