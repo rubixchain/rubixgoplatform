@@ -39,3 +39,15 @@ func (w *Wallet) AddSmartContractContentToPSQl(scc *SmartContractContent) error 
 	// TODO(phase09): implement smart contract content storage
 	return nil
 }
+
+// GetSmartContractTokenByDeployer returns all smart contract tokens deployed by the given DID.
+// TODO(phase07): implement full PostgreSQL query against tokens table with token_type=smart_contract.
+func (w *Wallet) GetSmartContractTokenByDeployer(did string) ([]SmartContract, error) {
+	return nil, nil
+}
+
+// GetSmartContractToken returns smart contract token(s) matching the given token ID.
+// TODO(phase07): implement full PostgreSQL query against tokens table.
+func (w *Wallet) GetSmartContractToken(tokenID string) ([]SmartContract, error) {
+	return nil, nil
+}
