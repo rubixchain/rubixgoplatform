@@ -276,4 +276,248 @@ func main() {
 	fmt.Printf("Transfer transaction found: ID=%s\n", txRecord.ID)
 
 	fmt.Println("\nDev runner complete: DID + 3 tokens seeded + transfer simulated and verified.")
+
+	// -----------------------------------------------------------------------
+	// Steps G-K: Full 2-DID transaction lifecycle
+	// -----------------------------------------------------------------------
+
+	senderDID := "bafybmidtest1234"   // reuse existing DID
+	receiverDID := "bafybmidrecvr5678" // new DID
+
+	// Step G: Create receiver DID (idempotent via ON CONFLICT UPDATE)
+	fmt.Println("\n--- Step G: Create receiver DID ---")
+	receiverDIDInfo := &models.DID{
+		DID:    receiverDID,
+		PeerID: "",
+		Local:  true,
+		AlgoID: int64(models.GetDidAlgoType(constants.DidAlgo_SECP256K1)),
+	}
+	if err := w.CreateOrUpdateDID(receiverDIDInfo); err != nil {
+		log.Fatalf("CreateOrUpdateDID(receiverDID) failed: %v", err)
+	}
+	fmt.Printf("Receiver DID inserted/updated: %s\n", receiverDID)
+
+	// Step H: Transfer all 3 tokens from senderDID to receiverDID
+	fmt.Println("\n--- Step H: Transfer 3 tokens from sender to receiver ---")
+	allTokenIDs := []string{"QmTestToken001", "QmTestToken002", "QmTestToken003"}
+
+	// Track genesis txID for QmTestToken001 (needed for Step J PreviousTransactionID assertion)
+	// After step F, QmTestToken001's TransactionID is the step-F transfer txID.
+	// We need the current token state before step H for each token.
+	stepHTransferTxIDs := make(map[string]string)
+
+	for _, tid := range allTokenIDs {
+		// H1: Read current token state to get current TransactionID (used as PreviousTransactionID)
+		preToken, err := w.ReadToken(tid)
+		if err != nil {
+			log.Fatalf("ReadToken(%s) failed before step-H transfer: %v", tid, err)
+		}
+		fmt.Printf("Pre-H-transfer: TokenID=%s TransactionID=%s LatestPosition=%d DID=%s\n",
+			preToken.TokenID, preToken.TransactionID, preToken.LatestPosition, preToken.DID)
+
+		// H2: Build TransactionInfo for transfer
+		// Epoch=2 because step F already used epoch=1 for QmTestToken001;
+		// using epoch=2 here keeps txIDs distinct for all 3 tokens in this batch.
+		transferTxInfoH := &models.TransactionInfo{
+			Initiator: senderDID,
+			Owner:     receiverDID,
+			Epoch:     2,
+			Network:   constants.NetworkID_RBT_Local,
+			Tokens: &models.TransactionTokens{
+				RBT: []*models.TokenInfo{
+					{
+						TokenID:               tid,
+						PreviousTransactionID: preToken.TransactionID,
+						TokenValue:            1.0,
+						DID:                   senderDID,
+					},
+				},
+			},
+		}
+
+		// H3: Compute transaction ID
+		txIDH, err := wallet.ComputeTransactionID(transferTxInfoH)
+		if err != nil {
+			log.Fatalf("ComputeTransactionID failed for %s (step H): %v", tid, err)
+		}
+		stepHTransferTxIDs[tid] = txIDH
+
+		// H4: Build dummy signature
+		sigH := &models.Signature{
+			InitiatorSignature: "dev-test-multi-transfer-sig",
+			Quorums:            nil,
+		}
+
+		// H5: Initiator-side persistence (token.DID stays senderDID after this call)
+		if err := w.PersistPostConsensus(ctx, &wallet.PostConsensusPersistenceRequest{
+			TransactionInfo: transferTxInfoH,
+			Signature:       sigH,
+			DID:             senderDID,
+			ExecutionRole:   wallet.ExecutionRoleInitiator,
+		}); err != nil {
+			log.Fatalf("PersistPostConsensus(initiator) failed for %s: %v", tid, err)
+		}
+
+		// H6: Receiver-side persistence (token.DID becomes receiverDID after this call)
+		// The tokenchain INSERT is ON CONFLICT DO NOTHING -- only the token.DID upsert changes.
+		if err := w.PersistPostConsensus(ctx, &wallet.PostConsensusPersistenceRequest{
+			TransactionInfo: transferTxInfoH,
+			Signature:       sigH,
+			DID:             receiverDID,
+			ExecutionRole:   wallet.ExecutionRoleReceiver,
+		}); err != nil {
+			log.Fatalf("PersistPostConsensus(receiver) failed for %s: %v", tid, err)
+		}
+
+		fmt.Printf("Step H transfer complete for %s: txID=%s\n", tid, txIDH)
+	}
+
+	// Step I: Ownership assertions
+	fmt.Println("\n--- Step I: Ownership assertions ---")
+
+	// I1: Each token must now be owned by receiverDID
+	for _, tid := range allTokenIDs {
+		tok, err := w.ReadToken(tid)
+		if err != nil {
+			log.Fatalf("ReadToken(%s) failed in step I: %v", tid, err)
+		}
+		if tok.DID != receiverDID {
+			log.Fatalf("ASSERTION FAILED: expected token %s DID=%s, got %s", tid, receiverDID, tok.DID)
+		}
+		fmt.Printf("Ownership OK: %s.DID = %s\n", tid, tok.DID)
+	}
+
+	// I2: senderDID must have 0 free tokens
+	senderTokens, senderTokenIDs, err := w.GetFreeRBTTokens(senderDID)
+	if err != nil {
+		log.Fatalf("GetFreeRBTTokens(senderDID) failed: %v", err)
+	}
+	if len(senderTokens) != 0 {
+		log.Fatalf("ASSERTION FAILED: expected 0 free tokens for sender, got %d (ids: %v)", len(senderTokens), senderTokenIDs)
+	}
+	fmt.Printf("Sender free tokens: %d (expected 0) -- OK\n", len(senderTokens))
+
+	// I3: receiverDID must have 3 free tokens
+	receiverTokens, receiverTokenIDList, err := w.GetFreeRBTTokens(receiverDID)
+	if err != nil {
+		log.Fatalf("GetFreeRBTTokens(receiverDID) failed: %v", err)
+	}
+	if len(receiverTokens) != 3 {
+		log.Fatalf("ASSERTION FAILED: expected 3 free tokens for receiver, got %d (ids: %v)", len(receiverTokens), receiverTokenIDList)
+	}
+	fmt.Printf("Receiver free tokens: %d (expected 3), ids=%v -- OK\n", len(receiverTokens), receiverTokenIDList)
+
+	// Step J: Tokenchain integrity assertions
+	fmt.Println("\n--- Step J: Tokenchain integrity assertions ---")
+
+	// Expected chain lengths:
+	// QmTestToken001: 3 entries (genesis + step-F transfer + step-H transfer)
+	// QmTestToken002, QmTestToken003: 2 entries (genesis + step-H transfer)
+	expectedChainLen := map[string]int{
+		"QmTestToken001": 3,
+		"QmTestToken002": 2,
+		"QmTestToken003": 2,
+	}
+
+	for _, tid := range allTokenIDs {
+		chainEntries, err := w.GetTokenChainByTokenID(tid)
+		if err != nil {
+			log.Fatalf("GetTokenChainByTokenID(%s) failed: %v", tid, err)
+		}
+
+		expected := expectedChainLen[tid]
+		fmt.Printf("Tokenchain for %s (%d entries):\n", tid, len(chainEntries))
+		for _, row := range chainEntries {
+			prevTxStr := "<nil>"
+			if row.PreviousTransactionID != nil {
+				prevTxStr = *row.PreviousTransactionID
+			}
+			fmt.Printf("  position=%d role=%d txID=%s prevTxID=%s\n",
+				row.Position, row.Role, row.TransactionID, prevTxStr)
+		}
+
+		if len(chainEntries) != expected {
+			log.Fatalf("ASSERTION FAILED: %s expected %d tokenchain entries, got %d", tid, expected, len(chainEntries))
+		}
+
+		// Assert positions are contiguous from 0
+		for i, row := range chainEntries {
+			if row.Position != int64(i) {
+				log.Fatalf("ASSERTION FAILED: %s position[%d] expected %d, got %d", tid, i, i, row.Position)
+			}
+		}
+
+		// Assert position 0 is role=1 (mint) with nil prevTxID
+		if chainEntries[0].Role != int16(models.GetTokenRoleID(constants.TokenRole_Mint)) {
+			log.Fatalf("ASSERTION FAILED: %s position 0 expected role=1 (mint), got %d", tid, chainEntries[0].Role)
+		}
+		if chainEntries[0].PreviousTransactionID != nil {
+			log.Fatalf("ASSERTION FAILED: %s position 0 expected nil prevTxID, got %v", tid, chainEntries[0].PreviousTransactionID)
+		}
+
+		// Assert all non-genesis entries have role=2 (transfer) and non-nil prevTxID
+		for i := 1; i < len(chainEntries); i++ {
+			if chainEntries[i].Role != int16(models.GetTokenRoleID(constants.TokenRole_Transfer)) {
+				log.Fatalf("ASSERTION FAILED: %s position %d expected role=2 (transfer), got %d", tid, i, chainEntries[i].Role)
+			}
+			if chainEntries[i].PreviousTransactionID == nil {
+				log.Fatalf("ASSERTION FAILED: %s position %d expected non-nil prevTxID, got nil", tid, i)
+			}
+		}
+
+		fmt.Printf("Tokenchain assertions OK for %s\n", tid)
+	}
+
+	// Step J2: PreviousTransactionID linkage verification
+	fmt.Println("\n--- Step J2: PreviousTransactionID linkage verification ---")
+
+	for _, tid := range allTokenIDs {
+		chainEntries, err := w.GetTokenChainByTokenID(tid)
+		if err != nil {
+			log.Fatalf("GetTokenChainByTokenID(%s) failed in step J2: %v", tid, err)
+		}
+
+		// Verify each position N+1's prevTxID == position N's txID
+		for i := 1; i < len(chainEntries); i++ {
+			expectedPrev := chainEntries[i-1].TransactionID
+			actualPrev := chainEntries[i].PreviousTransactionID
+			if actualPrev == nil || *actualPrev != expectedPrev {
+				actualStr := "<nil>"
+				if actualPrev != nil {
+					actualStr = *actualPrev
+				}
+				log.Fatalf("ASSERTION FAILED: %s position %d prevTxID mismatch: expected=%s actual=%s",
+					tid, i, expectedPrev, actualStr)
+			}
+			fmt.Printf("Chain link OK: %s position %d prevTxID == position %d txID (%s)\n",
+				tid, i, i-1, expectedPrev)
+		}
+	}
+
+	// Step K: tokenchain_index verification
+	fmt.Println("\n--- Step K: tokenchain_index verification ---")
+
+	expectedIndexLen := map[string]int{
+		"QmTestToken001": 3, // genesis + step-F + step-H
+		"QmTestToken002": 2, // genesis + step-H
+		"QmTestToken003": 2, // genesis + step-H
+	}
+
+	for _, tid := range allTokenIDs {
+		idx, err := w.GetTokenchainIndex(tid)
+		if err != nil {
+			log.Fatalf("GetTokenchainIndex(%s) failed: %v", tid, err)
+		}
+		if idx == nil {
+			log.Fatalf("ASSERTION FAILED: tokenchain_index is nil for %s", tid)
+		}
+		expected := expectedIndexLen[tid]
+		if len(idx.Index) != expected {
+			log.Fatalf("ASSERTION FAILED: %s expected %d tokenchain_index entries, got %d", tid, expected, len(idx.Index))
+		}
+		fmt.Printf("tokenchain_index OK: %s has %d entries (expected %d)\n", tid, len(idx.Index), expected)
+		_ = stepHTransferTxIDs[tid] // suppress unused-variable warning
+	}
+
+	fmt.Println("\nDev runner complete: 2-DID lifecycle verified -- 3 tokens minted, transferred, ownership confirmed, chains linked.")
 }
