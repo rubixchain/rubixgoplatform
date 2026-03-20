@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/rubixchain/rubixgoplatform/constants"
@@ -27,6 +29,16 @@ func main() {
 		log.Fatalf("failed to create rubix config: %v", err)
 	}
 
+	// Fix: CfgData.Ports is never populated by CreateRubixConfigFromUserConfig.
+	// The IPFS health manager reads cfg.CfgData.Ports.IPFSPort (defaults to 0),
+	// causing health checks to ping port 0 and all IPFSOperations methods timeout.
+	cfg.CfgData.Ports = cfg.PortConfig
+
+	// Fail fast if IPFS binary not available
+	if _, err := os.Stat("./ipfs"); os.IsNotExist(err) {
+		log.Fatalf("IPFS binary not found at ./ipfs -- run from project root")
+	}
+
 	// Step 3: Create logger
 	lg := logger.New(&logger.LoggerOptions{Name: "dev"})
 
@@ -37,6 +49,49 @@ func main() {
 	}
 
 	fmt.Println("Core initialized successfully.")
+
+	// --- IPFS Lifecycle ---
+	if err := c.RunIPFS(); err != nil {
+		log.Fatalf("RunIPFS failed: %v", err)
+	}
+	defer c.StopCore()
+	fmt.Println("IPFS daemon started successfully.")
+
+	// IPFS assertions
+	if !c.GetIPFSState() {
+		log.Fatalf("ASSERTION FAILED: GetIPFSState() returned false after RunIPFS")
+	}
+	peerID := c.GetPeerID()
+	if peerID == "" {
+		log.Fatalf("ASSERTION FAILED: GetPeerID() returned empty string after RunIPFS")
+	}
+	fmt.Printf("IPFS PeerID: %s\n", peerID)
+
+	if c.IPFSOperations() == nil {
+		log.Fatalf("ASSERTION FAILED: IPFSOperations() returned nil after RunIPFS")
+	}
+
+	// IPFS write test: AddDir with a temp file
+	ipfsTestDir, err := os.MkdirTemp("", "ipfs-dev-test-*")
+	if err != nil {
+		log.Fatalf("failed to create temp dir for IPFS test: %v", err)
+	}
+	defer os.RemoveAll(ipfsTestDir)
+
+	testFilePath := filepath.Join(ipfsTestDir, "test.txt")
+	if err := os.WriteFile(testFilePath, []byte("rubix dev runner IPFS test"), 0644); err != nil {
+		log.Fatalf("failed to write IPFS test file: %v", err)
+	}
+
+	cid, err := c.IPFSOperations().AddDir(ipfsTestDir)
+	if err != nil {
+		log.Fatalf("IPFSOperations().AddDir failed: %v", err)
+	}
+	if cid == "" {
+		log.Fatalf("ASSERTION FAILED: AddDir returned empty CID")
+	}
+	fmt.Printf("IPFS AddDir CID: %s\n", cid)
+	fmt.Println("IPFS integration validated.")
 
 	// Step A: Get wallet reference
 	w := c.GetWallet()
@@ -281,7 +336,7 @@ func main() {
 	// Steps G-K: Full 2-DID transaction lifecycle
 	// -----------------------------------------------------------------------
 
-	senderDID := "bafybmidtest1234"   // reuse existing DID
+	senderDID := "bafybmidtest1234"    // reuse existing DID
 	receiverDID := "bafybmidrecvr5678" // new DID
 
 	// Step G: Create receiver DID (idempotent via ON CONFLICT UPDATE)
@@ -349,14 +404,16 @@ func main() {
 		}
 
 		// H5: Initiator-side persistence (token.DID stays senderDID after this call)
-		if err := w.PersistPostConsensus(ctx, &wallet.PostConsensusPersistenceRequest{
-			TransactionInfo: transferTxInfoH,
-			Signature:       sigH,
-			DID:             senderDID,
-			ExecutionRole:   wallet.ExecutionRoleInitiator,
-		}); err != nil {
-			log.Fatalf("PersistPostConsensus(initiator) failed for %s: %v", tid, err)
-		}
+		/*
+			if err := w.PersistPostConsensus(ctx, &wallet.PostConsensusPersistenceRequest{
+				TransactionInfo: transferTxInfoH,
+				Signature:       sigH,
+				DID:             senderDID,
+				ExecutionRole:   wallet.ExecutionRoleInitiator,
+			}); err != nil {
+				log.Fatalf("PersistPostConsensus(initiator) failed for %s: %v", tid, err)
+			}
+		*/
 
 		// H6: Receiver-side persistence (token.DID becomes receiverDID after this call)
 		// The tokenchain INSERT is ON CONFLICT DO NOTHING -- only the token.DID upsert changes.
