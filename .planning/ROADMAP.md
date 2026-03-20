@@ -91,16 +91,22 @@ Plans:
 - [x] 07-01-PLAN.md -- Contract Package Elimination
 
 ### Phase 08: Persistence Wiring
-**Goal**: Every post-consensus write (genesis minting, pledge, unpledge, FT genesis/burn) goes through `PersistPostConsensus`; RBT split is atomic
+**Goal**: Wire `c.w.PersistPostConsensus` into the initiator transaction flow — single call site, single file (`core/transaction.go`), PERSIST-04 only
 **Depends on**: Phase 07
-**Requirements**: PERSIST-01, PERSIST-02, PERSIST-03, PERSIST-04, PERSIST-05
+**Requirements**: PERSIST-04
+**Scope**: Initiator flow only. `quorum_recv.go`, `unpledge.go`, `ft.go`, `split.go` are NOT touched in this phase.
 **Success Criteria** (what must be TRUE):
-  1. RBT and SC genesis minting call `PersistPostConsensus` with role `TokenRole_Mint` — no bare `c.w.CreateTokenBlock` calls remain in `core/token.go` genesis paths
-  2. Pledge and unpledge flows in `core/quorum_recv.go` and `core/unpledge.go` call `PersistPostConsensus` with the appropriate commit/unpledge role — no `block.CreateNewBlock` calls remain in these paths
-  3. FT genesis and FT burn block creation in `core/ft.go` are wired to `PersistPostConsensus` — no `c.w.AddTokenBlock` calls remain in FT paths
-  4. `PersistPostConsensus` has at least one verified call site in the consensus finalization path (was previously zero)
-  5. `performTokenSplit` in `core/parts/split.go` wraps `BurnToken`, `CreateRBTToken`, and `LockToken` inside a single `pgx.Tx` — a crash mid-split cannot leave tokens in a partial state
+  1. `PersistPostConsensus` is called exactly once in `initiateTransaction` in `core/transaction.go`, after `signatureTobePublished` is assembled and before `util.PublishTransaction`
+  2. The call uses `ExecutionRoleInitiator`, passes `transactionInfo`, `signatureTobePublished`, and `initiatorDID` — `AffectedTokens/TokenChainRows/TokenStates` are nil (auto-derived)
+  3. Failure is soft: error is logged at Error level, transaction response is NOT blocked
+  4. No other files are modified — `quorum_recv.go`, `unpledge.go`, `ft.go`, `split.go` unchanged
 **Plans**: TBD
+
+**Deferred to future phase (PERSIST-01/02/03/05):**
+- PERSIST-01: Genesis minting paths (`core/token.go` — partially done in pre-work)
+- PERSIST-02: Pledge/unpledge flows (`core/quorum_recv.go:1858`, `core/unpledge.go`)
+- PERSIST-03: FT genesis and burn (`core/ft.go`)
+- PERSIST-05: RBT split atomicity (`core/parts/split.go`)
 
 **Pre-work done (2026-03-20, out-of-phase):**
 - `models.SerializeTransactionInfo` added as the single source of truth for txInfo JSON encoding (`types/models/transaction_info.go`)
