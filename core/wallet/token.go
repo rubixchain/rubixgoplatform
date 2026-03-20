@@ -413,6 +413,24 @@ func (w *Wallet) GetAllPinnedTokens(did string) ([]models.Token, error) {
 	return tokens, rows.Err()
 }
 
+// ReleaseTokens sets the status of a slice of tokens back to Free (unlocked).
+// It accepts the same []*models.TokenInfo slice returned by CollectRBTTokens.
+// This is a best-effort operation: errors are logged but do not abort the loop.
+func (w *Wallet) ReleaseTokens(tokens []*models.TokenInfo) {
+	for _, t := range tokens {
+		if t == nil || t.TokenID == "" {
+			continue
+		}
+		if _, err := w.db.Pool().Exec(w.Ctx,
+			`UPDATE tokens SET token_status=$1 WHERE token_id=$2`,
+			constants.TokenStatus_Free, t.TokenID,
+		); err != nil {
+			// Log but do not propagate — release is best-effort
+			_ = fmt.Errorf("ReleaseTokens: failed to release token %s: %w", t.TokenID, err)
+		}
+	}
+}
+
 func (w *Wallet) CreateRBTToken(token models.Token) error {
 	if _, err := w.db.Pool().Exec(w.Ctx,
 		`INSERT INTO tokens(token_id, parent_token_id, token_value, token_status, did, transaction_id,
