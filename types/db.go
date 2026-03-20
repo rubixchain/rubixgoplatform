@@ -64,8 +64,24 @@ type PortConfig struct {
 	RubixServerPort uint16 `json:"rubix_server_port"`
 }
 
+// RubixCfgData provides a nested accessor for config fields used by
+// ipfs_health, ipfs_recovery, quorum_recv, token_state_validator, and unpledge_optimized.
+type RubixCfgData struct {
+	Ports          PortConfig
+	IPFSRecovery   *IPFSRecoveryConfig
+	TrustedNetwork bool
+	BootStrap      []string
+	TestBootStrap  []string
+	AsyncFTResponse bool
+	UnpledgeConfig UnpledgePoolConfig
+	NodeConfigDir  string
+}
+
 type RubixConfig struct {
-	NodeDir string
+	// CfgData provides the nested .CfgData.Ports / .CfgData.IPFSRecovery access path.
+	CfgData       RubixCfgData
+	NodeConfigDir string
+	NodeDir       string
 	// A directory under NodeDir to store IPFS DID
 	// and other files such as SC and NFT
 	NetworkDir              string
@@ -80,4 +96,5 @@ type RubixConfig struct {
 	EnableOptimizedUnpledge bool
 	AsyncFTResponse         bool
 	TrustedNetwork          bool
+	NodePort                int
 }

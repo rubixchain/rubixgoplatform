@@ -121,7 +121,8 @@ func (t *TrackedStorage) Drop(storageName string, value interface{}) error {
 
 func (t *TrackedStorage) Close() error {
 	defer t.c.TrackOperation("db.close", nil)(nil)
-	return t.storage.Close()
+	t.storage.Close()
+	return nil
 }
 
 func (t *TrackedStorage) UpdateColumn(storageName string, columnName string, columnValue interface{}, conditionString string, conditionValue interface{}) error {

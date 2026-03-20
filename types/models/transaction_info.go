@@ -21,9 +21,11 @@ type TransactionTokens struct {
 }
 
 type TokenInfo struct {
-	TokenID               string `json:"tokenId"`
-	PreviousTransactionID string `json:"previousTransactionID"`
-	Data                  string `json:"data"`
+	TokenID               string  `json:"tokenId"`
+	PreviousTransactionID string  `json:"previousTransactionID"`
+	Data                  string  `json:"data"`
+	TokenValue            float64 `json:"tokenValue"`
+	DID                   string  `json:"did"`
 }
 
 type QuorumInfo struct {

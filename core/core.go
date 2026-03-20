@@ -21,6 +21,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
+	svcpkg "github.com/rubixchain/rubixgoplatform/service"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
@@ -139,6 +140,8 @@ type Core struct {
 	mainnet              bool
 	localnet             bool
 	Ctx                  context.Context
+	qm                   *QuorumManager
+	srv                  *svcpkg.Service
 }
 
 func newRubixContext() context.Context {

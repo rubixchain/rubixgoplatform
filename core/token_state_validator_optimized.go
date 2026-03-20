@@ -79,7 +79,7 @@ func NewTokenStateValidatorOptimized(core *Core, did string, quorumList []string
 	tsv.initializeQuorumPeerCache(quorumList)
 
 	// Pre-cache sender peer ID
-	tsv.senderPeerID = core.w.GetPeerID(did)
+	tsv.senderPeerID, _ = core.w.GetPeerID(did)
 
 	return tsv
 }
