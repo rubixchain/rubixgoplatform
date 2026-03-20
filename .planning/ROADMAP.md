@@ -100,7 +100,9 @@ Plans:
   2. The call uses `ExecutionRoleInitiator`, passes `transactionInfo`, `signatureTobePublished`, and `initiatorDID` — `AffectedTokens/TokenChainRows/TokenStates` are nil (auto-derived)
   3. Failure is soft: error is logged at Error level, transaction response is NOT blocked
   4. No other files are modified — `quorum_recv.go`, `unpledge.go`, `ft.go`, `split.go` unchanged
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 08-01-PLAN.md — Wire PersistPostConsensus call in initiateTransaction (single call site, soft-fail)
 
 **Deferred to future phase (PERSIST-01/02/03/05):**
 - PERSIST-01: Genesis minting paths (`core/token.go` — partially done in pre-work)
@@ -150,10 +152,10 @@ Plans:
 | 05: Foundation Fixes | v3 | 3/3 | Complete | 2026-03-19 |
 | 06: Wallet Layer | v3 | 4/4 | Complete | 2026-03-20 |
 | 07: Contract Removal | v3 | 1/1 | Complete | 2026-03-20 |
-| 08: Persistence Wiring | v3 | 0/TBD | In progress (pre-work done) | - |
+| 08: Persistence Wiring | v3 | 0/1 | Planned | - |
 | 09: Architecture Consolidation | v3 | 0/TBD | Not started | - |
 | 10: Stub and Cleanup | v3 | 0/TBD | Not started | - |
 
 ---
 
-*Roadmap last updated: 2026-03-20 — Phase 07 complete via quick tasks; GSD state reconciled*
+*Roadmap last updated: 2026-03-20 — Phase 08 planned (1 plan, PERSIST-04 only)*
