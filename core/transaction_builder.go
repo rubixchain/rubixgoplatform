@@ -14,6 +14,21 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
+// networkModeToNetworkID maps a network mode string to its corresponding NetworkID constant.
+// Returns constants.NetworkID_RBT_Local for any unrecognised mode.
+func networkModeToNetworkID(networkMode string) string {
+	switch networkMode {
+	case constants.NetworkMode_Mainnet:
+		return constants.NetworkID_RBT_Mainnet
+	case constants.NetworkMode_Testnet:
+		return constants.NetworkID_RBT_Testnet
+	case constants.NetworkMode_Localnet:
+		return constants.NetworkID_RBT_Local
+	default:
+		return constants.NetworkID_RBT_Local
+	}
+}
+
 // BuildTransactionInfoFromRequest prepares a transaction by collecting and locking tokens
 // for a multi-asset transfer request. This is the single entry point for all token types:
 //
@@ -30,9 +45,9 @@ func BuildTransactionInfoFromRequest(
 	w *wallet.Wallet,
 	req *models.TransactionRequest,
 	dc types.DIDCrypto,
-	networkMode string, // The isTestNet bool changed to networkMode string to be passed to CollectRBTTokens
+	networkMode string,
 	log logger.Logger,
-	pubsub *types.PubSub, // punishFn which was of type func(*model.PubSubTxnInfo)  is change to types.PubSub to be passed to CollectRBTTokens
+	pubsub *types.PubSub,
 ) (*models.TransactionInfo, float64, error) {
 
 	txTokens := &models.TransactionTokens{}
@@ -154,6 +169,7 @@ func BuildTransactionInfoFromRequest(
 		Initiator:       req.Initiator,
 		Owner:           req.Owner,
 		Epoch:           int(time.Now().Unix()),
+		Network:         networkModeToNetworkID(networkMode),
 		Tokens:          txTokens,
 		CommittedTokens: nil,
 		Quorums:         nil,
