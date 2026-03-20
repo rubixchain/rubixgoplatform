@@ -112,7 +112,6 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIDumpTokenChainBlock, "POST", s.AuthHandle(s.APIDumpTokenChainBlock, true, s.AuthError, false))
 	s.AddRoute(setup.APIRegisterDID, "POST", s.AuthHandle(s.APIRegisterDID, true, s.AuthError, false))
 	s.AddRoute(setup.APISetupDID, "POST", s.AuthHandle(s.APISetupDID, true, s.AuthError, false))
-	s.AddRoute(setup.APISetupDB, "POST", s.AuthHandle(s.APISetupDB, true, s.AuthError, true))
 	s.AddRoute(setup.APIGetTxnByTxnID, "GET", s.AuthHandle(s.APIGetTxnByTxnID, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetTxnByDID, "GET", s.AuthHandle(s.APIGetTxnByDID, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetTxnByComment, "GET", s.AuthHandle(s.APIGetTxnByComment, true, s.AuthError, false))
