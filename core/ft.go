@@ -1,7 +1,8 @@
 package core
 
 import (
-	"bytes"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -24,7 +25,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 
-	ipfsnode "github.com/ipfs/go-ipfs-api"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 )
 
@@ -128,6 +128,9 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	c.log.Info("Initializing FT creation: progress logging")
 	currentTime := time.Now()
 
+	ftTokenTypeID := int16(models.GetTokenTypeID(constants.TokenType_FT))
+	mintRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Mint))
+
 	worker := func() {
 		defer wg.Done()
 		for job := range jobs {
@@ -150,44 +153,65 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 					c.log.Info(fmt.Sprintf("FT creation progress: %d%% (%d/%d created)", currentPercent, newCount, numFTs))
 				}
 			}
-			bti := &block.TransInfo{
-				Tokens: []block.TransTokens{{
-					Token:     ftID,
-					TokenType: c.TokenType(FTString),
-				}},
-				Comment: "FT generated at : " + time.Now().String() + " for FT Name : " + FTName,
-			}
-			tcb := &block.TokenChainBlock{
-				BlockType:  block.TokenGeneratedType,
-				TokenOwner: did,
-				TransInfo:  bti,
-				GenesisBlock: &block.GenesisBlock{
-					Info: []block.GenesisTokenInfo{{
-						Token:    ftID,
-						ParentID: parentTokenIDs,
-					}},
+
+			// Build genesis transaction info for FT token
+			txInfo := &models.TransactionInfo{
+				Initiator: did,
+				Owner:     did,
+				Epoch:     int(currentTime.Unix()),
+				Network:   constants.NetworkID_RBT_Testnet,
+				Tokens: &models.TransactionTokens{
+					FT: []*models.TokenInfo{
+						{TokenID: ftID, PreviousTransactionID: parentTokenIDs},
+					},
 				},
-				TokenValue: fractionalValue,
-				Version:    constants.BlockVersion,
-				Epoch:      int(currentTime.Unix()),
 			}
-			ctcb := make(map[string]*block.Block)
-			ctcb[ftID] = nil
-			blockObj := block.CreateNewBlock(ctcb, tcb)
-			if blockObj == nil {
-				results <- ftResult{Err: fmt.Errorf("failed to create new block")}
-				continue
-			}
-			err = blockObj.UpdateSignature(dc)
+			infoBytes, err := models.SerializeTransactionInfo(txInfo)
 			if err != nil {
-				results <- ftResult{Err: err}
+				results <- ftResult{Err: fmt.Errorf("createFTs: failed to serialize transaction info for FT %s: %w", ftID, err)}
 				continue
 			}
-			err = c.w.AddTokenBlock(ftID, blockObj)
+			signatureBytes, err := dc.PvtSign(infoBytes)
 			if err != nil {
-				results <- ftResult{Err: err}
+				results <- ftResult{Err: fmt.Errorf("createFTs: failed to sign transaction for FT %s: %w", ftID, err)}
 				continue
 			}
+			sigStruct := &models.Signature{InitiatorSignature: hex.EncodeToString(signatureBytes)}
+			sigBytes, err := json.Marshal(sigStruct)
+			if err != nil {
+				results <- ftResult{Err: fmt.Errorf("createFTs: failed to marshal signature for FT %s: %w", ftID, err)}
+				continue
+			}
+			txID, err := wallet.ComputeTransactionID(txInfo)
+			if err != nil {
+				results <- ftResult{Err: fmt.Errorf("createFTs: failed to compute transaction ID for FT %s: %w", ftID, err)}
+				continue
+			}
+
+			genesisTx := &models.Transactions{
+				ID:        txID,
+				Info:      infoBytes,
+				Signature: json.RawMessage(sigBytes),
+			}
+			t := &models.Token{
+				TokenID:     ftID,
+				DID:         did,
+				TokenValue:  fractionalValue,
+				TokenStatus: int16(constants.TokenStatus_Free),
+				TokenType:   ftTokenTypeID,
+				TransactionID: txID,
+			}
+			if err = c.w.PersistGenesisTokenRecord(genesisTx, t, &models.TokenChain{
+				TokenID:               ftID,
+				TransactionID:         txID,
+				PreviousTransactionID: nil,
+				Role:                  mintRoleID,
+				Position:              0,
+			}); err != nil {
+				results <- ftResult{Err: fmt.Errorf("createFTs: failed to persist genesis token record for FT %s: %w", ftID, err)}
+				continue
+			}
+
 			ft := wallet.FTToken{
 				TokenID:     ftID,
 				FTName:      FTName,
@@ -199,33 +223,19 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 			}
 			results <- ftResult{FTToken: ft, FTID: ftID}
 
-			// publish the transaction in the network with topic : rubix_txns
-			blockHash, err := blockObj.GetHash()
-			if err != nil {
-				c.log.Error("failed to get block hash")
-				results <- ftResult{Err: err}
-				continue
-			}
+			// Publish the genesis transaction on the network with topic: rubix_txns
 			publishingTxn := &model.PubSubTxnInfo{
-				BlockHash:    blockHash,
-				BlockType:    tcb.BlockType,
+				BlockHash:    txID,
+				BlockType:    "05",
 				AssetType:    FTTokenType,
 				FTName:       FTName,
 				PublisherDID: dc.GetDID(),
 				CreatorDID:   dc.GetDID(),
-				TxnBlock:     blockObj.GetBlock(),
 			}
 
 			err = c.publishTxn(publishingTxn)
 			if err != nil {
 				c.log.Error("Failed to publish txn", "err", err)
-				results <- ftResult{Err: err}
-				continue
-			}
-
-			_, err = c.ipfs.Add(bytes.NewBufferString(ftID), ipfsnode.OnlyHash(false), ipfsnode.Pin(true))
-			if err != nil {
-				c.log.Error(fmt.Sprintf("createFts: failed to get IPFS token hash for token: %v, err: %v", ftID, err))
 				results <- ftResult{Err: err}
 				continue
 			}
@@ -265,53 +275,25 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 	if firstErr != nil {
 		return firstErr
 	}
+
+	// newFTTokenIDs collected but not used after block package removal (was ChildTokens in old TokenChainBlock struct)
+	_ = newFTTokenIDs
+
 	for i := range wholeTokens {
 
 		release := true
 		defer c.relaseToken(&release, wholeTokens[i].TokenID)
-		ptts := RBTString
-		if wholeTokens[i].ParentTokenID != "" && wholeTokens[i].TokenValue < 1 {
-			ptts = PartString
-		}
-		ptt := c.TokenType(ptts)
 
-		bti := &block.TransInfo{
-			Tokens: []block.TransTokens{
-				{
-					Token:     wholeTokens[i].TokenID,
-					TokenType: ptt,
-				},
-			},
-			Comment: "Token burnt at : " + time.Now().String(),
-		}
-		tcb := &block.TokenChainBlock{
-			BlockType:   block.TokenIsBurntForFT,
-			TokenOwner:  did,
-			TransInfo:   bti,
-			TokenValue:  wholeTokens[i].TokenValue,
-			ChildTokens: newFTTokenIDs,
-			Version:     constants.BlockVersion,
-			Epoch:       int(currentTime.Unix()),
-		}
-		ctcb := make(map[string]*block.Block)
-		ctcb[wholeTokens[i].TokenID] = c.w.GetLatestTokenBlock(wholeTokens[i].TokenID, ptt)
-		block := block.CreateNewBlock(ctcb, tcb)
-		if block == nil {
-			return fmt.Errorf("failed to create new block")
-		}
-		err = block.UpdateSignature(dc)
+		// Read the full token record from PostgreSQL to get TransactionID and other metadata
+		parentTokenRecord, err := c.w.ReadToken(wholeTokens[i].TokenID)
 		if err != nil {
-			c.log.Error("FT creation failed, failed to update signature", "err", err)
+			c.log.Error("FT token creation failed, failed to read parent token record", "err", err)
 			return err
 		}
-		err = c.w.AddTokenBlock(wholeTokens[i].TokenID, block)
-		if err != nil {
-			c.log.Error("FT creation failed, failed to add token block", "err", err)
-			return err
-		}
-		c.log.Debug("burnt token block added ")
-		wholeTokens[i].TokenStatus = constants.TokenStatus_BurntForFT
-		err = c.w.UpdateToken(&wholeTokens[i])
+
+		// Burn the parent token: update status to BurntForFT (no block creation needed)
+		parentTokenRecord.TokenStatus = int16(constants.TokenStatus_BurntForFT)
+		err = c.w.UpdateToken(parentTokenRecord)
 		if err != nil {
 			c.log.Error("FT token creation failed, failed to update token status", "err", err)
 			return err
@@ -319,18 +301,13 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		c.log.Debug("burnt token block status updated ")
 		release = false
 
-		// publish the burnt block in the network with topic : rubix_txns
-		blockHash, err := block.GetHash()
-		if err != nil {
-			c.log.Error("failed to get burnt block hash")
-			return err
-		}
+		// Publish the burn event on the network with topic: rubix_txns
+		// Use last known transaction ID as block hash reference
 		publishingTxn := &model.PubSubTxnInfo{
-			BlockHash:    blockHash,
-			BlockType:    tcb.BlockType,
+			BlockHash:    parentTokenRecord.TransactionID, // last known txn ID replaces block hash
+			BlockType:    "07",                             // burnt type indicator
 			AssetType:    RBTTokenType,
 			PublisherDID: dc.GetDID(),
-			TxnBlock:     block.GetBlock(),
 		}
 
 		err = c.publishTxn(publishingTxn)
@@ -512,7 +489,6 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 	// Get all available FT tokens
 	var AllFTs []wallet.FTToken
 	var TokenInfo []ContractTokenInfo
-	var lockingErr error
 
 	if req.CreatorDID != "" {
 		AllFTs, err = c.w.GetFreeFTsByNameAndCreatorDID(req.FTName, did, req.CreatorDID)
@@ -572,16 +548,11 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			return resp
 		}
 		tt := c.TokenType(FTString)
-		blk := c.w.GetLatestTokenBlock(FTsForTxn[i].TokenID, tt)
-		if blk == nil {
-			c.log.Error("failed to get latest block, invalid token chain")
-			resp.Message = "failed to get latest block, invalid token chain"
-			return resp
-		}
-		bid, err := blk.GetBlockID(FTsForTxn[i].TokenID)
+		// Replace block-based GetLatestTokenBlock/GetBlockID with PostgreSQL token read
+		tokenRecord, err := c.w.ReadToken(FTsForTxn[i].TokenID)
 		if err != nil {
-			c.log.Error("failed to get block id", "err", err)
-			resp.Message = "failed to get block id, " + err.Error()
+			c.log.Error("failed to read token record", "err", err)
+			resp.Message = "failed to read token record, " + err.Error()
 			return resp
 		}
 		ti := ContractTokenInfo{
@@ -589,17 +560,19 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 			TokenType:  tt,
 			TokenValue: FTsForTxn[i].TokenValue,
 			OwnerDID:   did,
-			BlockID:    bid,
+			BlockID:    tokenRecord.TransactionID, // PostgreSQL transaction ID replaces block ID
 		}
 		TokenInfo = append(TokenInfo, ti)
 	}
 
-	// Extract token IDs for later use
+	// Extract token IDs for later use (reserved for future explorer/audit use)
 	FTTokenIDs := make([]string, 0)
 
 	for i := range TokenInfo {
 		FTTokenIDs = append(FTTokenIDs, TokenInfo[i].Token)
 	}
+	_ = FTTokenIDs // collected for future use; currently unused after block removal
+
 	sct := &ContractTypeInfo{
 		Type:       SCFTType,
 		PledgeMode: PeriodicPledgeMode,
@@ -709,6 +682,7 @@ func (c *Core) initiateFTTransfer(reqID string, req *model.TransferFTReq) *model
 				tokenDetail := AllToken{}
 				tokenDetail.TokenHash = TokenInfo[i].Token
 
+				// TODO(phase09): BlockID is now a transaction ID; update explorer token detail format
 				blockNoPart := strings.Split(TokenInfo[i].BlockID, "-")[0]
 				// Convert the string part to an int
 				blockNoInt, err := strconv.Atoi(blockNoPart)
