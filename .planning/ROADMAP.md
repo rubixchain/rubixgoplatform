@@ -45,7 +45,7 @@
 - [x] **Phase 05: Foundation Fixes** — Fix all isolated compile blockers and unify the constants type system (completed 2026-03-19)
 - [x] **Phase 06: Wallet Layer** — Implement missing wallet methods, fix tokenchain column bug, remove LevelDB remnants, replace legacy token types (completed 2026-03-20)
 - [x] **Phase 07: Contract Removal** (completed 2026-03-20) — Replace contract.TokenInfo and contract.Contract at all call sites with models equivalents
-- [ ] **Phase 08: Persistence Wiring** — Wire PersistPostConsensus to all genesis/pledge/unpledge/FT paths; fix RBT split atomicity
+- [x] **Phase 08: Persistence Wiring** — Wire PersistPostConsensus to all genesis/pledge/unpledge/FT paths; fix RBT split atomicity (completed 2026-03-20)
 - [ ] **Phase 09: Architecture Consolidation** — Remove type-specific initiators; make InitiateTransaction the sole entry point for all token types
 - [ ] **Phase 10: Stub and Cleanup** — Stub tokenchain validation and unpledge; remove credit system; strip all remaining block/contract imports; verify clean build
 
@@ -100,7 +100,7 @@ Plans:
   2. The call uses `ExecutionRoleInitiator`, passes `transactionInfo`, `signatureTobePublished`, and `initiatorDID` — `AffectedTokens/TokenChainRows/TokenStates` are nil (auto-derived)
   3. Failure is soft: error is logged at Error level, transaction response is NOT blocked
   4. No other files are modified — `quorum_recv.go`, `unpledge.go`, `ft.go`, `split.go` unchanged
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
 - [ ] 08-01-PLAN.md — Wire PersistPostConsensus call in initiateTransaction (single call site, soft-fail)
 

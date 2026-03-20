@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Phase 08 context gathered
-last_updated: "2026-03-20T06:03:43.330Z"
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-03-20T06:30:39.673Z"
 last_activity: 2026-03-20 — PersistGenesisTokenRecord implemented; generateTestTokens + generateTestTokensFaucet fixed (CreateTokenBlock removed from both)
 progress:
   total_phases: 6
-  completed_phases: 2
-  total_plans: 8
-  completed_plans: 5
+  completed_phases: 3
+  total_plans: 9
+  completed_plans: 6
   percent: 50
 ---
 
@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 
 ## Current Position
 
-Phase: 07 complete; Phase 08 not started
-Status: Phase 07 complete via quick tasks; Phase 08 pre-work done out-of-band
-Last activity: 2026-03-20 — PersistGenesisTokenRecord implemented; generateTestTokens + generateTestTokensFaucet fixed (CreateTokenBlock removed from both)
+Phase: 08 in progress; Plan 08-01 complete
+Status: Phase 08-01 complete — PersistPostConsensus wired in initiateTransaction (PERSIST-04 satisfied)
+Last activity: 2026-03-20 — PersistPostConsensus call site added to core/transaction.go (08-01)
 
-Progress: [█████░░░░░] 50% (phases 01, 02, 04, 05, 06, 07 complete; 08-10 pending)
+Progress: [███████░░░] 67% (phases 01, 02, 04, 05, 06, 07 complete; 08 in progress; 09-10 pending)
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Progress: [█████░░░░░] 50% (phases 01, 02, 04, 05, 06, 07 co
 | Phase 06 | ~25min | 4 plans | 14 files | Complete |
 | Phase 07 | ~2hrs | 17 quick tasks | multiple files | Complete |
 | Phase 08 pre-work | ~30min | out-of-band | 4 files | SerializeTransactionInfo + PersistGenesisTokenRecord + genesis token paths |
+| Phase 08-persistence-wiring P01 | 3min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,7 @@ Progress: [█████░░░░░] 50% (phases 01, 02, 04, 05, 06, 07 co
 - PersistGenesisTokenRecord (core/wallet/token_chain.go) is the genesis-specific atomic 3-insert (transactions→tokens→tokenchain in single pgx.Tx); ON CONFLICT idempotency on all three tables — for genesis paths only; full consensus paths continue to use PersistPostConsensus (Phase 08 pre-work)
 - generateTestTokens and generateTestTokensFaucet no longer use block package — replaced with SerializeTransactionInfo + PvtSign + ComputeTransactionID + PersistGenesisTokenRecord; ipfsnode import removed from core/token.go (Phase 08 pre-work)
 - Remaining CreateTokenBlock call sites NOT yet fixed: core/quorum_recv.go:1858, core/unpledge.go:187 — these are in scope for Phase 08
+- PersistPostConsensus call site wired in initiateTransaction (08-01): positioned after signatureTobePublished assembly, before util.PublishTransaction; soft-fail (log only, no early return); PERSIST-04 satisfied (08-01)
 
 ### Blockers/Concerns
 
@@ -115,6 +117,6 @@ Progress: [█████░░░░░] 50% (phases 01, 02, 04, 05, 06, 07 co
 
 ## Session Continuity
 
-Last session: 2026-03-20T06:03:43.317Z
-Stopped at: Phase 08 context gathered
-Resume file: .planning/phases/08-persistence-wiring/08-CONTEXT.md
+Last session: 2026-03-20T06:30:39.670Z
+Stopped at: Completed 08-01-PLAN.md
+Resume file: None
