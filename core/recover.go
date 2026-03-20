@@ -45,7 +45,7 @@ func (c *Core) initiateRecoverRBT(reqID string, req *model.RBTRecoverRequest) *m
 
 	did := req.Sender
 	pinningNodeDID := req.PinningNode
-	pinningNodepeerid := c.w.GetPeerID(pinningNodeDID)
+	pinningNodepeerid, _ := c.w.GetPeerID(pinningNodeDID)
 	if pinningNodepeerid == "" {
 		c.log.Error("Peer ID not found", "did", pinningNodepeerid)
 		resp.Message = "invalid address, Peer ID not found"

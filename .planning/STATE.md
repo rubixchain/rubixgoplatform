@@ -105,9 +105,11 @@ Progress: [███░░░░░░░] 33% (phases 01, 02, 04, 05, 06 comple
 | 260320-85w | Replace interface{} with TokenChainInput typed placeholder; add util.StrToHex | 2026-03-20 | a3b8dc2 | — |
 | 260320-8kl | Refactor core/ft.go to remove block package: PersistGenesisTokenRecord + ReadToken | 2026-03-20 | 60db81d | [260320-8kl-refactor-core-ft-go-to-remove-block-base](./quick/260320-8kl-refactor-core-ft-go-to-remove-block-base/) |
 | 260320-a78 | Stub core/quorum_validation.go; remove block package dependency (13 functions) | 2026-03-20 | 8887b35 | [260320-a78-stub-core-quorum-validation-go-remove-bl](./quick/260320-a78-stub-core-quorum-validation-go-remove-bl/) |
+| 260320-a78+ | Restore missing core types (ConensusRequest, QuorumDIDPeerMap, Token, AllToken); add util.HexToStr | 2026-03-20 | 2faf82a | — |
+| 260320-art | Stub core/recover.go: remove block package dependency (initiateRecoverRBT, recoverPinnedToken) | 2026-03-20 | 87460ab | [260320-art-stub-core-recover-go-remove-block-depend](./quick/260320-art-stub-core-recover-go-remove-block-depend/) |
 
 ## Session Continuity
 
 Last session: 2026-03-20
-Stopped at: Quick task 260320-a78 complete — core/quorum_validation.go block package dependency removed; 13 functions stubbed with TODO(phase07); TokenChainNotSynced const preserved for quorum_recv.go
+Stopped at: core/recover.go block import removed; remaining block importers: token.go, smartcontract_tokenchain_validation.go, unpledge.go
 Resume file: None
