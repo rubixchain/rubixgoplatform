@@ -97,9 +97,16 @@ Progress: [███░░░░░░░] 33% (phases 01, 02, 04, 05, 06 comple
 | 260320-59w | Remove core/ft_transfer_optimized.go and dead pool types (TokenInfoPool, TokenSlicePool) | 2026-03-20 | 4e991da | [260320-59w-evaluate-and-remove-core-ft-transfer-opt](./quick/260320-59w-evaluate-and-remove-core-ft-transfer-opt/) |
 | 260320-5ix | Eliminate contract package: internalize types to core, delete contract/ directory | 2026-03-20 | d3bd38b | [260320-5ix-eliminate-contract-package-dependency-cl](./quick/260320-5ix-eliminate-contract-package-dependency-cl/) |
 | 260320-6jw | Refactor syncTokenChain: replace GetAllTokenBlocks with GetTokenChainByTokenID (PostgreSQL) | 2026-03-20 | 871dd58 | [260320-6jw-refactor-first-getalltokenblocks-usage-i](./quick/260320-6jw-refactor-first-getalltokenblocks-usage-i/) |
+| 260320-76v | Replace soft tokenchain linkage warning with hard error return | 2026-03-20 | 13d57c1 | [260320-76v-replace-soft-tokenchain-linkage-warning-](./quick/260320-76v-replace-soft-tokenchain-linkage-warning-/) |
+| 260320-78x | Fix GetTokenChainByTokenID: add missing previous_transaction_id and id to SELECT | 2026-03-20 | 8ca90ab | [260320-78x-fix-gettokenchainbytokenid-add-missing-p](./quick/260320-78x-fix-gettokenchainbytokenid-add-missing-p/) |
+| 260320-7aa | Add position contiguity validation to syncTokenChain tokenchain invariant checks | 2026-03-20 | 4e4ba6d | [260320-7aa-add-position-gap-validation-to-synctoken](./quick/260320-7aa-add-position-gap-validation-to-synctoken/) |
+| 260320-7fy | Refactor GetMissingBlockSequence: remove block traversal, use PostgreSQL tokenchain validation | 2026-03-20 | 0cd3b56 | [260320-7fy-refactor-getmissingblocksequence-in-core](./quick/260320-7fy-refactor-getmissingblocksequence-in-core/) |
+| 260320-7vr | Stub all 14 functions in token_chain_validation.go; remove block package dependency | 2026-03-20 | 6e77069 | [260320-7vr-refactor-token-chain-validation-go-remov](./quick/260320-7vr-refactor-token-chain-validation-go-remov/) |
+| 260320-85w | Replace interface{} with TokenChainInput typed placeholder; add util.StrToHex | 2026-03-20 | a3b8dc2 | — |
+| 260320-8kl | Refactor core/ft.go to remove block package: PersistGenesisTokenRecord + ReadToken | 2026-03-20 | 60db81d | [260320-8kl-refactor-core-ft-go-to-remove-block-base](./quick/260320-8kl-refactor-core-ft-go-to-remove-block-base/) |
 
 ## Session Continuity
 
 Last session: 2026-03-20
-Stopped at: Quick task 260320-6jw complete — syncTokenChain refactored to use GetTokenChainByTokenID; first GetAllTokenBlocks call site eliminated from core/token.go
+Stopped at: Quick task 260320-8kl complete — core/ft.go all block references removed; FT genesis uses PersistGenesisTokenRecord; FT transfer uses ReadToken; wallet.ReleaseTokens added
 Resume file: None
