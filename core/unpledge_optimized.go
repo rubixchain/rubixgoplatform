@@ -15,18 +15,23 @@ func (c *Core) InitiateOptimizedUnpledgeProcess() (string, error) {
 	c.log.Info("Starting optimized unpledge process")
 
 	// Get all unpledge sequences
-	unpledgeSequenceInfo, err := c.w.GetUnpledgeSequenceDetails()
+	unpledgeSeqValues, err := c.w.GetUnpledgeSequenceDetails()
 	if err != nil {
 		c.log.Error("Failed to get unpledge sequences", "err", err)
 		return "", fmt.Errorf("failed to get unpledge sequences: %w", err)
 	}
 
-	if len(unpledgeSequenceInfo) == 0 {
+	if len(unpledgeSeqValues) == 0 {
 		c.log.Info("No tokens present to unpledge")
 		return "No tokens present to unpledge", nil
 	}
 
-	c.log.Info("Found unpledge sequences", "count", len(unpledgeSequenceInfo))
+	c.log.Info("Found unpledge sequences", "count", len(unpledgeSeqValues))
+
+	unpledgeSequenceInfo := make([]*wallet.UnpledgeSequenceInfo, len(unpledgeSeqValues))
+	for i := range unpledgeSeqValues {
+		unpledgeSequenceInfo[i] = &unpledgeSeqValues[i]
+	}
 
 	// Pre-filter ready transactions to avoid unnecessary processing
 	readyTransactions, err := c.filterReadyToUnpledge(unpledgeSequenceInfo)
@@ -246,7 +251,7 @@ func (c *Core) getOptimalPoolConfig(transactionCount int) config.UnpledgePoolCon
 	poolConfig := DefaultUnpledgePoolConfig()
 
 	// Check if custom config is provided
-	if c.cfg != nil && c.cfg.CfgData.UnpledgeConfig != nil {
+	if c.cfg != nil {
 		// Use custom configuration if provided
 		custom := c.cfg.CfgData.UnpledgeConfig
 		if custom.MaxWorkers > 0 {

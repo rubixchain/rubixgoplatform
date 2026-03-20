@@ -114,7 +114,7 @@ func (c *Core) GetAllTokens(did string, tt string) (*model.TokenResponse, error)
 		for _, t := range tkns {
 			td := model.TokenDetail{
 				Token:  t.TokenID,
-				Status: t.TokenStatus,
+				Status: int(t.TokenStatus),
 			}
 			tr.TokenDetails = append(tr.TokenDetails, td)
 		}
@@ -673,7 +673,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 		address := event.PublisherPeerID + "." + detail.Did
 
 		// add publisher to peer did table, if it is alredy NOT there in the PeerDIDTable
-		publisherPeerId := c.w.GetPeerID(detail.Did)
+		publisherPeerId, _ := c.w.GetPeerID(detail.Did)
 		if publisherPeerId != event.PublisherPeerID {
 
 			publisherDetails := &models.DID{

@@ -267,7 +267,7 @@ func (tsv *TokenStateValidator) validateSingleToken(
 		}
 		
 		// Add sender's peer ID
-		peerId := tsv.core.w.GetPeerID(did)
+		peerId, _ := tsv.core.w.GetPeerID(did)
 		if peerId != "" {
 			qPeerIds = append(qPeerIds, peerId)
 		}

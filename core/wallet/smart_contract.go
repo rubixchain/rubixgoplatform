@@ -17,9 +17,12 @@ type SmartContract struct {
 
 // SmartContractContent is a legacy stub for smart contract content.
 type SmartContractContent struct {
-	SmartContractHash string
-	BinaryCode        []byte
-	RawCode           []byte
+	SmartContractHash  string
+	DeployerDID        string
+	BinaryCodeFileName string
+	RawCodeFileName    string
+	BinaryCode         []byte
+	RawCode            []byte
 }
 
 func (w *Wallet) CreateSmartContractToken(sc *SmartContract) error {

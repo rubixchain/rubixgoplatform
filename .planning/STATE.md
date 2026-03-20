@@ -107,9 +107,12 @@ Progress: [███░░░░░░░] 33% (phases 01, 02, 04, 05, 06 comple
 | 260320-a78 | Stub core/quorum_validation.go; remove block package dependency (13 functions) | 2026-03-20 | 8887b35 | [260320-a78-stub-core-quorum-validation-go-remove-bl](./quick/260320-a78-stub-core-quorum-validation-go-remove-bl/) |
 | 260320-a78+ | Restore missing core types (ConensusRequest, QuorumDIDPeerMap, Token, AllToken); add util.HexToStr | 2026-03-20 | 2faf82a | — |
 | 260320-art | Stub core/recover.go: remove block package dependency (initiateRecoverRBT, recoverPinnedToken) | 2026-03-20 | 87460ab | [260320-art-stub-core-recover-go-remove-block-depend](./quick/260320-art-stub-core-recover-go-remove-block-depend/) |
+| 260320-b1c | Stub smartcontract_tokenchain_validation.go: remove block import; stub ValidateSmartContractTokenChain/Block/ValidateTxnInitiator | 2026-03-20 | b474fdc | — |
+| 260320-b1c+ | Add wallet stubs GetSmartContractTokenByDeployer + GetSmartContractToken | 2026-03-20 | e18401b | — |
+| 260320-bkj | Remove block package dependency from core/token.go; add BlockStub wallet stubs | 2026-03-20 | 3a1c339 | [260320-bkj-remove-block-dependency-from-core-token-](./quick/260320-bkj-remove-block-dependency-from-core-token-/) |
 
 ## Session Continuity
 
 Last session: 2026-03-20
-Stopped at: core/recover.go block import removed; remaining block importers: token.go, smartcontract_tokenchain_validation.go, unpledge.go
+Stopped at: core/token.go block import removed; remaining block importer: unpledge.go only
 Resume file: None

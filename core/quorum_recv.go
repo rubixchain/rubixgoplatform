@@ -12,11 +12,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/rubixchain/rubixgoplatform/block"
 	constants "github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	didcrypto "github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/service"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
@@ -1786,17 +1788,17 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 			if ur.Mode == NFTDeployMode || ur.Mode == NFTExecuteMode {
 				assetType = NFTTokenType
 			}
-			err = c.ValidateIncomingTokenBlockChainIntegrity(TokenChainInput{}, TokenChainInput{}, t, assetType)
+			err = c.ValidateIncomingTokenBlockChainIntegrity(TokenChainInput{}, TokenChainInput{}, t.Token, assetType)
 			if err != nil {
-				errMsg := fmt.Sprintf("failed to validate incoming transaction block for the token%s, error:%v", t, err)
+				errMsg := fmt.Sprintf("failed to validate incoming transaction block for the token%s, error:%v", t.Token, err)
 				c.log.Error(errMsg)
 				crep.Message = errMsg
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
-			err = c.w.AddTokenBlock(t, b)
+			err = c.w.AddTokenBlock(t.Token, b)
 			if err != nil {
-				c.log.Error("Failed to add token block", "token", t)
-				crep.Message = fmt.Sprintf("Failed to add token block fot the token%s", t)
+				c.log.Error("Failed to add token block", "token", t.Token)
+				crep.Message = fmt.Sprintf("Failed to add token block fot the token%s", t.Token)
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
 		}

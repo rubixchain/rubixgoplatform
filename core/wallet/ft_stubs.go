@@ -13,6 +13,9 @@ import (
 const (
 	FTTokenStorage = "ft_token_storage"
 	FTStorage      = "ft_storage"
+
+	// OwnerRole is the IPFS pin role for a token owner (int, matches token_provider_map.go role param).
+	OwnerRole = 0
 )
 
 // ── Legacy stub types ─────────────────────────────────────────────────────────
