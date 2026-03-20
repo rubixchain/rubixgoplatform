@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 
 Phase: 08 in progress; Plan 08-01 complete
 Status: Phase 08-01 complete — PersistPostConsensus wired in initiateTransaction (PERSIST-04 satisfied)
-Last activity: 2026-03-20 - Completed quick task 260320-hf8: Delete dead client/config.go + client/services.go; remove APISetupDB route from server.go
+Last activity: 2026-03-20 - Completed quick task 260320-hvl: Remove dead route registrations (APIInitiateRBTTransfer, APIInitiatePinRBT) from server/server.go
 
 Progress: [███████░░░] 67% (phases 01, 02, 04, 05, 06, 07 complete; 08 in progress; 09-10 pending)
 
@@ -116,9 +116,10 @@ Progress: [███████░░░] 67% (phases 01, 02, 04, 05, 06, 07 co
 | 260320-ffj | Reconcile GSD planning files with actual code state after 17 quick tasks | 2026-03-20 | b50e046 | [260320-ffj-reconcile-gsd-planning-files-with-actual](./quick/260320-ffj-reconcile-gsd-planning-files-with-actual/) |
 | 260320-h3o | Analyze missing config types causing build failure (NO CODE CHANGES) | 2026-03-20 | 34f1344 | [260320-h3o-analyze-missing-config-types-causing-bui](./quick/260320-h3o-analyze-missing-config-types-causing-bui/) |
 | 260320-hf8 | Delete dead client/config.go + client/services.go; remove APISetupDB route from server.go | 2026-03-20 | d758f82 | [260320-hf8-remove-dead-client-config-service-files-](./quick/260320-hf8-remove-dead-client-config-service-files-/) |
+| 260320-hvl | Remove dead route registrations (APIInitiateRBTTransfer, APIInitiatePinRBT) from server/server.go | 2026-03-20 | 3af2a4b | [260320-hvl-remove-dead-server-route-registrations-p](./quick/260320-hvl-remove-dead-server-route-registrations-p/) |
 
 ## Session Continuity
 
-Last session: 2026-03-20T07:27:00.000Z
-Stopped at: Completed quick task 260320-hf8
+Last session: 2026-03-20T07:25:43Z
+Stopped at: Completed quick task 260320-hvl
 Resume file: None
