@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 
@@ -140,5 +141,108 @@ func main() {
 			tokenID, t.TokenID, t.TokenValue, t.TokenStatus, t.DID)
 	}
 
-	fmt.Println("Dev runner complete: DID + 3 tokens seeded and verified.")
+	// Step F: Simulate transfer via PersistPostConsensus
+	fmt.Println("\n--- Step F: Transfer simulation via PersistPostConsensus ---")
+
+	// F1: Read QmTestToken001 to get its current TransactionID (needed as PreviousTransactionID)
+	preToken, err := w.ReadToken("QmTestToken001")
+	if err != nil {
+		log.Fatalf("ReadToken(QmTestToken001) failed before transfer: %v", err)
+	}
+	fmt.Printf("Pre-transfer state: TokenID=%s TransactionID=%s LatestPosition=%d LatestRole=%d\n",
+		preToken.TokenID, preToken.TransactionID, preToken.LatestPosition, preToken.LatestRole)
+
+	// F2: Build TransactionInfo for transfer (epoch=1)
+	transferTxInfo := &models.TransactionInfo{
+		Initiator: "bafybmidtest1234",
+		Owner:     "bafybmidtest1234", // same DID for simplicity (initiator perspective)
+		Epoch:     1,
+		Network:   constants.NetworkID_RBT_Local,
+		Tokens: &models.TransactionTokens{
+			RBT: []*models.TokenInfo{
+				{
+					TokenID:               "QmTestToken001",
+					PreviousTransactionID: preToken.TransactionID,
+					TokenValue:            1.0,
+					DID:                   "bafybmidtest1234",
+				},
+			},
+		},
+	}
+
+	// F3: Compute transaction ID for logging
+	transferTxID, err := wallet.ComputeTransactionID(transferTxInfo)
+	if err != nil {
+		log.Fatalf("ComputeTransactionID for transfer failed: %v", err)
+	}
+	fmt.Printf("Transfer transaction ID: %s\n", transferTxID)
+
+	// F4: Build signature and call PersistPostConsensus (production 4-field pattern)
+	transferSig := &models.Signature{
+		InitiatorSignature: "dev-test-transfer-sig",
+		Quorums:            nil,
+	}
+
+	ctx := context.Background()
+	if err := w.PersistPostConsensus(ctx, &wallet.PostConsensusPersistenceRequest{
+		TransactionInfo: transferTxInfo,
+		Signature:       transferSig,
+		DID:             "bafybmidtest1234",
+		ExecutionRole:   wallet.ExecutionRoleInitiator,
+	}); err != nil {
+		log.Fatalf("PersistPostConsensus failed: %v", err)
+	}
+	fmt.Println("PostConsensus complete")
+
+	// F5: Verify -- read back token after transfer
+	postToken, err := w.ReadToken("QmTestToken001")
+	if err != nil {
+		log.Fatalf("ReadToken(QmTestToken001) failed after transfer: %v", err)
+	}
+	fmt.Printf("Post-transfer state: TokenID=%s TransactionID=%s LatestPosition=%d LatestRole=%d DID=%s\n",
+		postToken.TokenID, postToken.TransactionID, postToken.LatestPosition, postToken.LatestRole, postToken.DID)
+
+	// Assert expected values
+	if postToken.LatestPosition != 1 {
+		log.Fatalf("ASSERTION FAILED: expected LatestPosition=1, got %d", postToken.LatestPosition)
+	}
+	if postToken.LatestRole != 2 { // 2 = transfer role
+		log.Fatalf("ASSERTION FAILED: expected LatestRole=2 (transfer), got %d", postToken.LatestRole)
+	}
+	if postToken.TransactionID != transferTxID {
+		log.Fatalf("ASSERTION FAILED: expected TransactionID=%s, got %s", transferTxID, postToken.TransactionID)
+	}
+
+	// F6: Verify -- tokenchain shows position 0 (mint) + position 1 (transfer)
+	chain, err := w.GetTokenChainByTokenID("QmTestToken001")
+	if err != nil {
+		log.Fatalf("GetTokenChainByTokenID(QmTestToken001) failed: %v", err)
+	}
+	fmt.Printf("Tokenchain entries for QmTestToken001: %d\n", len(chain))
+	for _, row := range chain {
+		prevTxID := "<nil>"
+		if row.PreviousTransactionID != nil {
+			prevTxID = *row.PreviousTransactionID
+		}
+		fmt.Printf("  position=%d role=%d txID=%s prevTxID=%s\n",
+			row.Position, row.Role, row.TransactionID, prevTxID)
+	}
+	if len(chain) != 2 {
+		log.Fatalf("ASSERTION FAILED: expected 2 tokenchain entries, got %d", len(chain))
+	}
+	if chain[0].Position != 0 || chain[1].Position != 1 {
+		log.Fatalf("ASSERTION FAILED: expected positions [0,1], got [%d,%d]", chain[0].Position, chain[1].Position)
+	}
+
+	// F7: Verify -- transfer transaction exists in transactions table
+	txRecord, err := w.GetTransactionByID(transferTxID)
+	if err != nil {
+		log.Fatalf("GetTransactionByID(%s) failed: %v", transferTxID, err)
+	}
+	if txRecord == nil {
+		log.Fatalf("ASSERTION FAILED: transfer transaction %s not found in DB", transferTxID)
+	}
+	fmt.Printf("Transfer transaction found: ID=%s\n", txRecord.ID)
+
+	fmt.Println("\nDev runner complete: DID + 3 tokens seeded + transfer simulated and verified.")
 }
