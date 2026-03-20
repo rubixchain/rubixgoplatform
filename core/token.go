@@ -16,7 +16,6 @@ import (
 	"sync"
 	"time"
 
-	block "github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -81,8 +80,8 @@ type TokenSyncInfo struct {
 }
 
 type ReceivedBlock struct {
-	GenesisBlock *block.Block `json:"genesis_block"`
-	LatestBlock  *block.Block `json:"latest_block"`
+	GenesisBlock *wallet.BlockStub `json:"genesis_block"`
+	LatestBlock  *wallet.BlockStub `json:"latest_block"`
 }
 
 type PubSubEnvelope struct {
@@ -759,15 +758,8 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 					//To update the token value first look at the genesis block type, If it is migrated type update the token value as whatever publisher published because,
 					// There is no token value in the Mainnet genesis block for migrated tokens.
 					//In rest of the genesis blocks case, read token value from the genesis block and update the sqlite table
-					if genesisBlock != nil {
-						genesisBlockType := genesisBlock.GetTransType()
-						if genesisBlockType == block.TokenMigratedType {
-
-							eventData.TokenValue = detail.TokenValue
-						} else {
-							eventData.TokenValue = genesisBlock.GetTokenValue()
-						}
-					}
+					// TODO(phase07): migration logic removed (block-based); use event token value as default
+					eventData.TokenValue = detail.TokenValue
 
 					c.AddTokenToRespectiveTable(detail.Token, currentOwner, blocks, &eventData, constants.SyncStatus_Unrequired)
 					continue
@@ -816,15 +808,8 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			//To update the token value first look at the genesis block type, If it is migrated type update the token value as whatever publisher published because,
 			// There is no token value in the Mainnet genesis block for migrated tokens.
 			//In rest of the genesis blocks case, read token value from the genesis block and update the sqlite table
-			if genesisBlock != nil {
-				genesisBlockType := genesisBlock.GetTransType()
-				if genesisBlockType == block.TokenMigratedType {
-
-					eventData.TokenValue = detail.TokenValue
-				} else {
-					eventData.TokenValue = genesisBlock.GetTokenValue()
-				}
-			}
+			// TODO(phase07): migration logic removed (block-based); use event token value as default
+			eventData.TokenValue = detail.TokenValue
 
 			c.AddTokenToRespectiveTable(detail.Token, currentOwner, blocks, &eventData, constants.SyncStatus_Unrequired)
 		}
@@ -1162,20 +1147,9 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 			c.log.Error("Failed to sync token chain block", "msg", trep.Message)
 			return fmt.Errorf(trep.Message), &trep
 		}
-		if len(trep.TCBlock) > 0 {
-			for _, bb := range trep.TCBlock {
-				blk := block.InitBlock(bb, nil)
-				if blk == nil {
-					c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
-					return fmt.Errorf("failed to add token chain block, invalid block, sync failed"), &trep
-				}
-				err = c.w.AddTokenBlock(token, blk)
-				if err != nil {
-					c.log.Error("Failed to add token chain block, syncing failed", "err", err)
-					return err, &trep
-				}
-			}
-		}
+		// TODO(phase07): block parsing removed; raw TCBlock bytes not processed
+		// Previously: InitBlock + AddTokenBlock for each block in response
+		_ = trep.TCBlock
 		if trep.NextBlockID == "" {
 			break
 		}
@@ -1229,32 +1203,14 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 
 		if strings.Contains(trep.Message, "Sent all blocks") {
 			if len(trep.TCBlock) > 0 {
-				syncerLatestBlk := block.InitBlock(trep.TCBlock[len(trep.TCBlock)-1], nil)
-				if syncerLatestBlk == nil {
-					c.log.Error("Failed to initialize peer's latest block", "token", tokenSyncInfo.TokenID)
-					return fmt.Errorf("failed to initialize peer's latest block")
-				}
-				syncerLatestBlkID, err = syncerLatestBlk.GetBlockID(tokenSyncInfo.TokenID)
-				if err != nil {
-					c.log.Error("Failed to get block hash of synced block", "err", err, "token", tokenSyncInfo.TokenID)
-					return err
-				}
+				// TODO(phase07): block parsing removed; cannot extract latest block ID from raw bytes
+				// Previously: InitBlock on last TCBlock, then GetBlockID to get syncerLatestBlkID
 			}
 		}
 
-		for _, bb := range trep.TCBlock {
-			blk := block.InitBlock(bb, nil)
-			if blk == nil {
-				c.log.Error("Failed to add token chain block, invalid block", "token", tokenSyncInfo.TokenID)
-				return fmt.Errorf("failed to add token chain block, invalid block")
-			}
-
-			err = c.w.AddFullNodeTokenBlock(tokenSyncInfo.TokenID, blk)
-			if err != nil {
-				c.log.Error("Failed to add token chain block, syncing failed", "err", err, "token", tokenSyncInfo.TokenID)
-				return err
-			}
-		}
+		// TODO(phase07): block parsing removed; raw TCBlock bytes not processed
+		// Previously: InitBlock + AddFullNodeTokenBlock for each block
+		_ = trep.TCBlock
 
 		if trep.NextBlockID == "" {
 			break
@@ -1490,33 +1446,15 @@ func (c *Core) syncGenesisAndLatestBlockFrom(p *ipfsport.Peer, syncReq TCBSyncRe
 		return fmt.Errorf(trep.Message)
 	}
 
-	// add genesis block
+	// TODO(phase07): block parsing removed; genesis block bytes not processed
+	// Previously: InitBlock + AddTokenBlock for genesis block
 	if trep.GenesisBlock != nil {
-		fmt.Println("adding genesis block")
-		genesisBlock := block.InitBlock(trep.GenesisBlock, nil)
-		if genesisBlock == nil {
-			c.log.Error("Failed to initiate genesis block, invalid block, sync failed", "err", err)
-			return fmt.Errorf("failed to initiate genesis block, invalid block, sync failed")
-		}
-		err = c.w.AddTokenBlock(syncReq.Token, genesisBlock) /// to work on this
-		if err != nil {
-			c.log.Error("Failed to add genesis block, syncing failed", "err", err)
-			return err
-		}
+		_ = trep.GenesisBlock
 	}
-	// add latest block
+	// TODO(phase07): block parsing removed; latest block bytes not processed
+	// Previously: InitBlock + AddTokenBlock for latest block
 	if trep.LatestBlock != nil {
-		fmt.Println("adding latest block")
-		latestBlock := block.InitBlock(trep.LatestBlock, nil)
-		if latestBlock == nil {
-			c.log.Error("Failed to initiate latest block, invalid block, sync failed", "err", err)
-			return fmt.Errorf("failed to initiate latest block, invalid block, sync failed")
-		}
-		err = c.w.AddTokenBlock(syncReq.Token, latestBlock) /// to work on this
-		if err != nil {
-			c.log.Error("Failed to add latest block, syncing failed", "err", err)
-			return err
-		}
+		_ = trep.LatestBlock
 	}
 
 	return nil
@@ -2036,25 +1974,10 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 		return br
 	}
 
-	//Validating token chain
-	tokenType := c.TokenType(RBTString)
-	genBlock := c.w.GetGenesisTokenBlock(tokenID, tokenType)
-
-	signers, err := genBlock.GetSigner()
-	if err != nil {
-		br.Message = "Couldn't get signer details"
-		return br
-	}
-
-	if len(signers) != 1 {
-		br.Message = "Invalid signer details"
-		return br
-	}
-	//The did will be hardcoded to match the faucet DID
-	if signers[0] != "bafybmibexoa7owxdkjzfcg3ff3elqthkxsbaeznqoqq65gx6t2xkvm52fe" {
-		br.Message = "Signer DID doesn't match faucet DID"
-		return br
-	}
+	// TODO(phase07): block-based token chain validation removed
+	// Previously: GetGenesisTokenBlock + GetSigner to verify faucet DID
+	br.Message = "Token chain validation temporarily unavailable (block removal in progress)"
+	return br
 
 	response, err := c.ValidateTokenOwner(TokenChainInput{}, did)
 	if err != nil {
@@ -2240,31 +2163,11 @@ func (c *Core) RestartIncompleteTokenChainSyncs() {
 func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, receivedBlock ReceivedBlock, event *model.PubSubTxnInfo, syncStatus int) error {
 	// var err error
 	var tokenStatus int
-	txnBlockType := receivedBlock.LatestBlock.GetTransType()
+	// TODO(phase07): replace block type logic with DB token status
+	// Previously: derived tokenStatus from receivedBlock.LatestBlock.GetTransType()
+	// Default to Free since block-based type detection is removed
 	if receivedBlock.LatestBlock != nil {
-		switch txnBlockType {
-		case block.TokenBurntType:
-			tokenStatus = constants.TokenStatus_Burnt
-		case block.TokenGeneratedType, block.TokenTransferredType,
-			block.TokenUnpledgedType, block.TokenMintedType, block.TokenMigratedType:
-			tokenStatus = constants.TokenStatus_Free
-		case block.TokenPledgedType:
-			tokenStatus = constants.TokenStatus_Pledged
-		case block.TokenDeployedType:
-			tokenStatus = constants.TokenStatus_Deployed
-		case block.TokenExecutedType:
-			tokenStatus = constants.TokenStatus_Executed
-		case block.TokenIsBurntForFT:
-			tokenStatus = constants.TokenStatus_BurntForFT
-		case block.TokenCommittedType:
-			tokenStatus = constants.TokenStatus_Committed
-		case block.TokenContractCommited:
-			tokenStatus = constants.TokenStatus_Committed
-		case block.TokenPinnedAsService:
-			tokenStatus = constants.TokenStatus_PinnedAsService
-
-		}
-
+		tokenStatus = constants.TokenStatus_Free
 	}
 
 	switch event.AssetType {
@@ -2286,22 +2189,15 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 					TransactionID: event.TransactionID,
 					PublisherDID:  event.PublisherDID,
 					BlockHeight:   event.LatestBlockHeight,
-					SyncStaus:     syncStatus,
+					SyncStatus:     syncStatus,
 					TokenStatus:   tokenStatus,
 					// TokenValue:    event.TokenValue,
 				}
 				// if event.TokenValue != 0 {
 				// 	tokenInfo.TokenValue = event.TokenValue
 				// }
-				if receivedBlock.GenesisBlock != nil {
-					genesisBlockType := receivedBlock.GenesisBlock.GetTransType()
-					if genesisBlockType == block.TokenMigratedType {
-						tokenInfo.TokenValue = event.TokenValue
-					} else {
-						tokenInfo.TokenValue = receivedBlock.GenesisBlock.GetTokenValue()
-					}
-
-				}
+				// TODO(phase07): migration logic removed (block-based); use event token value as default
+				tokenInfo.TokenValue = event.TokenValue
 
 				err = c.w.AddSyncedRBTToTable(tokenInfo)
 				if err != nil {
@@ -2322,7 +2218,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		syncedRBT.OwnerDID = tokenOwner
 		syncedRBT.TransactionID = event.TransactionID
 		syncedRBT.BlockHash = event.BlockHash
-		syncedRBT.SyncStaus = syncStatus
+		syncedRBT.SyncStatus = syncStatus
 		syncedRBT.BlockHeight = event.LatestBlockHeight
 		syncedRBT.PublisherDID = event.PublisherDID
 		syncedRBT.TokenStatus = tokenStatus
@@ -2332,15 +2228,8 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 
 		//If the token value is  zero, need to update
 		if syncedRBT.TokenValue == 0 {
-			if receivedBlock.GenesisBlock != nil {
-				genesisBlockType := receivedBlock.GenesisBlock.GetTransType()
-				if genesisBlockType == block.TokenMigratedType {
-					syncedRBT.TokenValue = event.TokenValue
-				} else {
-					syncedRBT.TokenValue = receivedBlock.GenesisBlock.GetTokenValue()
-				}
-
-			}
+			// TODO(phase07): migration logic removed (block-based); use event token value as default
+			syncedRBT.TokenValue = event.TokenValue
 		}
 
 		err = c.w.UpdateSyncedRBTToTable(syncedRBT)
@@ -2418,7 +2307,10 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		syncedSC, err := c.w.ReadSyncedSmartContractFromTable(tokenId)
 		if err != nil {
 			if strings.Contains(err.Error(), "no records found") {
-				scDeployer := receivedBlock.GenesisBlock.GetDeployerDID()
+				var scDeployer string
+				if receivedBlock.GenesisBlock != nil {
+					scDeployer = receivedBlock.GenesisBlock.GetDeployerDID()
+				}
 				scInfo := &wallet.SyncedSmartContract{
 					SmartContractHash: tokenId,
 					Deployer:          scDeployer,
@@ -2463,7 +2355,10 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 			if strings.Contains(err.Error(), "no records found") {
 				c.log.Debug("nft doesn't exist, creating new record")
 
-				nftOwner := receivedBlock.LatestBlock.GetDeployerDID()
+				var nftOwner string
+				if receivedBlock.LatestBlock != nil {
+					nftOwner = receivedBlock.LatestBlock.GetDeployerDID()
+				}
 				nftInfo := &wallet.SyncedNFT{
 					TokenID:       tokenId,
 					OwnerDID:      nftOwner,
