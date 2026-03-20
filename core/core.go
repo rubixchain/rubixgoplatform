@@ -181,6 +181,9 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 		return nil, fmt.Errorf(errMsg)
 	}
 
+	c.log = log.Named("Core")
+	c.didDir = cfg.DidDir
+
 	if _, err := os.Stat(c.didDir); os.IsNotExist(err) {
 		err := os.MkdirAll(c.didDir, os.ModeDir|os.ModePerm)
 		if err != nil {
@@ -188,8 +191,6 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 			return nil, err
 		}
 	}
-
-	c.log = log.Named("Core")
 	c.ipfsChan = make(chan bool)
 
 	dbOpts := storage.DBOpts{
@@ -462,6 +463,11 @@ func (c *Core) RenameNFTFolder(tempFolderPath string, nft string) (string, error
 // GetConfig returns the core configuration
 func (c *Core) GetConfig() *types.RubixConfig {
 	return c.cfg
+}
+
+// GetWallet returns the wallet instance for direct wallet operations.
+func (c *Core) GetWallet() *wallet.Wallet {
+	return c.w
 }
 
 func (c *Core) AddWebReq(req *ensweb.Request) {
