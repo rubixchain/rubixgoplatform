@@ -160,6 +160,9 @@ func (c *Core) checkPassword(didStr string, pwd string) bool {
 // Must be called after RunIPFS() so that c.ipfs is non-nil.
 func (c *Core) InitDIDModule() {
 	if c.d == nil {
+		// Ensure didDir has a trailing slash -- the did package uses raw string
+		// concatenation (d.dir + DID) and requires a path separator at the end.
+		c.didDir = util.SanitizeDirPath(c.didDir)
 		c.d = did.InitDID(c.didDir, c.log, c.ipfs)
 	}
 }
