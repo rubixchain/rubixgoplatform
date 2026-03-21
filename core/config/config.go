@@ -11,6 +11,12 @@ import (
 	"github.com/rubixchain/rubixgoplatform/types"
 )
 
+// Config is a type alias for types.RubixConfig, used by ipfs_health and ipfs_recovery.
+type Config = types.RubixConfig
+
+// UnpledgePoolConfig is a type alias for types.UnpledgePoolConfig, used by unpledge_pool.
+type UnpledgePoolConfig = types.UnpledgePoolConfig
+
 // ---------------------------------------------------------------------------------------------------------- //
 
 const userConfigTemplate = `
@@ -109,6 +115,15 @@ func CreateRubixConfigFromUserConfig(userConfig types.UserConfig, nodeDir string
 	rubixConfig.MainnetBootstrap = userConfig.Ipfs.MainnetBootstrapNodes
 	rubixConfig.TestnetBootstrap = userConfig.Ipfs.TestnetBootstrapNodes
 	rubixConfig.LocalnetBootStrap = userConfig.Ipfs.LocalnetBootstrapNodes
+
+	// Fall back to hardcoded bootstrap nodes when config.toml leaves arrays empty.
+	// Localnet intentionally has no fallback — empty list means isolated network.
+	if len(rubixConfig.MainnetBootstrap) == 0 {
+		rubixConfig.MainnetBootstrap = constants.MainnetBootstrapNodes
+	}
+	if len(rubixConfig.TestnetBootstrap) == 0 {
+		rubixConfig.TestnetBootstrap = constants.TestnetBootstrapNodes
+	}
 
 	// Postgres DB Config
 	rubixConfig.DBConfig.DBName = userConfig.Db.DBName

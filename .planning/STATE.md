@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed quick task 260321-16f
-last_updated: "2026-03-21T00:00:00.000Z"
-last_activity: 2026-03-21 — Wired tokenchain_index upsert into PersistGenesisTokenRecord + AddTokenChainEntry; added GetTokenchainIndex accessor + dev runner assertions (260321-16f)
+stopped_at: "Completed quick-260321-6zz: Enable IPFS in dev runner"
+last_updated: "2026-03-20T23:47:49.708Z"
+last_activity: "2026-03-21 - Completed quick task 260321-6zz: Enable IPFS in dev runner (localnetswarm.key + CfgData.Ports fix + RunIPFS/StopCore/AddDir lifecycle)"
 progress:
   total_phases: 6
   completed_phases: 3
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 
 Phase: 08 in progress; Plan 08-01 complete
 Status: Phase 08-01 complete — PersistPostConsensus wired in initiateTransaction (PERSIST-04 satisfied)
-Last activity: 2026-03-21 - Completed quick task 260321-16f: Wired tokenchain_index upsert into PersistGenesisTokenRecord + AddTokenChainEntry; GetTokenchainIndex accessor + dev runner Step C2/F6b assertions
+Last activity: 2026-03-21 - Completed quick task 260321-6zz: Enable IPFS in dev runner; fixed localnetswarm.key + CfgData.Ports blockers; added RunIPFS/StopCore/AddDir lifecycle
 
 Progress: [███████░░░] 67% (phases 01, 02, 04, 05, 06, 07 complete; 08 in progress; 09-10 pending)
 
@@ -80,6 +80,8 @@ Progress: [███████░░░] 67% (phases 01, 02, 04, 05, 06, 07 co
 - generateTestTokens and generateTestTokensFaucet no longer use block package — replaced with SerializeTransactionInfo + PvtSign + ComputeTransactionID + PersistGenesisTokenRecord; ipfsnode import removed from core/token.go (Phase 08 pre-work)
 - Remaining CreateTokenBlock call sites NOT yet fixed: core/quorum_recv.go:1858, core/unpledge.go:187 — these are in scope for Phase 08
 - PersistPostConsensus call site wired in initiateTransaction (08-01): positioned after signatureTobePublished assembly, before util.PublishTransaction; soft-fail (log only, no early return); PERSIST-04 satisfied (08-01)
+- localnetswarm.key uses fresh 32-byte random key (not copy of mainnet swarm.key) to keep localnet network isolated (quick-260321-6zz)
+- CfgData.Ports fix applied in cmd/dev/main.go after CreateRubixConfigFromUserConfig (not in config.go) to avoid changing shared production config path (quick-260321-6zz)
 
 ### Blockers/Concerns
 
@@ -90,6 +92,7 @@ Progress: [███████░░░] 67% (phases 01, 02, 04, 05, 06, 07 co
 - core/network.go still imports block package (line 5) — one of the CLEANUP-01 files for Phase 10
 - core/fullnode.go block import removed (quick task 260320-4ok); processSingleTransaction stubbed with TODO; StoreFailedTransaction/GetAllFailedToSyncTokens/AddTransactionsToFullNodeTransactionHistoryTable/ReadFullNodeTransactionHistoryTable/UpdateFullNodeTransactionHistoryTable added as no-op stubs in ft_stubs.go; EventTransaction.BlockHash/AssetType fields added to types/models/events.go
 - core/parts/genesis_transaction.go:46 still has json.Marshal(txInfo) — out of scope for Phase 08 pre-work but needs fixing before Phase 08 complete (grep check: grep -rn "json.Marshal(txInfo)" core/ should return 0)
+- Dev runner DID is a phantom (DB-only, no keypair, no IPFS) -- safe for persistence testing but cannot exercise PvtSign/PvtVerify/SetupDID signing paths; gap analysis documented in .planning/quick/260321-4qx-did-creation-and-lifecycle-validation-co/260321-4qx-DID-GAP-ANALYSIS.md
 
 ### Quick Tasks Completed
 
@@ -123,9 +126,16 @@ Progress: [███████░░░] 67% (phases 01, 02, 04, 05, 06, 07 co
 | 260320-w86 | Extend dev runner: DID insert + 3 genesis RBT token seeds + read-back verification; add GetWallet() accessor to Core | 2026-03-20 | e4dc1ac | Verified | [260320-w86-extend-dev-runner-to-create-did-seed-tok](./quick/260320-w86-extend-dev-runner-to-create-did-seed-tok/) |
 | 260320-wx1 | Extend dev runner Step F: PersistPostConsensus transfer simulation + tokenchain/transaction verification | 2026-03-21 | dbf892e | Verified | [260320-wx1-extend-dev-runner-to-simulate-transfer-v](./quick/260320-wx1-extend-dev-runner-to-simulate-transfer-v/) |
 | 260321-16f | Ensure tokenchain_index is updated: upsert in PersistGenesisTokenRecord + AddTokenChainEntry; GetTokenchainIndex accessor; dev runner Step C2/F6b assertions | 2026-03-21 | 38d4c99 | Verified | [260321-16f-ensure-tokenchain-index-table-is-updated](./quick/260321-16f-ensure-tokenchain-index-table-is-updated/) |
+| 260321-0vu | Populate TransactionInfo.Network; replace util.GetTransactionID with wallet.ComputeTransactionID; add RBT token pre-flight validation; fix context.TODO | 2026-03-21 | 9b2779f | Verified | [260321-0vu-refactor-initiatetransaction-aligned-wit](./quick/260321-0vu-refactor-initiatetransaction-aligned-wit/) |
+| 260321-2bo | Delete core/explorer_stubs.go, core/diagnostic_stubs.go, core/model/ft_migration.go — out-of-scope server-facing stubs polluting core/ | 2026-03-21 | — | Verified | [260321-2bo-clean-up-out-of-scope-changes-and-restor](./quick/260321-2bo-clean-up-out-of-scope-changes-and-restor/) |
+| 260321-31o | Fix D1 correctness bug: delete broken post-lock RBT validation block in initiateTransaction | 2026-03-21 | — | Verified | — |
+| 260321-3rg | Compare InitiateTransaction with Dev Runner Step F (STRICT EQUIVALENCE CHECK) | 2026-03-21 | — | Verified | [260321-3rg-compare-initiatetransaction-with-dev-run](./quick/260321-3rg-compare-initiatetransaction-with-dev-run/) |
+| 260321-4qx | DID creation and lifecycle validation -- gap analysis document (no code changes) | 2026-03-21 | -- | Complete | [260321-4qx-did-creation-and-lifecycle-validation-co](./quick/260321-4qx-did-creation-and-lifecycle-validation-co/) |
+| 260321-5mm | Extend dev runner with 2-DID full lifecycle: Steps G-K (receiver DID, 3-token transfer, ownership + chain + index assertions) | 2026-03-21 | fdd42b1 | Complete (runtime DB verify pending) | [260321-5mm-extend-dev-runner-with-full-db-only-tran](./quick/260321-5mm-extend-dev-runner-with-full-db-only-tran/) |
+| 260321-6zz | Enable IPFS in dev runner: create localnetswarm.key, fix CfgData.Ports blocker, wire RunIPFS/StopCore/AddDir lifecycle + assertions | 2026-03-21 | 62521ab | Complete | [260321-6zz-enable-and-validate-ipfs-in-dev-runner](./quick/260321-6zz-enable-and-validate-ipfs-in-dev-runner/) |
 
 ## Session Continuity
 
-Last session: 2026-03-21T00:00:00Z
-Stopped at: Completed quick task 260320-wx1
+Last session: 2026-03-20T23:47:49.702Z
+Stopped at: Completed quick-260321-6zz: Enable IPFS in dev runner
 Resume file: None
