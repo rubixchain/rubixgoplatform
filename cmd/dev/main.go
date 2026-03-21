@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -14,6 +16,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
@@ -110,6 +113,9 @@ func main() {
 
 	// Step B2: Verify sender DID artifacts on disk
 	didDir := cfg.DidDir
+
+	// Create DIDCrypto instance for sender (used for genesis signing and transfer signing)
+	senderDC := did.InitDIDLiteWithPassword(senderDID, didDir, "test-sender-pwd")
 	for _, fname := range []string{did.PvtKeyFileName, did.PubKeyFileName, did.MnemonicFileName} {
 		fpath := filepath.Join(didDir, senderDID, fname)
 		info, err := os.Stat(fpath)
@@ -159,10 +165,23 @@ func main() {
 			log.Fatalf("SerializeTransactionInfo failed for %s: %v", tokenID, err)
 		}
 
+		// Pattern B: genesis signing -- PvtSign(infoBytes) -> hex-encode -> marshal Signature struct
+		genesisSignBytes, err := senderDC.PvtSign(infoBytes)
+		if err != nil {
+			log.Fatalf("PvtSign failed for genesis token %s: %v", tokenID, err)
+		}
+		genesisSigStruct := &models.Signature{
+			InitiatorSignature: hex.EncodeToString(genesisSignBytes),
+		}
+		genesisSigJSON, err := json.Marshal(genesisSigStruct)
+		if err != nil {
+			log.Fatalf("json.Marshal(genesis signature) failed for %s: %v", tokenID, err)
+		}
+
 		txRecord := &models.Transactions{
 			ID:        txID,
 			Info:      infoBytes,
-			Signature: []byte("{}"),
+			Signature: genesisSigJSON,
 		}
 
 		token := &models.Token{
@@ -263,9 +282,18 @@ func main() {
 	}
 	fmt.Printf("Transfer transaction ID: %s\n", transferTxID)
 
-	// F4: Build signature and call PersistPostConsensus (production 4-field pattern)
+	// F4: Pattern A -- sign with sender's private key, verify before persistence
+	initiatorSigF, err := util.SignTransaction(senderDC, transferTxInfo)
+	if err != nil {
+		log.Fatalf("SignTransaction(step F) failed: %v", err)
+	}
+	if err := util.VerifySignature(senderDC, transferTxInfo, initiatorSigF); err != nil {
+		log.Fatalf("VerifySignature(step F) failed: %v", err)
+	}
+	fmt.Println("Step F: signature verified")
+
 	transferSig := &models.Signature{
-		InitiatorSignature: "dev-test-transfer-sig",
+		InitiatorSignature: initiatorSigF,
 		Quorums:            nil,
 	}
 
@@ -358,6 +386,10 @@ func main() {
 	}
 	fmt.Printf("Receiver DID created: %s\n", receiverDID)
 
+	// Create DIDCrypto instance for receiver
+	receiverDC := did.InitDIDLiteWithPassword(receiverDID, didDir, "test-receiver-pwd")
+	_ = receiverDC // used in future tasks
+
 	// Step G2: Verify receiver DID artifacts on disk
 	for _, fname := range []string{did.PvtKeyFileName, did.PubKeyFileName, did.MnemonicFileName} {
 		fpath := filepath.Join(didDir, receiverDID, fname)
@@ -416,9 +448,18 @@ func main() {
 		}
 		stepHTransferTxIDs[tid] = txIDH
 
-		// H4: Build dummy signature
+		// H4: Pattern A -- sign with sender's private key, verify before persistence
+		initiatorSigH, err := util.SignTransaction(senderDC, transferTxInfoH)
+		if err != nil {
+			log.Fatalf("SignTransaction(step H, %s) failed: %v", tid, err)
+		}
+		if err := util.VerifySignature(senderDC, transferTxInfoH, initiatorSigH); err != nil {
+			log.Fatalf("VerifySignature(step H, %s) failed: %v", tid, err)
+		}
+		fmt.Printf("Step H: signature verified for %s\n", tid)
+
 		sigH := &models.Signature{
-			InitiatorSignature: "dev-test-multi-transfer-sig",
+			InitiatorSignature: initiatorSigH,
 			Quorums:            nil,
 		}
 
