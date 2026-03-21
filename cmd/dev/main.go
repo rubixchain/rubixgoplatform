@@ -12,6 +12,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
@@ -93,20 +94,33 @@ func main() {
 	fmt.Printf("IPFS AddDir CID: %s\n", cid)
 	fmt.Println("IPFS integration validated.")
 
+	// --- DID Module Initialization ---
+	c.InitDIDModule()
+	fmt.Println("DID module initialized.")
+
 	// Step A: Get wallet reference
 	w := c.GetWallet()
 
-	// Step B: Insert test DID (idempotent via ON CONFLICT UPDATE)
-	didInfo := &models.DID{
-		DID:    "bafybmidtest1234",
-		PeerID: "",
-		Local:  true,
-		AlgoID: int64(models.GetDidAlgoType(constants.DidAlgo_SECP256K1)),
+	// Step B: Create sender DID (real keypair + IPFS CID + Postgres upsert)
+	senderDID, err := c.CreateDID(&did.DIDCreate{PrivPWD: "test-sender-pwd"})
+	if err != nil {
+		log.Fatalf("CreateDID(sender) failed: %v", err)
 	}
-	if err := w.CreateOrUpdateDID(didInfo); err != nil {
-		log.Fatalf("CreateOrUpdateDID failed: %v", err)
+	fmt.Printf("Sender DID created: %s\n", senderDID)
+
+	// Step B2: Verify sender DID artifacts on disk
+	didDir := cfg.DidDir
+	for _, fname := range []string{did.PvtKeyFileName, did.PubKeyFileName, did.MnemonicFileName} {
+		fpath := filepath.Join(didDir, senderDID, fname)
+		info, err := os.Stat(fpath)
+		if err != nil {
+			log.Fatalf("ASSERTION FAILED: DID artifact missing: %s (%v)", fpath, err)
+		}
+		if info.Size() == 0 {
+			log.Fatalf("ASSERTION FAILED: DID artifact empty: %s", fpath)
+		}
+		fmt.Printf("DID artifact OK: %s (%d bytes)\n", fname, info.Size())
 	}
-	fmt.Println("DID inserted/updated: bafybmidtest1234")
 
 	// Step C: Seed 3 genesis RBT tokens (idempotent -- check existence first)
 	for i := 1; i <= 3; i++ {
@@ -120,8 +134,8 @@ func main() {
 
 		// Token not found -- build and persist
 		txInfo := &models.TransactionInfo{
-			Initiator: "bafybmidtest1234",
-			Owner:     "bafybmidtest1234",
+			Initiator: senderDID,
+			Owner:     senderDID,
 			Epoch:     0,
 			Network:   constants.NetworkID_RBT_Local,
 			Tokens: &models.TransactionTokens{
@@ -129,7 +143,7 @@ func main() {
 					{
 						TokenID:    tokenID,
 						TokenValue: 1.0,
-						DID:        "bafybmidtest1234",
+						DID:        senderDID,
 					},
 				},
 			},
@@ -156,7 +170,7 @@ func main() {
 			ParentTokenID:  pgtype.Text{},
 			TokenValue:     1.0,
 			TokenStatus:    int16(constants.TokenStatus_Free),
-			DID:            "bafybmidtest1234",
+			DID:            senderDID,
 			TransactionID:  txID,
 			TokenStateHash: "",
 			TokenType:      int16(models.GetTokenTypeID(constants.TokenType_RBT)),
@@ -195,12 +209,12 @@ func main() {
 		fmt.Printf("tokenchain_index for %s: %v\n", tokenID, idx.Index)
 	}
 
-	// Step D: Verify by reading back free tokens for the test DID
-	tokens, tokenIDs, err := w.GetFreeRBTTokens("bafybmidtest1234")
+	// Step D: Verify by reading back free tokens for the sender DID
+	tokens, tokenIDs, err := w.GetFreeRBTTokens(senderDID)
 	if err != nil {
 		log.Fatalf("GetFreeRBTTokens failed: %v", err)
 	}
-	fmt.Printf("Free RBT tokens for bafybmidtest1234: count=%d, ids=%v\n", len(tokens), tokenIDs)
+	fmt.Printf("Free RBT tokens for %s: count=%d, ids=%v\n", senderDID, len(tokens), tokenIDs)
 
 	// Step E: Verify individual token read-back
 	for i := 1; i <= 3; i++ {
@@ -226,8 +240,8 @@ func main() {
 
 	// F2: Build TransactionInfo for transfer (epoch=1)
 	transferTxInfo := &models.TransactionInfo{
-		Initiator: "bafybmidtest1234",
-		Owner:     "bafybmidtest1234", // same DID for simplicity (initiator perspective)
+		Initiator: senderDID,
+		Owner:     senderDID, // same DID for simplicity (initiator perspective)
 		Epoch:     1,
 		Network:   constants.NetworkID_RBT_Local,
 		Tokens: &models.TransactionTokens{
@@ -236,7 +250,7 @@ func main() {
 					TokenID:               "QmTestToken001",
 					PreviousTransactionID: preToken.TransactionID,
 					TokenValue:            1.0,
-					DID:                   "bafybmidtest1234",
+					DID:                   senderDID,
 				},
 			},
 		},
@@ -259,7 +273,7 @@ func main() {
 	if err := w.PersistPostConsensus(ctx, &wallet.PostConsensusPersistenceRequest{
 		TransactionInfo: transferTxInfo,
 		Signature:       transferSig,
-		DID:             "bafybmidtest1234",
+		DID:             senderDID,
 		ExecutionRole:   wallet.ExecutionRoleInitiator,
 	}); err != nil {
 		log.Fatalf("PersistPostConsensus failed: %v", err)
@@ -330,27 +344,32 @@ func main() {
 	}
 	fmt.Printf("Transfer transaction found: ID=%s\n", txRecord.ID)
 
-	fmt.Println("\nDev runner complete: DID + 3 tokens seeded + transfer simulated and verified.")
+	fmt.Printf("\nDev runner complete: DID %s + 3 tokens seeded + transfer simulated and verified.\n", senderDID)
 
 	// -----------------------------------------------------------------------
 	// Steps G-K: Full 2-DID transaction lifecycle
 	// -----------------------------------------------------------------------
 
-	senderDID := "bafybmidtest1234"    // reuse existing DID
-	receiverDID := "bafybmidrecvr5678" // new DID
-
-	// Step G: Create receiver DID (idempotent via ON CONFLICT UPDATE)
+	// Step G: Create receiver DID (real keypair + IPFS CID + Postgres upsert)
 	fmt.Println("\n--- Step G: Create receiver DID ---")
-	receiverDIDInfo := &models.DID{
-		DID:    receiverDID,
-		PeerID: "",
-		Local:  true,
-		AlgoID: int64(models.GetDidAlgoType(constants.DidAlgo_SECP256K1)),
+	receiverDID, err := c.CreateDID(&did.DIDCreate{PrivPWD: "test-receiver-pwd"})
+	if err != nil {
+		log.Fatalf("CreateDID(receiver) failed: %v", err)
 	}
-	if err := w.CreateOrUpdateDID(receiverDIDInfo); err != nil {
-		log.Fatalf("CreateOrUpdateDID(receiverDID) failed: %v", err)
+	fmt.Printf("Receiver DID created: %s\n", receiverDID)
+
+	// Step G2: Verify receiver DID artifacts on disk
+	for _, fname := range []string{did.PvtKeyFileName, did.PubKeyFileName, did.MnemonicFileName} {
+		fpath := filepath.Join(didDir, receiverDID, fname)
+		info, err := os.Stat(fpath)
+		if err != nil {
+			log.Fatalf("ASSERTION FAILED: Receiver DID artifact missing: %s (%v)", fpath, err)
+		}
+		if info.Size() == 0 {
+			log.Fatalf("ASSERTION FAILED: Receiver DID artifact empty: %s", fpath)
+		}
+		fmt.Printf("Receiver DID artifact OK: %s (%d bytes)\n", fname, info.Size())
 	}
-	fmt.Printf("Receiver DID inserted/updated: %s\n", receiverDID)
 
 	// Step H: Transfer all 3 tokens from senderDID to receiverDID
 	fmt.Println("\n--- Step H: Transfer 3 tokens from sender to receiver ---")
@@ -576,5 +595,5 @@ func main() {
 		_ = stepHTransferTxIDs[tid] // suppress unused-variable warning
 	}
 
-	fmt.Println("\nDev runner complete: 2-DID lifecycle verified -- 3 tokens minted, transferred, ownership confirmed, chains linked.")
+	fmt.Printf("\nDev runner complete: 2-DID lifecycle verified with real DIDs.\n  Sender:   %s\n  Receiver: %s\n  3 tokens minted, transferred, ownership confirmed, chains linked.\n", senderDID, receiverDID)
 }
