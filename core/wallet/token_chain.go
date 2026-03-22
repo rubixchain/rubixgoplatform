@@ -346,7 +346,8 @@ func (w *Wallet) PersistGenesisTokenRecord(
 		token.TokenID = assignedID
 		entry.TokenID = assignedID
 	}
-
+	fmt.Printf("DEBUG PersistGenesisTokenRecord: txRecord.ID=%s  token.TransactionID=%s  match=%v\n",
+		txRecord.ID, token.TransactionID, txRecord.ID == token.TransactionID)
 	if _, err = tx.Exec(w.Ctx,
 		`INSERT INTO transactions (id, info, signature, created_at, updated_at)
 		 VALUES ($1, $2, $3, NOW(), NOW())

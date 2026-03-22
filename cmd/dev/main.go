@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -109,7 +110,7 @@ func main() {
 			if err != nil {
 				log.Fatal("ComputeTransactionID:", err)
 			}
-
+			fmt.Println("TX ID (caller):", txID)
 			tx := &models.Transactions{
 				ID:        txID,
 				Info:      infoBytes,
@@ -117,15 +118,22 @@ func main() {
 			}
 
 			token := &models.Token{
-				TokenID: "", // <-- IMPORTANT: auto generate
-				DID:     d,
+				TokenID:        "", // assigned by PersistGenesisTokenRecord
+				DID:            d,
+				TransactionID:  txID,
+				TokenValue:     1,
+				TokenStatus:    constants.TokenStatus_Free,
+				TokenType:      int16(models.GetTokenTypeID(constants.TokenType_RBT)),
+				LatestPosition: 0,
+				LatestRole:     int16(models.GetTokenRoleID(constants.TokenRole_Mint)),
 			}
 
 			entry := &models.TokenChain{
-				Role:     1,
-				Position: 0,
+				TransactionID: txID,
+				Role:          int16(models.GetTokenRoleID(constants.TokenRole_Mint)),
+				Position:      0,
 			}
-
+			fmt.Printf("DEBUG caller txID=%s  token.TransactionID=%s\n", txID, token.TransactionID)
 			err = w.PersistGenesisTokenRecord(tx, token, entry)
 			if err != nil {
 				log.Fatal(err)
