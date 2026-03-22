@@ -53,10 +53,19 @@ func BuildTransactionInfoFromRequest(
 	txTokens := &models.TransactionTokens{}
 	var totalAmount float64
 
-	// --- RBT path (separate — CollectRBTTokens manages its own locking) ---
+	// --- RBT path (separate — caller pre-fetches locked tokens + denomMap) ---
 	if req.HasRBT() {
-		// The underscore here is the denom count map.
-		rbtTokens, _, err := parts.CollectRBTTokens(dc, w, req.GetRBTAmount(), networkMode, log, pubsub)
+		// Lock and fetch free RBT tokens for split/transfer.
+		lockedTokens, err := w.LockTokensForSplit(ctx, dc.GetDID(), req.GetRBTAmount())
+		if err != nil {
+			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: failed to lock tokens for split: %w", err)
+		}
+		denomMap, err := w.GetTokenDenomArray(dc.GetDID())
+		if err != nil {
+			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: failed to fetch token denom array: %w", err)
+		}
+		rbtTokens, _, _, _, err := parts.CollectRBTTokens(dc, w, req.GetRBTAmount(), lockedTokens, denomMap, networkMode, log)
+		// TODO(phase09): persist childRecords (return value 2) via w.PersistGenesisBatch and burn parentsToBurn (return value 3)
 		if err != nil {
 			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: RBT collection failed: %w", err)
 		}
