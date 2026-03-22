@@ -77,7 +77,7 @@ func (w *Wallet) PersistGenesisBatch(
 			if err != nil {
 				return fmt.Errorf("PersistGenesisBatch: record[%d]: GetTokenLevelAndNumberForGlobalIndex(%d): %w", i, globalIndex, err)
 			}
-			assignedID := fmt.Sprintf("%d%d", tokenLevel, numInLevel)
+			assignedID := fmt.Sprintf("%d_%d", tokenLevel, numInLevel)
 			r.Token.TokenID = assignedID
 			r.TokenChain.TokenID = assignedID
 		}
@@ -342,7 +342,7 @@ func (w *Wallet) PersistGenesisTokenRecord(
 		if err != nil {
 			return fmt.Errorf("PersistGenesisTokenRecord: GetTokenLevelAndNumberForGlobalIndex(%d): %w", globalIndex, err)
 		}
-		assignedID := fmt.Sprintf("%d%d", tokenLevel, numInLevel)
+		assignedID := fmt.Sprintf("%d_%d", tokenLevel, numInLevel)
 		token.TokenID = assignedID
 		entry.TokenID = assignedID
 	}
