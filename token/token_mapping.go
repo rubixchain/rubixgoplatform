@@ -100,7 +100,7 @@ func GetTokenLevelAndNumberForGlobalIndex(globalIndex int) (tokenLevel int, numI
 		return 0, 0, fmt.Errorf("global index must be >= 1, got %d", globalIndex)
 	}
 	cumulative := 0
-	for mapLevel := 0; ; mapLevel++ {
+	for mapLevel := 1; ; mapLevel++ {
 		maxCount, ok := TokenMap[mapLevel]
 		if !ok {
 			return 0, 0, fmt.Errorf("global index %d exceeds max token levels", globalIndex)

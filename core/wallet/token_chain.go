@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/constants"
+	tokenmap "github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
@@ -66,6 +67,21 @@ func (w *Wallet) PersistGenesisBatch(
 
 	// Insert into transactions, tokens, tokenchain for each record.
 	for i, r := range records {
+		// Generate canonical TokenID from global DB counter if the caller left it empty.
+		if r.Token.TokenID == "" {
+			globalIndex, err := w.GetNextTokenNumber(ctx, tx)
+			if err != nil {
+				return fmt.Errorf("PersistGenesisBatch: record[%d]: GetNextTokenNumber: %w", i, err)
+			}
+			tokenLevel, numInLevel, err := tokenmap.GetTokenLevelAndNumberForGlobalIndex(globalIndex)
+			if err != nil {
+				return fmt.Errorf("PersistGenesisBatch: record[%d]: GetTokenLevelAndNumberForGlobalIndex(%d): %w", i, globalIndex, err)
+			}
+			assignedID := fmt.Sprintf("%d%d", tokenLevel, numInLevel)
+			r.Token.TokenID = assignedID
+			r.TokenChain.TokenID = assignedID
+		}
+
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO transactions (id, info, signature, created_at, updated_at)
 			 VALUES ($1, $2, $3, NOW(), NOW())
@@ -314,6 +330,21 @@ func (w *Wallet) PersistGenesisTokenRecord(
 	}
 	if len(txRecord.Signature) == 0 {
 		return fmt.Errorf("PersistGenesisTokenRecord: txRecord.Signature must not be empty for genesis")
+	}
+
+	// Generate canonical TokenID from global DB counter if the caller left it empty.
+	if token.TokenID == "" {
+		globalIndex, err := w.GetNextTokenNumber(w.Ctx, tx)
+		if err != nil {
+			return fmt.Errorf("PersistGenesisTokenRecord: GetNextTokenNumber: %w", err)
+		}
+		tokenLevel, numInLevel, err := tokenmap.GetTokenLevelAndNumberForGlobalIndex(globalIndex)
+		if err != nil {
+			return fmt.Errorf("PersistGenesisTokenRecord: GetTokenLevelAndNumberForGlobalIndex(%d): %w", globalIndex, err)
+		}
+		assignedID := fmt.Sprintf("%d%d", tokenLevel, numInLevel)
+		token.TokenID = assignedID
+		entry.TokenID = assignedID
 	}
 
 	if _, err = tx.Exec(w.Ctx,
