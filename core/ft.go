@@ -103,17 +103,20 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		c.log.Error("Failed to fetch whole token for FT creation")
 		return err
 	}
+	// Safe unlock: release locked tokens on failure before burn commits.
+	// After burn succeeds, tokens are BurntForFT — NEVER release them back to Free.
+	burned := false
+	defer func() {
+		if !burned {
+			c.w.ReleaseTokens(wholeTokens)
+		}
+	}()
+
 	fractionalValue, err := c.GetPresiceFractionalValue(int(numWholeTokens), numFTs)
 	if err != nil {
 		c.log.Error("Failed to calculate FT token value", err)
 		return err
 	}
-
-	var parentTokenIDsArray []string
-	for _, token := range wholeTokens {
-		parentTokenIDsArray = append(parentTokenIDsArray, token.TokenID)
-	}
-	parentTokenIDs := strings.Join(parentTokenIDsArray, ",")
 
 	type ftJob struct {
 		Index int
@@ -140,6 +143,114 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 
 	ftTokenTypeID := int16(models.GetTokenTypeID(constants.TokenType_FT))
 	mintRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Mint))
+	burnRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Burn))
+
+	// --- Burn parent RBT tokens FIRST via PersistPostConsensus ---
+	// Read all parent records first: PreviousTransactionID must be included in
+	// burnTxInfo per token, and tokenchain rows require the current LatestPosition.
+	parentRecords := make([]*models.Token, 0, len(wholeTokens))
+	for _, wt := range wholeTokens {
+		parentRec, err := c.w.ReadToken(wt.TokenID)
+		if err != nil {
+			c.log.Error("Failed to read parent token record for burn", "err", err)
+			return err
+		}
+		parentRecords = append(parentRecords, parentRec)
+	}
+
+	// Build burnRBTTokenInfos with correct PreviousTransactionID per token.
+	burnRBTTokenInfos := make([]*models.TokenInfo, 0, len(parentRecords))
+	for _, rec := range parentRecords {
+		burnRBTTokenInfos = append(burnRBTTokenInfos, &models.TokenInfo{
+			TokenID:               rec.TokenID,
+			PreviousTransactionID: rec.TransactionID,
+		})
+	}
+
+	burnTxInfo := &models.TransactionInfo{
+		Initiator: did,
+		Owner:     did,
+		Epoch:     int(currentTime.Unix()),
+		Network:   constants.NetworkID_RBT_Testnet,
+		Tokens: &models.TransactionTokens{
+			RBT: burnRBTTokenInfos,
+		},
+	}
+	burnInfoBytes, err := models.SerializeTransactionInfo(burnTxInfo)
+	if err != nil {
+		c.log.Error("Failed to serialize burn transaction info", "err", err)
+		return fmt.Errorf("failed to serialize burn transaction info: %w", err)
+	}
+	burnSigBytes, err := dc.PvtSign(burnInfoBytes)
+	if err != nil {
+		c.log.Error("Failed to sign burn transaction", "err", err)
+		return fmt.Errorf("failed to sign burn transaction: %w", err)
+	}
+	burnSignature := &models.Signature{InitiatorSignature: hex.EncodeToString(burnSigBytes)}
+	burnTxID, err := wallet.ComputeTransactionID(burnTxInfo)
+	if err != nil {
+		c.log.Error("Failed to compute burn transaction ID", "err", err)
+		return fmt.Errorf("failed to compute burn transaction ID: %w", err)
+	}
+
+	// Build tokenchain rows and token states now that burnTxID is known.
+	burnTokenIDs := make([]string, 0, len(parentRecords))
+	burnTokenChainRows := make([]models.TokenChain, 0, len(parentRecords))
+	burnTokenStates := make([]models.Token, 0, len(parentRecords))
+	for _, rec := range parentRecords {
+		prevTxID := rec.TransactionID
+		burnTokenIDs = append(burnTokenIDs, rec.TokenID)
+		burnTokenChainRows = append(burnTokenChainRows, models.TokenChain{
+			TokenID:               rec.TokenID,
+			TransactionID:         burnTxID,
+			PreviousTransactionID: &prevTxID,
+			Role:                  burnRoleID,
+			Position:              rec.LatestPosition + 1,
+		})
+		burnTokenStates = append(burnTokenStates, models.Token{
+			TokenID:        rec.TokenID,
+			ParentTokenID:  rec.ParentTokenID,
+			TokenValue:     rec.TokenValue,
+			TokenStatus:    int16(constants.TokenStatus_BurntForFT),
+			DID:            did,
+			TransactionID:  burnTxID,
+			TokenStateHash: rec.TokenStateHash,
+			TokenType:      rec.TokenType,
+			LatestPosition: rec.LatestPosition + 1,
+			LatestRole:     burnRoleID,
+		})
+	}
+
+	burnReq := &wallet.PostConsensusPersistenceRequest{
+		TransactionInfo: burnTxInfo,
+		Signature:       burnSignature,
+		DID:             did,
+		ExecutionRole:   wallet.ExecutionRoleInitiator,
+		AffectedTokens:  burnTokenIDs,
+		TokenChainRows:  burnTokenChainRows,
+		TokenStates:     burnTokenStates,
+	}
+	if err := c.w.PersistPostConsensus(context.Background(), burnReq); err != nil {
+		c.log.Error("Failed to persist parent RBT burn", "err", err)
+		return fmt.Errorf("failed to persist parent RBT burn: %w", err)
+	}
+	// Burn committed — tokens are BurntForFT. NEVER release them.
+	burned = true
+	c.log.Debug("parent RBT tokens burnt via PersistPostConsensus")
+
+	// Publish burn events per parent token (non-fatal).
+	for _, wt := range wholeTokens {
+		publishingTxn := &model.PubSubTxnInfo{
+			BlockHash:    burnTxID,
+			BlockType:    "07",
+			AssetType:    RBTTokenType,
+			PublisherDID: dc.GetDID(),
+		}
+		if pubErr := c.publishTxn(publishingTxn); pubErr != nil {
+			c.log.Error("Failed to publish burn txn", "err", pubErr)
+			_ = wt
+		}
+	}
 
 	worker := func() {
 		defer wg.Done()
@@ -172,7 +283,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 				Network:   constants.NetworkID_RBT_Testnet,
 				Tokens: &models.TransactionTokens{
 					FT: []*models.TokenInfo{
-						{TokenID: ftID, PreviousTransactionID: parentTokenIDs},
+						{TokenID: ftID, PreviousTransactionID: burnTxID},
 					},
 				},
 			}
@@ -288,106 +399,6 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 
 	// newFTTokenIDs collected but not used after block package removal (was ChildTokens in old TokenChainBlock struct)
 	_ = newFTTokenIDs
-
-	// --- Burn parent RBT tokens via PersistPostConsensus ---
-	burnTokenIDs := make([]string, 0, len(wholeTokens))
-	burnTokenChainRows := make([]models.TokenChain, 0, len(wholeTokens))
-	burnTokenStates := make([]models.Token, 0, len(wholeTokens))
-	burnRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Burn))
-
-	// Collect parent token infos for the burn transaction info
-	burnRBTTokenInfos := make([]*models.TokenInfo, 0, len(wholeTokens))
-	for _, wt := range wholeTokens {
-		burnRBTTokenInfos = append(burnRBTTokenInfos, &models.TokenInfo{
-			TokenID: wt.TokenID,
-		})
-	}
-
-	burnTxInfo := &models.TransactionInfo{
-		Initiator: did,
-		Owner:     did,
-		Epoch:     int(currentTime.Unix()),
-		Network:   constants.NetworkID_RBT_Testnet,
-		Tokens: &models.TransactionTokens{
-			RBT: burnRBTTokenInfos,
-		},
-	}
-
-	burnInfoBytes, err := models.SerializeTransactionInfo(burnTxInfo)
-	if err != nil {
-		c.log.Error("Failed to serialize burn transaction info", "err", err)
-		return fmt.Errorf("failed to serialize burn transaction info: %w", err)
-	}
-	burnSigBytes, err := dc.PvtSign(burnInfoBytes)
-	if err != nil {
-		c.log.Error("Failed to sign burn transaction", "err", err)
-		return fmt.Errorf("failed to sign burn transaction: %w", err)
-	}
-	burnSignature := &models.Signature{InitiatorSignature: hex.EncodeToString(burnSigBytes)}
-	burnTxID, err := wallet.ComputeTransactionID(burnTxInfo)
-	if err != nil {
-		c.log.Error("Failed to compute burn transaction ID", "err", err)
-		return fmt.Errorf("failed to compute burn transaction ID: %w", err)
-	}
-
-	for _, wt := range wholeTokens {
-		parentTokenRecord, err := c.w.ReadToken(wt.TokenID)
-		if err != nil {
-			c.log.Error("FT token creation failed, failed to read parent token record", "err", err)
-			return err
-		}
-		burnTokenIDs = append(burnTokenIDs, wt.TokenID)
-		prevTxID := parentTokenRecord.TransactionID
-		burnTokenChainRows = append(burnTokenChainRows, models.TokenChain{
-			TokenID:               wt.TokenID,
-			TransactionID:         burnTxID,
-			PreviousTransactionID: &prevTxID,
-			Role:                  burnRoleID,
-			Position:              parentTokenRecord.LatestPosition + 1,
-		})
-		burnTokenStates = append(burnTokenStates, models.Token{
-			TokenID:        wt.TokenID,
-			ParentTokenID:  parentTokenRecord.ParentTokenID,
-			TokenValue:     parentTokenRecord.TokenValue,
-			TokenStatus:    int16(constants.TokenStatus_BurntForFT),
-			DID:            did,
-			TransactionID:  burnTxID,
-			TokenStateHash: parentTokenRecord.TokenStateHash,
-			TokenType:      parentTokenRecord.TokenType,
-			LatestPosition: parentTokenRecord.LatestPosition + 1,
-			LatestRole:     burnRoleID,
-		})
-	}
-
-	burnReq := &wallet.PostConsensusPersistenceRequest{
-		TransactionInfo: burnTxInfo,
-		Signature:       burnSignature,
-		DID:             did,
-		ExecutionRole:   wallet.ExecutionRoleInitiator,
-		AffectedTokens:  burnTokenIDs,
-		TokenChainRows:  burnTokenChainRows,
-		TokenStates:     burnTokenStates,
-	}
-	if err := c.w.PersistPostConsensus(context.Background(), burnReq); err != nil {
-		c.log.Error("Failed to persist parent RBT burn", "err", err)
-		return fmt.Errorf("failed to persist parent RBT burn: %w", err)
-	}
-	c.log.Debug("parent RBT tokens burnt via PersistPostConsensus")
-
-	// Publish burn events per parent token
-	for _, wt := range wholeTokens {
-		publishingTxn := &model.PubSubTxnInfo{
-			BlockHash:    burnTxID,
-			BlockType:    "07",
-			AssetType:    RBTTokenType,
-			PublisherDID: dc.GetDID(),
-		}
-		if pubErr := c.publishTxn(publishingTxn); pubErr != nil {
-			c.log.Error("Failed to publish burn txn", "err", pubErr)
-			// Non-fatal: burn is already persisted
-			_ = wt
-		}
-	}
 
 	// After all workers finish, batch add provider details
 	err = c.w.AddProviderDetailsBatch(providerMaps)
