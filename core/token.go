@@ -200,43 +200,14 @@ func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex 
 	if err != nil {
 		return fmt.Errorf("DID is not exist")
 	}
-	var currentTokenNumber int
-
-	if startIndex >= 0 {
-		currentTokenNumber = startIndex
-	} else {
-		currentTokenNumber, err = c.w.GetLocalTokenNumber()
-		if err != nil {
-			return fmt.Errorf("failed to get local test token info, err: %v", err)
-		}
-
-	}
-
-	var startTokenNumber int
-	var finalTokenNumber int
-
-	if currentTokenNumber == 0 {
-		startTokenNumber = 1
-	} else {
-		startTokenNumber = currentTokenNumber
-	}
-
-	finalTokenNumber = startTokenNumber + num
 	currentTime := time.Now()
 
-	// Each global index maps to (tokenLevel, numInLevel) per TokenMap: level 10000 = TokenMap 0 (56 tokens), 10001 = TokenMap 1 (4300000), etc.
-	for globalIndex := startTokenNumber; globalIndex < finalTokenNumber; globalIndex++ {
-		tokenLevel, numInLevel, err := token.GetTokenLevelAndNumberForGlobalIndex(globalIndex)
-		if err != nil {
-			c.log.Error("Failed to get token level and number for global index", "globalIndex", globalIndex, "err", err)
-			return err
-		}
-		id, err := c.getTokenIDForLocalTestTokens(tokenLevel, numInLevel)
-		if err != nil {
-			c.log.Error("Failed to add token to network", "err", err)
-			return err
-		}
-		// Serialize txInfo once — used for signature, txID, and transactions.info storage
+	// TokenID is assigned atomically inside PersistGenesisTokenRecord using the
+	// global DB counter (GetNextTokenNumber). startIndex is retained in the
+	// signature for API compatibility but is no longer used.
+	for i := 0; i < num; i++ {
+		// Build genesis txInfo with empty TokenID — PersistGenesisTokenRecord
+		// assigns the canonical DB-counter-based TokenID inside the transaction.
 		txInfo := &models.TransactionInfo{
 			Initiator: did,
 			Owner:     did,
@@ -244,41 +215,28 @@ func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex 
 			Network:   constants.NetworkID_RBT_Local,
 			Tokens: &models.TransactionTokens{
 				RBT: []*models.TokenInfo{
-					{TokenID: id, PreviousTransactionID: ""},
+					{TokenID: "", PreviousTransactionID: ""},
 				},
 			},
 		}
 		infoBytes, err := models.SerializeTransactionInfo(txInfo)
 		if err != nil {
-			return fmt.Errorf("createTokensAtLevel: failed to serialize transaction info for token %s: %w", id, err)
+			return fmt.Errorf("generateTestTokens: failed to serialize transaction info: %w", err)
 		}
-		// Sign serialized txInfo bytes with creator DID (genesis self-signature)
 		signatureBytes, err := dc.PvtSign(infoBytes)
 		if err != nil {
-			return fmt.Errorf("createTokensAtLevel: failed to sign transaction for token %s: %w", id, err)
+			return fmt.Errorf("generateTestTokens: failed to sign transaction: %w", err)
 		}
 		sigStruct := &models.Signature{InitiatorSignature: hex.EncodeToString(signatureBytes)}
 		sigBytes, err := json.Marshal(sigStruct)
 		if err != nil {
-			return fmt.Errorf("createTokensAtLevel: failed to marshal signature for token %s: %w", id, err)
+			return fmt.Errorf("generateTestTokens: failed to marshal signature: %w", err)
 		}
 		txID, err := wallet.ComputeTransactionID(txInfo)
 		if err != nil {
-			return fmt.Errorf("createTokensAtLevel: failed to compute transaction ID for token %s: %w", id, err)
+			return fmt.Errorf("generateTestTokens: failed to compute transaction ID: %w", err)
 		}
 
-		// Add token to IPFS via wallet functions to obtain TokenStateHash
-		tokenIDBuffer := bytes.NewBufferString(id)
-		tokenHash, err := c.w.Add(tokenIDBuffer, did, constants.TokenProviderFunc_Add, true)
-		if err != nil {
-			return fmt.Errorf("createTokensAtLevel: failed to add token to ipfs: %v, err: %v", id, err)
-		}
-		if _, err := c.w.Pin(tokenHash, constants.TokenProviderRole_Owner, did, "NA", did, "NA", floatPrecision(1.0, MaxDecimalPlaces)); err != nil {
-			return fmt.Errorf("createTokensAtLevel: failed to pin token: %v, err: %v", id, err)
-		}
-		// TODO: if DB persistence below fails, roll back IPFS pin via c.w.Unpin(tokenHash, constants.TokenProviderRole_Owner, did)
-
-		// Atomically and idempotently persist genesis transaction, token, and tokenchain entry
 		mintRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Mint))
 		tokenTypeID := int16(models.GetTokenTypeID(constants.TokenType_RBT))
 		genesisTx := &models.Transactions{
@@ -287,18 +245,18 @@ func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex 
 			Signature: json.RawMessage(sigBytes),
 		}
 		t := &models.Token{
-			TokenID:        id,
+			TokenID:        "", // assigned by PersistGenesisTokenRecord
 			DID:            did,
 			TokenValue:     floatPrecision(1.0, MaxDecimalPlaces),
 			TokenStatus:    int16(constants.TokenStatus_Free),
 			TransactionID:  txID,
-			TokenStateHash: tokenHash,
+			TokenStateHash: "",
 			TokenType:      tokenTypeID,
 			LatestPosition: 0,
 			LatestRole:     mintRoleID,
 		}
 		if err = c.w.PersistGenesisTokenRecord(genesisTx, t, &models.TokenChain{
-			TokenID:               id,
+			TokenID:               "", // assigned by PersistGenesisTokenRecord
 			TransactionID:         txID,
 			PreviousTransactionID: nil,
 			Role:                  mintRoleID,
@@ -319,15 +277,6 @@ func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex 
 			c.log.Error("Failed to publish txn", "err", err)
 			return err
 		}
-	}
-
-	// Store (tokenLevel, numInLevel) for NEXT token; e.g. after 100 tokens → level 10001, number 45
-	tokenLevel, numInLevel, err := token.GetTokenLevelAndNumberForGlobalIndex(finalTokenNumber)
-	if err != nil {
-		return fmt.Errorf("failed to get token level for global index %d, err: %v", finalTokenNumber, err)
-	}
-	if err := c.w.SetLocalTokenlevelAndNumber(tokenLevel, numInLevel); err != nil {
-		return fmt.Errorf("failed to set local test token number, err: %v", err)
 	}
 
 	return nil
