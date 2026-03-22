@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/rubixchain/rubixgoplatform/core/parts"
@@ -21,14 +22,26 @@ func ReqPledgeToken(
 	referenceId string,
 ) (models.PledgeTokenResponse, error) {
 
-	pledgeTokenDetails, _, err := parts.CollectRBTTokens(
+	// Lock and fetch free RBT tokens for split/transfer.
+	lockedTokens, err := w.LockTokensForSplit(context.Background(), dc.GetDID(), transactionValue)
+	if err != nil {
+		return models.PledgeTokenResponse{}, fmt.Errorf("ReqPledgeToken: failed to lock tokens for split: %w", err)
+	}
+	denomMap, err := w.GetTokenDenomArray(dc.GetDID())
+	if err != nil {
+		return models.PledgeTokenResponse{}, fmt.Errorf("ReqPledgeToken: failed to fetch token denom array: %w", err)
+	}
+
+	pledgeTokenDetails, _, _, _, err := parts.CollectRBTTokens(
 		dc,
 		w,
 		transactionValue,
+		lockedTokens,
+		denomMap,
 		networkMode,
 		log,
-		pubsub,
 	)
+	// TODO(phase09): handle childRecords and parentsToBurn for pledge path
 
 	if err != nil {
 		log.Error("Failed to get tokens", "err", err)

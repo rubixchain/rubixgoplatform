@@ -56,14 +56,29 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 	if c.testnet {
 		networkStr = "testnet"
 	}
-	rbtTokensToCommitDetails, _, err := parts.CollectRBTTokens(
+	// Lock and fetch free RBT tokens for split/transfer.
+	lockedTokens, err := c.w.LockTokensForSplit(c.w.Ctx, didCryptoLib.GetDID(), deployReq.RBTAmount)
+	if err != nil {
+		c.log.Error("Failed to lock tokens for split", "err", err)
+		resp.Message = "DeploySmartContract: failed to lock tokens for split, err: " + err.Error()
+		return resp
+	}
+	denomMap, err := c.w.GetTokenDenomArray(didCryptoLib.GetDID())
+	if err != nil {
+		c.log.Error("Failed to fetch token denom array", "err", err)
+		resp.Message = "DeploySmartContract: failed to fetch token denom array, err: " + err.Error()
+		return resp
+	}
+	rbtTokensToCommitDetails, _, _, _, err := parts.CollectRBTTokens(
 		didCryptoLib,
 		c.w,
 		deployReq.RBTAmount,
+		lockedTokens,
+		denomMap,
 		networkStr,
 		c.log,
-		c.ps,
 	)
+	// TODO(phase09): handle childRecords and parentsToBurn for SC deploy path
 	if err != nil {
 		c.log.Error("Failed to retrieve Tokens to be committed", "err", err)
 		resp.Message = "Failed to retrieve Tokens to be committed , err : " + err.Error()
