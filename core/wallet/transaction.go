@@ -9,6 +9,9 @@ import (
 )
 
 // CreateTransaction inserts a new transaction into the transactions table.
+// BYPASS: do not use for genesis token minting — this path writes transactions only,
+// has no ON CONFLICT clause (will error on duplicate id), and skips tokens, tokenchain,
+// tokenchain_index, and transaction_units. Use PersistGenesisTokenRecord instead.
 func (w *Wallet) CreateTransaction(tx *models.Transactions) error {
 	_, err := w.db.Pool().Exec(w.Ctx,
 		`INSERT INTO transactions (id, info, signature, created_at, updated_at)

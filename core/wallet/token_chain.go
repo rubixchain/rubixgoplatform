@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -105,8 +106,10 @@ func (w *Wallet) GetTokenChainByTransactionID(transactionID string) ([]models.To
 }
 
 // PersistGenesisTokenRecord atomically inserts a genesis transaction, token, and tokenchain
-// entry in a single PostgreSQL transaction. All inserts are idempotent (ON CONFLICT DO NOTHING).
-// Rollback is automatic on any failure via deferred Rollback.
+// entry across five tables (transactions, tokens, tokenchain, tokenchain_index, transaction_units)
+// in a single PostgreSQL transaction. Callers must ensure entry.Position == 0,
+// entry.Role == mint role, entry.PreviousTransactionID == nil, and txRecord.Signature non-empty.
+// Returns an error if invariants are violated. Rollback is automatic on any failure via deferred Rollback.
 func (w *Wallet) PersistGenesisTokenRecord(
 	txRecord *models.Transactions,
 	token *models.Token,
@@ -118,6 +121,21 @@ func (w *Wallet) PersistGenesisTokenRecord(
 	}
 	defer tx.Rollback(w.Ctx) //nolint:errcheck
 
+	// Genesis invariant guards — fail fast on invalid inputs.
+	mintRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Mint))
+	if entry.Position != 0 {
+		return fmt.Errorf("PersistGenesisTokenRecord: entry.Position must be 0 for genesis, got %d", entry.Position)
+	}
+	if entry.Role != mintRoleID {
+		return fmt.Errorf("PersistGenesisTokenRecord: entry.Role must be mint (%d) for genesis, got %d", mintRoleID, entry.Role)
+	}
+	if entry.PreviousTransactionID != nil {
+		return fmt.Errorf("PersistGenesisTokenRecord: entry.PreviousTransactionID must be nil for genesis, got %q", *entry.PreviousTransactionID)
+	}
+	if len(txRecord.Signature) == 0 {
+		return fmt.Errorf("PersistGenesisTokenRecord: txRecord.Signature must not be empty for genesis")
+	}
+
 	if _, err = tx.Exec(w.Ctx,
 		`INSERT INTO transactions (id, info, signature, created_at, updated_at)
 		 VALUES ($1, $2, $3, NOW(), NOW())
@@ -127,21 +145,20 @@ func (w *Wallet) PersistGenesisTokenRecord(
 		return fmt.Errorf("PersistGenesisTokenRecord: insert transaction: %w", err)
 	}
 
-	if _, err = tx.Exec(w.Ctx,
+	cmdTagToken, err := tx.Exec(w.Ctx,
 		`INSERT INTO tokens (token_id, parent_token_id, token_value, token_status, did, transaction_id,
 		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
-		 ON CONFLICT (token_id) DO UPDATE SET
-		   transaction_id = EXCLUDED.transaction_id,
-		   token_state_hash = EXCLUDED.token_state_hash,
-		   latest_position = EXCLUDED.latest_position,
-		   latest_role = EXCLUDED.latest_role,
-		   updated_at = NOW()`,
+		 ON CONFLICT (token_id) DO NOTHING`,
 		token.TokenID, token.ParentTokenID, token.TokenValue, token.TokenStatus,
 		token.DID, token.TransactionID, token.TokenStateHash, token.TokenType,
 		token.LatestPosition, token.LatestRole,
-	); err != nil {
+	)
+	if err != nil {
 		return fmt.Errorf("PersistGenesisTokenRecord: insert token: %w", err)
+	}
+	if cmdTagToken.RowsAffected() == 0 {
+		return fmt.Errorf("PersistGenesisTokenRecord: token %q already exists — duplicate genesis call rejected", token.TokenID)
 	}
 
 	if _, err = tx.Exec(w.Ctx,
@@ -169,6 +186,15 @@ func (w *Wallet) PersistGenesisTokenRecord(
 		  updated_at = NOW()
 	`, entry.TokenID, index); err != nil {
 		return fmt.Errorf("PersistGenesisTokenRecord: upsert tokenchain_index: %w", err)
+	}
+
+	// Insert transaction_units record for the genesis initiator.
+	if _, err = tx.Exec(w.Ctx, `
+		INSERT INTO transaction_units (transaction_id, did, execution_role, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, NOW(), NOW())
+		ON CONFLICT (transaction_id, did) DO NOTHING
+	`, txRecord.ID, token.DID, ExecutionRoleInitiator, transactionUnitStatusCommitted); err != nil {
+		return fmt.Errorf("PersistGenesisTokenRecord: insert transaction_units: %w", err)
 	}
 
 	return tx.Commit(w.Ctx)
