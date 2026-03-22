@@ -1,12 +1,192 @@
 package wallet
 
 import (
+	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
+
+// GenesisMintRecord groups the three tables' data for a single genesis token
+// into one unit that PersistGenesisBatch inserts atomically.
+// Token.TokenStateHash must be set to the IPFS CID from w.Add before calling
+// PersistGenesisBatch (set explicitly after w.Pin succeeds in createChildTokensAtLevel).
+type GenesisMintRecord struct {
+	TxRecord   *models.Transactions
+	Token      *models.Token
+	TokenChain *models.TokenChain
+}
+
+// PersistGenesisBatch atomically inserts N genesis tokens across five tables
+// (transactions, tokens, tokenchain, tokenchain_index, transaction_units) in
+// a single pgx.Tx. Optionally updates the denom array for did in the same Tx.
+//
+// Invariant guards (applied before any DB work):
+//   - TokenChain.Position == 0
+//   - TokenChain.Role == mint role
+//   - TokenChain.PreviousTransactionID == nil
+//   - TxRecord.Signature non-empty
+func (w *Wallet) PersistGenesisBatch(
+	ctx context.Context,
+	records []GenesisMintRecord,
+	did string,
+	denomMap map[types.DenomValue]types.DenomCount,
+) error {
+	if len(records) == 0 {
+		return nil
+	}
+
+	mintRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Mint))
+
+	// Fail fast: validate all invariants before opening a DB transaction.
+	for i, r := range records {
+		if r.TokenChain.Position != 0 {
+			return fmt.Errorf("PersistGenesisBatch: record[%d]: TokenChain.Position must be 0 for genesis, got %d", i, r.TokenChain.Position)
+		}
+		if r.TokenChain.Role != mintRoleID {
+			return fmt.Errorf("PersistGenesisBatch: record[%d]: TokenChain.Role must be mint (%d) for genesis, got %d", i, mintRoleID, r.TokenChain.Role)
+		}
+		if r.TokenChain.PreviousTransactionID != nil {
+			return fmt.Errorf("PersistGenesisBatch: record[%d]: TokenChain.PreviousTransactionID must be nil for genesis, got %q", i, *r.TokenChain.PreviousTransactionID)
+		}
+		if len(r.TxRecord.Signature) == 0 {
+			return fmt.Errorf("PersistGenesisBatch: record[%d]: TxRecord.Signature must not be empty for genesis", i)
+		}
+	}
+
+	tx, err := w.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("PersistGenesisBatch: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	// Insert into transactions, tokens, tokenchain for each record.
+	for i, r := range records {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO transactions (id, info, signature, created_at, updated_at)
+			 VALUES ($1, $2, $3, NOW(), NOW())
+			 ON CONFLICT (id) DO NOTHING`,
+			r.TxRecord.ID, r.TxRecord.Info, r.TxRecord.Signature,
+		); err != nil {
+			return fmt.Errorf("PersistGenesisBatch: record[%d]: insert transaction: %w", i, err)
+		}
+
+		cmdTagToken, err := tx.Exec(ctx,
+			`INSERT INTO tokens (token_id, parent_token_id, token_value, token_status, did, transaction_id,
+			 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+			 ON CONFLICT (token_id) DO NOTHING`,
+			r.Token.TokenID, r.Token.ParentTokenID, r.Token.TokenValue, r.Token.TokenStatus,
+			r.Token.DID, r.Token.TransactionID, r.Token.TokenStateHash, r.Token.TokenType,
+			r.Token.LatestPosition, r.Token.LatestRole,
+		)
+		if err != nil {
+			return fmt.Errorf("PersistGenesisBatch: record[%d]: insert token: %w", i, err)
+		}
+		if cmdTagToken.RowsAffected() == 0 {
+			return fmt.Errorf("PersistGenesisBatch: record[%d]: token %q already exists — duplicate genesis call rejected", i, r.Token.TokenID)
+		}
+
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO tokenchain (token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at)
+			 VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+			 ON CONFLICT (token_id, position) DO NOTHING`,
+			r.TokenChain.TokenID, r.TokenChain.TransactionID, r.TokenChain.PreviousTransactionID, r.TokenChain.Role, r.TokenChain.Position,
+		); err != nil {
+			return fmt.Errorf("PersistGenesisBatch: record[%d]: insert tokenchain: %w", i, err)
+		}
+	}
+
+	// Batch upsert tokenchain_index using the syncTokenChainIndex pattern.
+	tokenIDs := make([]string, len(records))
+	for i, r := range records {
+		tokenIDs[i] = r.Token.TokenID
+	}
+	if err := w.batchUpsertTokenChainIndex(ctx, tx, tokenIDs); err != nil {
+		return fmt.Errorf("PersistGenesisBatch: upsert tokenchain_index: %w", err)
+	}
+
+	// Insert transaction_units for each record.
+	for i, r := range records {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO transaction_units (transaction_id, did, execution_role, status, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, NOW(), NOW())
+			ON CONFLICT (transaction_id, did) DO NOTHING
+		`, r.TxRecord.ID, r.Token.DID, ExecutionRoleInitiator, transactionUnitStatusCommitted); err != nil {
+			return fmt.Errorf("PersistGenesisBatch: record[%d]: insert transaction_units: %w", i, err)
+		}
+	}
+
+	// Optionally update denom array within the same transaction.
+	if len(denomMap) > 0 {
+		if err := w.updateTokenDenomArrayTx(ctx, tx, did, denomMap); err != nil {
+			return fmt.Errorf("PersistGenesisBatch: update denom array: %w", err)
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
+// batchUpsertTokenChainIndex rebuilds tokenchain_index for the given tokenIDs
+// inside the caller's transaction (replicates syncTokenChainIndex pattern from
+// PostConsensusPersistenceCoordinator).
+func (w *Wallet) batchUpsertTokenChainIndex(ctx context.Context, tx pgx.Tx, tokenIDs []string) error {
+	rows, err := tx.Query(ctx, `
+		SELECT token_id, array_agg(id ORDER BY position)
+		FROM tokenchain
+		WHERE token_id = ANY($1::text[])
+		GROUP BY token_id
+	`, tokenIDs)
+	if err != nil {
+		return fmt.Errorf("batchUpsertTokenChainIndex: query: %w", err)
+	}
+	defer rows.Close()
+
+	type indexRow struct {
+		tokenID string
+		index   []int32
+	}
+
+	indexRows := make([]indexRow, 0, len(tokenIDs))
+	for rows.Next() {
+		var r indexRow
+		if err := rows.Scan(&r.tokenID, &r.index); err != nil {
+			return fmt.Errorf("batchUpsertTokenChainIndex: scan: %w", err)
+		}
+		indexRows = append(indexRows, r)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("batchUpsertTokenChainIndex: stream: %w", err)
+	}
+	if len(indexRows) == 0 {
+		return nil
+	}
+
+	placeholders := make([]string, 0, len(indexRows))
+	args := make([]interface{}, 0, len(indexRows)*2)
+	for i, r := range indexRows {
+		offset := i*2 + 1
+		placeholders = append(placeholders, fmt.Sprintf("($%d, $%d, NOW(), NOW())", offset, offset+1))
+		args = append(args, r.tokenID, r.index)
+	}
+
+	query := `
+		INSERT INTO tokenchain_index (token_id, index, created_at, updated_at)
+		VALUES ` + strings.Join(placeholders, ",") + `
+		ON CONFLICT (token_id) DO UPDATE SET
+			index = EXCLUDED.index,
+			updated_at = NOW()
+	`
+	if _, err := tx.Exec(ctx, query, args...); err != nil {
+		return fmt.Errorf("batchUpsertTokenChainIndex: upsert: %w", err)
+	}
+
+	return nil
+}
 
 func (w *Wallet) GetTokenChainByTokenID(tokenID string) ([]models.TokenChain, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
