@@ -1,7 +1,6 @@
 package core
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
@@ -26,7 +25,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	resp := &model.BasicResponse{
 		Status: false,
 	}
-	ctx := context.Background()
+	ctx := c.Ctx
 	initiatorDID := request.Initiator
 	nextOwnerDID := request.Owner
 
@@ -176,10 +175,14 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		c.log.Error("InitiateTransaction: Failed to get peer for receiver", "err", err)
 	}
 	defer receiverPeer.Close()
-
+	// The check for whether this is an asset which needs to be sent to the receiver need to be checked here.
+	// For smartcontracts we need not send the token information to the receriver, we just need to publish it.
+	// For NFTs we need to check the particular boolean on the in the request for sending.
+	// For RBTs we need to send the entire token information.
 	var sendTokensRequest models.SendTokensRequest
 	var sendTokensResponse model.BasicResponse
 	sendTokensRequest.Tokens = transactionInfo.Tokens
+	sendTokensRequest.NFTOwnershipTransfer = util.HasNFTOwnershipTransfer(request.Tokens.NFT)
 	err = receiverPeer.SendJSONRequest(
 		"POST",
 		APISendTokens,
@@ -205,12 +208,20 @@ func (c *Core) TransactionSetup() {
 
 // This function has been added here since the other corresponding sync functions has not been added yet.
 // Once the other sync functions and all are added, we can move this along with that.
-func (c *Core) syncTransactionTokens(peer *ipfsport.Peer, tokens *models.TransactionTokens) error {
+func (c *Core) syncTransactionTokens(
+	peer *ipfsport.Peer,
+	tokens *models.TransactionTokens,
+	NFTOwnershipTransfer bool,
+) error {
+
 	tokenGroups := [][]*models.TokenInfo{
 		tokens.RBT,
-		tokens.NFT,
 		tokens.FT,
-		tokens.SmartContract,
+	}
+
+	// Add NFT only if flag is true
+	if NFTOwnershipTransfer {
+		tokenGroups = append(tokenGroups, tokens.NFT)
 	}
 
 	for _, group := range tokenGroups {
@@ -245,7 +256,7 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 		c.log.Error("InitiateTransaction: Failed to get peer for receiver", "err", err)
 	}
 	defer peer.Close()
-	err = c.syncTransactionTokens(peer, sendTokensRequest.Tokens)
+	err = c.syncTransactionTokens(peer, sendTokensRequest.Tokens, sendTokensRequest.NFTOwnershipTransfer)
 	if err != nil {
 		c.log.Error("SendTokens: Failed to sync transaction tokens", "err", err)
 		crep.Message = "SendTokens: Failed to sync transaction tokens"

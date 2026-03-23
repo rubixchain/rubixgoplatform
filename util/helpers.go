@@ -3,6 +3,8 @@ package util
 import (
 	"os"
 	"strings"
+
+	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
 func FileWrite(fileName string, data []byte) error {
@@ -44,4 +46,17 @@ func ParseAddress(addr string) (string, string, bool) {
 	}
 	//TODO:: Validation
 	return peerID, did, true
+}
+
+func HasNFTOwnershipTransfer(nfts []models.NFTInfo) bool {
+	for _, nft := range nfts {
+		if nft.NFTId == "" {
+			continue
+		}
+
+		if nft.TransferOwnerShip {
+			return true
+		}
+	}
+	return false
 }

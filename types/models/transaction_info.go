@@ -87,5 +87,6 @@ type PledgeTokenResponse struct {
 }
 
 type SendTokensRequest struct {
-	Tokens *TransactionTokens `json:"tokens"`
+	Tokens               *TransactionTokens `json:"tokens"`
+	NFTOwnershipTransfer bool               `json:"nftOwnershipTransfer"`
 }
