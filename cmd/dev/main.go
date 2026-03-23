@@ -143,6 +143,13 @@ func main() {
 			if err := util.VerifySignature(dc, txInfo, sigCheck.InitiatorSignature); err != nil {
 				log.Fatal("pre-persistence signature verification failed:", err)
 			}
+			// DID binding: dc is bound to d, so d must match txInfo.Initiator and token.DID.
+			if txInfo.Initiator != d {
+				log.Fatal("signature: DID mismatch — signer does not match initiator")
+			}
+			if token.DID != txInfo.Initiator {
+				log.Fatal("signature: DID mismatch — signer does not match initiator")
+			}
 			fmt.Println("Pre-persistence signature verified")
 
 			err = w.PersistGenesisTokenRecord(tx, token, entry)

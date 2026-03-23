@@ -60,6 +60,9 @@ func (w *Wallet) PersistGenesisBatch(
 		if len(r.TxRecord.Signature) == 0 {
 			return fmt.Errorf("PersistGenesisBatch: record[%d]: TxRecord.Signature must not be empty for genesis", i)
 		}
+		if r.Token.TokenStatus == constants.TokenStatus_Free && len(r.TxRecord.Signature) == 0 {
+			return fmt.Errorf("genesis: FREE token must have initiator signature")
+		}
 		// TODO(phase09-sig): verify signature against r.TxRecord inputs when pubkey available
 	}
 
@@ -348,6 +351,9 @@ func (w *Wallet) PersistGenesisTokenRecord(
 	}
 	if len(txRecord.Signature) == 0 {
 		return fmt.Errorf("PersistGenesisTokenRecord: txRecord.Signature must not be empty for genesis")
+	}
+	if token.TokenStatus == constants.TokenStatus_Free && len(txRecord.Signature) == 0 {
+		return fmt.Errorf("genesis: FREE token must have initiator signature")
 	}
 	// TODO(phase09-sig): verify signature against txRecord inputs when pubkey available
 
