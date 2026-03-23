@@ -45,6 +45,9 @@ func (w *Wallet) PersistGenesisBatch(
 
 	// Fail fast: validate all invariants before opening a DB transaction.
 	for i, r := range records {
+		if r.TxRecord.ID == "" {
+			return fmt.Errorf("genesis: record[%d]: empty transaction_id", i)
+		}
 		if r.TokenChain.Position != 0 {
 			return fmt.Errorf("PersistGenesisBatch: record[%d]: TokenChain.Position must be 0 for genesis, got %d", i, r.TokenChain.Position)
 		}
@@ -57,6 +60,7 @@ func (w *Wallet) PersistGenesisBatch(
 		if len(r.TxRecord.Signature) == 0 {
 			return fmt.Errorf("PersistGenesisBatch: record[%d]: TxRecord.Signature must not be empty for genesis", i)
 		}
+		// TODO(phase09-sig): verify signature against r.TxRecord inputs when pubkey available
 	}
 
 	tx, err := w.BeginTx(ctx)
@@ -80,6 +84,17 @@ func (w *Wallet) PersistGenesisBatch(
 			assignedID := fmt.Sprintf("%d_%d", tokenLevel, numInLevel)
 			r.Token.TokenID = assignedID
 			r.TokenChain.TokenID = assignedID
+		}
+
+		// Post-assignment invariants (after potential auto-assign).
+		if r.Token.TokenID == "" {
+			return fmt.Errorf("genesis: record[%d]: empty token_id", i)
+		}
+		if r.Token.TransactionID != r.TxRecord.ID {
+			return fmt.Errorf("genesis: record[%d]: token %q transaction_id mismatch", i, r.Token.TokenID)
+		}
+		if r.TokenChain.TransactionID != r.TxRecord.ID {
+			return fmt.Errorf("genesis: record[%d]: entry transaction_id mismatch for token %q", i, r.TokenChain.TokenID)
 		}
 
 		if _, err := tx.Exec(ctx,
@@ -319,6 +334,9 @@ func (w *Wallet) PersistGenesisTokenRecord(
 
 	// Genesis invariant guards — fail fast on invalid inputs.
 	mintRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Mint))
+	if txRecord.ID == "" {
+		return fmt.Errorf("genesis: empty transaction_id")
+	}
 	if entry.Position != 0 {
 		return fmt.Errorf("PersistGenesisTokenRecord: entry.Position must be 0 for genesis, got %d", entry.Position)
 	}
@@ -331,6 +349,7 @@ func (w *Wallet) PersistGenesisTokenRecord(
 	if len(txRecord.Signature) == 0 {
 		return fmt.Errorf("PersistGenesisTokenRecord: txRecord.Signature must not be empty for genesis")
 	}
+	// TODO(phase09-sig): verify signature against txRecord inputs when pubkey available
 
 	// Generate canonical TokenID from global DB counter if the caller left it empty.
 	if token.TokenID == "" {
@@ -346,8 +365,16 @@ func (w *Wallet) PersistGenesisTokenRecord(
 		token.TokenID = assignedID
 		entry.TokenID = assignedID
 	}
-	fmt.Printf("DEBUG PersistGenesisTokenRecord: txRecord.ID=%s  token.TransactionID=%s  match=%v\n",
-		txRecord.ID, token.TransactionID, txRecord.ID == token.TransactionID)
+	// Post-assignment invariants (after potential auto-assign).
+	if token.TokenID == "" {
+		return fmt.Errorf("genesis: empty token_id")
+	}
+	if token.TransactionID != txRecord.ID {
+		return fmt.Errorf("genesis: token %q transaction_id mismatch", token.TokenID)
+	}
+	if entry.TransactionID != txRecord.ID {
+		return fmt.Errorf("genesis: entry transaction_id mismatch for token %q", entry.TokenID)
+	}
 	if _, err = tx.Exec(w.Ctx,
 		`INSERT INTO transactions (id, info, signature, created_at, updated_at)
 		 VALUES ($1, $2, $3, NOW(), NOW())
