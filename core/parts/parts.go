@@ -104,11 +104,11 @@ func CollectRBTTokens(dc types.DIDCrypto, w *wallet.Wallet, transferAmount float
 				break
 			}
 
-			heirarchicalID := token.HierarchicalID
+			tokenId := token.TokenID
 			tokenValue := token.Token.TokenValue
 
 			if tokenValue > remainingAmount {
-				splitOp, err := planTokenSplit(heirarchicalID, remainingAmount, log)
+				splitOp, err := planTokenSplit(tokenId, remainingAmount, log)
 				if err != nil {
 					return nil, nil, fmt.Errorf("CollectRBTTokens: failed to plan the token split, err: %v", err)
 				}
@@ -128,7 +128,7 @@ func CollectRBTTokens(dc types.DIDCrypto, w *wallet.Wallet, transferAmount float
 		for _, splitOp := range splitOps {
 			partTokensToTransfer, tokensToKeep, tokensBeingBurnt, err := performTokenSplit(w, dc, splitOp, tokenCache, remainingBalanceDenomArr)
 			if err != nil {
-				return nil, nil, fmt.Errorf("CollectRBTTokens: could not perform split at Level: %v, err: %v", splitOp.HierarchicalTokenID.Level(), err)
+				return nil, nil, fmt.Errorf("CollectRBTTokens: could not perform split at Level: %v, err: %v", splitOp.TokenID.Level(), err)
 			}
 
 			tokensToKeepList = append(tokensToKeepList, tokensToKeep...)

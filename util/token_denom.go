@@ -3,8 +3,12 @@ package util
 import (
 	"fmt"
 	"math"
+	"strconv"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
+	rubixmath "github.com/rubixchain/rubixgoplatform/math"
+	"github.com/rubixchain/rubixgoplatform/types"
 )
 
 var TreeLevelRanges = computeTreeLevelRanges()
@@ -119,7 +123,108 @@ func GetNumberOfChildren(parentLevel int) int {
 	return 5 // when parent level is odd
 }
 
-// LevelMin returns the minimum part index for a given level (1-indexed).
-func LevelMin(level int) int {
-	return TreeLevelRanges[level][0]
+// get level, token number and part index from the RBT token id
+func GetRbtIDElements(tokenID string) (types.RbtIDElements, error) {
+	var err error
+	rbtElems := types.RbtIDElements{}
+
+	// check if token id is ft id, by checking if the length of the id is more than legth of DID (59)
+	if len(tokenID) > 59 {
+		return types.RbtIDElements{}, fmt.Errorf("invalid token id format for rbt: %s, id length should be <= 15 (<max 2 digits level>_<max 7 digits token number>_<max 4 digits part index>)", tokenID)
+	}
+
+	idElems := strings.Split(tokenID, "_")
+	if len(idElems) < 2 || len(idElems) > 3 { // ensure id is in proper RBT id format
+		return types.RbtIDElements{}, fmt.Errorf("invalid token id format for rbt: %s, id elements should be 2 (whole) or 3 (part)", tokenID)
+	}
+
+	rbtElems.Level, err = strconv.Atoi(idElems[0])
+	if err != nil {
+		return types.RbtIDElements{}, fmt.Errorf("failed to convert level into int for rbt: %s, error: %v", tokenID, err)
+	}
+	rbtElems.TokenNumber, err = strconv.Atoi(idElems[1])
+	if err != nil {
+		return types.RbtIDElements{}, fmt.Errorf("failed to convert token number into int for rbt: %s, error: %v", tokenID, err)
+	}
+
+	switch len(idElems) {
+	case 2:
+		rbtElems.PartIndex = 0 // Case for whole token
+	case 3:
+		rbtElems.PartIndex, err = strconv.Atoi(idElems[2]) // Case for part token
+		if err != nil {
+			return types.RbtIDElements{}, fmt.Errorf("failed to convert part index into int for rbt: %s, error: %v", tokenID, err)
+		}
+	default:
+		return types.RbtIDElements{}, fmt.Errorf("invalid token id format for rbt: %s, id elements should be 2 (whole) or 3 (part)", tokenID)
+	}
+	return rbtElems, nil
+}
+
+// GetTokenValueAtLevel returns the token value at a given tree level as float64.
+// Integer arithmetic is used internally (scaled by 10^maxDecimalPlaces)
+// to avoid floating point precision drift during division.
+//
+// Example with maxDecimalPlaces=3:
+//
+//	L0 -> 1.0
+//	L1 -> 0.5
+//	L2 -> 0.1
+//	L3 -> 0.05
+//	L4 -> 0.01
+//	L5 -> 0.005
+//	L6 -> 0.001
+func GetTokenValueAtLevel(level int) (float64, error) {
+	if level < 0 {
+		return 0, fmt.Errorf("GetTokenValueAtLevel: level must be non-negative, got %d", level)
+	}
+
+	maxDecimalPlaces := constants.MaxSupportedDecimalPlaces
+	scale := 1
+	for i := 0; i < maxDecimalPlaces; i++ {
+		scale *= 10
+	}
+
+	scaledValue := scale // L0 = 1 token = scale units
+
+	for l := 0; l < level; l++ {
+		divisor := GetNumberOfChildren(l)
+		if scaledValue%divisor != 0 {
+			return 0, fmt.Errorf(
+				"GetTokenValueAtLevel: indivisible at level %d: scaled value %d is not divisible by %d",
+				l, scaledValue, divisor,
+			)
+		}
+		scaledValue /= divisor
+	}
+
+	if scaledValue < 1 {
+		return 0, fmt.Errorf(
+			"GetTokenValueAtLevel: level %d exceeds maximum depth for %d decimal places",
+			level, maxDecimalPlaces,
+		)
+	}
+
+	// divide scaled integer by scale as float64 at the very end —
+	// a single division is exact for these values unlike repeated float divisions
+	return float64(scaledValue) / float64(scale), nil
+}
+
+// GetTokenValueFromTokenID fetches the token value by
+// looking at the IPFS content
+func GetTokenValueFromTokenID(tokenID string) (float64, error) {
+	// split RBT id elements
+	tokenElems, err := GetRbtIDElements(tokenID)
+	if err != nil {
+		return rubixmath.ZeroFloat(), fmt.Errorf("GetTokenValueFromTokenID: failed to split elements of token ID %s, err: %v", tokenID, err)
+	}
+
+	// get token level
+	tokenTreeLevel, err := GetTreeLevelFromPartIndex(tokenElems.PartIndex)
+	if err != nil {
+		return rubixmath.ZeroFloat(), fmt.Errorf("GetTokenValueFromTokenID: failed to get denom tree level of token %s, err: %v", tokenID, err)
+	}
+
+	// get token value from tree level
+	return GetTokenValueAtLevel(tokenTreeLevel)
 }

@@ -3,6 +3,8 @@ package parts
 import (
 	"fmt"
 	"strings"
+
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 type TokenID string
@@ -94,10 +96,22 @@ func (id TokenID) Parent() *TokenID {
 	return &parent
 }
 
-// Child returns the token ID for a child at the given index (1-based)
-func (id TokenID) Child(index int) TokenID {
+// Child returns the token ID for a child at the given child-position (1-based)
+func (id TokenID) Child(childPosition int) TokenID {
+	// get children range of the tokenID
+	childrenRange, err := id.GetChildrenIndexRange()
+	if err != nil {
+		return ""
+	}
+	// index is child position in the children range
+	// first-child-index + (required-child-position - 1) = required-child-index
+	tokenElems, err := util.GetRbtIDElements(string(id))
+	if err != nil {
+		return ""
+	}
+	partIndex := childrenRange.First + (childPosition - 1)
 	// Create child hierarchical string by appending index
-	return TokenID(fmt.Sprintf("%s_%d", string(id), index))
+	return TokenID(fmt.Sprintf("%d_%d_%d", tokenElems.Level, tokenElems.TokenNumber, partIndex))
 }
 
 // Children returns all child token IDs for a given split factor
@@ -164,7 +178,7 @@ func (id TokenID) String() string {
 }
 
 type SplitOp struct {
-	HierarchicalTokenID TokenID
-	ChildrenToTransfer  []int // Which child indices (1-based) go to recipient
-	ChildrenToKeep      []int // Which child indices stay with sender
+	TokenID            TokenID
+	ChildrenToTransfer []int // Which child indices (1-based) go to recipient
+	ChildrenToKeep     []int // Which child indices stay with sender
 }

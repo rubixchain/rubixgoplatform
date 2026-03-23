@@ -3,52 +3,12 @@ package parts
 import (
 	"fmt"
 	"math"
-	"strconv"
-	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
-
-// get level, token number and part index from the RBT token id
-func (id TokenID) GetRbtIDElements() (types.RbtIDElements, error) {
-	var err error
-	rbtElems := types.RbtIDElements{}
-
-	// check if token id is ft id, by checking if the length of the id is more than legth of DID (59)
-	if len(id) > 59 {
-		return types.RbtIDElements{}, fmt.Errorf("invalid token id format for rbt: %s, id length should be <= 15 (<max 2 digits level>_<max 7 digits token number>_<max 4 digits part index>)", id)
-	}
-
-	idElems := strings.Split(id.String(), "_")
-	if len(idElems) < 2 || len(idElems) > 3 { // ensure id is in proper RBT id format
-		return types.RbtIDElements{}, fmt.Errorf("invalid token id format for rbt: %s, id elements should be 2 (whole) or 3 (part)", id)
-	}
-
-	rbtElems.Level, err = strconv.Atoi(idElems[0])
-	if err != nil {
-		return types.RbtIDElements{}, fmt.Errorf("failed to convert level into int for rbt: %s, error: %v", id, err)
-	}
-	rbtElems.TokenNumber, err = strconv.Atoi(idElems[1])
-	if err != nil {
-		return types.RbtIDElements{}, fmt.Errorf("failed to convert token number into int for rbt: %s, error: %v", id, err)
-	}
-
-	switch len(idElems) {
-	case 2:
-		rbtElems.PartIndex = 0 // Case for whole token
-	case 3:
-		rbtElems.PartIndex, err = strconv.Atoi(idElems[2]) // Case for part token
-		if err != nil {
-			return types.RbtIDElements{}, fmt.Errorf("failed to convert part index into int for rbt: %s, error: %v", id, err)
-		}
-	default:
-		return types.RbtIDElements{}, fmt.Errorf("invalid token id format for rbt: %s, id elements should be 2 (whole) or 3 (part)", id)
-	}
-	return rbtElems, nil
-}
 
 // GetMaxDenomTreeLevel gets the max level of a Denom Tree
 func GetMaxDenomTreeLevel() int {
@@ -73,176 +33,6 @@ func getLevelStart(level int) int {
 		}
 	}
 	return start
-}
-
-// getSuffixProduct returns the product of numChildren(j) for j in [from, to).
-// numChildren(j) = 2 if j is even, 5 if j is odd.
-func getSuffixProduct(from, to int) int {
-	product := 1
-	for j := from; j < to; j++ {
-		if j%2 == 0 {
-			product *= 2
-		} else {
-			product *= 5
-		}
-	}
-	return product
-}
-
-func IndexedToHierarchical(indexedToken string) (TokenID, error) {
-	parts := strings.Split(indexedToken, "_")
-	if len(parts) < 3 {
-		if len(parts) == 2 {
-			// This is the whole token case
-			return TokenID(indexedToken), nil
-		}
-		return "", fmt.Errorf("invalid indexed token format: expected at least 3 parts, got %d", len(parts))
-	}
-
-	// Extract prefix (TokenLevel_TokenNumber)
-	prefix := parts[0] + "_" + parts[1]
-
-	// Parse the indexed number
-	var tokenId int
-	_, err := fmt.Sscanf(parts[2], "%d", &tokenId)
-	if err != nil {
-		return "", fmt.Errorf("invalid indexed number: %s", parts[2])
-	}
-
-	path := GetTokenPath(tokenId)
-	// If path is empty, return just the prefix (whole token)
-	if path == "" {
-		return TokenID(prefix), nil
-	}
-
-	// Return full hierarchical form
-	return TokenID(prefix + "_" + path), nil
-}
-
-// GetTokenPath converts a BFS tokenId to its hierarchical path representation.
-// Returns a string like "1_2" (just the path portion, without the token prefix).
-func GetTokenPath(tokenId int) string {
-	maxLevel := GetMaxDenomTreeLevel() - 1
-
-	// Root node (whole token)
-	if tokenId == 0 {
-		return ""
-	}
-
-	// Find which level this tokenId belongs to
-	level := 0
-	for level < maxLevel {
-		if tokenId < getLevelStart(level+1) {
-			break
-		}
-		level++
-	}
-
-	// Position within this level (0-indexed)
-	pos := tokenId - getLevelStart(level)
-
-	// Decode the path using mixed-radix arithmetic
-	path := make([]int, level)
-	for i := 0; i < level; i++ {
-		sp := getSuffixProduct(i+1, level)
-		path[i] = pos/sp + 1
-		pos = pos % sp
-	}
-
-	// Convert path to string
-	pathStr := make([]string, level)
-	for i := 0; i < level; i++ {
-		pathStr[i] = fmt.Sprintf("%d", path[i])
-	}
-
-	return strings.Join(pathStr, "_")
-}
-
-func HeirarchicalToIndexed(heirarchicalID TokenID) (string, error) {
-	parts := strings.Split(heirarchicalID.String(), "_")
-	if len(parts) < 3 {
-		if len(parts) == 2 {
-			// This is the whole token case
-			return string(heirarchicalID), nil
-		}
-		return "", fmt.Errorf("invalid hierarchical token format: expected at least 3 parts, got %d", len(parts))
-	}
-
-	// Extract prefix (TokenLevel_TokenNumber)
-	prefix := parts[0] + "_" + parts[1]
-
-	// Extract hierarchical path (everything after prefix)
-	pathParts := parts[2:]
-	pathStr := strings.Join(pathParts, "_")
-
-	indexedToken, err := GetTokenIdFromPath(pathStr)
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("%s_%d", prefix, indexedToken), nil
-}
-
-// GetTokenIdFromPath converts a hierarchical path string to its BFS tokenId.
-// Takes a path like "34_2345_1_2" (with prefix) or "1_2" (without prefix).
-func GetTokenIdFromPath(pathStr string) (int, error) {
-	maxDepthWithoutRoot := GetMaxDenomTreeLevel() - 1
-
-	parts := strings.Split(pathStr, "_")
-
-	// Auto-detect prefix: check if first part is a valid position (1 or 2)
-	// If not, assume first 2 parts are prefix (NetworkLevel_TokenNumber)
-	if len(parts) >= 3 {
-		var firstVal int
-		fmt.Sscanf(parts[0], "%d", &firstVal)
-		if firstVal > 2 {
-			// First part is not a valid position, strip prefix
-			parts = parts[2:]
-			pathStr = strings.Join(parts, "_")
-		}
-	}
-
-	// Root case
-	if pathStr == "0" {
-		return 0, fmt.Errorf("unexpected case: whole token found for path: %v", pathStr)
-	}
-
-	if len(parts) > maxDepthWithoutRoot {
-		return 0, fmt.Errorf("path length %d exceeds MaxDepth %d", len(parts), maxDepthWithoutRoot)
-	}
-
-	path := make([]int, len(parts))
-	for i := 0; i < len(parts); i++ {
-		_, err := fmt.Sscanf(parts[i], "%d", &path[i])
-		if err != nil {
-			return 0, fmt.Errorf("invalid number at depth %d: %s", i, parts[i])
-		}
-	}
-
-	n := len(path)
-
-	// BFS index = level_start(n) + position_within_level
-	levelStart := getLevelStart(n)
-	pos := 0
-	for i := 0; i < n; i++ {
-		child := path[i]
-
-		var numChildren int
-		if i%2 == 0 {
-			numChildren = 2
-		} else {
-			numChildren = 5
-		}
-
-		if child < 1 || child > numChildren {
-			return 0, fmt.Errorf("invalid child %d at depth %d", child, i)
-		}
-
-		sp := getSuffixProduct(i+1, n)
-		pos += (child - 1) * sp
-	}
-
-	return levelStart + pos, nil
 }
 
 func GetSplitAndNonsplitTokenDenom(
@@ -292,7 +82,7 @@ func GetSplitAndNonsplitTokenDenom(
 //  6. parentLevelIndex = childLevelIndex / numChildren   (integer division)
 //  7. parentPartIndex= Min(Lp) + parentLevelIndex
 func (id TokenID) GetParentToken() (string, error) {
-	child, err := id.GetRbtIDElements()
+	child, err := util.GetRbtIDElements(string(id))
 	if err != nil {
 		return "", err
 	}
@@ -311,7 +101,7 @@ func (id TokenID) GetParentToken() (string, error) {
 		return parentToken, nil
 	}
 
-	childLevelIndex := x - util.LevelMin(lx)
+	childLevelIndex := x - getLevelStart(lx)
 
 	// lp: parent level on tree
 	lp := lx - 1
@@ -319,7 +109,7 @@ func (id TokenID) GetParentToken() (string, error) {
 
 	// parent position in the level
 	parentLevelIndex := childLevelIndex / numChildren
-	parentPartIndex := util.LevelMin(lp) + parentLevelIndex
+	parentPartIndex := getLevelStart(lp) + parentLevelIndex
 
 	return fmt.Sprintf("%d_%d_%d", child.Level, child.TokenNumber, parentPartIndex), nil
 }
@@ -335,7 +125,7 @@ func (id TokenID) GetParentToken() (string, error) {
 //  5. firstChild = (levelIndex * numChildren) + Min(Lx+1)
 //  6. lastChild  = firstChild + (numChildren - 1)
 func (id TokenID) GetChildrenIndexRange() (types.ChildrenRange, error) {
-	parent, err := id.GetRbtIDElements()
+	parent, err := util.GetRbtIDElements(string(id))
 	if err != nil {
 		return types.ChildrenRange{}, err
 	}
@@ -353,9 +143,9 @@ func (id TokenID) GetChildrenIndexRange() (types.ChildrenRange, error) {
 	}
 
 	// parent position in the level
-	levelIndex := x - util.LevelMin(lx)
+	levelIndex := x - getLevelStart(lx)
 	numChildren := util.GetNumberOfChildren(lx)
-	firstChild := (levelIndex * numChildren) + util.LevelMin(lx+1)
+	firstChild := (levelIndex * numChildren) + getLevelStart(lx+1)
 	lastChild := firstChild + (numChildren - 1)
 
 	return types.ChildrenRange{First: firstChild, Last: lastChild}, nil
