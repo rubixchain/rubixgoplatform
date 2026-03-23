@@ -48,8 +48,8 @@ func ReqPledgeToken(
 
 	return pledgeResponse, nil
 }
-func InitiateConsensus(consensusRequest models.ConsensusRequest, dc types.DIDCrypto, w wallet.Wallet, log logger.Logger) (models.ConsensusResponse, error) {
-
+func InitiateConsensus(consensusRequest models.ConsensusRequest, quorumDc types.DIDCrypto, w *wallet.Wallet, log logger.Logger) (models.ConsensusResponse, error) {
+	quorumDid := quorumDc.GetDID()
 	isTransactionInfoValidatded, err := ValidateTransaction()
 	if err != nil {
 		log.Error("InitiateConsensus : Failed to validate transaction info", "err", err)
@@ -66,14 +66,19 @@ func InitiateConsensus(consensusRequest models.ConsensusRequest, dc types.DIDCry
 	pledgeDetails := consensusRequest.TransactionInfo.Quorums
 	// Here we are assuming there is only one quorum
 	// This will change when multple quorums are involved
+	if len(pledgeDetails) == 0 {
+		log.Error("InitiateConsensus : No pledge details found")
+		return models.ConsensusResponse{}, fmt.Errorf("no pledge details found")
+	}
 	pledgeTokenDetails := pledgeDetails[0].Tokens
 	// pledgeTokenList := util.ExtractTokenIDs(pledgeTokenDetails) // Need to ensure this function logic is not existing at th emoment
-	quorumSignature, err := util.SignTransaction(dc, consensusRequest.TransactionInfo)
+
+	quorumSignature, err := util.SignTransaction(quorumDc, consensusRequest.TransactionInfo)
 	if err != nil {
 		log.Error("InitiateConsensus : Failed to sign transaction info", "err", err)
 		return models.ConsensusResponse{}, err
 	}
-	transactionId, err := util.GetTransactionID(&consensusRequest.TransactionInfo)
+	transactionId, err := util.GetTransactionID(consensusRequest.TransactionInfo)
 	if err != nil {
 		log.Error("InitiateConsensus : Failed to get transaction ID", "err", err)
 		return models.ConsensusResponse{}, err
@@ -83,11 +88,26 @@ func InitiateConsensus(consensusRequest models.ConsensusRequest, dc types.DIDCry
 		log.Error("InitiateConsensus : Failed to marshal transaction info", "err", err)
 		return models.ConsensusResponse{}, err
 	}
+	quorumSignatureInfo := models.QuorumSignature{
+		Did:       quorumDid,
+		Signature: quorumSignature,
+	}
+
+	signature := models.Signature{
+		InitiatorSignature: consensusRequest.InitiatorSignature,
+		Quorums:            []models.QuorumSignature{quorumSignatureInfo},
+	}
+
+	signatureBytes, err := json.Marshal(signature)
+	if err != nil {
+		log.Error("InitiateConsensus : Failed to marshal signature", "err", err)
+		return models.ConsensusResponse{}, err
+	}
 
 	transactions := &models.Transactions{
 		ID:        transactionId,
 		Info:      json.RawMessage(transactionInfoBytes),
-		Signature: json.RawMessage(quorumSignature),
+		Signature: json.RawMessage(signatureBytes),
 	}
 
 	consensusResponse := models.ConsensusResponse{
@@ -98,7 +118,7 @@ func InitiateConsensus(consensusRequest models.ConsensusRequest, dc types.DIDCry
 	}
 	//List of Pledge token ids
 	// The incoming TransactionInfo with the signature of both initiator and quorumSignature
-	w.PledgeTokens(pledgeTokenDetails, transactions)
+	w.PledgeTokens(pledgeTokenDetails, transactions, quorumDid, consensusRequest.TransactionInfo.Epoch)
 
 	return consensusResponse, nil
 }
