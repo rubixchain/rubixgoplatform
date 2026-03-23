@@ -1,7 +1,7 @@
 package util
 
 import (
-	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
@@ -21,30 +21,30 @@ func GetTransactionID(txInfo *models.TransactionInfo) (string, error) {
 }
 
 func SignTransaction(dc types.DIDCrypto, txInfo *models.TransactionInfo) (string, error) {
-	transactionId, err := GetTransactionID(txInfo)
+	infoBytes, err := models.SerializeTransactionInfo(txInfo)
 	if err != nil {
-		return "", fmt.Errorf("SignTransaction: failed to get transaction ID, err: %v", err)
+		return "", fmt.Errorf("SignTransaction: failed to serialize TransactionInfo, err: %v", err)
 	}
-	signatureBytes, err := dc.PvtSign([]byte(transactionId))
+	signatureBytes, err := dc.PvtSign(infoBytes)
 	if err != nil {
-		return "", fmt.Errorf("SignTransaction: failed to sign transaction ID, err: %v", err)
+		return "", fmt.Errorf("SignTransaction: failed to sign transaction info, err: %v", err)
 	}
-	signature := base64.StdEncoding.EncodeToString(signatureBytes)
+	signature := hex.EncodeToString(signatureBytes)
 	return signature, nil
 }
 
 func VerifySignature(dc types.DIDCrypto, txInfo *models.TransactionInfo, signature string) error {
-	transactionId, err := GetTransactionID(txInfo)
+	infoBytes, err := models.SerializeTransactionInfo(txInfo)
 	if err != nil {
-		return fmt.Errorf("VerifySignature: failed to get transaction ID, err: %w", err)
+		return fmt.Errorf("VerifySignature: failed to serialize TransactionInfo, err: %w", err)
 	}
 
-	signatureBytes, err := base64.StdEncoding.DecodeString(signature)
+	signatureBytes, err := hex.DecodeString(signature)
 	if err != nil {
-		return fmt.Errorf("VerifySignature: failed to decode signature, err: %w", err)
+		return fmt.Errorf("VerifySignature: failed to decode hex signature, err: %w", err)
 	}
 
-	ok, err := dc.PvtVerify([]byte(transactionId), signatureBytes)
+	ok, err := dc.PvtVerify(infoBytes, signatureBytes)
 	if err != nil {
 		return fmt.Errorf("VerifySignature: failed to verify signature, err: %w", err)
 	}
