@@ -25,7 +25,12 @@ func SignTransaction(dc types.DIDCrypto, txInfo *models.TransactionInfo) (string
 	if err != nil {
 		return "", fmt.Errorf("SignTransaction: failed to serialize TransactionInfo, err: %v", err)
 	}
-	signatureBytes, err := dc.PvtSign(infoBytes)
+	// Hash before signing so the full payload (not just the first 32 bytes) is bound
+	// to the signature. ECDSA operates on a fixed-size digest; passing raw variable-length
+	// JSON allows an attacker to forge a valid signature for a different payload that
+	// shares only the first N bytes (curve-order truncation attack).
+	digest := CalculateHash(infoBytes, constants.HashAlgorithm_SHA3_256)
+	signatureBytes, err := dc.PvtSign(digest)
 	if err != nil {
 		return "", fmt.Errorf("SignTransaction: failed to sign transaction info, err: %v", err)
 	}
@@ -38,13 +43,15 @@ func VerifySignature(dc types.DIDCrypto, txInfo *models.TransactionInfo, signatu
 	if err != nil {
 		return fmt.Errorf("VerifySignature: failed to serialize TransactionInfo, err: %w", err)
 	}
+	// Must hash identically to SignTransaction so the digest is the same 32-byte value.
+	digest := CalculateHash(infoBytes, constants.HashAlgorithm_SHA3_256)
 
 	signatureBytes, err := hex.DecodeString(signature)
 	if err != nil {
 		return fmt.Errorf("VerifySignature: failed to decode hex signature, err: %w", err)
 	}
 
-	ok, err := dc.PvtVerify(infoBytes, signatureBytes)
+	ok, err := dc.PvtVerify(digest, signatureBytes)
 	if err != nil {
 		return fmt.Errorf("VerifySignature: failed to verify signature, err: %w", err)
 	}
