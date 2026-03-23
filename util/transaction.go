@@ -11,9 +11,9 @@ import (
 )
 
 func GetTransactionID(txInfo *models.TransactionInfo) (string, error) {
-	txInfoBytes, err := json.Marshal(txInfo)
+	txInfoBytes, err := models.SerializeTransactionInfo(txInfo)
 	if err != nil {
-		return "", fmt.Errorf("GetTransactionID: failed to marshal TransactionInfo, err: %v", err)
+		return "", fmt.Errorf("GetTransactionID: failed to serialize TransactionInfo, err: %v", err)
 	}
 
 	txHashBytes := CalculateHash(txInfoBytes, constants.HashAlgorithm_SHA3_256)
@@ -61,9 +61,9 @@ func PublishTransaction(pubsub *types.PubSub, tx *models.TransactionInfo, signat
 		return nil, fmt.Errorf("PublishTransaction: failed to get transaction ID: %v", err)
 	}
 
-	txInfoBytes, err := json.Marshal(tx)
+	txInfoBytes, err := models.SerializeTransactionInfo(tx)
 	if err != nil {
-		return nil, fmt.Errorf("PublishTransaction: failed to marshal transactionInfo, err: %v", err)
+		return nil, fmt.Errorf("PublishTransaction: failed to serialize TransactionInfo, err: %v", err)
 	}
 
 	signatureBytes, err := json.Marshal(signature)
