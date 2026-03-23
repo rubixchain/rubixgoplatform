@@ -81,13 +81,15 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 	if err := validatePostConsensusRequest(req, txRecord.ID); err != nil {
 		return err
 	}
-
+	if pc.wallet.didDir == "" {
+		return fmt.Errorf("transfer: signature verification not configured")
+	}
 	// Signature verification — must run BEFORE BeginTx so an invalid request
 	// never enters a transaction. Requires w.didDir set via SetDidDir().
 	if pc.wallet.didDir != "" {
 		var sig models.Signature
 		if err := json.Unmarshal(txRecord.Signature, &sig); err != nil {
-			return fmt.Errorf("transfer: missing initiator signature")
+			return fmt.Errorf("transfer: invalid signature format")
 		}
 		if sig.InitiatorSignature == "" {
 			return fmt.Errorf("transfer: missing initiator signature")
@@ -132,7 +134,7 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 
 func buildTransactionRecord(req *PostConsensusPersistenceRequest) (*models.Transactions, error) {
 	if req == nil {
-		return nil, fmt.Errorf("post-consensus persistence: request is nil")
+		return nil, fmt.Errorf("transfer: request is nil")
 	}
 
 	if req.Transaction != nil {
@@ -152,14 +154,15 @@ func buildTransactionRecord(req *PostConsensusPersistenceRequest) (*models.Trans
 				record.Signature = builtRecord.Signature
 			}
 		}
-		if req.TransactionInfo != nil {
-			txID, err := ComputeTransactionID(req.TransactionInfo)
-			if err != nil {
-				return nil, fmt.Errorf("post-consensus persistence: compute transaction id: %w", err)
-			}
-			if record.ID != txID {
-				return nil, fmt.Errorf("post-consensus persistence: transaction id mismatch")
-			}
+		if req.TransactionInfo == nil {
+			return nil, fmt.Errorf("transfer: transaction info required for transaction id binding")
+		}
+		txID, err := ComputeTransactionID(req.TransactionInfo)
+		if err != nil {
+			return nil, fmt.Errorf("transfer: failed to recompute transaction id: %v", err)
+		}
+		if record.ID != txID {
+			return nil, fmt.Errorf("transfer: transaction id mismatch: request claims %q, payload computes %q", record.ID, txID)
 		}
 		return &record, nil
 	}
@@ -479,22 +482,22 @@ func (pc *PostConsensusPersistenceCoordinator) insertTokenChainRows(ctx context.
 					offset, offset+1, offset+2, offset+3, offset+4,
 				),
 			)
-				args = append(args,
-					row.TokenID,
-					row.TransactionID,
-					row.PreviousTransactionID,
-					row.Role,
-					row.Position,
-				)
-			}
+			args = append(args,
+				row.TokenID,
+				row.TransactionID,
+				row.PreviousTransactionID,
+				row.Role,
+				row.Position,
+			)
+		}
 
-			query := `
+		query := `
 				INSERT INTO tokenchain (token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at)
 				VALUES ` + strings.Join(placeholders, ",") + `
 				ON CONFLICT (token_id, position) DO NOTHING
 			`
-			if _, err := tx.Exec(ctx, query, args...); err != nil {
-				return fmt.Errorf("post-consensus persistence: insert tokenchain rows: %w", err)
+		if _, err := tx.Exec(ctx, query, args...); err != nil {
+			return fmt.Errorf("post-consensus persistence: insert tokenchain rows: %w", err)
 		}
 	}
 
