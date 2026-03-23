@@ -307,10 +307,17 @@ func isValidExecutionRole(role string) bool {
 // with the correct position and previous_transaction_id. All reads use the provided pgx.Tx
 // (FOR UPDATE) to ensure they are consistent with the pending writes.
 func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(ctx context.Context, tx pgx.Tx, req *PostConsensusPersistenceRequest) error {
+	if req == nil {
+		return fmt.Errorf("transfer: empty transaction_id")
+	}
+
 	for _, row := range req.TokenChainRows {
 		if row.Position == 0 {
 			// Genesis rows are validated by genesis-specific paths.
 			continue
+		}
+		if row.TokenID == "" {
+			return fmt.Errorf("transfer: empty token_id")
 		}
 
 		var dbDID string
@@ -326,25 +333,25 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 		`, row.TokenID).Scan(&dbDID, &dbStatus, &dbTransactionID, &dbLatestPosition)
 		if err != nil {
 			if err == pgx.ErrNoRows {
-				return fmt.Errorf("transfer: token %q not found", row.TokenID)
+				return fmt.Errorf("transfer: token %q does not exist", row.TokenID)
 			}
 			return fmt.Errorf("transfer: query token %q: %w", row.TokenID, err)
 		}
 
 		if dbDID != req.DID {
-			return fmt.Errorf("transfer: token %q DID mismatch: expected %q, got %q", row.TokenID, req.DID, dbDID)
+			return fmt.Errorf("transfer: token %q not owned by %s", row.TokenID, req.DID)
 		}
 
 		if dbStatus != int16(constants.TokenStatus_Free) {
-			return fmt.Errorf("transfer: token %q status is %d, expected Free (0)", row.TokenID, dbStatus)
+			return fmt.Errorf("transfer: token %q is not FREE, status=%d", row.TokenID, dbStatus)
 		}
 
 		if row.PreviousTransactionID != nil && *row.PreviousTransactionID != dbTransactionID {
-			return fmt.Errorf("transfer: token %q previous_transaction_id mismatch: expected %q, got %q", row.TokenID, dbTransactionID, *row.PreviousTransactionID)
+			return fmt.Errorf("transfer: token %q previous_transaction_id mismatch", row.TokenID)
 		}
 
 		if row.Position != dbLatestPosition+1 {
-			return fmt.Errorf("transfer: token %q position gap: expected %d, got %d", row.TokenID, dbLatestPosition+1, row.Position)
+			return fmt.Errorf("transfer: token %q position must be latest+1, got %d want %d", row.TokenID, row.Position, dbLatestPosition+1)
 		}
 	}
 
