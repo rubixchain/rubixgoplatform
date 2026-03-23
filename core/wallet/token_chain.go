@@ -234,18 +234,23 @@ func (w *Wallet) GetTokenChainByTokenID(tokenID string) ([]models.TokenChain, er
 	return pgx.CollectRows(rows, pgx.RowToStructByName[models.TokenChain])
 }
 
-/*
 func (w *Wallet) GetLatestTransactionAndRoleByTokenID(tokenID string) (*models.Transactions, int16, error) {
 	row := w.db.Pool().QueryRow(w.Ctx,
-		`SELECT transaction_id, role FROM tokenchain WHERE token_id = $1 ORDER BY position DESC LIMIT 1`, tokenID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("GetTokenChainByTokenIDAndPrevTxnId: %w", err)
+		`SELECT transaction_id, role FROM tokenchain WHERE token_id = $1 ORDER BY position DESC LIMIT 1`, tokenID)
+	var txID string
+	var tokenRoleInTx int16
+	if err := row.Scan(&txID, &tokenRoleInTx); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, -1, nil
+		}
+		return nil, -1, fmt.Errorf("GetLatestTransactionByTokenID scan: %w", err)
 	}
-
-	return pgx.CollectRows(rows, pgx.RowToStructByName[models.TokenChain])
+	tx, err := w.GetTransactionByID(txID)
+	if err != nil {
+		return nil, -1, fmt.Errorf("GetLatestTransactionByTokenID GetTransactionByID: %w", err)
+	}
+	return tx, tokenRoleInTx, nil
 }
-*/
 
 // get token role in latest transaction of the given token id
 func (w *Wallet) GetRoleOfTokenIdInLatestTxn(tokenID string, isFullNode bool) (int16, error) {
