@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
 func GetNetworkMode(testnet, mainnet, localnet bool) (string, error) {
@@ -33,12 +32,14 @@ func GetNetworkMode(testnet, mainnet, localnet bool) (string, error) {
 	}
 }
 
-func ExtractTokenIDs(tokens []*models.TokenInfo) []string {
-	tokenIDs := make([]string, 0, len(tokens)) // pre-allocate capacity
+func UnzipMap[K comparable, V any](m map[K]V) ([]K, []V) {
+	keys := make([]K, 0, len(m))
+	values := make([]V, 0, len(m))
 
-	for _, token := range tokens {
-		tokenIDs = append(tokenIDs, token.TokenID)
+	for k, v := range m {
+		keys = append(keys, k)
+		values = append(values, v)
 	}
 
-	return tokenIDs
+	return keys, values
 }
