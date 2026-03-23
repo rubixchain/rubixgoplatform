@@ -139,3 +139,7 @@ func InitiateConsensus(consensusRequest models.ConsensusRequest, quorumDc types.
 
 	return &consensusResponse, nil
 }
+
+func ValidateTransaction() (bool, error) {
+	return true, nil
+}

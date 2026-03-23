@@ -509,3 +509,25 @@ func (w *Wallet) GetAllTransactionInfoByTokenId(tokenID string, txnId string) ([
 	}
 	return txnChain, tokenChain[len(tokenChain)-1].TransactionID, nil
 }
+
+// GetTokenChainByTokenIDAndPrevTxnId fetches the token chain from the input transaction id, with a limit of 100 transactions
+func (w *Wallet) GetTokenChainByTokenIDAndPrevTxnId(tokenID string, txnID string) ([]models.TokenChain, error) {
+	rows, err := w.db.Pool().Query(w.Ctx,
+		`SELECT tc.*
+            FROM tokenchain tc
+            WHERE tc.token_id = $1
+            AND tc.position >= (
+                SELECT position
+                FROM tokenchain
+                WHERE token_id = $1
+                AND prev_txn_id = $2
+                )
+            ORDER BY tc.position
+            LIMIT 100`, tokenID, txnID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetTokenChainByTokenIDAndPrevTxnId: %w", err)
+	}
+
+	return pgx.CollectRows(rows, pgx.RowToStructByName[models.TokenChain])
+}

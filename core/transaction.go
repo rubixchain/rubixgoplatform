@@ -228,20 +228,20 @@ func (c *Core) syncTransactionTokens(
 	if NFTOwnershipTransfer {
 		tokenGroups = append(tokenGroups, tokens.NFT)
 	}
+	/*
+		for _, group := range tokenGroups {
+			for _, token := range group {
+				if token == nil {
+					continue
+				}
 
-	for _, group := range tokenGroups {
-		for _, token := range group {
-			if token == nil {
-				continue
-			}
-
-			err := c.syncTokenChainFrom(peer, token.PreviousTransactionID, token.TokenID)
-			if err != nil {
-				return err
+				err := c.syncTokenChainFrom(peer, token.PreviousTransactionID, token.TokenID)
+				if err != nil {
+					return err
+				}
 			}
 		}
-	}
-
+	*/
 	return nil
 }
 
