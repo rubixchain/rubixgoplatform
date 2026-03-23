@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"golang.org/x/crypto/sha3"
 )
@@ -84,6 +85,10 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 		return fmt.Errorf("post-consensus persistence: begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
+
+	if err := pc.validateTransferChainContinuity(ctx, tx, req); err != nil {
+		return err
+	}
 
 	if err := pc.insertTransaction(ctx, tx, txRecord); err != nil {
 		return err
@@ -295,6 +300,55 @@ func isValidExecutionRole(role string) bool {
 	default:
 		return false
 	}
+}
+
+// validateTransferChainContinuity validates that each non-genesis TokenChain row in req
+// references a token that exists, belongs to req.DID, is Free, and continues the chain
+// with the correct position and previous_transaction_id. All reads use the provided pgx.Tx
+// (FOR UPDATE) to ensure they are consistent with the pending writes.
+func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(ctx context.Context, tx pgx.Tx, req *PostConsensusPersistenceRequest) error {
+	for _, row := range req.TokenChainRows {
+		if row.Position == 0 {
+			// Genesis rows are validated by genesis-specific paths.
+			continue
+		}
+
+		var dbDID string
+		var dbStatus int16
+		var dbTransactionID string
+		var dbLatestPosition int64
+
+		err := tx.QueryRow(ctx, `
+			SELECT did, token_status, transaction_id, latest_position
+			FROM tokens
+			WHERE token_id = $1
+			FOR UPDATE
+		`, row.TokenID).Scan(&dbDID, &dbStatus, &dbTransactionID, &dbLatestPosition)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				return fmt.Errorf("transfer: token %q not found", row.TokenID)
+			}
+			return fmt.Errorf("transfer: query token %q: %w", row.TokenID, err)
+		}
+
+		if dbDID != req.DID {
+			return fmt.Errorf("transfer: token %q DID mismatch: expected %q, got %q", row.TokenID, req.DID, dbDID)
+		}
+
+		if dbStatus != int16(constants.TokenStatus_Free) {
+			return fmt.Errorf("transfer: token %q status is %d, expected Free (0)", row.TokenID, dbStatus)
+		}
+
+		if row.PreviousTransactionID != nil && *row.PreviousTransactionID != dbTransactionID {
+			return fmt.Errorf("transfer: token %q previous_transaction_id mismatch: expected %q, got %q", row.TokenID, dbTransactionID, *row.PreviousTransactionID)
+		}
+
+		if row.Position != dbLatestPosition+1 {
+			return fmt.Errorf("transfer: token %q position gap: expected %d, got %d", row.TokenID, dbLatestPosition+1, row.Position)
+		}
+	}
+
+	return nil
 }
 
 func (pc *PostConsensusPersistenceCoordinator) insertTransaction(ctx context.Context, tx pgx.Tx, record *models.Transactions) error {
