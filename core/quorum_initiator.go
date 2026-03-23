@@ -123,11 +123,11 @@ func (c *Core) requestPledgeTokenHandler(request *ensweb.Request) *ensweb.Result
 
 func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result {
 	quorumDid := c.l.GetQuery(request, "did")
-	response := model.BasicResponse{Status: false}
+	response := &models.ConsensusResponse{Status: false}
 	quorumDc, err := c.SetupDID(reqID, quorumDid)
 	if err != nil {
 		response.Message = "InitiateTransaction:Failed to setup DID: " + err.Error()
-		return c.l.RenderJSON(request, &response, http.StatusInternalServerError)
+		return c.l.RenderJSON(request, response, http.StatusInternalServerError)
 	}
 	c.log.Info("Initiate consensus called")
 	var consensusRequest models.ConsensusRequest
@@ -141,12 +141,16 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 
 	// This initiateConsensus needs to be edited to accept all the necessary params
 	// Need to paqss the quorum dc itself.
-	consensus.InitiateConsensus(consensusRequest, quorumDc, c.w, c.log)
+	consensusResponse, err := consensus.InitiateConsensus(consensusRequest, quorumDc, c.w, c.log)
+	if err != nil {
+		c.log.Error("initiateConsensusHandler : Consensus failed", "err", err)
+		response.Message = err.Error()
+		return c.l.RenderJSON(request, &response, http.StatusInternalServerError)
+	}
+
+	return c.l.RenderJSON(request, &consensusResponse, http.StatusOK)
 	// Call the consensus logic here and handle the response accordingly.
 	// For now, we will just return a success response.
-	response.Status = true
-	response.Message = "Consensus initiated successfully"
-	return c.l.RenderJSON(request, &response, http.StatusOK)
 }
 
 func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
