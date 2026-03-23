@@ -2,10 +2,8 @@ package core
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
-	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/types/models"
@@ -48,25 +46,6 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		c.log.Error("InitiateTransaction: Failed to build transaction info", "err", err)
 		resp.Message = err.Error()
 		return resp
-	}
-
-	// Validate each selected RBT token: must exist, belong to initiator, and be free
-	if transactionInfo.Tokens != nil {
-		for _, ti := range transactionInfo.Tokens.RBT {
-			tok, err := c.w.ReadToken(ti.TokenID)
-			if err != nil {
-				resp.Message = "InitiateTransaction: token not found: " + ti.TokenID
-				return resp
-			}
-			if tok.DID != initiatorDID {
-				resp.Message = "InitiateTransaction: token " + ti.TokenID + " does not belong to initiator"
-				return resp
-			}
-			if tok.TokenStatus != int16(constants.TokenStatus_Free) {
-				resp.Message = "InitiateTransaction: token " + ti.TokenID + " is not free (status=" + fmt.Sprint(tok.TokenStatus) + ")"
-				return resp
-			}
-		}
 	}
 
 	// Fetch quorum addresses
@@ -120,7 +99,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		Tokens: pledgeTokenPtrs,
 	}
 	transactionInfo.Quorums = []*models.QuorumInfo{pledegTokenInfo}
-	txID, err := wallet.ComputeTransactionID(transactionInfo)
+	txID, err := util.GetTransactionID(transactionInfo)
 	if err != nil {
 		c.log.Error("InitiateTransaction: Failed to compute transaction ID", "err", err)
 		resp.Message = "InitiateTransaction: Failed to compute transaction ID: " + err.Error()

@@ -17,7 +17,7 @@ func GetTransactionID(txInfo *models.TransactionInfo) (string, error) {
 	}
 
 	txHashBytes := CalculateHash(txInfoBytes, constants.HashAlgorithm_SHA3_256)
-	return string(txHashBytes), nil
+	return hex.EncodeToString(txHashBytes), nil
 }
 
 func SignTransaction(dc types.DIDCrypto, txInfo *models.TransactionInfo) (string, error) {

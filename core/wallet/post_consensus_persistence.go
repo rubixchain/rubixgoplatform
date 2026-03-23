@@ -3,7 +3,6 @@ package wallet
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -13,7 +12,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
-	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -157,7 +155,7 @@ func buildTransactionRecord(req *PostConsensusPersistenceRequest) (*models.Trans
 		if req.TransactionInfo == nil {
 			return nil, fmt.Errorf("transfer: transaction info required for transaction id binding")
 		}
-		txID, err := ComputeTransactionID(req.TransactionInfo)
+		txID, err := util.GetTransactionID(req.TransactionInfo)
 		if err != nil {
 			return nil, fmt.Errorf("transfer: failed to recompute transaction id: %v", err)
 		}
@@ -178,7 +176,7 @@ func buildTransactionRecordFromPayload(txInfo *models.TransactionInfo, signature
 		return nil, fmt.Errorf("post-consensus persistence: transaction signature is required")
 	}
 
-	txID, err := ComputeTransactionID(txInfo)
+	txID, err := util.GetTransactionID(txInfo)
 	if err != nil {
 		return nil, fmt.Errorf("post-consensus persistence: compute transaction id: %w", err)
 	}
@@ -200,18 +198,6 @@ func buildTransactionRecordFromPayload(txInfo *models.TransactionInfo, signature
 	}, nil
 }
 
-// ComputeTransactionID computes a deterministic hex-encoded SHA3-256 transaction ID from txInfo
-// using models.SerializeTransactionInfo as the canonical encoding.
-// Returns hex string (not raw bytes) for DB and cross-node compatibility.
-func ComputeTransactionID(txInfo *models.TransactionInfo) (string, error) {
-	txInfoBytes, err := models.SerializeTransactionInfo(txInfo)
-	if err != nil {
-		return "", err
-	}
-
-	hash := sha3.Sum256(txInfoBytes)
-	return hex.EncodeToString(hash[:]), nil
-}
 
 func validatePostConsensusRequest(req *PostConsensusPersistenceRequest, transactionID string) error {
 	if req == nil {

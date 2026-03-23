@@ -187,7 +187,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 		return fmt.Errorf("failed to sign burn transaction: %w", err)
 	}
 	burnSignature := &models.Signature{InitiatorSignature: hex.EncodeToString(burnSigBytes)}
-	burnTxID, err := wallet.ComputeTransactionID(burnTxInfo)
+	burnTxID, err := util.GetTransactionID(burnTxInfo)
 	if err != nil {
 		c.log.Error("Failed to compute burn transaction ID", "err", err)
 		return fmt.Errorf("failed to compute burn transaction ID: %w", err)
@@ -303,7 +303,7 @@ func (c *Core) createFTs(reqID string, FTName string, numFTs int, numWholeTokens
 				results <- ftResult{Err: fmt.Errorf("createFTs: failed to marshal signature for FT %s: %w", ftID, err)}
 				continue
 			}
-			txID, err := wallet.ComputeTransactionID(txInfo)
+			txID, err := util.GetTransactionID(txInfo)
 			if err != nil {
 				results <- ftResult{Err: fmt.Errorf("createFTs: failed to compute transaction ID for FT %s: %w", ftID, err)}
 				continue

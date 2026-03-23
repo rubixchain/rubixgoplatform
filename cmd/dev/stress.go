@@ -78,7 +78,7 @@ func buildTransferReqFromTok(cfg *config.Config, fromDID, toDID string, tok *mod
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("buildTransferReqFromTok: marshal signature: %w", err)
 	}
-	txID, err := wallet.ComputeTransactionID(txInfo)
+	txID, err := util.GetTransactionID(txInfo)
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("buildTransferReqFromTok: ComputeTransactionID: %w", err)
 	}
@@ -697,7 +697,7 @@ func runTransferFuzz(w *wallet.Wallet, cfg *config.Config, dids []string, availa
 				},
 			},
 		}
-		txIDB, err := wallet.ComputeTransactionID(txInfoB)
+		txIDB, err := util.GetTransactionID(txInfoB)
 		if err != nil {
 			log.Fatalf("[FUZZ case 6] ComputeTransactionID txInfoB: %v", err)
 		}
@@ -859,7 +859,7 @@ func runTransferFuzz(w *wallet.Wallet, cfg *config.Config, dids []string, availa
 		if err != nil {
 			log.Fatalf("[FUZZ case 10] SerializeTransactionInfo: %v", err)
 		}
-		txIDFake, err := wallet.ComputeTransactionID(txInfoFake)
+		txIDFake, err := util.GetTransactionID(txInfoFake)
 		if err != nil {
 			log.Fatalf("[FUZZ case 10] ComputeTransactionID: %v", err)
 		}
