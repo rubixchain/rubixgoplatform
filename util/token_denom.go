@@ -161,55 +161,6 @@ func GetRbtIDElements(tokenID string) (types.RbtIDElements, error) {
 	return rbtElems, nil
 }
 
-// GetTokenValueAtLevel returns the token value at a given tree level as float64.
-// Integer arithmetic is used internally (scaled by 10^maxDecimalPlaces)
-// to avoid floating point precision drift during division.
-//
-// Example with maxDecimalPlaces=3:
-//
-//	L0 -> 1.0
-//	L1 -> 0.5
-//	L2 -> 0.1
-//	L3 -> 0.05
-//	L4 -> 0.01
-//	L5 -> 0.005
-//	L6 -> 0.001
-func GetTokenValueAtLevel(level int) (float64, error) {
-	if level < 0 {
-		return 0, fmt.Errorf("GetTokenValueAtLevel: level must be non-negative, got %d", level)
-	}
-
-	maxDecimalPlaces := constants.MaxSupportedDecimalPlaces
-	scale := 1
-	for i := 0; i < maxDecimalPlaces; i++ {
-		scale *= 10
-	}
-
-	scaledValue := scale // L0 = 1 token = scale units
-
-	for l := 0; l < level; l++ {
-		divisor := GetNumberOfChildren(l)
-		if scaledValue%divisor != 0 {
-			return 0, fmt.Errorf(
-				"GetTokenValueAtLevel: indivisible at level %d: scaled value %d is not divisible by %d",
-				l, scaledValue, divisor,
-			)
-		}
-		scaledValue /= divisor
-	}
-
-	if scaledValue < 1 {
-		return 0, fmt.Errorf(
-			"GetTokenValueAtLevel: level %d exceeds maximum depth for %d decimal places",
-			level, maxDecimalPlaces,
-		)
-	}
-
-	// divide scaled integer by scale as float64 at the very end —
-	// a single division is exact for these values unlike repeated float divisions
-	return float64(scaledValue) / float64(scale), nil
-}
-
 // GetTokenValueFromTokenID fetches the token value by
 // looking at the IPFS content
 func GetTokenValueFromTokenID(tokenID string) (float64, error) {
@@ -226,5 +177,5 @@ func GetTokenValueFromTokenID(tokenID string) (float64, error) {
 	}
 
 	// get token value from tree level
-	return GetTokenValueAtLevel(tokenTreeLevel)
+	return LevelToDenom(tokenTreeLevel)
 }
