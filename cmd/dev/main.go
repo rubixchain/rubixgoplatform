@@ -302,6 +302,7 @@ func main() {
 	fmt.Println("chain length: D1 tokens=2 rows, D2 tokens=3 rows OK")
 
 	fmt.Println("\nALL CHECKS PASSED - 3-DID multi-hop transfer simulation complete")
+	RunStressTests(w, &cfg, dids, didTokens)
 }
 
 func validateTokenFormat(tokens []string) {
