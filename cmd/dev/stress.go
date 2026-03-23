@@ -164,7 +164,7 @@ func RunStressTests(w *wallet.Wallet, cfg *config.Config, dids []string, didToke
 	s1Results := make(chan stressResult, 5)
 	var wg sync.WaitGroup
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
