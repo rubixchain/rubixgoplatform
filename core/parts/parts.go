@@ -180,7 +180,7 @@ func CollectRBTTokens(
 		return nil, nil, nil, nil, fmt.Errorf("CollectRBTTokens: failed to get genesis transaction info, err: %v", err)
 	}
 
-	txID, err := wallet.ComputeTransactionID(transactionInfo)
+	txID, err := util.GetTransactionID(transactionInfo)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("CollectRBTTokens: failed to compute transaction id, err: %v", err)
 	}

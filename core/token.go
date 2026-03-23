@@ -232,7 +232,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex 
 		if err != nil {
 			return fmt.Errorf("generateTestTokens: failed to marshal signature: %w", err)
 		}
-		txID, err := wallet.ComputeTransactionID(txInfo)
+		txID, err := util.GetTransactionID(txInfo)
 		if err != nil {
 			return fmt.Errorf("generateTestTokens: failed to compute transaction ID: %w", err)
 		}
@@ -1785,7 +1785,7 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 		if err != nil {
 			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to marshal signature for token %s: %w", id, err)
 		}
-		txID, err := wallet.ComputeTransactionID(txInfo)
+		txID, err := util.GetTransactionID(txInfo)
 		if err != nil {
 			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to compute transaction ID for token %s: %w", id, err)
 		}

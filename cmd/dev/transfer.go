@@ -89,7 +89,7 @@ func transferOneToken(w *wallet.Wallet, cfg *config.Config, fromDID, toDID, toke
 	if err != nil {
 		log.Fatalf("transferOneToken: marshal signature: %v", err)
 	}
-	txID, err := wallet.ComputeTransactionID(txInfo)
+	txID, err := util.GetTransactionID(txInfo)
 	if err != nil {
 		log.Fatalf("transferOneToken: ComputeTransactionID: %v", err)
 	}

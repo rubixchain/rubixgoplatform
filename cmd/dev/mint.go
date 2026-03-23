@@ -52,7 +52,7 @@ func mintTokens(w *wallet.Wallet, cfg *config.Config, dids []string, count int) 
 			if err != nil {
 				log.Fatal("marshal signature:", err)
 			}
-			txID, err := wallet.ComputeTransactionID(txInfo)
+			txID, err := util.GetTransactionID(txInfo)
 			if err != nil {
 				log.Fatal("ComputeTransactionID:", err)
 			}
