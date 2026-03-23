@@ -128,7 +128,7 @@ func CollectRBTTokens(dc types.DIDCrypto, w *wallet.Wallet, transferAmount float
 		for _, splitOp := range splitOps {
 			partTokensToTransfer, tokensToKeep, tokensBeingBurnt, err := performTokenSplit(w, dc, splitOp, tokenCache, remainingBalanceDenomArr)
 			if err != nil {
-				return nil, nil, fmt.Errorf("CollectRBTTokens: could not perform split at Level: %v, err: %v", splitOp.TokenID.Level(), err)
+				return nil, nil, fmt.Errorf("CollectRBTTokens: could not perform split of token: %v, err: %v", splitOp.TokenID, err)
 			}
 
 			tokensToKeepList = append(tokensToKeepList, tokensToKeep...)

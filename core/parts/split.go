@@ -105,9 +105,6 @@ func performTokenSplit(w *wallet.Wallet, dc types.DIDCrypto,
 	var parentToken models.Token
 	// parentTokenHeirarchicalID := splitOp.TokenID
 	parentTokenID := string(splitOp.TokenID)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("performTokenSplit: failed to convert parent token hierarchical ID to indexed ID: %v", err)
-	}
 
 	if cachedToken, exists := tokenCache[parentTokenID]; exists {
 		parentToken = cachedToken
@@ -115,23 +112,18 @@ func performTokenSplit(w *wallet.Wallet, dc types.DIDCrypto,
 		var err error
 		parentToken, err = w.GetRBTToken(parentTokenID)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("performTokenSplit: unable to get parent token: %v with id: %v; indexid: %v, err: %v", splitOp.TokenID.String(), parentTokenID, parentTokenID, err)
-		}
-
-		if err := w.LockToken(parentToken); err != nil {
-			return nil, nil, nil, fmt.Errorf("performTokenSplit: unable to local parent token: %v, err: %v", parentToken.TokenID, err)
+			return nil, nil, nil, fmt.Errorf("performTokenSplit: unable to get info of parent token: %v, err: %v", parentTokenID, err)
 		}
 	}
 
 	// get parent token elements
 	parentElems, err := util.GetRbtIDElements(parentTokenID)
 	if err != nil {
-		return nil,nil, nil, fmt.Errorf("performTokenSplit: failed to split elements of parent token id %s; err: %w", parentTokenID, err)
+		return nil,nil, nil, fmt.Errorf("performTokenSplit: failed to split elements of parent token %s; err: %w", parentTokenID, err)
 	} 
 	parentDenomLevel, err := util.GetTreeLevelFromPartIndex(parentElems.PartIndex)
 	childLevel := parentDenomLevel + 1
 
-	// TODO -------
 	childTokensCreatedMap, err := createChildTokensAtLevel(dc, w, splitOp.TokenID, childLevel, tokenDenomArr)
 	if err != nil {
 		return nil, nil, nil, err

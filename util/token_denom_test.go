@@ -71,7 +71,7 @@ func TestGetTokenValueAtLevel(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := GetTokenValueAtLevel(tc.level)
+			result, err := LevelToDenom(tc.level)
 			if tc.expectError {
 				if err == nil {
 					t.Errorf("expected error but got %v", result)
