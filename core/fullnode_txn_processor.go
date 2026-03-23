@@ -7,7 +7,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -57,7 +56,7 @@ func (c *Core) initDynamicTxnProcessor() {
 	numCPU := runtime.NumCPU()
 
 	c.txnProcessor = &DynamicTxnProcessor{
-		txnQueue:        make(chan *model.PubSubTxnInfo, 1000),
+		txnQueue:        make(chan *models.EventTransaction, 1000),
 		ctx:             ctx,
 		cancel:          cancel,
 		minWorkers:      max(1, numCPU/4),

@@ -107,7 +107,7 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 }
 
 // Process transaction with retry mechanism
-func (c *Core) processTxnWithRetry(txnEvent *model.PubSubTxnInfo, workerID int) {
+func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID int) {
 	var lastErr error
 
 	for attempt := 0; attempt < c.txnProcessor.maxRetries; attempt++ {
@@ -140,7 +140,7 @@ func (c *Core) processTxnWithRetry(txnEvent *model.PubSubTxnInfo, workerID int) 
 }
 
 // Enhanced single transaction processing with better error handling
-func (c *Core) processSingleTransaction(newEvent *model.PubSubTxnInfo) error {
+func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error {
 	// TODO: Full node block processing removed — block package eliminated.
 	// This function previously parsed incoming block data via block.InitBlock,
 	// validated block sequences, checked ownership, and stored blocks in the
@@ -153,7 +153,7 @@ func (c *Core) processSingleTransaction(newEvent *model.PubSubTxnInfo) error {
 }
 
 // Handle failed transactions after all retries
-func (c *Core) handleFailedTransaction(txnEvent *model.PubSubTxnInfo, lastErr error) {
+func (c *Core) handleFailedTransaction(txnEvent *models.EventTransaction, lastErr error) {
 	c.log.Error("Transaction processing failed permanently",
 		"blockHash", txnEvent.BlockHash,
 		"error", lastErr)
@@ -166,7 +166,7 @@ func (c *Core) handleFailedTransaction(txnEvent *model.PubSubTxnInfo, lastErr er
 	// Example: Store in failed transactions table
 	failedTxn := &model.FailedTransaction{
 		BlockHash:    txnEvent.BlockHash,
-		PublisherDID: txnEvent.PublisherDID,
+		PublisherDID: "", // EventTransaction does not carry publisher DID
 		Error:        lastErr.Error(),
 		FailedAt:     time.Now(),
 		RetryCount:   c.txnProcessor.maxRetries,

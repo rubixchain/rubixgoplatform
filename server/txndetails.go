@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -164,16 +163,9 @@ func (s *Server) APIGetTxnByComment(req *ensweb.Request) *ensweb.Result {
 // @Success 200 {object} model.TxnCountForDID
 // @Router /api/get-by-node [get]
 func (s *Server) APIGetTxnByNode(req *ensweb.Request) *ensweb.Result {
-	dir, ok := s.validateAccess(req)
+	_, ok := s.validateAccess(req)
 	if !ok {
 		return s.BasicResponse(req, false, "Unathuriozed access", nil)
-	}
-	if s.cfg.EnableAuth {
-		// always expect client token to present
-		token, ok := req.ClientToken.Model.(*setup.BearerToken)
-		if ok {
-			dir = token.DID
-		}
 	}
 	Result := model.TxnCountForDID{
 		BasicResponse: model.BasicResponse{

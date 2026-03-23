@@ -62,7 +62,7 @@ func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.Basic
 		return basicResponse
 	}
 
-	nftHash, err := c.ipfsOps.Add(bytes.NewReader(nftJSON))
+	nftHash, err := c.ipfsOps.Add(bytes.NewReader(nftJSON), nil)
 	if err != nil {
 		c.log.Error("Failed to add nft to IPFS", "err", err)
 		return basicResponse

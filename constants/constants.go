@@ -25,7 +25,7 @@ const (
 	DefaultPostgresUsername string = "rubix"
 	DefaultPostgresPassword string = "rubixpass"
 	DefaultPostgresDBName   string = "rubix"
-	DefaultPostgresPort     uint64 = 5433
+	DefaultPostgresPort     uint64 = 5500
 	DefaultPostgresHost     string = "localhost"
 )
 
@@ -63,34 +63,34 @@ const (
 // Token Statuses -- grouped by lifecycle stage
 const (
 	// Active states
-	TokenStatus_Free   = 0
-	TokenStatus_Locked = 1
+	TokenStatus_Free = iota
+	TokenStatus_Locked
 
 	// Lifecycle -- creation & acquisition
-	TokenStatus_Generated = 13
-	TokenStatus_Fetched   = 15
+	TokenStatus_Generated
+	TokenStatus_Fetched
 
 	// Lifecycle -- transfer & commitment
-	TokenStatus_Transferred = 14
-	TokenStatus_Committed   = 3
+	TokenStatus_Transferred
+	TokenStatus_Committed
 
 	// Pledge states
-	TokenStatus_Pledged       = 4
-	TokenStatus_QuorumPledged = 12
+	TokenStatus_Pledged
+	TokenStatus_QuorumPledged
 
 	// Terminal / destruction
-	TokenStatus_Burnt      = 2
-	TokenStatus_BurntForFT = 5
+	TokenStatus_Burnt
+	TokenStatus_BurntForFT
 
 	// Smart contract lifecycle
-	TokenStatus_Deployed        = 6
-	TokenStatus_Executed        = 7
-	TokenStatus_PinnedAsService = 8
+	TokenStatus_Deployed
+	TokenStatus_Executed
+	TokenStatus_PinnedAsService
 
 	// Error / edge states
-	TokenStatus_Orphaned         = 9
-	TokenStatus_ChainSyncIssue   = 10
-	TokenStatus_BeingDoubleSpent = 11
+	TokenStatus_Orphaned
+	TokenStatus_ChainSyncIssue
+	TokenStatus_BeingDoubleSpent
 
 	// Special
 	TokenStatus_Seed = 99
@@ -120,11 +120,11 @@ const (
 const (
 	Storage_Tokens               = "tokens"
 	Storage_Transactions         = "transactions"
-	Storage_FTTokens             = "tokens"              // FT tokens live in the main tokens table (token_type distinguishes)
+	Storage_FTTokens             = "tokens" // FT tokens live in the main tokens table (token_type distinguishes)
 	Storage_FTTransactionHistory = "ft_transaction_history"
 	Storage_DIDPeer              = "did_peer_map"
 	Storage_DIDs                 = "dids"
-	Storage_FTs                  = "fts"                  // FT definitions (name, count, creator)
+	Storage_FTs                  = "fts" // FT definitions (name, count, creator)
 	Storage_FTTokenFixResult     = "ft_token_fix_result"
 )
 
