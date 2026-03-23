@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core"
@@ -15,6 +16,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
@@ -58,7 +60,7 @@ func main() {
 
 	for i := 1; i <= 3; i++ {
 		didID, err := c.CreateDID(&did.DIDCreate{
-			PrivPWD: fmt.Sprintf("pwd-%d", i),
+			PrivPWD: "pwd-1",
 		})
 		if err != nil {
 			log.Fatal(err)
@@ -74,14 +76,14 @@ func main() {
 
 	allTokenIDs := []string{}
 
-	for _, d := range dids {
+	for _, d := range dids[:2] {
 		dc := did.InitDIDLiteWithPassword(d, cfg.DidDir, "pwd-1")
 
 		for i := 0; i < 3; i++ {
 			txInfo := &models.TransactionInfo{
 				Initiator: d,
 				Owner:     d,
-				Epoch:     1,
+				Epoch:     int(time.Now().UnixNano()),
 				Network:   "local",
 				Tokens: &models.TransactionTokens{
 					RBT: []*models.TokenInfo{
@@ -134,6 +136,16 @@ func main() {
 				Position:      0,
 			}
 			fmt.Printf("DEBUG caller txID=%s  token.TransactionID=%s\n", txID, token.TransactionID)
+
+			var sigCheck models.Signature
+			if err := json.Unmarshal(tx.Signature, &sigCheck); err != nil {
+				log.Fatal("unmarshal signature for verification:", err)
+			}
+			if err := util.VerifySignature(dc, txInfo, sigCheck.InitiatorSignature); err != nil {
+				log.Fatal("pre-persistence signature verification failed:", err)
+			}
+			fmt.Println("Pre-persistence signature verified")
+
 			err = w.PersistGenesisTokenRecord(tx, token, entry)
 			if err != nil {
 				log.Fatal(err)
