@@ -467,14 +467,11 @@ func (pc *PostConsensusPersistenceCoordinator) insertTransactionUnit(ctx context
 
 func (pc *PostConsensusPersistenceCoordinator) insertTokenChainRows(ctx context.Context, tx pgx.Tx, rows []models.TokenChain) error {
 	for start := 0; start < len(rows); start += pc.batchSize {
-		end := start + pc.batchSize
-		if end > len(rows) {
-			end = len(rows)
-		}
+		end := min(start+pc.batchSize, len(rows))
 
 		chunk := rows[start:end]
 		placeholders := make([]string, 0, len(chunk))
-		args := make([]interface{}, 0, len(chunk)*5)
+		args := make([]any, 0, len(chunk)*5)
 		for i, row := range chunk {
 			offset := i*5 + 1
 			placeholders = append(placeholders,
@@ -537,7 +534,7 @@ func (pc *PostConsensusPersistenceCoordinator) syncTokenChainIndex(ctx context.C
 	}
 
 	placeholders := make([]string, 0, len(indexRows))
-	args := make([]interface{}, 0, len(indexRows)*2)
+	args := make([]any, 0, len(indexRows)*2)
 	for i, row := range indexRows {
 		offset := i*2 + 1
 		placeholders = append(placeholders, fmt.Sprintf("($%d, $%d, NOW(), NOW())", offset, offset+1))
@@ -560,14 +557,11 @@ func (pc *PostConsensusPersistenceCoordinator) syncTokenChainIndex(ctx context.C
 
 func (pc *PostConsensusPersistenceCoordinator) upsertTokenStates(ctx context.Context, tx pgx.Tx, tokenStates []models.Token) error {
 	for start := 0; start < len(tokenStates); start += pc.batchSize {
-		end := start + pc.batchSize
-		if end > len(tokenStates) {
-			end = len(tokenStates)
-		}
+		end := min(start+pc.batchSize, len(tokenStates))
 
 		chunk := tokenStates[start:end]
 		placeholders := make([]string, 0, len(chunk))
-		args := make([]interface{}, 0, len(chunk)*10)
+		args := make([]any, 0, len(chunk)*10)
 		for i, tokenState := range chunk {
 			offset := i*10 + 1
 			placeholders = append(placeholders,
