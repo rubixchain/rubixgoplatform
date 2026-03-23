@@ -51,8 +51,10 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	// table to see if any previous transaction id from TransactionInfo is present in the
 	// current node's table. If so, then its removed
 	if len(c.qc) > 0 {
-		if err := c.CallBackQuorumUnpledge(txInfo); err != nil {
-			c.log.Error(fmt.Sprintf("failed to check token state hashes records, err: %v", err))
+		for did := range c.qc {
+			if err := c.CallBackQuorumUnpledge(newEvent.Transaction, did); err != nil {
+				c.log.Error(fmt.Sprintf("failed to check token state hashes records, err: %v", err))
+			}
 		}
 	}
 
