@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -99,11 +98,11 @@ func main() {
 			if err != nil {
 				log.Fatal("serialize txInfo:", err)
 			}
-			signatureBytes, err := dc.PvtSign(infoBytes)
+			sigHex, err := util.SignTransaction(dc, txInfo)
 			if err != nil {
-				log.Fatal("PvtSign:", err)
+				log.Fatal("SignTransaction:", err)
 			}
-			sigStruct := &models.Signature{InitiatorSignature: hex.EncodeToString(signatureBytes)}
+			sigStruct := &models.Signature{InitiatorSignature: sigHex}
 			sigBytes, err := json.Marshal(sigStruct)
 			if err != nil {
 				log.Fatal("marshal signature:", err)
