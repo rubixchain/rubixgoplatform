@@ -1,10 +1,14 @@
 package core
 
-import "time"
+import (
+	"time"
+
+	"github.com/rubixchain/rubixgoplatform/setup"
+)
 
 // ValidateDIDToken validates a DID authentication token.
 // TODO(phase07): implement full JWT/token validation logic.
-func (c *Core) ValidateDIDToken(token string, tokenType string, did string) (interface{}, bool) {
+func (c *Core) ValidateDIDToken(token string, tokenType string, did string) (*setup.BearerToken, bool) {
 	return nil, false
 }
 

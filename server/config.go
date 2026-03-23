@@ -94,15 +94,16 @@ func (s *Server) APIGetAllBootStrap(req *ensweb.Request) *ensweb.Result {
 
 // APIAddQuorum will add quorum list to node
 func (s *Server) APIAddQuorum(req *ensweb.Request) *ensweb.Result {
-	var reqMap map[string]interface{}
-	err := s.ParseJSON(req, &reqMap)
+	var ql model.QuorumList
+	err := s.ParseJSON(req, &ql)
 	if err != nil {
 		return s.BasicResponse(req, false, "invlid input request", nil)
 	}
 
-	err = s.c.AddQuorum(ql)
-	if err != nil {
-		return s.BasicResponse(req, false, "Failed to add quorums, "+err.Error(), nil)
+	for _, q := range ql.Quorum {
+		if err := s.c.AddQuorum(q.Address); err != nil {
+			return s.BasicResponse(req, false, "Failed to add quorums, "+err.Error(), nil)
+		}
 	}
 	return s.BasicResponse(req, true, "Quorums added successfully", nil)
 }

@@ -18,7 +18,7 @@ type DBParams struct {
 
 type DBConfig struct {
 	Host     string   `toml:"host"`
-	Port     int      `toml:"-"`
+	Port     int      `toml:"port"` // optional override; 0 means auto-calculate from node_index
 	Username string   `toml:"username"`
 	Password string   `toml:"password"`
 	DBName   string   `toml:"db_name"`

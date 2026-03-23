@@ -23,6 +23,15 @@ func StrToHex(s string) []byte {
 	return b
 }
 
+// CalculateHashString computes a hash of data using the given method and returns the hex-encoded result.
+func CalculateHashString(data string, method string) string {
+	h := CalculateHash([]byte(data), method)
+	if h == nil {
+		return ""
+	}
+	return HexToStr(h)
+}
+
 func CalculateHash(data []byte, method string) []byte {
 	switch method {
 	case constants.HashAlgorithm_SHA3_256:

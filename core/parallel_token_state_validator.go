@@ -130,7 +130,7 @@ func NewParallelTokenStateValidator(core *Core, did string, quorumList []string)
 	
 	// Pre-cache quorum peer IDs
 	ptsv.initializeQuorumPeerCache(quorumList)
-	ptsv.senderPeerID = core.w.GetPeerID(did)
+	ptsv.senderPeerID, _ = core.w.GetPeerID(did)
 	
 	ptsv.log.Info("Initialized parallel token state validator",
 		"max_concurrent", maxConcurrent,

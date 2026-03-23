@@ -3,11 +3,11 @@ package core
 import (
 	"fmt"
 
-	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
 )
 
-func (c *Core) ValidateTokenNetworkID(blk *block.Block, tokenID string) error {
+func (c *Core) ValidateTokenNetworkID(blk *wallet.BlockStub, tokenID string) error {
 	blockNumber, err := blk.GetBlockNumber(tokenID)
 	if err != nil {
 		return fmt.Errorf("ValidateTokenNetworkID: failed to get block number for token %s, err: %v", tokenID, err)

@@ -84,6 +84,13 @@ func New(opts *LoggerOptions) Logger {
 		output = []io.Writer{DefaultOutput}
 	}
 
+	if len(opts.Color) == 0 {
+		opts.Color = make([]ColorOption, len(output))
+		for i := range opts.Color {
+			opts.Color[i] = AutoColor
+		}
+	}
+
 	level := opts.Level
 	if level == NoLevel {
 		level = DefaultLevel
