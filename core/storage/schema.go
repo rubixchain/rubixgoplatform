@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS tokenchain (
 
         CREATE TABLE IF NOT EXISTS unpledge_sequence_info (
             tx_id          TEXT PRIMARY KEY,
-            pledge_tokens  TEXT, -- might have to move to somthing like an array
+            pledge_tokens  TEXT[],
             epoch          INTEGER,
             quorum_did     TEXT,
             created_at     TIMESTAMPTZ DEFAULT NOW(),
@@ -202,7 +202,9 @@ CREATE TABLE IF NOT EXISTS tokenchain (
             denom NUMERIC(4, 3) NOT NULL,
             count BIGINT NOT NULL,
             created_at TIMESTAMPTZ DEFAULT NOW(),
-            updated_at TIMESTAMPTZ DEFAULT NOW()
+            updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+            CONSTRAINT unique_did_denom UNIQUE (did, denom)
         );
 
         CREATE TABLE IF NOT EXISTS fullnode_rbt (

@@ -43,18 +43,14 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 		return
 	}
 
-	var txInfo models.TransactionInfo
-	if err := json.Unmarshal(newEvent.Transaction.Info, &txInfo); err != nil {
-		c.log.Error(fmt.Sprintf("failed to unmarshal transaction info, err: %v", err))
-		return
-	}
-
 	// If the current node is setup as quorum, we check the records in token_state_hashes
 	// table to see if any previous transaction id from TransactionInfo is present in the
 	// current node's table. If so, then its removed 
 	if len(c.qc) > 0 {
-		if err := c.CallBackQuorumUnpledge(txInfo); err != nil {
-			c.log.Error(fmt.Sprintf("failed to check token state hashes records, err: %v", err))
+		for did := range c.qc {
+			if err := c.CallBackQuorumUnpledge(newEvent.Transaction, did); err != nil {
+				c.log.Error(fmt.Sprintf("failed to check token state hashes records, err: %v", err))
+			}
 		}
 	}
 

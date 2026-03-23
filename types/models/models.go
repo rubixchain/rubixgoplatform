@@ -89,12 +89,12 @@ type TokenProviderMap struct {
 }
 
 type UnpledgeSequenceInfo struct {
-	TxID         string      `db:"tx_id"`
-	PledgeTokens pgtype.Text `db:"pledge_tokens"`
-	Epoch        pgtype.Int4 `db:"epoch"`
-	QuorumDID    pgtype.Text `db:"quorum_did"`
-	CreatedAt    time.Time   `db:"created_at"`
-	UpdatedAt    time.Time   `db:"updated_at"`
+	TxID         string    `db:"tx_id"`
+	PledgeTokens []string  `db:"pledge_tokens"`
+	Epoch        int       `db:"epoch"`
+	QuorumDID    string    `db:"quorum_did"`
+	CreatedAt    time.Time `db:"created_at"`
+	UpdatedAt    time.Time `db:"updated_at"`
 }
 
 type FT struct {

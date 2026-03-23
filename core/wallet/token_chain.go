@@ -43,9 +43,9 @@ func (w *Wallet) GetLatestTransactionAndRoleByTokenID(tokenID string) (*models.T
 
 func (w *Wallet) AddTokenChainEntry(entry *models.TokenChain) error {
 	_, err := w.db.Pool().Exec(w.Ctx, `
-		INSERT INTO tokenchain (token_id, transaction_id, role, height, created_at, updated_at)
+		INSERT INTO tokenchain (token_id, transaction_id, role, position, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, NOW(), NOW())
-	`, entry.TokenID, entry.TransactionID, entry.Role, entry.Height)
+	`, entry.TokenID, entry.TransactionID, entry.Role, entry.Position)
 	if err != nil {
 		return fmt.Errorf("AddTokenChainEntry: %w", err)
 	}
