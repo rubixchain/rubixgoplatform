@@ -1,14 +1,24 @@
 package core
 
-import "github.com/rubixchain/rubixgoplatform/types/models"
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/rubixchain/rubixgoplatform/types/models"
+)
 
 // Quorums listening on "rubix_txns" event will check the `Tokens` attribute
 // of incoming `TransactionInfo` (recieved via main Callback function of "rubix_txns")
 // and will go through all Tokens. Quorum check if the TokenStateHash is present
 // in their DB or not (for which they have pledged). If they have, then they can
 // remove all the records from the TokenStateHash table
-func (c *Core) CallBackQuorumUnpledge(tx models.TransactionInfo) error {
-	// Step 1: Loop through all the tokens and gather transactionID and
+func (c *Core) CallBackQuorumUnpledge(tx *models.Transactions, did string) error {
+	var txInfo models.TransactionInfo
+	if err := json.Unmarshal(tx.Info, &txInfo); err != nil {
+		return fmt.Errorf("failed to unmarshal transaction info, err: %v", err)
+	}
+
+	// Loop through all the tokens and gather previous transactionID and
 	// pledge Token ID map
 	var prevTransactionsSet map[string]struct{} = make(map[string]struct{})
 
@@ -18,19 +28,19 @@ func (c *Core) CallBackQuorumUnpledge(tx models.TransactionInfo) error {
 		}
 	}
 
-	for _, rbtToken := range tx.Tokens.RBT {
+	for _, rbtToken := range txInfo.Tokens.RBT {
 		addToSet(rbtToken.PreviousTransactionID)
 	}
 
-	for _, ftToken := range tx.Tokens.FT {
+	for _, ftToken := range txInfo.Tokens.FT {
 		addToSet(ftToken.PreviousTransactionID)
 	}
 
-	for _, nftToken := range tx.Tokens.NFT {
+	for _, nftToken := range txInfo.Tokens.NFT {
 		addToSet(nftToken.PreviousTransactionID)
 	}
 
-	for _, smartContractToken := range tx.Tokens.SmartContract {
+	for _, smartContractToken := range txInfo.Tokens.SmartContract {
 		addToSet(smartContractToken.PreviousTransactionID)
 	}
 
@@ -43,8 +53,15 @@ func (c *Core) CallBackQuorumUnpledge(tx models.TransactionInfo) error {
 		prevTransactionList = append(prevTransactionList, prevTransaction)
 	}
 
-	if err := c.w.RemoveTokenStateHashes(prevTransactionList); err != nil {
-		return err
+	transactionToUnpledge, err := c.w.CheckTxnsPresentInUnpledgeSequenceInfo(prevTransactionList)
+	if err != nil {
+		return fmt.Errorf("CallBackQuorumUnpledge: failed to get transactions from `unpledge_sequence_info` table, err: %v")
+	}
+
+	if len(transactionToUnpledge) != 0 {
+		for _, txToUnpledge := range transactionToUnpledge {
+			c.w.UnpledgeTokens(txToUnpledge, tx, did)
+		}
 	}
 
 	return nil

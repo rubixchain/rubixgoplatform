@@ -31,3 +31,15 @@ func GetNetworkMode(testnet, mainnet, localnet bool) (string, error) {
 		return constants.NetworkMode_Localnet, nil
 	}
 }
+
+func UnzipMap[K comparable, V any](m map[K]V) ([]K, []V) {
+    keys := make([]K, 0, len(m))
+    values := make([]V, 0, len(m))
+
+    for k, v := range m {
+        keys = append(keys, k)
+        values = append(values, v)
+    }
+
+    return keys, values
+}
