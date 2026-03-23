@@ -182,7 +182,9 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	var sendTokensRequest models.SendTokensRequest
 	var sendTokensResponse model.BasicResponse
 	sendTokensRequest.Tokens = transactionInfo.Tokens
-	sendTokensRequest.NFTOwnershipTransfer = util.HasNFTOwnershipTransfer(request.Tokens.NFT)
+	if request.HasNFT() {
+		sendTokensRequest.NFTOwnershipTransfer = request.Tokens.TransferNFTOwnership
+	}
 	err = receiverPeer.SendJSONRequest(
 		"POST",
 		APISendTokens,
