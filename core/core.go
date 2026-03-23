@@ -293,6 +293,7 @@ func (c *Core) SetupCore() error {
 	}
 
 	c.w.SetupWallet(c.ipfs)
+	c.w.SetDidDir(c.didDir)
 	// Set health-managed IPFS operations for the wallet
 	if c.ipfsOps != nil {
 		c.w.SetIPFSOperations(NewWalletIPFSAdapter(c.ipfsOps))

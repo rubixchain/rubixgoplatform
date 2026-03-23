@@ -10,7 +10,9 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -78,6 +80,22 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 	}
 	if err := validatePostConsensusRequest(req, txRecord.ID); err != nil {
 		return err
+	}
+
+	// Signature verification — must run BEFORE BeginTx so an invalid request
+	// never enters a transaction. Requires w.didDir set via SetDidDir().
+	if pc.wallet.didDir != "" {
+		var sig models.Signature
+		if err := json.Unmarshal(txRecord.Signature, &sig); err != nil {
+			return fmt.Errorf("transfer: missing initiator signature")
+		}
+		if sig.InitiatorSignature == "" {
+			return fmt.Errorf("transfer: missing initiator signature")
+		}
+		dc := did.InitDIDLiteWithPassword(req.DID, pc.wallet.didDir, "")
+		if err := util.VerifySignature(dc, req.TransactionInfo, sig.InitiatorSignature); err != nil {
+			return fmt.Errorf("transfer: invalid initiator signature")
+		}
 	}
 
 	tx, err := pc.wallet.BeginTx(ctx)
@@ -311,6 +329,33 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 		return fmt.Errorf("transfer: empty transaction_id")
 	}
 
+	// Build a set of token IDs declared in the signed txInfo payload.
+	// Every token in the request must be present in txInfo (no payload tampering).
+	// This check is pure struct-level — no DB access.
+	txInfoTokenSet := make(map[string]bool)
+	if req.TransactionInfo != nil && req.TransactionInfo.Tokens != nil {
+		for _, t := range req.TransactionInfo.Tokens.RBT {
+			if t != nil {
+				txInfoTokenSet[t.TokenID] = true
+			}
+		}
+		for _, t := range req.TransactionInfo.Tokens.NFT {
+			if t != nil {
+				txInfoTokenSet[t.TokenID] = true
+			}
+		}
+		for _, t := range req.TransactionInfo.Tokens.FT {
+			if t != nil {
+				txInfoTokenSet[t.TokenID] = true
+			}
+		}
+		for _, t := range req.TransactionInfo.Tokens.SmartContract {
+			if t != nil {
+				txInfoTokenSet[t.TokenID] = true
+			}
+		}
+	}
+
 	for _, row := range req.TokenChainRows {
 		if row.Position == 0 {
 			// Genesis rows are validated by genesis-specific paths.
@@ -318,6 +363,9 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 		}
 		if row.TokenID == "" {
 			return fmt.Errorf("transfer: empty token_id")
+		}
+		if len(txInfoTokenSet) > 0 && !txInfoTokenSet[row.TokenID] {
+			return fmt.Errorf("transfer: token %q not present in transaction payload", row.TokenID)
 		}
 
 		var dbDID string
