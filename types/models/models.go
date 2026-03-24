@@ -16,12 +16,14 @@ type Transactions struct {
 }
 
 type TokenChain struct {
-	TokenID       string    `db:"token_id"`
-	TransactionID string    `db:"transaction_id"`
-	Role          int16     `db:"role"`
-	Height        int64     `db:"height"`
-	CreatedAt     time.Time `db:"created_at"`
-	UpdatedAt     time.Time `db:"updated_at"`
+	ID                    int32     `db:"id"`
+	TokenID               string    `db:"token_id"`
+	TransactionID         string    `db:"transaction_id"`
+	PreviousTransactionID *string   `db:"previous_transaction_id"`
+	Role                  int16     `db:"role"`
+	Position              int64     `db:"position"`
+	CreatedAt             time.Time `db:"created_at"`
+	UpdatedAt             time.Time `db:"updated_at"`
 }
 
 type DIDAlgo struct {
@@ -64,6 +66,15 @@ type Token struct {
 	UpdatedAt      time.Time   `db:"updated_at"`
 }
 
+type TransactionUnit struct {
+	TransactionID string    `db:"transaction_id"`
+	DID           string    `db:"did"`
+	ExecutionRole string    `db:"execution_role"`
+	Status        string    `db:"status"`
+	CreatedAt     time.Time `db:"created_at"`
+	UpdatedAt     time.Time `db:"updated_at"`
+}
+
 type TokenProviderMap struct {
 	Token         string         `db:"token"`
 	DID           pgtype.Text    `db:"did"`
@@ -78,12 +89,12 @@ type TokenProviderMap struct {
 }
 
 type UnpledgeSequenceInfo struct {
-	TxID         string      `db:"tx_id"`
-	PledgeTokens pgtype.Text `db:"pledge_tokens"`
-	Epoch        pgtype.Int4 `db:"epoch"`
-	QuorumDID    pgtype.Text `db:"quorum_did"`
-	CreatedAt    time.Time   `db:"created_at"`
-	UpdatedAt    time.Time   `db:"updated_at"`
+	TxID         string    `db:"tx_id"`
+	PledgeTokens []string  `db:"pledge_tokens"`
+	Epoch        int       `db:"epoch"`
+	QuorumDID    string    `db:"quorum_did"`
+	CreatedAt    time.Time `db:"created_at"`
+	UpdatedAt    time.Time `db:"updated_at"`
 }
 
 type FT struct {
@@ -154,8 +165,8 @@ type TokenDenom struct {
 }
 
 type TokenchainIndex struct {
-	TokenID   string `db:"token_id"`
-	Index     []int  `db:"index"`
+	TokenID   string    `db:"token_id"`
+	Index     []int     `db:"index"`
 	CreatedAt time.Time `db:"created_at"`
 	UpdatedAt time.Time `db:"updated_at"`
 }
