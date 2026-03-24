@@ -110,7 +110,11 @@ func CreateRubixConfigFromUserConfig(userConfig types.UserConfig, nodeDir string
 	rubixConfig.PortConfig.SwarmPort = (constants.SwarmPort + uint16(userConfig.Core.NodeIndex))
 	rubixConfig.PortConfig.IPFSAPIPort = (constants.IPFSAPIPort + uint16(userConfig.Core.NodeIndex))
 	rubixConfig.PortConfig.RubixServerPort = (constants.RubixServerPort + uint16(userConfig.Core.NodeIndex))
-	rubixConfig.DBConfig.Port = (int(constants.PostgresBasePort) + int(userConfig.Core.NodeIndex))
+	if userConfig.Db.Port != 0 {
+		rubixConfig.DBConfig.Port = userConfig.Db.Port
+	} else {
+		rubixConfig.DBConfig.Port = (int(constants.PostgresBasePort) + int(userConfig.Core.NodeIndex))
+	}
 
 	rubixConfig.MainnetBootstrap = userConfig.Ipfs.MainnetBootstrapNodes
 	rubixConfig.TestnetBootstrap = userConfig.Ipfs.TestnetBootstrapNodes

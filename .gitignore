@@ -48,3 +48,6 @@ context-*.md
 # GSD planning directory
 .planning/
 .planning.zip
+
+# Local Claude instructions — never commit
+CLAUDE.md

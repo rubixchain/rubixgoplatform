@@ -8,7 +8,7 @@ const (
 	SwarmPort        uint16 = 4002
 	IPFSAPIPort      uint16 = 8081
 	MaxPeerConn      uint16 = 1000
-	PostgresBasePort uint16 = 5433
+	PostgresBasePort uint16 = 5500
 )
 
 var (

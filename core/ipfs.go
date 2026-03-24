@@ -107,17 +107,20 @@ func (c *Core) initIPFS(ipfsdir string) error {
 			return err
 		}
 
+		var bootstrapPeers []string
 		if c.testnet {
-			_, err = c.ipfs.BootstrapAdd(c.cfg.TestnetBootstrap)
+			bootstrapPeers = c.cfg.TestnetBootstrap
 		} else if c.localnet {
-			_, err = c.ipfs.BootstrapAdd(c.cfg.LocalnetBootStrap)
+			bootstrapPeers = c.cfg.LocalnetBootStrap
 		} else {
-			_, err = c.ipfs.BootstrapAdd(c.cfg.MainnetBootstrap)
+			bootstrapPeers = c.cfg.MainnetBootstrap
 		}
-
-		if err != nil {
-			c.log.Error("unable to add bootstrap", "err", err)
-			return err
+		if len(bootstrapPeers) > 0 {
+			_, err = c.ipfs.BootstrapAdd(bootstrapPeers)
+			if err != nil {
+				c.log.Error("unable to add bootstrap", "err", err)
+				return err
+			}
 		}
 		err = c.configIPFS()
 		if err != nil {

@@ -1,13 +1,9 @@
-#psql ... -c "TRUNCATE tokens, tokenchain, transactions, tokenchain_index CASCADE RESTART IDENTITY;"
-echo "Resetting DB..."
-PGPASSWORD='rubixpass' psql -h localhost -p 5500 -U rubix -d rubix -c "TRUNCATE transaction_units, tokenchain, tokens, tokenchain_index, transactions RESTART IDENTITY;"
-
 #!/usr/bin/env bash
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
 # Rubix dev runner
-# Builds cmd/dev, ensures Postgres is up on :5500, then runs the binary.
+# Builds cmd/dev, ensures Postgres is up on :5500, resets DB, then runs.
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -92,16 +88,31 @@ else
   done
 fi
 
-# ---- 3. Run dir + config ----------------------------------------------------
+# ---- 3. Reset DB ------------------------------------------------------------
+echo "==> Resetting DB (truncate all dev tables)..."
+PGPASSWORD="$PG_PASS" psql -h localhost -p "$PG_PORT" -U "$PG_USER" -d "$PG_DB" -c \
+  "TRUNCATE dids, tokens, tokenchain, tokenchain_index, transactions, transaction_units, local_test_token_info RESTART IDENTITY CASCADE;"
+echo "    DB reset OK"
+
+# ---- 4. Kill any lingering IPFS daemon from a previous run ------------------
+pkill -f "$RUN_DIR/ipfs daemon" 2>/dev/null || true
+sleep 1
+
+# ---- 5. Run dir + config ----------------------------------------------------
 mkdir -p "$RUN_DIR/config"
-# Wipe stale IPFS state so ipfs init runs cleanly
-rm -rf "$RUN_DIR/.ipfs"
+#rm -rf "$RUN_DIR/.ipfs"
+rm -rf "$RUN_DIR/localnet/dids"
 cp "$REPO_ROOT/config/config.toml" "$RUN_DIR/config/config.toml"
 
 # IPFS binary (looked up as ./ipfs relative to CWD)
 if [[ -f "$REPO_ROOT/ipfs" ]]; then
   cp "$REPO_ROOT/ipfs" "$RUN_DIR/ipfs"
   chmod +x "$RUN_DIR/ipfs"
+  # macOS 26+ requires a valid code signature on every binary
+  if [[ "$(uname)" == "Darwin" ]]; then
+    echo "==> Signing ipfs binary (macOS)..."
+    codesign -s - -f "$RUN_DIR/ipfs"
+  fi
 else
   echo "WARNING: $REPO_ROOT/ipfs not found — IPFS will not start"
 fi
@@ -111,7 +122,7 @@ if [[ -f "$REPO_ROOT/localnetswarm.key" ]]; then
   cp "$REPO_ROOT/localnetswarm.key" "$RUN_DIR/localnetswarm.key"
 fi
 
-# ---- 4. Run -----------------------------------------------------------------
+# ---- 6. Run -----------------------------------------------------------------
 echo "==> Starting rubix dev node (cwd: $RUN_DIR)..."
 echo "    Press Ctrl-C to stop."
 cd "$RUN_DIR"

@@ -46,6 +46,11 @@ type FTTokenFixResult struct {
 	OldDID     string
 	NewDID     string
 	FixApplied bool
+	// Fields expected by server/ft.go
+	OldCreator string
+	NewCreator string
+	Success    bool
+	Error      error
 }
 
 // LegacyStorageStub replaces the old SQLite storage interface with no-ops.

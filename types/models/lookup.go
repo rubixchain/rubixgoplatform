@@ -65,6 +65,6 @@ func GetTokenTypeID(tokenType string) int {
 			return idx + 1
 		}
 	}
-
-	return -1
+	panic("invalid token type: " + tokenType)
+	//return -1
 }

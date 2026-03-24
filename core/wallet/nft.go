@@ -16,6 +16,30 @@ type NFT struct {
 	Filename    string
 }
 
+// GetNFTToken returns the NFT token record for a given token ID.
+func (w *Wallet) GetNFTToken(tokenID string) (*NFT, error) {
+	// TODO(phase07): query tokens table where token_id=$1 and token_type=nft
+	return nil, fmt.Errorf("NFT token not found: %s", tokenID)
+}
+
+// GetAllNFT returns all NFT tokens stored in the wallet DB.
+func (w *Wallet) GetAllNFT() ([]NFT, error) {
+	// TODO(phase07): query tokens table where token_type=nft
+	return nil, nil
+}
+
+// GetNFTsByDid returns all NFT tokens owned by the given DID.
+func (w *Wallet) GetNFTsByDid(did string) ([]NFT, error) {
+	// TODO(phase07): query tokens table where did=$1 and token_type=nft
+	return nil, nil
+}
+
+// GetSmartContractTokenUrl returns a URL for the smart contract token.
+func (w *Wallet) GetSmartContractTokenUrl(tokenID string) (string, error) {
+	// TODO(phase07): query smart contract storage for URL
+	return "", nil
+}
+
 func (w *Wallet) UpdateNFTStatus(nftHash string, status int, local bool, receiver string, nftValue float64) error {
 	if local {
 		_, err := w.db.Pool().Exec(w.Ctx,
