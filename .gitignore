@@ -44,3 +44,7 @@ result/
 # Documentation artifacts
 compact-*.md
 context-*.md
+
+# GSD planning directory
+.planning/
+.planning.zip

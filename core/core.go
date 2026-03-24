@@ -14,7 +14,6 @@ import (
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
-	"github.com/rubixchain/rubixgoplatform/core/pubsub"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
@@ -22,6 +21,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
+	svcpkg "github.com/rubixchain/rubixgoplatform/service"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
@@ -39,6 +39,7 @@ const (
 	APIConfirmTokenTransfer         string = "/api/confirm-token-transfer"
 	APIRollbackTransaction          string = "/api/rollback-transaction"
 	APISyncTokenChain               string = "/api/sync-token-chain"
+	APISyncTransactionChain         string = "/api/sync-transaction-chain"
 	APIDhtProviderCheck             string = "/api/dht-provider-check"
 	APIMapDIDArbitration            string = "/api/map-did-arbitration"
 	APICheckDIDArbitration          string = "/api/check-did-arbitration"
@@ -110,7 +111,7 @@ type Core struct {
 	didDir               string
 	pm                   *ipfsport.PeerManager
 	l                    *ipfsport.Listener
-	ps                   *pubsub.PubSub
+	ps                   *types.PubSub
 	started              bool
 	ipfsApp              string
 	testnet              bool
@@ -129,9 +130,7 @@ type Core struct {
 	ipfsProviderStore    *IPFSProviderStore
 	asyncPinManager      *AsyncPinManager
 	perfTracker          *PerformanceTracker
-	tokenPool            *TokenInfoPool
 	batchSyncTokenPool   *BatchSyncTokenInfoPool
-	tokenSlicePool       *TokenSlicePool
 	pendingTokenMonitor  *PendingTokenMonitor
 	publishTokenChain    bool
 	fullNode             bool
@@ -141,6 +140,8 @@ type Core struct {
 	mainnet              bool
 	localnet             bool
 	Ctx                  context.Context
+	qm                   *QuorumManager
+	srv                  *svcpkg.Service
 }
 
 func newRubixContext() context.Context {
@@ -180,6 +181,9 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 		return nil, fmt.Errorf(errMsg)
 	}
 
+	c.log = log.Named("Core")
+	c.didDir = cfg.DidDir
+
 	if _, err := os.Stat(c.didDir); os.IsNotExist(err) {
 		err := os.MkdirAll(c.didDir, os.ModeDir|os.ModePerm)
 		if err != nil {
@@ -187,8 +191,6 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 			return nil, err
 		}
 	}
-
-	c.log = log.Named("Core")
 	c.ipfsChan = make(chan bool)
 
 	dbOpts := storage.DBOpts{
@@ -240,9 +242,7 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 	}
 
 	// Initialize token pools for memory optimization
-	c.tokenPool = NewTokenInfoPool()
 	c.batchSyncTokenPool = NewBatchSyncTokenInfoPool()
-	c.tokenSlicePool = NewTokenSlicePool()
 
 	// Initialize pending token monitor for self-healing
 	// Check every 5 minutes for tokens pending > 10 minutes
@@ -293,6 +293,7 @@ func (c *Core) SetupCore() error {
 	}
 
 	c.w.SetupWallet(c.ipfs)
+	c.w.SetDidDir(c.didDir)
 	// Set health-managed IPFS operations for the wallet
 	if c.ipfsOps != nil {
 		c.w.SetIPFSOperations(NewWalletIPFSAdapter(c.ipfsOps))
@@ -463,6 +464,11 @@ func (c *Core) RenameNFTFolder(tempFolderPath string, nft string) (string, error
 // GetConfig returns the core configuration
 func (c *Core) GetConfig() *types.RubixConfig {
 	return c.cfg
+}
+
+// GetWallet returns the wallet instance for direct wallet operations.
+func (c *Core) GetWallet() *wallet.Wallet {
+	return c.w
 }
 
 func (c *Core) AddWebReq(req *ensweb.Request) {

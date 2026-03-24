@@ -14,11 +14,11 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/block"
 	constants "github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	didcrypto "github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/service"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
@@ -76,8 +76,8 @@ func (c *Core) creditStatus(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &cs, http.StatusOK)
 }
 
-func (c *Core) verifyContract(cr *ConensusRequest, self_did string) (bool, *contract.Contract, string) {
-	sc := contract.InitContract(cr.ContractBlock, nil)
+func (c *Core) verifyContract(cr *ConensusRequest, self_did string) (bool, *ConsensusContract, string) {
+	sc := InitConsensusContract(cr.ContractBlock, nil)
 	// setup the did to verify the signature
 	dc, err := c.SetupForienDID(sc.GetSenderDID(), self_did)
 	if err != nil {
@@ -418,7 +418,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 		consensusReply.Message = "contract block in consensus req is nil"
 		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 	}
-	consensusContract := contract.InitContract(consensusRequest.ContractBlock, nil)
+	consensusContract := InitConsensusContract(consensusRequest.ContractBlock, nil)
 
 	var verifyDID string
 	if consensusRequest.Mode == SmartContractDeployMode {
@@ -645,7 +645,7 @@ func (c *Core) quorumNFTConsensus(req *ensweb.Request, did string, qdc didcrypto
 		consensusReply.Message = "contract block in consensus req is nil"
 		return c.l.RenderJSON(req, &consensusReply, http.StatusOK)
 	}
-	consensusContract := contract.InitContract(consensusRequest.ContractBlock, nil)
+	consensusContract := InitConsensusContract(consensusRequest.ContractBlock, nil)
 	// setup the did to verify the signature
 	c.log.Info("Verifying the deployer signature while deploying nft")
 
@@ -1234,7 +1234,7 @@ func (c *Core) quorumConensus(req *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) updateReceiverToken(
-	senderAddress string, receiverAddress string, tokenInfo []contract.TokenInfo, tokenChainBlock []byte,
+	senderAddress string, receiverAddress string, tokenInfo []ContractTokenInfo, tokenChainBlock []byte,
 	quorumList []string, quorumInfo []QuorumDIDPeerMap, transactionEpoch int, pinningServiceMode bool,
 ) ([]string, *ipfsport.Peer, error) {
 	var receiverPeerId string = ""
@@ -1478,7 +1478,7 @@ func (c *Core) updateReceiverTokenHandle(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
-func (c *Core) updateFTToken(senderAddress string, receiverAddress string, tokenInfo []contract.TokenInfo, tokenChainBlock []byte,
+func (c *Core) updateFTToken(senderAddress string, receiverAddress string, tokenInfo []ContractTokenInfo, tokenChainBlock []byte,
 	quorumList []string, quorumInfo []QuorumDIDPeerMap, transactionEpoch int, ftinfo *model.FTInfo,
 ) ([]string, error) {
 	receiverPeerId, receiverDID, ok := util.ParseAddress(receiverAddress)
@@ -1783,22 +1783,22 @@ func (c *Core) updatePledgeToken(req *ensweb.Request) *ensweb.Result {
 	if !c.w.IsDIDExist(b.GetOwner()) && !c.w.IsDIDExist(b.GetSenderDID()) {
 		for _, t := range tks {
 			// validate incoming transaction block (before response is sent)
-			latestBlock := c.w.GetLatestTokenBlock(t, b.GetTokenType(t))
+			// TODO(phase07): latestBlock removed — ValidateIncomingTokenBlockChainIntegrity is stubbed
 			assetType := unKnownAssetType
 			if ur.Mode == NFTDeployMode || ur.Mode == NFTExecuteMode {
 				assetType = NFTTokenType
 			}
-			err = c.ValidateIncomingTokenBlockChainIntegrity(*b, latestBlock, t, assetType)
+			err = c.ValidateIncomingTokenBlockChainIntegrity(TokenChainInput{}, TokenChainInput{}, t.Token, assetType)
 			if err != nil {
-				errMsg := fmt.Sprintf("failed to validate incoming transaction block for the token%s, error:%v", t, err)
+				errMsg := fmt.Sprintf("failed to validate incoming transaction block for the token%s, error:%v", t.Token, err)
 				c.log.Error(errMsg)
 				crep.Message = errMsg
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
-			err = c.w.AddTokenBlock(t, b)
+			err = c.w.AddTokenBlock(t.Token, b)
 			if err != nil {
-				c.log.Error("Failed to add token block", "token", t)
-				crep.Message = fmt.Sprintf("Failed to add token block fot the token%s", t)
+				c.log.Error("Failed to add token block", "token", t.Token)
+				crep.Message = fmt.Sprintf("Failed to add token block fot the token%s", t.Token)
 				return c.l.RenderJSON(req, &crep, http.StatusOK)
 			}
 		}

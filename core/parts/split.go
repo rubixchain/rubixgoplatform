@@ -94,81 +94,124 @@ func planTokenSplit(tokenID TokenID, needed float64, log logger.Logger) ([]Split
 	return splits, nil
 }
 
-// performTokenSplit - transferFree, transferBurn, keepFree, keepBurnt
+// performTokenSplit executes a single split operation, performing IPFS uploads for
+// child tokens and the burned parent. Returns the resulting tokens and GenesisMintRecord
+// stubs for the child tokens (TransactionID is NOT set yet — the caller sets it after
+// computing the genesis txID from createGenesisTransaction).
 func performTokenSplit(w *wallet.Wallet, dc types.DIDCrypto,
-	splitOp SplitOp, tokenCache map[string]models.Token, tokenDenomArr map[types.DenomValue]types.DenomCount,
-) (freeTokens []models.Token, keepTokens []models.Token, burnTokens []models.Token, err error) {
+	splitOp SplitOp, tokenCache map[string]models.Token,
+	tokenDenomArr map[types.DenomValue]types.DenomCount,
+	network string,
+) (freeTokens []models.Token, keepTokens []models.Token, burnTokens []models.Token,
+	childMintRecords []wallet.GenesisMintRecord, err error) {
 	freeTokens = make([]models.Token, 0)
 	keepTokens = make([]models.Token, 0)
 	burnTokens = make([]models.Token, 0)
+	childMintRecords = make([]wallet.GenesisMintRecord, 0)
 
 	var parentToken models.Token
-	// parentTokenHeirarchicalID := splitOp.TokenID
 	parentTokenID := string(splitOp.TokenID)
 
 	if cachedToken, exists := tokenCache[parentTokenID]; exists {
 		parentToken = cachedToken
 	} else {
-		var err error
-		parentToken, err = w.GetRBTToken(parentTokenID)
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("performTokenSplit: unable to get info of parent token: %v, err: %v", parentTokenID, err)
+		var fetchErr error
+		parentToken, fetchErr = w.GetRBTToken(parentTokenID)
+		if fetchErr != nil {
+			return nil, nil, nil, nil, fmt.Errorf("performTokenSplit: unable to get parent token: %v, err: %v", parentTokenID, fetchErr)
+		}
+
+		if lockErr := w.LockToken(parentToken); lockErr != nil {
+			return nil, nil, nil, nil, fmt.Errorf("performTokenSplit: unable to lock parent token: %v, err: %v", parentToken.TokenID, lockErr)
 		}
 	}
 
 	// get parent token elements
 	parentElems, err := util.GetRbtIDElements(parentTokenID)
 	if err != nil {
-		return nil,nil, nil, fmt.Errorf("performTokenSplit: failed to split elements of parent token %s; err: %w", parentTokenID, err)
+		return nil,nil, nil, nil, fmt.Errorf("performTokenSplit: failed to split elements of parent token %s; err: %w", parentTokenID, err)
 	} 
 	parentDenomLevel, err := util.GetTreeLevelFromPartIndex(parentElems.PartIndex)
 	childLevel := parentDenomLevel + 1
 
 	childTokensCreatedMap, err := createChildTokensAtLevel(dc, w, splitOp.TokenID, childLevel, tokenDenomArr)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	err = burnParentToken(dc, w, parentToken.TokenID, parentToken.TokenValue, dc.GetDID(), tokenDenomArr)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to burn part token: %v of did: %v, err: %v", parentTokenID, dc.GetDID(), err)
+		return nil, nil, nil, nil, fmt.Errorf("failed to burn part token: %v of did: %v, err: %v", parentTokenID, dc.GetDID(), err)
 	}
+
+	mintRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Mint))
 
 	for _, transferIdx := range splitOp.ChildrenToTransfer {
 		childTokenToTransfer, exists := childTokensCreatedMap[transferIdx]
 		if !exists {
-			return nil, nil, nil, fmt.Errorf("performTokenSplit: unexpected error: unable to fetch token at index: %v for parent token: %v", transferIdx, parentTokenID)
+			return nil, nil, nil, nil, fmt.Errorf("performTokenSplit: unexpected error: unable to fetch token at index: %v for parent token: %v", transferIdx, parentTokenID)
 		}
-
 		freeTokens = append(freeTokens, childTokenToTransfer)
+		// Build a partial GenesisMintRecord; TxRecord and TokenChain.TransactionID will be
+		// filled in by the caller once the genesis txID is computed.
+		childMintRecords = append(childMintRecords, wallet.GenesisMintRecord{
+			Token: &models.Token{
+				TokenID:        childTokenToTransfer.TokenID,
+				ParentTokenID:  childTokenToTransfer.ParentTokenID,
+				TokenValue:     childTokenToTransfer.TokenValue,
+				TokenStatus:    childTokenToTransfer.TokenStatus,
+				DID:            childTokenToTransfer.DID,
+				TokenStateHash: childTokenToTransfer.TokenStateHash,
+				TokenType:      childTokenToTransfer.TokenType,
+				LatestPosition: childTokenToTransfer.LatestPosition,
+				LatestRole:     childTokenToTransfer.LatestRole,
+			},
+			TokenChain: &models.TokenChain{
+				TokenID:               childTokenToTransfer.TokenID,
+				Position:              0,
+				Role:                  mintRoleID,
+				PreviousTransactionID: nil,
+			},
+		})
 	}
 
 	for _, keepIdx := range splitOp.ChildrenToKeep {
 		childTokenToKeep, exists := childTokensCreatedMap[keepIdx]
 		if !exists {
-			return nil, nil, nil, fmt.Errorf("performTokenSplit: unexpected error: unable to fetch token at index: %v for parent token: %v to keep", keepIdx, parentTokenID)
+			return nil, nil, nil, nil, fmt.Errorf("performTokenSplit: unexpected error: unable to fetch token at index: %v for parent token: %v to keep", keepIdx, parentTokenID)
 		}
-
 		keepTokens = append(keepTokens, childTokenToKeep)
+		childMintRecords = append(childMintRecords, wallet.GenesisMintRecord{
+			Token: &models.Token{
+				TokenID:        childTokenToKeep.TokenID,
+				ParentTokenID:  childTokenToKeep.ParentTokenID,
+				TokenValue:     childTokenToKeep.TokenValue,
+				TokenStatus:    childTokenToKeep.TokenStatus,
+				DID:            childTokenToKeep.DID,
+				TokenStateHash: childTokenToKeep.TokenStateHash,
+				TokenType:      childTokenToKeep.TokenType,
+				LatestPosition: childTokenToKeep.LatestPosition,
+				LatestRole:     childTokenToKeep.LatestRole,
+			},
+			TokenChain: &models.TokenChain{
+				TokenID:               childTokenToKeep.TokenID,
+				Position:              0,
+				Role:                  mintRoleID,
+				PreviousTransactionID: nil,
+			},
+		})
 	}
 
 	burnTokens = append(burnTokens, parentToken)
 
-	return freeTokens, burnTokens, burnTokens, nil
+	return freeTokens, burnTokens, burnTokens, childMintRecords, nil
 }
 
 func burnParentToken(dc types.DIDCrypto, w *wallet.Wallet, parentTokenID string,
 	parentTokenValue float64, did string, tokenDenomArr map[types.DenomValue]types.DenomCount,
 ) error {
-	parentTokenLevel, err := util.DenomToLevel(parentTokenValue)
-	if err != nil {
-		return err
-	}
-
-	err = w.BurnToken(parentTokenID)
-	if err != nil {
-		return fmt.Errorf("burnParentToken: failed while updating Parent token %v status to burnt, err: %v", parentTokenID, err)
-	}
+	// NOTE: w.BurnToken (DB write) removed — DB burn is now the caller's responsibility
+	// via PersistGenesisBatch. Only IPFS upload is performed here.
 
 	parentTokenIDBuffer := bytes.NewBufferString(parentTokenID)
 	parentTokenHash, err := w.Add(parentTokenIDBuffer, did, constants.TokenProviderFunc_Add, true)
@@ -180,20 +223,8 @@ func burnParentToken(dc types.DIDCrypto, w *wallet.Wallet, parentTokenID string,
 		return fmt.Errorf("burnParentToken: failed to pin parent token: %v, err: %v", parentTokenID, err)
 	}
 
-	// Immediate update of token denom array for the burnt token
+	// In-memory denom decrement for subsequent split planning (no DB write).
 	tokenDenomArr[parentTokenValue] -= 1
-	if err != nil {
-		return fmt.Errorf(
-			"burnParentToken: unable to decrement token denom array index for level %v, token %v, err: %v",
-			parentTokenLevel,
-			parentTokenID,
-			err,
-		)
-	}
-
-	if err := w.UpdateTokenDenomArray(did, tokenDenomArr); err != nil {
-		return fmt.Errorf("createChildTokensAtLevel: failed to update token denom")
-	}
 
 	return nil
 }
@@ -239,6 +270,7 @@ func createChildTokensAtLevel(dc types.DIDCrypto, w *wallet.Wallet, parentTokenI
 				Valid:  true,
 			},
 			TokenValue:     childTokenValue,
+			TokenStateHash: childTokenHash, // CRITICAL: explicit IPFS CID assignment after w.Pin
 			DID:            did,
 			TokenStatus:    constants.TokenStatus_Free,
 			CreatedAt:      time.Now(),
@@ -248,20 +280,17 @@ func createChildTokensAtLevel(dc types.DIDCrypto, w *wallet.Wallet, parentTokenI
 			TokenType:      int16(models.GetTokenTypeID(constants.TokenType_RBT)),
 		}
 
-		err = w.CreateRBTToken(childToken)
-		if err != nil {
-			return nil, fmt.Errorf("createChildTokensAtLevel: failed to add child token %v to DB, err: %v", childToken, err)
-		}
-
+ 		// NOTE: w.CreateRBTToken (DB write) removed — DB insert is now the caller's
+		// responsibility via PersistGenesisBatch.
 		// the key in the map represents child position among all children
 		childTokenIndexMap[index - childrenIndexRange.First + 1] = childToken
 	}
 
+	// In-memory denom increment for subsequent split planning (no DB write).
 	tokenDenomArr[childTokenValue] += int64(maxTokenCount)
 
-	if err := w.UpdateTokenDenomArray(did, tokenDenomArr); err != nil {
-		return nil, fmt.Errorf("createChildTokensAtLevel: failed to update token denom")
-	}
+	// NOTE: w.UpdateTokenDenomArray (DB write) removed — denom update is performed
+	// atomically inside PersistGenesisBatch.
 
 	return childTokenIndexMap, nil
 }

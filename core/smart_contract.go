@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/token"
@@ -140,7 +141,7 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 		c.log.Error("Failed to rename SC folder", "err", err)
 		return basicResponse
 	}
-	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: smartContractTokenHash, Deployer: smartContractTokenRequest.DID, BinaryCodeHash: binaryCodeHash, RawCodeHash: rawCodeHash, ContractStatus: wallet.TokenIsGenerated})
+	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: smartContractTokenHash, Deployer: smartContractTokenRequest.DID, BinaryCodeHash: binaryCodeHash, RawCodeHash: rawCodeHash, ContractStatus: constants.TokenStatus_Generated})
 	if err != nil {
 		c.log.Error("Failed to create smart contract token", "err", err)
 		return basicResponse
@@ -246,7 +247,7 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 		return basicResponse
 	}
 
-	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: fetchSmartContractRequest.SmartContractToken, Deployer: smartContractToken.DID, BinaryCodeHash: smartContractToken.BinaryCodeHash, RawCodeHash: smartContractToken.RawCodeHash, ContractStatus: wallet.TokenIsFetched})
+	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: fetchSmartContractRequest.SmartContractToken, Deployer: smartContractToken.DID, BinaryCodeHash: smartContractToken.BinaryCodeHash, RawCodeHash: smartContractToken.RawCodeHash, ContractStatus: constants.TokenStatus_Fetched})
 	if err != nil {
 		basicResponse.Message = "unable to add Smart contract record to DB, err: " + err.Error()
 		return basicResponse

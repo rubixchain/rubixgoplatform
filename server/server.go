@@ -9,7 +9,6 @@ import (
 
 	"github.com/gorilla/sessions"
 	"github.com/rubixchain/rubixgoplatform/core"
-	"github.com/rubixchain/rubixgoplatform/grpcserver"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
@@ -18,11 +17,10 @@ import (
 // Server defines server handle
 type Server struct {
 	ensweb.Server
-	cfg  *Config
-	log  logger.Logger
-	c    *core.Core
-	sc   chan bool
-	grpc *grpcserver.ServerGRPC
+	cfg *Config
+	log logger.Logger
+	c   *core.Core
+	sc  chan bool
 }
 
 // NewServer create new server instances
@@ -106,13 +104,11 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIRemoveAllQuorum, "GET", s.AuthHandle(s.APIRemoveAllQuorum, true, s.AuthError, true))
 	s.AddRoute(setup.APISetupQuorum, "POST", s.AuthHandle(s.APISetupQuorum, true, s.AuthError, true))
 	s.AddRoute(setup.APIGenerateTestToken, "POST", s.AuthHandle(s.APIGenerateTestToken, true, s.AuthError, false))
-	s.AddRoute(setup.APIInitiateTransaction, "POST", s.AuthHandle(s.APIInitiateRBTTransfer, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetAccountInfo, "GET", s.AuthHandle(s.APIGetAccountInfo, true, s.AuthError, false))
 	s.AddRoute(setup.APISignatureResponse, "POST", s.AuthHandle(s.APISignatureResponse, true, s.AuthError, false))
 	s.AddRoute(setup.APIDumpTokenChainBlock, "POST", s.AuthHandle(s.APIDumpTokenChainBlock, true, s.AuthError, false))
 	s.AddRoute(setup.APIRegisterDID, "POST", s.AuthHandle(s.APIRegisterDID, true, s.AuthError, false))
 	s.AddRoute(setup.APISetupDID, "POST", s.AuthHandle(s.APISetupDID, true, s.AuthError, false))
-	s.AddRoute(setup.APISetupDB, "POST", s.AuthHandle(s.APISetupDB, true, s.AuthError, true))
 	s.AddRoute(setup.APIGetTxnByTxnID, "GET", s.AuthHandle(s.APIGetTxnByTxnID, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetTxnByDID, "GET", s.AuthHandle(s.APIGetTxnByDID, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetTxnByComment, "GET", s.AuthHandle(s.APIGetTxnByComment, true, s.AuthError, false))
@@ -140,7 +136,6 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APICheckPinnedState, "DELETE", s.AuthHandle(s.APICheckPinnedState, false, s.AuthError, true))
 	s.AddRoute(setup.APISelfTransfer, "POST", s.AuthHandle(s.SelfTransferHandle, false, s.AuthError, true))
 	s.AddRoute(setup.APIRunUnpledge, "POST", s.AuthHandle(s.RunUnpledgeHandle, false, s.AuthError, true))
-	s.AddRoute(setup.APIInitiatePinRBT, "POST", s.AuthHandle(s.APIInitiatePinRBT, true, s.AuthError, false))
 	s.AddRoute(setup.APIRecoverRBT, "POST", s.AuthHandle(s.APIRecoverRBT, true, s.AuthError, false))
 	s.AddRoute(setup.APIValidateTokenChain, "GET", s.AuthHandle(s.APIValidateTokenChain, false, s.AuthError, false))
 	s.AddRoute(setup.APIGenerateFaucetTestToken, "POST", s.AuthHandle(s.APIGenerateFaucetTestToken, true, s.AuthError, false))

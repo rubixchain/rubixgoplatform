@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -53,14 +52,33 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		return resp
 	}
 	//Get the RBT details from DB for the associated amount/ if token amount is of PArts create
-	rbtTokensToCommitDetails, err := parts.CollectRBTTokens(
+	networkStr := "mainnet"
+	if c.testnet {
+		networkStr = "testnet"
+	}
+	// Lock and fetch free RBT tokens for split/transfer.
+	lockedTokens, err := c.w.LockTokensForSplit(c.w.Ctx, didCryptoLib.GetDID(), deployReq.RBTAmount)
+	if err != nil {
+		c.log.Error("Failed to lock tokens for split", "err", err)
+		resp.Message = "DeploySmartContract: failed to lock tokens for split, err: " + err.Error()
+		return resp
+	}
+	denomMap, err := c.w.GetTokenDenomArray(didCryptoLib.GetDID())
+	if err != nil {
+		c.log.Error("Failed to fetch token denom array", "err", err)
+		resp.Message = "DeploySmartContract: failed to fetch token denom array, err: " + err.Error()
+		return resp
+	}
+	rbtTokensToCommitDetails, _, _, _, err := parts.CollectRBTTokens(
 		didCryptoLib,
 		c.w,
 		deployReq.RBTAmount,
-		c.testnet,
+		lockedTokens,
+		denomMap,
+		networkStr,
 		c.log,
-		c.publishTxn,
 	)
+	// TODO(phase09): handle childRecords and parentsToBurn for SC deploy path
 	if err != nil {
 		c.log.Error("Failed to retrieve Tokens to be committed", "err", err)
 		resp.Message = "Failed to retrieve Tokens to be committed , err : " + err.Error()
@@ -82,8 +100,8 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		rbtTokensToCommit = append(rbtTokensToCommit, rbtTokensToCommitDetails[i].TokenID)
 	}
 
-	rbtTokenInfoArray := make([]contract.TokenInfo, 0)
-	smartContractInfoArray := make([]contract.TokenInfo, 0)
+	rbtTokenInfoArray := make([]ContractTokenInfo, 0)
+	smartContractInfoArray := make([]ContractTokenInfo, 0)
 	tokenListForExplorer := []Token{}
 	for i := range rbtTokensToCommitDetails {
 		tokenTypeString := "rbt"
@@ -103,7 +121,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 			resp.Message = "failed to get block id, " + err.Error()
 			return resp
 		}
-		tokenInfo := contract.TokenInfo{
+		tokenInfo := ContractTokenInfo{
 			Token:      rbtTokensToCommitDetails[i].TokenID,
 			TokenType:  tokenType,
 			TokenValue: rbtTokensToCommitDetails[i].TokenValue,
@@ -114,7 +132,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		tokenListForExplorer = append(tokenListForExplorer, Token{TokenHash: tokenInfo.Token, TokenValue: tokenInfo.TokenValue})
 	}
 
-	smartContractInfo := contract.TokenInfo{
+	smartContractInfo := ContractTokenInfo{
 		Token:      deployReq.SmartContractToken,
 		TokenType:  c.TokenType("sc"),
 		TokenValue: deployReq.RBTAmount,
@@ -122,11 +140,11 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 	}
 	smartContractInfoArray = append(smartContractInfoArray, smartContractInfo)
 
-	consensusContractDetails := &contract.ContractType{
-		Type:       contract.SmartContractDeployType,
-		PledgeMode: contract.PeriodicPledgeMode,
+	consensusContractDetails := &ContractTypeInfo{
+		Type:       SmartContractDeployType,
+		PledgeMode: PeriodicPledgeMode,
 		TotalRBTs:  deployReq.RBTAmount,
-		TransInfo: &contract.TransInfo{
+		TransInfo: &ContractTransInfo{
 			DeployerDID:        did,
 			Comment:            deployReq.Comment,
 			CommitedTokens:     rbtTokenInfoArray,
@@ -135,7 +153,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		},
 		ReqID: reqID,
 	}
-	consensusContract := contract.CreateNewContract(consensusContractDetails)
+	consensusContract := CreateNewConsensusContract(consensusContractDetails)
 	if consensusContract == nil {
 		c.log.Error("Failed to create Consensus contract")
 		resp.Message = "Failed to create Consensus contract"
@@ -244,8 +262,8 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 		return resp
 	}
 
-	smartContractInfoArray := make([]contract.TokenInfo, 0)
-	smartContractInfo := contract.TokenInfo{
+	smartContractInfoArray := make([]ContractTokenInfo, 0)
+	smartContractInfo := ContractTokenInfo{
 		Token:      executeReq.SmartContractToken,
 		TokenType:  c.TokenType("sc"),
 		TokenValue: smartContractValue,
@@ -254,11 +272,11 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 	smartContractInfoArray = append(smartContractInfoArray, smartContractInfo)
 
 	//create teh consensuscontract
-	consensusContractDetails := &contract.ContractType{
-		Type:       contract.SmartContractDeployType,
-		PledgeMode: contract.PeriodicPledgeMode,
+	consensusContractDetails := &ContractTypeInfo{
+		Type:       SmartContractDeployType,
+		PledgeMode: PeriodicPledgeMode,
 		TotalRBTs:  smartContractValue,
-		TransInfo: &contract.TransInfo{
+		TransInfo: &ContractTransInfo{
 			ExecutorDID:        did,
 			Comment:            executeReq.Comment,
 			SmartContractToken: executeReq.SmartContractToken,
@@ -268,7 +286,7 @@ func (c *Core) executeSmartContractToken(reqID string, executeReq *model.Execute
 		ReqID: reqID,
 	}
 
-	consensusContract := contract.CreateNewContract(consensusContractDetails)
+	consensusContract := CreateNewConsensusContract(consensusContractDetails)
 	if consensusContract == nil {
 		c.log.Error("Failed to create Consensus contract")
 		resp.Message = "Failed to create Consensus contract"

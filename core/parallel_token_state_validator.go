@@ -8,7 +8,6 @@ import (
 	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
-	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
@@ -63,7 +62,7 @@ type BatchDHTChecker struct {
 // TokenValidationInput holds input data for validation
 type TokenValidationInput struct {
 	Index     int
-	TokenInfo contract.TokenInfo
+	TokenInfo ContractTokenInfo
 }
 
 // TokenValidationResult holds intermediate validation results
@@ -131,7 +130,7 @@ func NewParallelTokenStateValidator(core *Core, did string, quorumList []string)
 	
 	// Pre-cache quorum peer IDs
 	ptsv.initializeQuorumPeerCache(quorumList)
-	ptsv.senderPeerID = core.w.GetPeerID(did)
+	ptsv.senderPeerID, _ = core.w.GetPeerID(did)
 	
 	ptsv.log.Info("Initialized parallel token state validator",
 		"max_concurrent", maxConcurrent,
@@ -143,7 +142,7 @@ func NewParallelTokenStateValidator(core *Core, did string, quorumList []string)
 
 // ValidateTokenStates performs parallel token state validation
 func (ptsv *ParallelTokenStateValidator) ValidateTokenStates(
-	tokens []contract.TokenInfo,
+	tokens []ContractTokenInfo,
 	did string,
 ) []TokenStateCheckResult {
 	startTime := time.Now()

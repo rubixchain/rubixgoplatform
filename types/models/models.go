@@ -64,6 +64,7 @@ type Token struct {
 	LatestRole     int16       `db:"latest_role"`
 	CreatedAt      time.Time   `db:"created_at"`
 	UpdatedAt      time.Time   `db:"updated_at"`
+	SyncStatus     int         `db:"-"` // transient field, not persisted
 }
 
 type TransactionUnit struct {
@@ -241,4 +242,10 @@ type FullNodeSmartContract struct {
 	LatestRole     int16     `db:"latest_role"`
 	CreatedAt      time.Time `db:"created_at"`
 	UpdatedAt      time.Time `db:"updated_at"`
+}
+
+// SyncTransactionChainRequest is used by the transaction chain sync API.
+// TODO: dev-team -- expand fields as needed for full sync implementation
+type SyncTransactionChainRequest struct {
+	Did string `json:"did"`
 }

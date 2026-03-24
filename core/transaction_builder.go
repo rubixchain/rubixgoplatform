@@ -14,6 +14,21 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
+// networkModeToNetworkID maps a network mode string to its corresponding NetworkID constant.
+// Returns constants.NetworkID_RBT_Local for any unrecognised mode.
+func networkModeToNetworkID(networkMode string) string {
+	switch networkMode {
+	case constants.NetworkMode_Mainnet:
+		return constants.NetworkID_RBT_Mainnet
+	case constants.NetworkMode_Testnet:
+		return constants.NetworkID_RBT_Testnet
+	case constants.NetworkMode_Localnet:
+		return constants.NetworkID_RBT_Local
+	default:
+		return constants.NetworkID_RBT_Local
+	}
+}
+
 // BuildTransactionInfoFromRequest prepares a transaction by collecting and locking tokens
 // for a multi-asset transfer request. This is the single entry point for all token types:
 //
@@ -30,18 +45,27 @@ func BuildTransactionInfoFromRequest(
 	w *wallet.Wallet,
 	req *models.TransactionRequest,
 	dc types.DIDCrypto,
-	networkMode string, // The isTestNet bool changed to networkMode string to be passed to CollectRBTTokens
+	networkMode string,
 	log logger.Logger,
-	pubsub *types.PubSub, // punishFn which was of type func(*model.PubSubTxnInfo)  is change to types.PubSub to be passed to CollectRBTTokens
+	pubsub *types.PubSub,
 ) (*models.TransactionInfo, float64, error) {
 
 	txTokens := &models.TransactionTokens{}
 	var totalAmount float64
 
-	// --- RBT path (separate — CollectRBTTokens manages its own locking) ---
+	// --- RBT path (separate — caller pre-fetches locked tokens + denomMap) ---
 	if req.HasRBT() {
-		// The underscore here is the denom count map.
-		rbtTokens, _, err := parts.CollectRBTTokens(dc, w, req.GetRBTAmount(), networkMode, log, pubsub)
+		// Lock and fetch free RBT tokens for split/transfer.
+		lockedTokens, err := w.LockTokensForSplit(ctx, dc.GetDID(), req.GetRBTAmount())
+		if err != nil {
+			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: failed to lock tokens for split: %w", err)
+		}
+		denomMap, err := w.GetTokenDenomArray(dc.GetDID())
+		if err != nil {
+			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: failed to fetch token denom array: %w", err)
+		}
+		rbtTokens, _, _, _, err := parts.CollectRBTTokens(dc, w, req.GetRBTAmount(), lockedTokens, denomMap, networkMode, log)
+		// TODO(phase09): persist childRecords (return value 2) via w.PersistGenesisBatch and burn parentsToBurn (return value 3)
 		if err != nil {
 			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: RBT collection failed: %w", err)
 		}
@@ -154,6 +178,7 @@ func BuildTransactionInfoFromRequest(
 		Initiator:       req.Initiator,
 		Owner:           req.Owner,
 		Epoch:           int(time.Now().Unix()),
+		Network:         networkModeToNetworkID(networkMode),
 		Tokens:          txTokens,
 		CommittedTokens: nil,
 		Quorums:         nil,

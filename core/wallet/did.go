@@ -102,3 +102,8 @@ func (w *Wallet) IsDIDExists(did string) (bool, error) {
 
 	return exists, nil
 }
+
+func (w *Wallet) IsDIDExist(did string) bool {
+	exists, _ := w.IsDIDExists(did)
+	return exists
+}

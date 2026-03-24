@@ -2,7 +2,6 @@ package parts
 
 import (
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -43,9 +42,9 @@ func createGenesisTransaction(dc types.DIDCrypto,
 		CommittedTokens: committedTokensInfo,
 	}
 
-	txInfoBytes, err := json.Marshal(txInfo)
+	txInfoBytes, err := models.SerializeTransactionInfo(txInfo)
 	if err != nil {
-		return nil, nil, fmt.Errorf("createGenesisTransaction: failed to marshal transaction info, err: %v", err)
+		return nil, nil, fmt.Errorf("createGenesisTransaction: failed to serialize transaction info: %w", err)
 	}
 
 	signatureBytes, err := dc.PvtSign(txInfoBytes)
@@ -60,6 +59,11 @@ func createGenesisTransaction(dc types.DIDCrypto,
 	return txInfo, signature, nil
 }
 
+// storeGenesisTx calls CreateTransaction directly.
+// BYPASS: do not use — this path writes the transactions table only and skips
+// tokens, tokenchain, tokenchain_index, and transaction_units.
+// Callers in CollectRBTTokens use this path; routing through PersistGenesisTokenRecord
+// is deferred as an OPEN QUESTION for the next phase (see ANALYSIS.md).
 func storeGenesisTx(w *wallet.Wallet, transaction models.Transactions) error {
 	if err := w.CreateTransaction(&transaction); err != nil {
 		return fmt.Errorf("storeGenesisTx: failed to store transaction info, err: %v", err)

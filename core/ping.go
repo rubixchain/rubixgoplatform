@@ -94,7 +94,7 @@ func (c *Core) CheckQuorumStatus(peerID string, did string) (string, bool, error
 	q := make(map[string]string)
 	if peerID == "" {
 		fmt.Println("peerID is empty in CheckQuorumStatus")
-		peerID = c.qm.GetPeerID(did, c.peerID)
+		peerID, _ = c.w.GetPeerID(did)
 		if peerID == "" {
 			qPeerDIDInfo, err := c.GetPeerDIDInfo(did)
 			if err != nil {
@@ -132,7 +132,7 @@ func (c *Core) GetPeerInfoResponse(req *ensweb.Request) *ensweb.Result { //PingR
 	}
 	var pInfo models.DID
 
-	pInfo.PeerID = c.w.GetPeerID(peerDID)
+	pInfo.PeerID, _ = c.w.GetPeerID(peerDID)
 	if pInfo.PeerID == "" {
 		_, err := c.w.GetDID(peerDID)
 		if err != nil {

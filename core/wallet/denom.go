@@ -1,8 +1,10 @@
 package wallet
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/types"
 )
@@ -51,9 +53,40 @@ func (w *Wallet) UpdateTokenDenomArray(did string, denomMap map[types.DenomValue
 	_, err := w.db.Pool().Exec(w.Ctx, `
 		UPDATE token_denom t
 		SET
-			count = v.count
+			count = v.count,
 			updated_at = NOW()
-		FROM unset($2::numeric[], $3::bigint[]) AS v(denom, count)
+		FROM unnest($2::numeric[], $3::bigint[]) AS v(denom, count)
+		WHERE
+			t.did = $1
+		AND t.denom = v.denom
+	`, did, denoms, counts)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// updateTokenDenomArrayTx is the tx-accepting variant of UpdateTokenDenomArray.
+// It executes within a caller-provided pgx.Tx, sharing the same database transaction.
+// Only called from within the wallet package (e.g., PersistGenesisBatch).
+func (w *Wallet) updateTokenDenomArrayTx(ctx context.Context, tx pgx.Tx, did string, denomMap map[types.DenomValue]types.DenomCount) error {
+	if len(denomMap) == 0 {
+		return nil
+	}
+
+	denoms := make([]types.DenomValue, 0)
+	counts := make([]types.DenomCount, 0)
+	for denom, count := range denomMap {
+		denoms = append(denoms, denom)
+		counts = append(counts, count)
+	}
+
+	_, err := tx.Exec(ctx, `
+		UPDATE token_denom t
+		SET
+			count = v.count,
+			updated_at = NOW()
+		FROM unnest($2::numeric[], $3::bigint[]) AS v(denom, count)
 		WHERE
 			t.did = $1
 		AND t.denom = v.denom
@@ -65,7 +98,11 @@ func (w *Wallet) UpdateTokenDenomArray(did string, denomMap map[types.DenomValue
 }
 
 // The following function should only used when a new DID is created
-func (w *Wallet) InitNewTokenDenomArrayForDID(did string, denomMap map[types.DenomValue]types.DenomCount) error
+func (w *Wallet) InitNewTokenDenomArrayForDID(did string, denomMap map[types.DenomValue]types.DenomCount) error {
+	// TODO: dev-team -- implement initial INSERT of denom rows for new DID
+	return nil
+}
+
 func (w *Wallet) GetRBTBalanceFromDenomArr(did string) (float64, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
 		`SELECT denom, count

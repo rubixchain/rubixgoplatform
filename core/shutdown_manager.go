@@ -87,9 +87,7 @@ func NewShutdownManager(core *Core) *ShutdownManager {
 		{
 			Name: "Close Database Connections",
 			Function: func() error {
-				if sm.core.s != nil {
-					sm.core.s.Close()
-				}
+				// TODO(phase07): sm.core.s (storage.RubixDB) removed; PostgreSQL pool used instead
 				// Wallet doesn't have a Close method, just log
 				if sm.core.w != nil {
 					sm.log.Debug("Wallet cleanup completed")

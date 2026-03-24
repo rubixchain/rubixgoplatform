@@ -8,8 +8,10 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/types/models"
-	"golang.org/x/crypto/sha3"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 const (
@@ -77,12 +79,34 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 	if err := validatePostConsensusRequest(req, txRecord.ID); err != nil {
 		return err
 	}
+	if pc.wallet.didDir == "" {
+		return fmt.Errorf("transfer: signature verification not configured")
+	}
+	// Signature verification — must run BEFORE BeginTx so an invalid request
+	// never enters a transaction. Requires w.didDir set via SetDidDir().
+	if pc.wallet.didDir != "" {
+		var sig models.Signature
+		if err := json.Unmarshal(txRecord.Signature, &sig); err != nil {
+			return fmt.Errorf("transfer: invalid signature format")
+		}
+		if sig.InitiatorSignature == "" {
+			return fmt.Errorf("transfer: missing initiator signature")
+		}
+		dc := did.InitDIDLiteWithPassword(req.DID, pc.wallet.didDir, "")
+		if err := util.VerifySignature(dc, req.TransactionInfo, sig.InitiatorSignature); err != nil {
+			return fmt.Errorf("transfer: invalid initiator signature")
+		}
+	}
 
 	tx, err := pc.wallet.BeginTx(ctx)
 	if err != nil {
 		return fmt.Errorf("post-consensus persistence: begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
+
+	if err := pc.validateTransferChainContinuity(ctx, tx, req); err != nil {
+		return err
+	}
 
 	if err := pc.insertTransaction(ctx, tx, txRecord); err != nil {
 		return err
@@ -108,7 +132,7 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 
 func buildTransactionRecord(req *PostConsensusPersistenceRequest) (*models.Transactions, error) {
 	if req == nil {
-		return nil, fmt.Errorf("post-consensus persistence: request is nil")
+		return nil, fmt.Errorf("transfer: request is nil")
 	}
 
 	if req.Transaction != nil {
@@ -128,14 +152,15 @@ func buildTransactionRecord(req *PostConsensusPersistenceRequest) (*models.Trans
 				record.Signature = builtRecord.Signature
 			}
 		}
-		if req.TransactionInfo != nil {
-			txID, err := computeTransactionID(req.TransactionInfo)
-			if err != nil {
-				return nil, fmt.Errorf("post-consensus persistence: compute transaction id: %w", err)
-			}
-			if record.ID != txID {
-				return nil, fmt.Errorf("post-consensus persistence: transaction id mismatch")
-			}
+		if req.TransactionInfo == nil {
+			return nil, fmt.Errorf("transfer: transaction info required for transaction id binding")
+		}
+		txID, err := util.GetTransactionID(req.TransactionInfo)
+		if err != nil {
+			return nil, fmt.Errorf("transfer: failed to recompute transaction id: %v", err)
+		}
+		if record.ID != txID {
+			return nil, fmt.Errorf("transfer: transaction id mismatch: request claims %q, payload computes %q", record.ID, txID)
 		}
 		return &record, nil
 	}
@@ -151,12 +176,12 @@ func buildTransactionRecordFromPayload(txInfo *models.TransactionInfo, signature
 		return nil, fmt.Errorf("post-consensus persistence: transaction signature is required")
 	}
 
-	txID, err := computeTransactionID(txInfo)
+	txID, err := util.GetTransactionID(txInfo)
 	if err != nil {
 		return nil, fmt.Errorf("post-consensus persistence: compute transaction id: %w", err)
 	}
 
-	infoBytes, err := json.Marshal(txInfo)
+	infoBytes, err := models.SerializeTransactionInfo(txInfo)
 	if err != nil {
 		return nil, fmt.Errorf("post-consensus persistence: marshal transaction info: %w", err)
 	}
@@ -173,15 +198,6 @@ func buildTransactionRecordFromPayload(txInfo *models.TransactionInfo, signature
 	}, nil
 }
 
-func computeTransactionID(txInfo *models.TransactionInfo) (string, error) {
-	txInfoBytes, err := json.Marshal(txInfo)
-	if err != nil {
-		return "", err
-	}
-
-	hash := sha3.Sum256(txInfoBytes)
-	return string(hash[:]), nil
-}
 
 func validatePostConsensusRequest(req *PostConsensusPersistenceRequest, transactionID string) error {
 	if req == nil {
@@ -293,6 +309,92 @@ func isValidExecutionRole(role string) bool {
 	}
 }
 
+// validateTransferChainContinuity validates that each non-genesis TokenChain row in req
+// references a token that exists, belongs to req.DID, is Free, and continues the chain
+// with the correct position and previous_transaction_id. All reads use the provided pgx.Tx
+// (FOR UPDATE) to ensure they are consistent with the pending writes.
+func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(ctx context.Context, tx pgx.Tx, req *PostConsensusPersistenceRequest) error {
+	if req == nil {
+		return fmt.Errorf("transfer: empty transaction_id")
+	}
+
+	// Build a set of token IDs declared in the signed txInfo payload.
+	// Every token in the request must be present in txInfo (no payload tampering).
+	// This check is pure struct-level — no DB access.
+	txInfoTokenSet := make(map[string]bool)
+	if req.TransactionInfo != nil && req.TransactionInfo.Tokens != nil {
+		for _, t := range req.TransactionInfo.Tokens.RBT {
+			if t != nil {
+				txInfoTokenSet[t.TokenID] = true
+			}
+		}
+		for _, t := range req.TransactionInfo.Tokens.NFT {
+			if t != nil {
+				txInfoTokenSet[t.TokenID] = true
+			}
+		}
+		for _, t := range req.TransactionInfo.Tokens.FT {
+			if t != nil {
+				txInfoTokenSet[t.TokenID] = true
+			}
+		}
+		for _, t := range req.TransactionInfo.Tokens.SmartContract {
+			if t != nil {
+				txInfoTokenSet[t.TokenID] = true
+			}
+		}
+	}
+
+	for _, row := range req.TokenChainRows {
+		if row.Position == 0 {
+			// Genesis rows are validated by genesis-specific paths.
+			continue
+		}
+		if row.TokenID == "" {
+			return fmt.Errorf("transfer: empty token_id")
+		}
+		if len(txInfoTokenSet) > 0 && !txInfoTokenSet[row.TokenID] {
+			return fmt.Errorf("transfer: token %q not present in transaction payload", row.TokenID)
+		}
+
+		var dbDID string
+		var dbStatus int16
+		var dbTransactionID string
+		var dbLatestPosition int64
+
+		err := tx.QueryRow(ctx, `
+			SELECT did, token_status, transaction_id, latest_position
+			FROM tokens
+			WHERE token_id = $1
+			FOR UPDATE
+		`, row.TokenID).Scan(&dbDID, &dbStatus, &dbTransactionID, &dbLatestPosition)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				return fmt.Errorf("transfer: token %q does not exist", row.TokenID)
+			}
+			return fmt.Errorf("transfer: query token %q: %w", row.TokenID, err)
+		}
+
+		if dbDID != req.DID {
+			return fmt.Errorf("transfer: token %q not owned by %s", row.TokenID, req.DID)
+		}
+
+		if dbStatus != int16(constants.TokenStatus_Free) {
+			return fmt.Errorf("transfer: token %q is not FREE, status=%d", row.TokenID, dbStatus)
+		}
+
+		if row.PreviousTransactionID != nil && *row.PreviousTransactionID != dbTransactionID {
+			return fmt.Errorf("transfer: token %q previous_transaction_id mismatch", row.TokenID)
+		}
+
+		if row.Position != dbLatestPosition+1 {
+			return fmt.Errorf("transfer: token %q position must be latest+1, got %d want %d", row.TokenID, row.Position, dbLatestPosition+1)
+		}
+	}
+
+	return nil
+}
+
 func (pc *PostConsensusPersistenceCoordinator) insertTransaction(ctx context.Context, tx pgx.Tx, record *models.Transactions) error {
 	cmdTag, err := tx.Exec(ctx, `
 		INSERT INTO transactions (id, info, signature, created_at, updated_at)
@@ -351,14 +453,11 @@ func (pc *PostConsensusPersistenceCoordinator) insertTransactionUnit(ctx context
 
 func (pc *PostConsensusPersistenceCoordinator) insertTokenChainRows(ctx context.Context, tx pgx.Tx, rows []models.TokenChain) error {
 	for start := 0; start < len(rows); start += pc.batchSize {
-		end := start + pc.batchSize
-		if end > len(rows) {
-			end = len(rows)
-		}
+		end := min(start+pc.batchSize, len(rows))
 
 		chunk := rows[start:end]
 		placeholders := make([]string, 0, len(chunk))
-		args := make([]interface{}, 0, len(chunk)*5)
+		args := make([]any, 0, len(chunk)*5)
 		for i, row := range chunk {
 			offset := i*5 + 1
 			placeholders = append(placeholders,
@@ -366,22 +465,22 @@ func (pc *PostConsensusPersistenceCoordinator) insertTokenChainRows(ctx context.
 					offset, offset+1, offset+2, offset+3, offset+4,
 				),
 			)
-				args = append(args,
-					row.TokenID,
-					row.TransactionID,
-					row.PreviousTransactionID,
-					row.Role,
-					row.Position,
-				)
-			}
+			args = append(args,
+				row.TokenID,
+				row.TransactionID,
+				row.PreviousTransactionID,
+				row.Role,
+				row.Position,
+			)
+		}
 
-			query := `
+		query := `
 				INSERT INTO tokenchain (token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at)
 				VALUES ` + strings.Join(placeholders, ",") + `
 				ON CONFLICT (token_id, position) DO NOTHING
 			`
-			if _, err := tx.Exec(ctx, query, args...); err != nil {
-				return fmt.Errorf("post-consensus persistence: insert tokenchain rows: %w", err)
+		if _, err := tx.Exec(ctx, query, args...); err != nil {
+			return fmt.Errorf("post-consensus persistence: insert tokenchain rows: %w", err)
 		}
 	}
 
@@ -421,7 +520,7 @@ func (pc *PostConsensusPersistenceCoordinator) syncTokenChainIndex(ctx context.C
 	}
 
 	placeholders := make([]string, 0, len(indexRows))
-	args := make([]interface{}, 0, len(indexRows)*2)
+	args := make([]any, 0, len(indexRows)*2)
 	for i, row := range indexRows {
 		offset := i*2 + 1
 		placeholders = append(placeholders, fmt.Sprintf("($%d, $%d, NOW(), NOW())", offset, offset+1))
@@ -444,14 +543,11 @@ func (pc *PostConsensusPersistenceCoordinator) syncTokenChainIndex(ctx context.C
 
 func (pc *PostConsensusPersistenceCoordinator) upsertTokenStates(ctx context.Context, tx pgx.Tx, tokenStates []models.Token) error {
 	for start := 0; start < len(tokenStates); start += pc.batchSize {
-		end := start + pc.batchSize
-		if end > len(tokenStates) {
-			end = len(tokenStates)
-		}
+		end := min(start+pc.batchSize, len(tokenStates))
 
 		chunk := tokenStates[start:end]
 		placeholders := make([]string, 0, len(chunk))
-		args := make([]interface{}, 0, len(chunk)*10)
+		args := make([]any, 0, len(chunk)*10)
 		for i, tokenState := range chunk {
 			offset := i*10 + 1
 			placeholders = append(placeholders,

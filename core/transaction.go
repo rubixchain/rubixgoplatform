@@ -5,6 +5,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -34,15 +35,12 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		resp.Message = "InitiateTransaction:Failed to setup DID: " + err.Error()
 		return resp
 	}
-	// This needs to be passed to the BuildTransactionInfoFromRequest to be given as an input to the function CollectRBTTokens
-	// Can't call this inside BuildTransactionInfoFromRequest since it is a standalone function not a methiod of Core.
 	networkMode, err := util.GetNetworkMode(c.testnet, c.mainnet, c.localnet)
 	if err != nil {
 		resp.Message = "InitiateTransaction:Failed to determine network mode: " + err.Error()
 		return resp
 	}
 	// Build transaction info
-	//Here the c.publishTxn must be verified because the input type is *model.PubSubTxnInfo which need to be updated
 	transactionInfo, transactionValue, err := BuildTransactionInfoFromRequest(ctx, c.w, request, dc, networkMode, c.log, c.ps)
 	if err != nil {
 		c.log.Error("InitiateTransaction: Failed to build transaction info", "err", err)
@@ -50,8 +48,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		return resp
 	}
 
-	// Fetch the listt if dids from quorum_m,anager tavble
-	//	We then loop over that list and queried from did table and pfetch the peerid
+	// Fetch quorum addresses
 	quorumAddresses, err := c.GetAllQuorum()
 	if err != nil {
 		c.log.Error("InitiateTransaction: Failed to get quorum address", "err", err)
@@ -63,7 +60,6 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		return resp
 	}
 
-	// this will be a list of *ipfsport.Peer since we can have multiple quorums, we need to loop over them
 	p, err := c.getPeer(quorumAddresses[0])
 	if err != nil {
 		resp.Message = err.Error()
@@ -103,14 +99,14 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		Tokens: pledgeTokenPtrs,
 	}
 	transactionInfo.Quorums = []*models.QuorumInfo{pledegTokenInfo}
-	transactionId, err := util.GetTransactionID(transactionInfo)
+	txID, err := util.GetTransactionID(transactionInfo)
 	if err != nil {
-		c.log.Error("InitiateTransaction: Failed to get transaction ID", "err", err)
-		resp.Message = "InitiateTransaction: Failed to get transaction ID: " + err.Error()
+		c.log.Error("InitiateTransaction: Failed to compute transaction ID", "err", err)
+		resp.Message = "InitiateTransaction: Failed to compute transaction ID: " + err.Error()
 		return resp
 	}
 
-	c.log.Info("Transaction ID created", "hash", transactionId)
+	c.log.Info("Transaction ID created", "txID", txID)
 
 	// Signature done by the initiator on the  transactionInfo
 	initiatorSignature, err := util.SignTransaction(dc, transactionInfo)
@@ -147,9 +143,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		resp.Message = consensusResponse.Message
 		return resp
 	}
-	// When multiple transaction situation comes into picture this quorum signature part will change.
-	// We have kept this as an array to accomodate multiple quorums in future.
-	// Right now we are only accomodating a single quorum.
+	// TODO: support multiple quorums (currently single quorum only)
 	err = util.VerifySignature(dc, transactionInfo, consensusResponse.QuorumSignature)
 	if err != nil {
 		c.log.Error("InitiateTransaction: Failed to verify quorum signature", "err", err)
@@ -163,6 +157,15 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	signatureTobePublished := &models.Signature{
 		InitiatorSignature: initiatorSignature,
 		Quorums:            quorumSignature,
+	}
+	// Persist post-consensus state to PostgreSQL (soft-fail: log error, do not block transaction)
+	if err := c.w.PersistPostConsensus(ctx, &wallet.PostConsensusPersistenceRequest{
+		TransactionInfo: transactionInfo,
+		Signature:       signatureTobePublished,
+		DID:             initiatorDID,
+		ExecutionRole:   wallet.ExecutionRoleInitiator,
+	}); err != nil {
+		c.log.Error("InitiateTransaction: failed to persist post-consensus state", "err", err)
 	}
 	//Publish transaction to the network
 	util.PublishTransaction(c.ps, transactionInfo, signatureTobePublished)
@@ -225,20 +228,20 @@ func (c *Core) syncTransactionTokens(
 	if NFTOwnershipTransfer {
 		tokenGroups = append(tokenGroups, tokens.NFT)
 	}
+	/*
+		for _, group := range tokenGroups {
+			for _, token := range group {
+				if token == nil {
+					continue
+				}
 
-	for _, group := range tokenGroups {
-		for _, token := range group {
-			if token == nil {
-				continue
-			}
-
-			err := c.syncTokenChainFrom(peer, token.PreviousTransactionID, token.TokenID)
-			if err != nil {
-				return err
+				err := c.syncTokenChainFrom(peer, token.PreviousTransactionID, token.TokenID)
+				if err != nil {
+					return err
+				}
 			}
 		}
-	}
-
+	*/
 	return nil
 }
 

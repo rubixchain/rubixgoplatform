@@ -155,6 +155,18 @@ func (c *Core) checkPassword(didStr string, pwd string) bool {
 	return true
 }
 
+// InitDIDModule initialises the DID sub-system without the full
+// SetupCore() side-effects (listener, pubsub, peer manager).
+// Must be called after RunIPFS() so that c.ipfs is non-nil.
+func (c *Core) InitDIDModule() {
+	if c.d == nil {
+		// Ensure didDir has a trailing slash -- the did package uses raw string
+		// concatenation (d.dir + DID) and requires a path separator at the end.
+		c.didDir = util.SanitizeDirPath(c.didDir)
+		c.d = did.InitDID(c.didDir, c.log, c.ipfs)
+	}
+}
+
 func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
 	did, err := c.d.CreateDID(didCreate)
 	if err != nil {
@@ -325,7 +337,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*models.DID, error) {
 		}
 
 		// 2. If missing, try peer table
-		peerID = c.w.GetPeerID(didStr)
+		peerID, _ = c.w.GetPeerID(didStr)
 
 		if peerID != "" {
 			return &models.DID{
@@ -335,7 +347,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*models.DID, error) {
 		}
 	} else {
 		// 1. Try peer table first
-		peerID = c.w.GetPeerID(didStr)
+		peerID, _ = c.w.GetPeerID(didStr)
 
 		if peerID != "" {
 			return &models.DID{
