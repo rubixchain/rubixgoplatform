@@ -47,7 +47,6 @@ const (
 	APIGetTxnByTxnID                    string = "/api/get-by-txnId"
 	APIGetTxnByDID                      string = "/api/get-by-did"
 	APIGetTxnByComment                  string = "/api/get-by-comment"
-	APICreateNFT                        string = "/api/create-nft"
 	APIGetAllNFT                        string = "/api/list-nfts"
 	APIAddNFTSale                       string = "/api/addnftsale"
 	APIDeploySmartContract              string = "/api/deploy-smart-contract"
@@ -129,6 +128,9 @@ const (
 	APIGenerateSmartContract string = "/rubix/v1/smart_contracts/generate"
 	APIListSmartContracts    string = "/rubix/v1/smart_contracts"
 	APIGetSmartContractChain string = "/rubix/v1/smart_contracts/{contract_id}/chain"
+	APICreateNFT             string = "/rubix/v1/nfts/generate"
+	APIListNFTs              string = "/rubix/v1/nfts"
+	APIGetNFTChain           string = "/rubix/v1/nfts/{nft_id}/chain"
 )
 
 // jwt.RegisteredClaims

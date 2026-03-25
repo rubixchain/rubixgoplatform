@@ -89,7 +89,7 @@ func (s *Server) APIDeploySmartContract(req *ensweb.Request) *ensweb.Result {
 // @Param 		 binaryCodePath	   formData      file    true  "location of binary code hash"
 // @Param 		 rawCodePath	   formData      file    true  "location of raw code hash"
 // @Success      200  {object}  model.BasicResponse
-// @Router       /api/generate-smart-contract [post]
+// @Router       /rubix/v1/smart_contracts/generate [post]
 func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	var deploySC core.GenerateSmartContractRequest
 	var err error
@@ -408,7 +408,7 @@ func (s *Server) APIExecuteSmartContract(req *ensweb.Request) *ensweb.Result {
 // @Success      200  {object}  model.BasicResponse
 // @Router       /rubix/v1/smart_contracts [get]
 
-func (s *Server) APIGetSmartContracts(req *ensweb.Request) *ensweb.Result {
+func (s *Server) APIListSmartContracts(req *ensweb.Request) *ensweb.Result {
 	response, err := s.c.GetAllSmartcontracts()
 	if err != nil {
 		return s.BasicResponse(req, false, "Failed to retrieve smart contracts", nil)

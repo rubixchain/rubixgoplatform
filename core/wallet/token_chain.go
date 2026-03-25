@@ -201,3 +201,25 @@ func (w *Wallet) GetSmartContractChainByTokenID(tokenID string) ([]models.TokenC
 	// Step 3: Convert transactions to TokenChainResponse using util function
 	return util.ConvertToTokenChainResponses(transactions)
 }
+
+// GetNFTChainByTokenID retrieves all transactions for an NFT token
+// and converts them into TokenChainResponse format with TransactionID, Initiator, Epoch, and Data.
+func (w *Wallet) GetNFTChainByTokenID(tokenID string) ([]models.TokenChainResponse, error) {
+	// Step 1: Validate that the token is an NFT
+	isNFT, err := w.IsNFT(tokenID)
+	if err != nil {
+		return nil, fmt.Errorf("GetNFTChainByTokenID: %w", err)
+	}
+	if !isNFT {
+		return nil, fmt.Errorf("GetNFTChainByTokenID: token %s is not an NFT", tokenID)
+	}
+
+	// Step 2: Get all transactions in chronological order
+	transactions, err := w.GetTransactionsByTokenID(tokenID)
+	if err != nil {
+		return nil, fmt.Errorf("GetNFTChainByTokenID: %w", err)
+	}
+
+	// Step 3: Convert transactions to TokenChainResponse using util function
+	return util.ConvertToTokenChainResponses(transactions)
+}
