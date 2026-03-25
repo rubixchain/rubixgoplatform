@@ -106,7 +106,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIRemoveAllQuorum, "GET", s.AuthHandle(s.APIRemoveAllQuorum, true, s.AuthError, true))
 	s.AddRoute(setup.APISetupQuorum, "POST", s.AuthHandle(s.APISetupQuorum, true, s.AuthError, true))
 	s.AddRoute(setup.APIGenerateTestToken, "POST", s.AuthHandle(s.APIGenerateTestToken, true, s.AuthError, false))
-	s.AddRoute(setup.APIInitiateTransaction, "POST", s.AuthHandle(s.APIInitiateRBTTransfer, true, s.AuthError, false))
+	s.AddRoute(setup.APITransaction, "POST", s.AuthHandle(s.APIInitiateRBTTransfer, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetAccountInfo, "GET", s.AuthHandle(s.APIGetAccountInfo, true, s.AuthError, false))
 	s.AddRoute(setup.APISignatureResponse, "POST", s.AuthHandle(s.APISignatureResponse, true, s.AuthError, false))
 	s.AddRoute(setup.APIDumpTokenChainBlock, "POST", s.AuthHandle(s.APIDumpTokenChainBlock, true, s.AuthError, false))
@@ -175,23 +175,18 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIRemoteRecoverTokens, "POST", s.APIRemoteRecoverTokens)
 
 	//Below are De-Explorer APIs
-	s.AddRoute(setup.APIGetAllRBTs, "GET", s.AuthHandle(s.APIGetAllFreeRBT, false, s.AuthError, false))
-	s.AddRoute(setup.APIGetAllFTs, "GET", s.AuthHandle(s.APIGetAllFreeFTs, false, s.AuthError, false))
-	s.AddRoute(setup.APIGetAllNFTs, "GET", s.AuthHandle(s.APIGetAllFreeNFTs, false, s.AuthError, false))
-	s.AddRoute(setup.APIGetAllSmartContracts, "GET", s.AuthHandle(s.APIGetAllFreeSmartContracts, false, s.AuthError, false))
-
-	s.AddRoute(setup.APIGetRBTbyDID, "GET", s.AuthHandle(s.APIGetRBTbyDID, false, s.AuthError, false))
-	s.AddRoute(setup.APIGetFTbyDID, "GET", s.AuthHandle(s.APIGetFTbyDID, false, s.AuthError, false))
-	s.AddRoute(setup.APIGetNFTbyDID, "GET", s.AuthHandle(s.APIGetNFTbyDID, false, s.AuthError, false))
-	s.AddRoute(setup.APIGetSmartContractbyDID, "GET", s.AuthHandle(s.APIGetSmartContractbyDID, false, s.AuthError, false))
-	s.AddRoute(setup.APIGetTxnAmount, "GET", s.AuthHandle(s.APIGetTxnAmountFromFullNode, false, s.AuthError, false))
-
-	s.AddRoute(setup.APIGetTokenChain, "GET", s.AuthHandle(s.APIGetFullTokenChain, false, s.AuthError, false))
-	s.AddRoute(setup.APIGetTokenChainHeight, "GET", s.AuthHandle(s.APIGetFullTokenChainHeight, false, s.AuthError, false))
-
 	s.AddRoute(setup.APIRemoveStaleDID, "POST", s.AuthHandle(s.APIRemoveStaleDID, true, s.AuthError, false))
 
 	s.AddRoute(setup.APIInitiateTransaction, "POST", s.AuthHandle(s.APIInitiateTransaction, true, s.AuthError, false))
+
+	s.AddRoute(setup.APIListSmartContracts, "GET", s.AuthHandle(s.APIListSmartContracts, true, s.AuthError, false))
+	s.AddRoute(setup.APIListNFTs, "GET", s.AuthHandle(s.APIListNFTs, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetNFTChain, "GET", s.AuthHandle(s.APIGetNFTChain, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetSmartContractChain, "GET", s.AuthHandle(s.APIGetSmartContractChain, true, s.AuthError, false))
+	s.AddRoute(setup.APITransaction, "POST", s.AuthHandle(s.APIInitiateTransaction, true, s.AuthError, false))
+	s.AddRoute(setup.APITransaction, "GET", s.APIGetTransactions)
+	s.AddRoute(setup.APIGetTransactionByID, "GET", s.APIGetTransactionByID)
+	s.AddRoute(setup.APIListFT, "POST", s.APIListFTs)
 }
 
 func (s *Server) ExitFunc() error {
