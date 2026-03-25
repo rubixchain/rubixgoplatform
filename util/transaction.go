@@ -2,8 +2,8 @@ package util
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,40 +14,47 @@ import (
 )
 
 func GetTransactionID(txInfo *models.TransactionInfo) (string, error) {
-	txInfoBytes, err := json.Marshal(txInfo)
+	txInfoBytes, err := models.SerializeTransactionInfo(txInfo)
 	if err != nil {
-		return "", fmt.Errorf("GetTransactionID: failed to marshal TransactionInfo, err: %v", err)
+		return "", fmt.Errorf("GetTransactionID: failed to serialize TransactionInfo, err: %v", err)
 	}
 
 	txHashBytes := CalculateHash(txInfoBytes, constants.HashAlgorithm_SHA3_256)
-	return string(txHashBytes), nil
+	return hex.EncodeToString(txHashBytes), nil
 }
 
 func SignTransaction(dc types.DIDCrypto, txInfo *models.TransactionInfo) (string, error) {
-	transactionId, err := GetTransactionID(txInfo)
+	infoBytes, err := models.SerializeTransactionInfo(txInfo)
 	if err != nil {
-		return "", fmt.Errorf("SignTransaction: failed to get transaction ID, err: %v", err)
+		return "", fmt.Errorf("SignTransaction: failed to serialize TransactionInfo, err: %v", err)
 	}
-	signatureBytes, err := dc.PvtSign([]byte(transactionId))
+	// Hash before signing so the full payload (not just the first 32 bytes) is bound
+	// to the signature. ECDSA operates on a fixed-size digest; passing raw variable-length
+	// JSON allows an attacker to forge a valid signature for a different payload that
+	// shares only the first N bytes (curve-order truncation attack).
+	digest := CalculateHash(infoBytes, constants.HashAlgorithm_SHA3_256)
+	signatureBytes, err := dc.PvtSign(digest)
 	if err != nil {
-		return "", fmt.Errorf("SignTransaction: failed to sign transaction ID, err: %v", err)
+		return "", fmt.Errorf("SignTransaction: failed to sign transaction info, err: %v", err)
 	}
-	signature := base64.StdEncoding.EncodeToString(signatureBytes)
+	signature := hex.EncodeToString(signatureBytes)
 	return signature, nil
 }
 
 func VerifySignature(dc types.DIDCrypto, txInfo *models.TransactionInfo, signature string) error {
-	transactionId, err := GetTransactionID(txInfo)
+	infoBytes, err := models.SerializeTransactionInfo(txInfo)
 	if err != nil {
-		return fmt.Errorf("VerifySignature: failed to get transaction ID, err: %w", err)
+		return fmt.Errorf("VerifySignature: failed to serialize TransactionInfo, err: %w", err)
+	}
+	// Must hash identically to SignTransaction so the digest is the same 32-byte value.
+	digest := CalculateHash(infoBytes, constants.HashAlgorithm_SHA3_256)
+
+	signatureBytes, err := hex.DecodeString(signature)
+	if err != nil {
+		return fmt.Errorf("VerifySignature: failed to decode hex signature, err: %w", err)
 	}
 
-	signatureBytes, err := base64.StdEncoding.DecodeString(signature)
-	if err != nil {
-		return fmt.Errorf("VerifySignature: failed to decode signature, err: %w", err)
-	}
-
-	ok, err := dc.PvtVerify([]byte(transactionId), signatureBytes)
+	ok, err := dc.PvtVerify(digest, signatureBytes)
 	if err != nil {
 		return fmt.Errorf("VerifySignature: failed to verify signature, err: %w", err)
 	}
@@ -64,9 +71,9 @@ func PublishTransaction(pubsub *types.PubSub, tx *models.TransactionInfo, signat
 		return nil, fmt.Errorf("PublishTransaction: failed to get transaction ID: %v", err)
 	}
 
-	txInfoBytes, err := json.Marshal(tx)
+	txInfoBytes, err := models.SerializeTransactionInfo(tx)
 	if err != nil {
-		return nil, fmt.Errorf("PublishTransaction: failed to marshal transactionInfo, err: %v", err)
+		return nil, fmt.Errorf("PublishTransaction: failed to serialize TransactionInfo, err: %v", err)
 	}
 
 	signatureBytes, err := json.Marshal(signature)
