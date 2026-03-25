@@ -43,9 +43,10 @@ type FT struct {
 // FTTokenFixResult is a legacy stub for FT fix operation results.
 type FTTokenFixResult struct {
 	TokenID    string
-	OldDID     string
-	NewDID     string
-	FixApplied bool
+	OldCreator string
+	NewCreator string
+	Success    bool
+	Error      error
 }
 
 // LegacyStorageStub replaces the old SQLite storage interface with no-ops.

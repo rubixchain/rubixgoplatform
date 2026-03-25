@@ -47,6 +47,47 @@ testnet_bootstrap_nodes = [
 localnet_bootstrap_nodes = []
 `
 
+// LegacyConfigData holds nested config fields from the SQLite-era config.
+// TODO(phase11-cleanup): remove along with Config when legacy tools are updated.
+type LegacyConfigData struct {
+	TrustedNetwork bool `json:"trusted_network"`
+}
+
+// Config is a legacy top-level node configuration struct (SQLite/BoltDB era).
+// Preserved for grpcclient and tools compatibility; new code uses types.RubixConfig instead.
+// TODO(phase11-cleanup): remove when grpcclient/tools are fully updated.
+type Config struct {
+	NodeAddress string           `json:"node_address"`
+	NodePort    string           `json:"node_port"`
+	DirPath     string           `json:"dir_path"`
+	CfgData     LegacyConfigData `json:"cfg_data"`
+}
+
+// StorageConfig defines legacy storage configuration (SQLite-era; used by client/server setup endpoints).
+// TODO(phase11-cleanup): remove when SetupDB endpoint is fully retired.
+type StorageConfig struct {
+	StorageType int    `json:"stroage_type"`
+	DBName      string `json:"db_name"`
+	DBAddress   string `json:"db_address"`
+	DBPort      string `json:"db_port"`
+	DBType      string `json:"db_type"`
+	DBUserName  string `json:"db_user_name"`
+	DBPassword  string `json:"db_password"`
+}
+
+// ServiceConfig defines legacy service configuration.
+// TODO(phase11-cleanup): remove when SetupService endpoint is fully retired.
+type ServiceConfig struct {
+	ServiceSettings string `json:"service_settings"`
+	ServiceName     string `json:"service_name"`
+	DBName          string `json:"db_name"`
+	DBAddress       string `json:"db_address"`
+	DBPort          string `json:"db_port"`
+	DBType          string `json:"db_type"`
+	DBUserName      string `json:"db_user_name"`
+	DBPassword      string `json:"db_password"`
+}
+
 func ParseConfigFromPath(configPath string) (types.UserConfig, error) {
 	configFilePath := path.Join(configPath, "config.toml")
 	configDataBytes, err := os.ReadFile(configFilePath)

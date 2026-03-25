@@ -101,7 +101,7 @@ func (s *Server) APIAddQuorum(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, "invlid input request", nil)
 	}
-
+	ql, _ := reqMap["quorumDID"].(string)
 	err = s.c.AddQuorum(ql)
 	if err != nil {
 		return s.BasicResponse(req, false, "Failed to add quorums, "+err.Error(), nil)

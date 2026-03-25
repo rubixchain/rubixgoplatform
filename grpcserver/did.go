@@ -71,10 +71,9 @@ func createFile(fileName string, data string, decode bool) error {
 }
 
 func (rn *RubixNative) CreateDID(ctx context.Context, req *protos.CreateDIDReq) (*protos.CreateDIDRes, error) {
+	// TODO(phase11-upstream): Secret and MasterDID fields removed from DIDCreate; upstream gRPC params ignored.
 	dc := &did.DIDCreate{
-		Secret:    req.Secret,
-		MasterDID: req.MasterDid,
-		PrivPWD:   req.PrivKeyPwd,
+		PrivPWD: req.PrivKeyPwd,
 	}
 	folderName, err := rn.c.CreateTempFolder()
 	if err != nil {

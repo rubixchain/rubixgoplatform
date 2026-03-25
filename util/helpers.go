@@ -1,6 +1,8 @@
 package util
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -8,6 +10,15 @@ import (
 	"path"
 	"strings"
 )
+
+// GetRandString returns a cryptographically random 32-byte hex string.
+func GetRandString() string {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(b)
+}
 
 func FileWrite(fileName string, data []byte) error {
 	f, err := os.Create(fileName)

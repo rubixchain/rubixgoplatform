@@ -97,7 +97,7 @@ func (s *Server) APIGetAllDID(req *ensweb.Request) *ensweb.Result {
 func (s *Server) validateDIDAccess(req *ensweb.Request, did string) bool {
 	if s.cfg.EnableAuth {
 		// always expect client token to present
-		token := req.ClientToken.Model.(*setup.BearerToken)
+		_ = req.ClientToken.Model.(*setup.BearerToken)
 		return s.c.IsDIDExist(did)
 	} else {
 		return true

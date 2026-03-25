@@ -16,7 +16,6 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/client"
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/config"
 	_ "github.com/rubixchain/rubixgoplatform/docs"
@@ -261,7 +260,6 @@ var commandsHelp = []string{"To get tool version",
 type Command struct {
 	cfg                          types.RubixConfig
 	c                            *client.Client
-	sc                           *contract.Contract
 	encKey                       string
 	start                        bool
 	node                         uint
