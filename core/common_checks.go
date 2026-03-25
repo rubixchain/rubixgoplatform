@@ -299,7 +299,7 @@ func (c *Core) ValidateNewTokenContent(tokenContent string, isQuorum bool) error
 }
 
 // ValidateTransactionValueAndPledge checks that the total value of RBT tokens
-// in the transaction equals the total value of tokens pledged across all quorums.
+// in the transaction equals the total value of tokens pledged across all quorums.FullNode will do this check. 
 func (c *Core) ValidateTransactionValueAndPledge(txnInfo *models.TransactionInfo) error {
 	if txnInfo.Tokens == nil {
 		return fmt.Errorf("transaction has no tokens")
