@@ -5,6 +5,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 func (w *Wallet) GetTokenChainByTokenID(tokenID string) ([]models.TokenChain, error) {
@@ -118,4 +119,85 @@ func (w *Wallet) GetAllTransactionInfoByTokenId(tokenID string, txnId string) ([
 		txnChain = append(txnChain, *txn)
 	}
 	return txnChain, tokenChain[len(tokenChain)-1].TransactionID, nil
+}
+
+// GetTokenChainIndices retrieves the index array from tokenchain_index table for a given token.
+// The index array represents the chronological order of tokenchain entries for this token.
+func (w *Wallet) GetTokenChainIndices(tokenID string) ([]int, error) {
+	var indices []int
+	err := w.db.Pool().QueryRow(w.Ctx,
+		`SELECT index FROM tokenchain_index WHERE token_id = $1`,
+		tokenID,
+	).Scan(&indices)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("GetTokenChainIndices: no tokenchain_index found for token_id %s", tokenID)
+		}
+		return nil, fmt.Errorf("GetTokenChainIndices: failed to query tokenchain_index: %w", err)
+	}
+
+	return indices, nil
+}
+
+// GetTransactionsByTokenIDSingleQuery is an alternative single-query implementation.
+// It performs the same operation as GetTransactionsByTokenID but in one database query.
+
+func (w *Wallet) GetTransactionsByTokenID(tokenID string) ([]models.Transactions, error) {
+	// Step 1: Get the index array from tokenchain_index
+	var indices []int
+	err := w.db.Pool().QueryRow(w.Ctx,
+		`SELECT index FROM tokenchain_index WHERE token_id = $1`,
+		tokenID,
+	).Scan(&indices)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("GetTransactionsByTokenID: no tokenchain_index found for token_id %s", tokenID)
+		}
+		return nil, fmt.Errorf("GetTransactionsByTokenID: failed to get indices: %w", err)
+	}
+
+	if len(indices) == 0 {
+		return []models.Transactions{}, nil
+	}
+
+	// Step 2 & 3: Get transactions in exact order using unnest WITH ORDINALITY
+	rows, err := w.db.Pool().Query(w.Ctx, `
+		SELECT t.id, t.info, t.signature, t.created_at, t.updated_at
+		FROM unnest($1::int[]) WITH ORDINALITY AS idx(id, ord)
+		JOIN tokenchain tc ON tc.id = idx.id
+		JOIN transactions t ON t.id = tc.transaction_id
+		ORDER BY idx.ord
+	`, indices)
+	if err != nil {
+		return nil, fmt.Errorf("GetTransactionsByTokenID: failed to get transactions: %w", err)
+	}
+
+	transactions, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.Transactions])
+	if err != nil {
+		return nil, fmt.Errorf("GetTransactionsByTokenID: failed to collect rows: %w", err)
+	}
+
+	return transactions, nil
+}
+
+// GetSmartContractChainByTokenID retrieves all transactions for a smart contract token
+// and converts them into TokenChainResponse format with TransactionID, Initiator, Epoch, and Data.
+func (w *Wallet) GetSmartContractChainByTokenID(tokenID string) ([]models.TokenChainResponse, error) {
+	// Step 1: Validate that the token is a smart contract
+	isSC, err := w.IsSmartContract(tokenID)
+	if err != nil {
+		return nil, fmt.Errorf("GetSmartContractChainByTokenID: %w", err)
+	}
+	if !isSC {
+		return nil, fmt.Errorf("GetSmartContractChainByTokenID: token %s is not a smart contract", tokenID)
+	}
+
+	// Step 2: Get all transactions in chronological order
+	transactions, err := w.GetTransactionsByTokenID(tokenID)
+	if err != nil {
+		return nil, fmt.Errorf("GetSmartContractChainByTokenID: %w", err)
+	}
+
+	// Step 3: Convert transactions to TokenChainResponse using util function
+	return util.ConvertToTokenChainResponses(transactions)
 }

@@ -52,7 +52,6 @@ const (
 	APIAddNFTSale                       string = "/api/addnftsale"
 	APIDeploySmartContract              string = "/api/deploy-smart-contract"
 	APIExecuteSmartContract             string = "/api/execute-smart-contract"
-	APIGenerateSmartContract            string = "/api/generate-smart-contract"
 	APIFetchSmartContract               string = "/api/fetch-smart-contract"
 	APIPublishContract                  string = "/api/publish-smart-contract"
 	APISubscribecontract                string = "/api/subscribe-smart-contract"
@@ -126,7 +125,10 @@ const (
 
 	APIRemoveStaleDID string = "/api/remove-stale-did"
 
-	APIInitiateTransaction string = "/rubix/v1/token/tx"
+	APIInitiateTransaction   string = "/rubix/v1/token/tx"
+	APIGenerateSmartContract string = "/rubix/v1/smart_contracts/generate"
+	APIListSmartContracts    string = "/rubix/v1/smart_contracts"
+	APIGetSmartContractChain string = "/rubix/v1/smart_contracts/{contract_id}/chain"
 )
 
 // jwt.RegisteredClaims
