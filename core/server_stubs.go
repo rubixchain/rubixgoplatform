@@ -1,6 +1,15 @@
 package core
 
-import "github.com/rubixchain/rubixgoplatform/core/model"
+import (
+	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
+)
+
+// GetWallet returns the wallet instance for direct access in dev/test scenarios.
+// In production, wallet operations go through Core methods.
+func (c *Core) GetWallet() *wallet.Wallet {
+	return c.w
+}
 
 // DumpSmartContractTokenChain returns token chain blocks for a smart contract token.
 // TODO(phase11-upstream): implement using PostgreSQL tokenchain queries.
