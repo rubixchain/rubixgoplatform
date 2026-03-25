@@ -14,7 +14,6 @@ import (
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
-	"github.com/rubixchain/rubixgoplatform/core/pubsub"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
@@ -110,7 +109,7 @@ type Core struct {
 	didDir               string
 	pm                   *ipfsport.PeerManager
 	l                    *ipfsport.Listener
-	ps                   *pubsub.PubSub
+	ps                   *types.PubSub
 	started              bool
 	ipfsApp              string
 	testnet              bool
