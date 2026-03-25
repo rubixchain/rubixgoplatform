@@ -179,6 +179,66 @@ func (w *Wallet) LockFTTokens(ctx context.Context, ownerDID string, ftName strin
 	return selected, nil
 }
 
+// LockTokensForSplit selects and locks ALL free RBT tokens for the given owner DID
+// using SELECT ... FOR UPDATE SKIP LOCKED to avoid deadlocks with concurrent transactions.
+// The caller's denomination-selection logic (CollectRBTTokens) determines which tokens
+// from the returned slice to actually use for the transfer or split.
+//
+// Returns the locked token rows; callers must eventually release or consume them.
+func (w *Wallet) LockTokensForSplit(ctx context.Context, ownerDID string, amount float64) ([]models.Token, error) {
+	tx, err := w.db.BeginTx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("LockTokensForSplit: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	if _, err := tx.Exec(ctx, "SET LOCAL lock_timeout = '5s'"); err != nil {
+		return nil, fmt.Errorf("LockTokensForSplit: set lock_timeout: %w", err)
+	}
+
+	rows, err := tx.Query(ctx, `
+		SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
+		       token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+		FROM tokens
+		WHERE did=$1
+		  AND token_type=(SELECT id FROM token_type WHERE name=$2)
+		  AND token_status=$3
+		ORDER BY token_value DESC
+		FOR UPDATE SKIP LOCKED
+	`, ownerDID, constants.TokenType_RBT, constants.TokenStatus_Free)
+	if err != nil {
+		return nil, fmt.Errorf("LockTokensForSplit: query: %w", err)
+	}
+
+	locked, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.Token])
+	if err != nil {
+		return nil, fmt.Errorf("LockTokensForSplit: collect: %w", err)
+	}
+
+	if len(locked) == 0 {
+		return locked, nil
+	}
+
+	tokenIDs := make([]string, len(locked))
+	for i, tok := range locked {
+		tokenIDs[i] = tok.TokenID
+	}
+
+	_, err = tx.Exec(ctx,
+		`UPDATE tokens SET token_status = $1, updated_at = $2 WHERE token_id = ANY($3::text[])`,
+		constants.TokenStatus_Locked, time.Now(), tokenIDs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("LockTokensForSplit: update status: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("LockTokensForSplit: commit: %w", err)
+	}
+
+	return locked, nil
+}
+
 // LockNFTTokens locks NFT tokens by IDs. Self-contained.
 func (w *Wallet) LockNFTTokens(ctx context.Context, ownerDID string, tokenIDs []string) ([]models.Token, error) {
 	return w.lockTokensByIDs(ctx, ownerDID, tokenIDs, constants.TokenType_NFT, "LockNFTTokens")

@@ -17,6 +17,13 @@ type Wallet struct {
 	log     logger.Logger
 	db      *storage.RubixDB
 	Ctx     context.Context
+	didDir  string
+}
+
+// SetDidDir sets the DID directory so the wallet can instantiate DIDLite for
+// pre-persistence signature verification. Call this after NewWallet.
+func (w *Wallet) SetDidDir(dir string) {
+	w.didDir = dir
 }
 
 // GetIpfsOps returns the IPFS operations interface
