@@ -32,11 +32,6 @@ type DIDResponse struct {
 	Result  DIDResult `json:"result"`
 }
 
-// // DIDFromPubKeyResponse to receive request to create did for provided pub key
-// type DIDFromPubKeyResponse struct {
-// 	DID string `json:"did"`
-// }
-
 // Arbitrary sign request
 type ArbitrarySignRequest struct {
 	SignerDID string `json:"signer_did"`

@@ -30,8 +30,7 @@ func (cmd *Command) CreateDID() {
 		}
 		cmd.privPWD = pwd
 	}
-	// TODO : if public key is passed in input, request body will be different
-	// else it is treated as local DID
+	
 	cfg := did.DIDCreate{
 		PrivPWD:   cmd.privPWD,
 		Mnemonic:  cmd.mnemonic,

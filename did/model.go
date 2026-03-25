@@ -33,12 +33,6 @@ type DIDCreate struct {
 	ChildPath int    `json:"childPath"`
 }
 
-// // DIDFromPubKeyRequest to receive request to create did for provided pub key
-// type DIDFromPubKeyRequest struct {
-// 	PubKey string `json:"public_key"`
-// 	// PrivPWD string `json:"private_password"`
-// }
-
 type DIDSignature struct {
 	Pixels    []byte
 	Signature []byte

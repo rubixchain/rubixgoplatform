@@ -103,18 +103,17 @@ const (
 	SubscribeNFTCmd                string = "subscribe-nft"
 	FetchNftCmd                    string = "fetch-nft"
 	GetNftsByDidCmd                string = "get-nfts-by-did"
-	// CreateDIDFromPubKeyCmd         string = "createdidfrompubkey"
-	AddUserAPIKeyCmd           string = "adduserapikey"
-	AddPeerDetailsFromExplorer string = "exppeerdetails"
-	GetFTTxnDetailsCmd         string = "get-ft-txn-details"
-	ArbitrarySignCmd           string = "sign"
-	VerifySignatureCmd         string = "verify-signature"
-	AsyncFTStatusCmd           string = "asyncftstatus"
-	SetAsyncFTStatusCmd        string = "setasyncftstatus"
-	FixFTCreatorCmd            string = "fix-ft-creator"
-	GetFTCreatorStatsCmd       string = "get-ft-creator-stats"
-	RemoveStaleDIDCmd          string = "removedid"
-	InitCmd                    string = "init"
+	AddUserAPIKeyCmd               string = "adduserapikey"
+	AddPeerDetailsFromExplorer     string = "exppeerdetails"
+	GetFTTxnDetailsCmd             string = "get-ft-txn-details"
+	ArbitrarySignCmd               string = "sign"
+	VerifySignatureCmd             string = "verify-signature"
+	AsyncFTStatusCmd               string = "asyncftstatus"
+	SetAsyncFTStatusCmd            string = "setasyncftstatus"
+	FixFTCreatorCmd                string = "fix-ft-creator"
+	GetFTCreatorStatsCmd           string = "get-ft-creator-stats"
+	RemoveStaleDIDCmd              string = "removedid"
+	InitCmd                        string = "init"
 )
 
 var commands = []string{VersionCmd,
@@ -177,7 +176,6 @@ var commands = []string{VersionCmd,
 	SubscribeNFTCmd,
 	FetchNftCmd,
 	GetNftsByDidCmd,
-	// CreateDIDFromPubKeyCmd,
 	AddUserAPIKeyCmd,
 	AddPeerDetailsFromExplorer,
 	GetFTTxnDetailsCmd,
@@ -261,29 +259,28 @@ var commandsHelp = []string{"To get tool version",
 }
 
 type Command struct {
-	cfg            types.RubixConfig
-	c              *client.Client
-	sc             *contract.Contract
-	encKey         string
-	start          bool
-	node           uint
-	nodeConfigPath string
-	logFile        string
-	logLevel       string
-	cfgFile        string
-	testnet        bool
-	mainnet        bool
-	localnet       bool
-	testNetKey     string
-	addr           string
-	port           string
-	peerID         string
-	peers          []string
-	log            logger.Logger
-	forcePWD       bool
-	privPWD        string
-	quorumPWD      string
-	// privKeyFile                  string
+	cfg                          types.RubixConfig
+	c                            *client.Client
+	sc                           *contract.Contract
+	encKey                       string
+	start                        bool
+	node                         uint
+	nodeConfigPath               string
+	logFile                      string
+	logLevel                     string
+	cfgFile                      string
+	testnet                      bool
+	mainnet                      bool
+	localnet                     bool
+	testNetKey                   string
+	addr                         string
+	port                         string
+	peerID                       string
+	peers                        []string
+	log                          logger.Logger
+	forcePWD                     bool
+	privPWD                      string
+	quorumPWD                    string
 	pubKeyFile                   string
 	srvName                      string
 	storageType                  string
@@ -689,7 +686,6 @@ func Run(args []string) {
 	flag.StringVar(&cmd.privPWD, "privPWD", "mypassword", "Private key password")
 	flag.StringVar(&cmd.quorumPWD, "quorumPWD", "mypassword", "Quorum key password")
 	flag.StringVar(&cmd.mnemonic, "mnemonic", "", "Mnemonic keys")
-	// flag.StringVar(&cmd.privKeyFile, "privKeyFile", "", "Private key file")
 	flag.StringVar(&cmd.pubKeyFile, "publicKey", "", "Public key")
 	flag.StringVar(&cmd.srvName, "srvName", "explorer_service", "Service name")
 	flag.StringVar(&cmd.storageType, "storageType", constants.DBType_PostgreSQL, "Storage type")
@@ -950,8 +946,6 @@ func Run(args []string) {
 		cmd.fetchNFT()
 	case GetNftsByDidCmd:
 		cmd.getNFTsByDid()
-	// case CreateDIDFromPubKeyCmd:
-	// 	cmd.CreateDIDFromPubKey()
 	case AddUserAPIKeyCmd:
 		cmd.addUserAPIKey()
 	case AddPeerDetailsFromExplorer:
