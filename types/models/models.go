@@ -98,12 +98,12 @@ type UnpledgeSequenceInfo struct {
 }
 
 type FT struct {
-	ID         string      `db:"id"`
-	FTName     pgtype.Text `db:"ft_name"`
-	FTCount    pgtype.Int4 `db:"ft_count"`
-	CreatorDID pgtype.Text `db:"creator_did"`
-	CreatedAt  time.Time   `db:"created_at"`
-	UpdatedAt  time.Time   `db:"updated_at"`
+	ID         string    `db:"id"`
+	FTName     string    `db:"ft_name"`
+	FTCount    int64     `db:"ft_count"`
+	CreatorDID string    `db:"creator_did"`
+	CreatedAt  time.Time `db:"created_at"`
+	UpdatedAt  time.Time `db:"updated_at"`
 }
 
 type TokenRecovery struct {
