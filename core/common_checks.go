@@ -8,6 +8,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
+	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -208,6 +209,43 @@ func (c *Core) ValidateNewTokenContent(tokenContent string, isQuorum bool) error
 		}
 		c.log.Debug("token content validated for the part token", tokenContent)
 
+	}
+
+	return nil
+}
+
+// ValidateTransactionValueAndPledge checks that the total value of RBT tokens
+// in the transaction equals the total value of tokens pledged across all quorums.
+func (c *Core) ValidateTransactionValueAndPledge(txnInfo *models.TransactionInfo) error {
+	if txnInfo.Tokens == nil {
+		return fmt.Errorf("transaction has no tokens")
+	}
+
+	transactionValue := rubixmath.ZeroFloat()
+	for _, t := range txnInfo.Tokens.RBT {
+		tokenValue, err := parts.GetTokenValueFromIndexedID(t.TokenID)
+		if err != nil {
+			return fmt.Errorf("failed to get value for RBT token %s: %w", t.TokenID, err)
+		}
+		transactionValue = rubixmath.AddFloat(transactionValue, tokenValue)
+	}
+
+	totalPledgeValue := rubixmath.ZeroFloat()
+	for _, quorum := range txnInfo.Quorums {
+		for _, t := range quorum.Tokens {
+			tokenValue, err := parts.GetTokenValueFromIndexedID(t.TokenID)
+			if err != nil {
+				return fmt.Errorf("failed to get value for pledge token %s from quorum %s: %w", t.TokenID, quorum.Did, err)
+			}
+			totalPledgeValue = rubixmath.AddFloat(totalPledgeValue, tokenValue)
+		}
+	}
+
+	if transactionValue != totalPledgeValue {
+		return fmt.Errorf(
+			"transaction value (%v) does not match total pledge amount (%v)",
+			transactionValue, totalPledgeValue,
+		)
 	}
 
 	return nil
