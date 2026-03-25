@@ -100,7 +100,7 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	}
 
 	deploySC.DID = did["did"][0]
-	if !s.c.IsDIDExist("", deploySC.DID) {
+	if !s.c.IsDIDExist(deploySC.DID) {
 		s.log.Error("Generate Smart Contract failed, DID does not exist")
 		return s.BasicResponse(req, false, "DID does not exist", nil)
 	}

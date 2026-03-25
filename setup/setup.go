@@ -22,8 +22,6 @@ const (
 	APIGetAllBootStrap                  string = "/api/get-all-bootstrap"
 	APIGetDIDChallenge                  string = "/api/getdidchallenge"
 	APIGetDIDAccess                     string = "/api/logindid"
-	APICreateDID                        string = "/api/createdid"
-	APIGetAllDID                        string = "/api/getalldid"
 	APIGetAllTokens                     string = "/api/getalltokens"
 	APIAddQuorum                        string = "/api/addquorum"
 	APIGetAllQuorum                     string = "/api/getallquorum"
@@ -35,7 +33,6 @@ const (
 	APIGetAccountInfo                   string = "/api/get-account-info"
 	APISignatureResponse                string = "/api/signature-response"
 	APIDumpTokenChainBlock              string = "/api/dump-token-chain"
-	APIRegisterDID                      string = "/api/register-did"
 	APISetupDID                         string = "/api/setup-did"
 	APIMigrateNode                      string = "/api/migrate-node"
 	APILockTokens                       string = "/api/lock-tokens"
@@ -91,7 +88,6 @@ const (
 	APIFetchNft                         string = "/api/fetch-nft"
 	APIGetNftsByDid                     string = "/api/get-nfts-by-did"
 	APIGetFTTokenchain                  string = "/api/get-ft-token-chain"
-	APIRequestDIDForPubKey              string = "/api/request-did-for-pubkey"
 	APISendJWTFromWallet                string = "/api/send-jwt-from-wallet"
 	APIAddPeerDetailsFromExplorer       string = "/api/add-peer-details-from-explorer"
 	APIGetFTTxnByDID                    string = "/api/get-ft-txn-by-did"
@@ -105,6 +101,12 @@ const (
 	APIGetFailedFTDownloadStatus        string = "/api/get-failed-ft-download-status"
 	APIRecoverLostTokens                string = "/api/recover-lost-tokens"
 	APIRemoteRecoverTokens              string = "/api/remote-recover-tokens"
+
+
+	// Endpoints on DID module 
+	APICreateDID                        string = "/rubix/v1/dids/create"
+	APIGetAllDID                        string = "/rubix/v1/dids"
+	APIRegisterDID                      string = "/rubix/v1/dids/{did}/register"
 
 	//Below are Explorer-service API endpoints
 	APIGetAllRBTs           string = "/api/de-exp/get-rbt-list"

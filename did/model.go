@@ -26,17 +26,18 @@ const (
 )
 
 type DIDCreate struct {
-	Dir          string `json:"dir"`
-	Config       string `json:"config"`
-	RootDID      bool   `json:"root_did"`
-	MasterDID    string `json:"master_did"`
-	Secret       string `json:"secret"`
-	PrivPWD      string `json:"priv_pwd"`
-	PubKeyFile   string `json:"pub_key_file"`
-	PrivKeyFile  string `json:"priv_key_file"`
-	MnemonicFile string `json:"mnemonic_file"`
-	ChildPath    int    `json:"childPath"`
+	PrivPWD   string `json:"priv_pwd"`
+	PubKey    string `json:"pub_key"`
+	PrivKey   string `json:"priv_key"`
+	Mnemonic  string `json:"mnemonic"`
+	ChildPath int    `json:"childPath"`
 }
+
+// // DIDFromPubKeyRequest to receive request to create did for provided pub key
+// type DIDFromPubKeyRequest struct {
+// 	PubKey string `json:"public_key"`
+// 	// PrivPWD string `json:"private_password"`
+// }
 
 type DIDSignature struct {
 	Pixels    []byte

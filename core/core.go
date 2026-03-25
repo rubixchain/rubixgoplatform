@@ -110,7 +110,7 @@ type Core struct {
 	didDir               string
 	pm                   *ipfsport.PeerManager
 	l                    *ipfsport.Listener
-	ps                   *pubsub.PubSub
+	ps                   *types.PubSub
 	started              bool
 	ipfsApp              string
 	testnet              bool

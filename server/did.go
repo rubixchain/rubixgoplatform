@@ -36,42 +36,22 @@ func (s *Server) APIGetDIDChallenge(req *ensweb.Request) *ensweb.Result {
 
 // APICreateDID will create new DID
 func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
-
-	folderName, err := s.c.CreateTempFolder()
-	if err != nil {
-		s.log.Error("failed to create folder")
-		return s.BasicResponse(req, false, "failed to create folder", nil)
-	}
-	defer os.RemoveAll(folderName)
-
-	fileNames, fieldNames, err := s.ParseMultiPartForm(req, folderName+"/")
-
-	if err != nil {
-		s.log.Error("failed to parse request", "err", err)
-		return s.BasicResponse(req, false, "failed to create DID", nil)
-	}
-	fields := fieldNames[setup.DIDConfigField]
-	if len(fields) == 0 {
-		s.log.Error("missing did configuration")
-		return s.BasicResponse(req, false, "missing did configuration", nil)
-	}
 	var didCreate did.DIDCreate
-	err = json.Unmarshal([]byte(fields[0]), &didCreate)
+	err := s.ParseJSON(req, &didCreate)
 	if err != nil {
 		s.log.Error("failed to parse did configuration", "err", err)
 		return s.BasicResponse(req, false, "failed to parse did configuration", nil)
 	}
 
-	for _, fileName := range fileNames {
+	// depending on pub key passed or not, direct the function call
+	var didLocal bool
+	if didCreate.PubKey == "" {
+		didLocal = true // create key pair and did locally
+	} else {
+		didLocal = false // create did from the input public key
+	}
 
-		if strings.Contains(fileName, did.PubKeyFileName) {
-			didCreate.PubKeyFile = fileName
-		}
-	}
-	if !s.cfg.EnableAuth {
-		didCreate.Dir = DIDRootDir
-	}
-	did, err := s.c.CreateDID(&didCreate)
+	did, err := s.c.CreateDID(&didCreate, didLocal)
 	if err != nil {
 		s.log.Error("failed to create did", "err", err)
 		return s.BasicResponse(req, false, err.Error(), nil)
@@ -84,12 +64,13 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 			PeerID: s.c.GetPeerID(),
 		},
 	}
-	return s.RenderJSON(req, &didResp, http.StatusOK)
+
+	return s.BasicResponse(req, true, didResp.Message, &didResp)
 }
 
 // APIGetAllDID will get all DID
 func (s *Server) APIGetAllDID(req *ensweb.Request) *ensweb.Result {
-	_, ok := s.validateAccess(req)
+	ok := s.validateAccess(req)
 	if !ok {
 		return s.BasicResponse(req, false, "Unathuriozed access", nil)
 	}
@@ -117,7 +98,7 @@ func (s *Server) validateDIDAccess(req *ensweb.Request, did string) bool {
 	if s.cfg.EnableAuth {
 		// always expect client token to present
 		token := req.ClientToken.Model.(*setup.BearerToken)
-		return s.c.IsDIDExist(token.DID, did)
+		return s.c.IsDIDExist(did)
 	} else {
 		return true
 	}
@@ -140,22 +121,10 @@ func (s *Server) didResponse(req *ensweb.Request, reqID string) *ensweb.Result {
 }
 
 func (s *Server) APIRegisterDID(req *ensweb.Request) *ensweb.Result {
-	var m map[string]interface{}
-	err := s.ParseJSON(req, &m)
-	if err != nil {
-		return s.BasicResponse(req, false, "Failed to parse input", nil)
-	}
-	di, ok := m["did"]
-	if !ok {
-		return s.BasicResponse(req, false, "Failed to parse input", nil)
-	}
-	didStr, ok := di.(string)
-	if !ok {
-		return s.BasicResponse(req, false, "Failed to parse input", nil)
-	}
+	didStr := s.GetRouteVar(req, "did")
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(didStr)
 	if !strings.HasPrefix(didStr, "bafybmi") || len(didStr) != 59 || !is_alphanumeric {
-		s.log.Error("Invalid DID")
+		s.log.Error("Invalid DID: %s", didStr)
 		return s.BasicResponse(req, false, "Invalid DID", nil)
 	}
 	s.c.AddWebReq(req)
@@ -191,64 +160,19 @@ func (s *Server) APISetupDID(req *ensweb.Request) *ensweb.Result {
 	for _, fileName := range fileNames {
 
 		if strings.Contains(fileName, did.PvtKeyFileName) {
-			didCreate.PrivKeyFile = fileName
+			didCreate.PrivKey = fileName
 		}
 		if strings.Contains(fileName, did.PubKeyFileName) {
-			didCreate.PubKeyFile = fileName
+			didCreate.PubKey = fileName
 		}
 	}
-	dir, ok := s.validateAccess(req)
+	ok := s.validateAccess(req)
 	if !ok {
 		return s.BasicResponse(req, false, "Unathuriozed access", nil)
 	}
-	didCreate.Dir = dir
+	// didCreate.Dir = dir
 	br := s.c.AddDID(&didCreate)
 	return s.RenderJSON(req, br, http.StatusOK)
-}
-
-type DIDFromPubKeySwaggoRequest struct {
-	PubKey string `json:"public_key"`
-}
-
-// APICreateDIDFromPubKey creates a DID from the provided public key
-
-// @Summary     Returns DID for corresponding public key
-// @Description This API will returns DID for corresponding public key
-// @Tags        Account
-// @ID 			request-did-for-pubkey
-// @Accept      json
-// @Produce     json
-// @Param 		input body DIDFromPubKeySwaggoRequest true "Get DID from Public Key"
-// @Success 200 {object} model.DIDFromPubKeyResponse
-// @Router /api/request-did-for-pubkey [post]
-func (s *Server) APICreateDIDFromPubKey(req *ensweb.Request) *ensweb.Result {
-	var didReq model.DIDFromPubKeyRequest
-	err := s.ParseJSON(req, &didReq)
-	if err != nil {
-		return s.BasicResponse(req, false, "Failed to parse input to create did from pub key", nil)
-	}
-
-	//provide required data to create a new lite mode did
-	didCreate := did.DIDCreate{
-		PubKeyFile: "",
-	}
-
-	if !s.cfg.EnableAuth {
-		didCreate.Dir = DIDRootDir
-	}
-
-	//pass the public key and other required data to create a did
-	did, err := s.c.CreateDIDFromPubKey(&didCreate, didReq.PubKey)
-	if err != nil {
-		s.log.Error("failed to create did from given pub key", "err", err)
-		return s.BasicResponse(req, false, err.Error(), nil)
-	}
-
-	// respond with the requested did along with the corr. public key
-	didResp := model.DIDFromPubKeyResponse{
-		DID: did,
-	}
-	return s.RenderJSON(req, didResp, http.StatusOK)
 }
 
 // arbitrary signature API

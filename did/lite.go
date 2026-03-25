@@ -103,7 +103,7 @@ func (d *DIDLite) GetSignType() int {
 
 // PKI based sign in lite mode
 // In lite mode, the sign function returns only the private signature, unlike the basic mode
-func (d *DIDLite) Sign(hash string) ([]byte, []byte, error) {
+func (d *DIDLite) Sign(hash string) ([]byte, []byte, error) { //TODO : should return one signature only
 	pvtKeySign, err := d.PvtSign([]byte(hash))
 	bs := []byte{}
 

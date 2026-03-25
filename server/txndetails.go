@@ -164,7 +164,7 @@ func (s *Server) APIGetTxnByComment(req *ensweb.Request) *ensweb.Result {
 // @Success 200 {object} model.TxnCountForDID
 // @Router /api/get-by-node [get]
 func (s *Server) APIGetTxnByNode(req *ensweb.Request) *ensweb.Result {
-	dir, ok := s.validateAccess(req)
+	ok := s.validateAccess(req)
 	if !ok {
 		return s.BasicResponse(req, false, "Unathuriozed access", nil)
 	}

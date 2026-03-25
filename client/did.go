@@ -9,6 +9,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 func (c *Client) GetDIDChallenge(did string) (string, error) {
@@ -47,17 +48,8 @@ func (c *Client) GetAllDIDs() (*model.GetAccountInfo, error) {
 }
 
 func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
-	jd, err := json.Marshal(&cfg)
-	if err != nil {
-		c.log.Error("Failed to parse json data", "err", err)
-		return "Failed to parse json data", false
-	}
-	fields := make(map[string]string)
-	fields[setup.DIDConfigField] = string(jd)
-	files := make(map[string]string)
-
 	var dr model.DIDResponse
-	err = c.sendMutiFormRequest("POST", setup.APICreateDID, nil, fields, files, &dr)
+	err := c.sendJSONRequest("POST", setup.APICreateDID, nil, cfg, &dr)
 	if err != nil {
 		c.log.Error("Invalid response from the node", "err", err)
 		return "Invalid response from the node, " + err.Error(), false
@@ -72,9 +64,9 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 
 func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
 
-	if !strings.Contains(dc.PubKeyFile, did.PubKeyFileName) ||
-		!strings.Contains(dc.PrivKeyFile, did.PvtKeyFileName) ||
-		!strings.Contains(dc.MnemonicFile, did.MnemonicFileName) {
+	if !strings.Contains(dc.PubKey, did.PubKeyFileName) ||
+		!strings.Contains(dc.PrivKey, did.PvtKeyFileName) ||
+		!strings.Contains(dc.Mnemonic, did.MnemonicFileName) {
 		return "Required files are missing", false
 	}
 
@@ -87,11 +79,11 @@ func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
 	fields[setup.DIDConfigField] = string(jd)
 	files := make(map[string]string)
 
-	if dc.PubKeyFile != "" {
-		files["pub_key"] = dc.PubKeyFile
+	if dc.PubKey != "" {
+		files["pub_key"] = dc.PubKey
 	}
-	if dc.PrivKeyFile != "" {
-		files["priv_key"] = dc.PrivKeyFile
+	if dc.PrivKey != "" {
+		files["priv_key"] = dc.PrivKey
 	}
 
 	var br model.BasicResponse
@@ -118,10 +110,14 @@ func (c *Client) SignatureResponse(sr *did.SignRespData, timeout ...time.Duratio
 }
 
 func (c *Client) RegisterDID(didStr string) (*model.BasicResponse, error) {
-	m := make(map[string]interface{})
-	m["did"] = didStr
+	pathParams := make(map[string]string)
+	pathParams["did"] = didStr
+	endpoint, err := ensweb.SubstitutePathParams(setup.APIRegisterDID, pathParams)
+	if err != nil {
+		return nil, err
+	}
 	var rm model.BasicResponse
-	err := c.sendJSONRequest("POST", setup.APIRegisterDID, nil, &m, &rm)
+	err = c.sendJSONRequest("POST", endpoint, nil, nil, &rm)
 	if err != nil {
 		return nil, err
 	}
@@ -137,19 +133,6 @@ func (c *Client) GetAccountInfo(didStr string) (*model.GetAccountInfo, error) {
 		return nil, err
 	}
 	return &info, nil
-}
-
-// CreateDIDFromPubKey request to create did from provided public key
-func (c *Client) CreateDIDFromPubKey(pubKey string) (string, error) {
-	data := map[string]interface{}{
-		"public_key": pubKey,
-	}
-	var resp model.DIDFromPubKeyResponse
-	err := c.sendJSONRequest("POST", setup.APIRequestDIDForPubKey, nil, &data, &resp)
-	if err != nil {
-		return "", err
-	}
-	return resp.DID, nil
 }
 
 // Arbitrary signature
