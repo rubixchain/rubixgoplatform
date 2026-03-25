@@ -133,22 +133,26 @@ func (c *Core) IsparentTokenBurnt(isFullNode bool, tokenID string) (error, bool)
 				//instead of return, it should compute parent tokenID from the tokenID
 						// TODO: replace with proper parent tokenID computation once available
 			partTokenID := parts.TokenID(tokenID)
-			parentPtr := partTokenID.Parent()
-			if parentPtr == nil {
+			parentTokenID, err := partTokenID.GetParentToken()
+			if err != nil {
+				return fmt.Errorf("failed to get parent for token %s: %w", partTokenID, err), false
+			}
+			if parentTokenID == "" {
 				return nil, false
 			}
-			parentTokenID = parentPtr.String()
 				
 			}
 			parentTokenID = tokenDetails.ParentTokenID.String
 		} else {
 			// TODO: replace with proper parent tokenID computation once available
 			partTokenID := parts.TokenID(tokenID)
-			parentPtr := partTokenID.Parent()
-			if parentPtr == nil {
+			parentTokenID, err := partTokenID.GetParentToken()
+			if err != nil {
+				return fmt.Errorf("failed to get parent id of token %s: %w", partTokenID, err), false
+			}
+			if parentTokenID == "" {
 				return nil, false
 			}
-			parentTokenID = parentPtr.String()
 		}
 
 		// TODO: replace with proper fullnode genesis txnID retrieval once available

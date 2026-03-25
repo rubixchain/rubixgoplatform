@@ -3,101 +3,85 @@ package parts
 import (
 	"fmt"
 	"strings"
+
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 type TokenID string
 
-func ParseTokenID(id TokenID, wholeTokenID string) (root string, path []int, err error) {
-	s := string(id)
-
-	// If this IS the whole token, no hierarchy
-	if s == wholeTokenID {
-		return s, []int{}, nil
+func ParseTokenID(id TokenID) (path []int, err error) {
+	tokenElems, err := util.GetRbtIDElements(id.String())
+	if err != nil {
+		return nil, fmt.Errorf("ParseTokenID: %w", err)
+	}
+	
+	// id is root token, and root has no path
+	if tokenElems.PartIndex == 0 {
+		return []int{}, nil
 	}
 
-	// Check if the ID starts with the whole token prefix
-	expectedPrefix := wholeTokenID + "_"
-	if !strings.HasPrefix(s, expectedPrefix) {
-		return "", nil, fmt.Errorf("token ID '%s' does not belong to whole token '%s'", s, wholeTokenID)
-	}
-
-	// Extract the part token hierarchy (everything after the whole token ID)
-	hierarchySuffix := s[len(expectedPrefix):]
-	parts := strings.Split(hierarchySuffix, "_")
-
-	// Parse each segment as an integer index
-	path = make([]int, len(parts))
-	for i, part := range parts {
-		var idx int
-		_, err := fmt.Sscanf(part, "%d", &idx)
+	// walk up the tree, and at each step compute the node's
+	// position among its siblings before moving to the parent.
+	// We collect positions bottom-up, then reverse at the end.
+	current := tokenElems.PartIndex
+	currentToken := id
+	for current != 0 {
+		// get parent token
+		parent, err := currentToken.GetParentToken()
 		if err != nil {
-			return "", nil, fmt.Errorf("invalid token ID segment '%s': %w", part, err)
+			return nil, fmt.Errorf("ParseTokenID: error getting parent for index %d: %w", current, err)
 		}
-		path[i] = idx
-	}
-
-	return wholeTokenID, path, nil
-}
-
-func (id TokenID) GetWholeTokenID() TokenID {
-	// Walk back through parents to find the whole token
-	// The whole token is when there's no more parent
-	currentID := id
-	for {
-		parent := currentID.Parent()
-		if parent == nil {
-			return currentID
-		}
-		currentID = *parent
-	}
-}
-
-func (id TokenID) Level() int {
-	// Count parent hops to determine level
-	level := 0
-	currentID := id
-
-	idElems := strings.Split(currentID.String(), "_")
-	if len(idElems) == 2 {
-		return 0 // Case for whole token
-	}
-
-	for {
-		parent := currentID.Parent()
-		if parent == nil {
-			return level
+		// get parent's children range to find siblings
+		childrenRanges, err := TokenID(parent).GetChildrenIndexRange()
+		if err != nil {
+			return nil, fmt.Errorf("ParseTokenID: error getting children for parent %v: %w", parent, err)
 		}
 
-		level++
-		currentID = *parent
+		// 1-indexed position among siblings
+		position := (current - childrenRanges.First) + 1
+		path = append(path, position)
+
+		parentElems, err := util.GetRbtIDElements(parent) 
+		current = parentElems.PartIndex
+		currentToken = TokenID(parent)
 	}
+	// ancestors = [globalIndex, ..., L2 node, L1 node]
+	// reverse: collected bottom-up, need top-down (L1 first)
+	for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
+		path[i], path[j] = path[j], path[i]
+	}
+
+	return path, nil
 }
 
-// Parent returns the parent token ID, or nil for whole tokens
-func (id TokenID) Parent() *TokenID {
-	s := string(id)
-
-	elems := strings.Split(s, "_")
-	if len(elems) == 2 {
-		return nil // This is a whole token, no parent
+// GetWholeTokenID returns corresponding whole token pf the input token id
+func (id TokenID) GetWholeTokenID() (TokenID, error) {
+	// remove part index from token id, if any
+	// and that is the whole token
+	tokenElems, err := util.GetRbtIDElements(id.String())
+	if err != nil {
+		return "", fmt.Errorf("GetWholeTokenID: failed to extract token id elements, err: %w", err)
 	}
-
-	// Find the last dash to get parent
-	lastDash := strings.LastIndex(s, "_")
-	if lastDash == -1 {
-		return nil // Whole token has no parent
-	}
-
-	// Return parent hierarchical string
-	parentHierarchical := s[:lastDash]
-	parent := TokenID(parentHierarchical)
-	return &parent
+	// level_tokenNumber is the corresponding whole token of any part token
+	return TokenID(fmt.Sprintf("%d_%d", tokenElems.Level, tokenElems.TokenNumber)), nil
 }
 
-// Child returns the token ID for a child at the given index (1-based)
-func (id TokenID) Child(index int) TokenID {
+// Child returns the token ID for a child at the given child-position (1-based)
+func (id TokenID) Child(childPosition int) TokenID {
+	// get children range of the tokenID
+	childrenRange, err := id.GetChildrenIndexRange()
+	if err != nil {
+		return ""
+	}
+	// index is child position in the children range
+	// first-child-index + (required-child-position - 1) = required-child-index
+	tokenElems, err := util.GetRbtIDElements(string(id))
+	if err != nil {
+		return ""
+	}
+	partIndex := childrenRange.First + (childPosition - 1)
 	// Create child hierarchical string by appending index
-	return TokenID(fmt.Sprintf("%s_%d", string(id), index))
+	return TokenID(fmt.Sprintf("%d_%d_%d", tokenElems.Level, tokenElems.TokenNumber, partIndex))
 }
 
 // Children returns all child token IDs for a given split factor
@@ -119,8 +103,8 @@ func (id TokenID) IsAncestorOf(other TokenID) bool {
 // This is format-agnostic and works by getting whole token roots and parsing with them
 func (a TokenID) LexicalCompare(b TokenID) int {
 	// Get whole token IDs for both
-	rootA := a.GetWholeTokenID()
-	rootB := b.GetWholeTokenID()
+	rootA, _ := a.GetWholeTokenID()
+	rootB, _ := b.GetWholeTokenID()
 
 	// Compare whole tokens first
 	if rootA < rootB {
@@ -131,8 +115,8 @@ func (a TokenID) LexicalCompare(b TokenID) int {
 	}
 
 	// Same whole token - compare hierarchical paths
-	_, pathA, _ := ParseTokenID(a, string(rootA))
-	_, pathB, _ := ParseTokenID(b, string(rootB))
+	pathA, _ := ParseTokenID(a)
+	pathB, _ := ParseTokenID(b)
 
 	minLen := len(pathA)
 	if len(pathB) < minLen {
@@ -164,7 +148,7 @@ func (id TokenID) String() string {
 }
 
 type SplitOp struct {
-	HierarchicalTokenID TokenID
-	ChildrenToTransfer  []int // Which child indices (1-based) go to recipient
-	ChildrenToKeep      []int // Which child indices stay with sender
+	TokenID            TokenID
+	ChildrenToTransfer []int // Which child indices (1-based) go to recipient
+	ChildrenToKeep     []int // Which child indices stay with sender
 }
