@@ -349,31 +349,31 @@ func (c *Core) IsParentTokenBurnt(isFullNode bool, tokenID string) (error, bool)
 	if isFullNode {
 		tokenDetails, err := c.w.GetFullNodeRBTToken(tokenID)
 		if err == nil {
-			if tokenDetails.ParentTokenID.Valid && tokenDetails.ParentTokenID.String != "" {
-				parentTokenID = tokenDetails.ParentTokenID.String
-
+			if !tokenDetails.ParentTokenID.Valid || tokenDetails.ParentTokenID.String == "" {
+				//instead of return, it should compute parent tokenID from the tokenID
+						// TODO: replace with proper parent tokenID computation once available
+			partTokenID := parts.TokenID(tokenID)
+			parentTokenID, err := partTokenID.GetParentToken()
+			if err != nil {
+				return fmt.Errorf("failed to get parent for token %s: %w", partTokenID, err), false
+			}
+			if parentTokenID == "" {
+				return nil, false
+			}
+				
+			}
+			parentTokenID = tokenDetails.ParentTokenID.String
+		} else {
+			// TODO: replace with proper parent tokenID computation once available
+			partTokenID := parts.TokenID(tokenID)
+			parentTokenID, err := partTokenID.GetParentToken()
+			if err != nil {
+				return fmt.Errorf("failed to get parent id of token %s: %w", partTokenID, err), false
+			}
+			if parentTokenID == "" {
+				return nil, false
 			}
 		}
-	} else {
-		tokenDetails, err := c.w.GetTokenByTokenID(tokenID)
-		if err == nil {
-			if tokenDetails.ParentTokenID.Valid && tokenDetails.ParentTokenID.String != "" {
-				parentTokenID = tokenDetails.ParentTokenID.String
-
-			}
-
-		}
-	}
-
-	if parentTokenID == "" {
-		partTokenID := parts.TokenID(tokenID)
-		parentPtr := partTokenID.Parent()
-		if parentPtr == nil {
-			return nil, false
-
-		}
-		parentTokenID = parentPtr.String()
-	}
 
 	var genesisTx *models.Transactions
 	var err error

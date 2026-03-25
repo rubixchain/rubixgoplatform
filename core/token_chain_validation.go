@@ -11,7 +11,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/types"
@@ -424,7 +423,7 @@ func (c *Core) ValidateParentTokenLatestBlock(parentTokenId string, userDID stri
 			}
 		} else {
 			var err error
-			tv, err = parts.GetTokenValueFromIndexedID(string(b))
+			tv, err = util.GetTokenValueFromTokenID(string(b))
 			if err != nil {
 				c.log.Error("failed while attempting fetch the value for part token", "err", err)
 				response.Message = "failed to fetch part token value"
