@@ -248,3 +248,43 @@ func (w *Wallet) CreateRBTToken(token models.Token) error {
 
 	return nil
 }
+
+// IsSmartContract checks if the given token ID is of type smart_contract.
+// Returns true if the token exists and is a smart contract, false otherwise.
+func (w *Wallet) IsSmartContract(tokenID string) (bool, error) {
+	var exists bool
+	err := w.db.Pool().QueryRow(w.Ctx,
+		`SELECT EXISTS(
+			SELECT 1 FROM tokens t
+			JOIN token_type tt ON t.token_type = tt.id
+			WHERE t.token_id = $1 AND tt.name = $2
+		)`,
+		tokenID, constants.TokenType_SmartContract,
+	).Scan(&exists)
+
+	if err != nil {
+		return false, fmt.Errorf("IsSmartContract: failed to check token type: %w", err)
+	}
+
+	return exists, nil
+}
+
+// IsNFT checks if the given token ID is of type nft.
+// Returns true if the token exists and is an NFT, false otherwise.
+func (w *Wallet) IsNFT(tokenID string) (bool, error) {
+	var exists bool
+	err := w.db.Pool().QueryRow(w.Ctx,
+		`SELECT EXISTS(
+			SELECT 1 FROM tokens t
+			JOIN token_type tt ON t.token_type = tt.id
+			WHERE t.token_id = $1 AND tt.name = $2
+		)`,
+		tokenID, constants.TokenType_NFT,
+	).Scan(&exists)
+
+	if err != nil {
+		return false, fmt.Errorf("IsNFT: failed to check token type: %w", err)
+	}
+
+	return exists, nil
+}

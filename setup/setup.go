@@ -47,12 +47,10 @@ const (
 	APIGetTxnByTxnID                    string = "/api/get-by-txnId"
 	APIGetTxnByDID                      string = "/api/get-by-did"
 	APIGetTxnByComment                  string = "/api/get-by-comment"
-	APICreateNFT                        string = "/api/create-nft"
 	APIGetAllNFT                        string = "/api/list-nfts"
 	APIAddNFTSale                       string = "/api/addnftsale"
 	APIDeploySmartContract              string = "/api/deploy-smart-contract"
 	APIExecuteSmartContract             string = "/api/execute-smart-contract"
-	APIGenerateSmartContract            string = "/api/generate-smart-contract"
 	APIFetchSmartContract               string = "/api/fetch-smart-contract"
 	APIPublishContract                  string = "/api/publish-smart-contract"
 	APISubscribecontract                string = "/api/subscribe-smart-contract"
@@ -113,6 +111,12 @@ const (
 
 	APIRemoveStaleDID string = "/api/remove-stale-did"
 
+	APIGenerateSmartContract string = "/rubix/v1/smart_contracts/generate"
+	APIListSmartContracts    string = "/rubix/v1/smart_contracts"
+	APIGetSmartContractChain string = "/rubix/v1/smart_contracts/{contract_id}/chain"
+	APICreateNFT             string = "/rubix/v1/nfts/generate"
+	APIListNFTs              string = "/rubix/v1/nfts"
+	APIGetNFTChain           string = "/rubix/v1/nfts/{nft_id}/chain"
 	APITransaction        string = "/rubix/v1/tx"
 	APIGetTransactionByID string = "/rubix/v1/tx/{tx_id}"
 
