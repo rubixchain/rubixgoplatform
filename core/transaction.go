@@ -233,8 +233,8 @@ func (c *Core) syncTransactionTokens(
 			if token == nil {
 				continue
 			}
-
-			err := c.syncTokenChainFrom(peer, token.PreviousTransactionID, token.TokenID)
+            //Handling the response in the future.
+			err, _ := c.syncTransactionChainFrom(peer, token.PreviousTransactionID, token.TokenID)
 			if err != nil {
 				return err
 			}

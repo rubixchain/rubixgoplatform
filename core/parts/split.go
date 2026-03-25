@@ -110,7 +110,7 @@ func performTokenSplit(w *wallet.Wallet, dc types.DIDCrypto,
 		parentToken = cachedToken
 	} else {
 		var err error
-		parentToken, err = w.GetRBTToken(parentTokenID)
+		parentToken, err = w.GetTokenByTokenID(parentTokenIndexedID)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("performTokenSplit: unable to get info of parent token: %v, err: %v", parentTokenID, err)
 		}

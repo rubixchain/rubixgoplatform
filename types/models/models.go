@@ -242,3 +242,28 @@ type FullNodeSmartContract struct {
 	CreatedAt      time.Time `db:"created_at"`
 	UpdatedAt      time.Time `db:"updated_at"`
 }
+
+// SyncTransactionChainRequest is used by the transaction chain sync API.
+// TODO: dev-team -- expand fields as needed for full sync implementation
+type SyncTransactionChainRequest struct {
+	Did string `json:"did"`
+}
+type GenesisAndLatestTransactionSyncRequest struct {
+	Token string `json:"token"`
+}
+type TransactionChainSyncRequest struct {
+	TokenID       string `json:"token_id"`
+	TransactionID string `json:"transaction_id"`
+}
+type TransactionChainSyncReply struct {
+	Status            bool     `json:"status"`
+	Message           string   `json:"message"`
+	NextTransactionID string   `json:"next_transaction_id"`
+	Transactions      [][]byte `json:"transactions"`
+}
+type GenesisAndLatestTransactionSyncReply struct {
+	Status             bool   `json:"status"`
+	Message            string `json:"message"`
+	GenesisTransaction []byte `json:"genesis_transaction"`
+	LatestTransaction  []byte `json:"latest_transaction"`
+}

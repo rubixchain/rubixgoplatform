@@ -1,8 +1,8 @@
 package util
 
 import (
-	"encoding/base64"
 	"bytes"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -91,7 +91,6 @@ func PublishTransaction(pubsub *types.PubSub, tx *models.TransactionInfo, signat
 
 	return transaction, nil
 }
-
 
 // TransactionToBytes converts transaction struct into a byte array
 func TransactionToBytes(txn *models.Transactions) ([]byte, error) {
