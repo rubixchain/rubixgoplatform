@@ -132,7 +132,7 @@ func (c *Core) GetPeerInfoResponse(req *ensweb.Request) *ensweb.Result { //PingR
 	}
 	var pInfo models.DID
 
-	pInfo.PeerID = c.w.GetPeerID(peerDID)
+	pInfo.PeerID, _ = c.w.GetPeerID(peerDID)
 	if pInfo.PeerID == "" {
 		_, err := c.w.GetDID(peerDID)
 		if err != nil {

@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,8 +16,6 @@ import (
 	"sync"
 	"time"
 
-	ipfsnode "github.com/ipfs/go-ipfs-api"
-	block "github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
@@ -47,10 +46,11 @@ type TCBSyncRequest struct {
 }
 
 type TCBSyncReply struct {
-	Status      bool     `json:"status"`
-	Message     string   `json:"message"`
-	NextBlockID string   `json:"next_block_id"`
-	TCBlock     [][]byte `json:"tc_block"`
+	Status      bool                `json:"status"`
+	Message     string              `json:"message"`
+	NextBlockID string              `json:"next_block_id"`
+	TCBlock     [][]byte            `json:"tc_block"`
+	TokenChain  []models.TokenChain `json:"token_chain,omitempty"`
 }
 
 type TCBSyncGenesisAndLatestBlockReply struct {
@@ -80,8 +80,8 @@ type TokenSyncInfo struct {
 }
 
 type ReceivedBlock struct {
-	GenesisBlock *block.Block `json:"genesis_block"`
-	LatestBlock  *block.Block `json:"latest_block"`
+	GenesisBlock *wallet.BlockStub `json:"genesis_block"`
+	LatestBlock  *wallet.BlockStub `json:"latest_block"`
 }
 
 type PubSubEnvelope struct {
@@ -116,7 +116,7 @@ func (c *Core) GetAllTokens(did string, tt string) (*model.TokenResponse, error)
 		for _, t := range tkns {
 			td := model.TokenDetail{
 				Token:  t.TokenID,
-				Status: t.TokenStatus,
+				Status: int(t.TokenStatus),
 			}
 			tr.TokenDetails = append(tr.TokenDetails, td)
 		}
@@ -202,136 +202,83 @@ func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex 
 	if err != nil {
 		return fmt.Errorf("DID is not exist")
 	}
-	var currentTokenNumber int
-
-	if startIndex >= 0 {
-		currentTokenNumber = startIndex
-	} else {
-		currentTokenNumber, err = c.w.GetLocalTokenNumber()
-		if err != nil {
-			return fmt.Errorf("failed to get local test token info, err: %v", err)
-		}
-
-	}
-
-	var startTokenNumber int
-	var finalTokenNumber int
-
-	if currentTokenNumber == 0 {
-		startTokenNumber = 1
-	} else {
-		startTokenNumber = currentTokenNumber
-	}
-
-	finalTokenNumber = startTokenNumber + num
 	currentTime := time.Now()
 
-	// Each global index maps to (tokenLevel, numInLevel) per TokenMap: level 10000 = TokenMap 0 (56 tokens), 10001 = TokenMap 1 (4300000), etc.
-	for globalIndex := startTokenNumber; globalIndex < finalTokenNumber; globalIndex++ {
-		tokenLevel, numInLevel, err := token.GetTokenLevelAndNumberForGlobalIndex(globalIndex)
-		if err != nil {
-			c.log.Error("Failed to get token level and number for global index", "globalIndex", globalIndex, "err", err)
-			return err
-		}
-		id, err := c.getTokenIDForLocalTestTokens(tokenLevel, numInLevel)
-		if err != nil {
-			c.log.Error("Failed to add token to network", "err", err)
-			return err
-		}
-		gb := &block.GenesisBlock{
-			// Type: block.TokenGeneratedType,
-			Info: []block.GenesisTokenInfo{
-				{Token: id, NetworkID: constants.NetworkID_RBT_Local},
-			},
-		}
-		ti := &block.TransInfo{
-			Tokens: []block.TransTokens{
-				{
-					Token:     id,
-					TokenType: token.TestTokenType,
+	// TokenID is assigned atomically inside PersistGenesisTokenRecord using the
+	// global DB counter (GetNextTokenNumber). startIndex is retained in the
+	// signature for API compatibility but is no longer used.
+	for i := 0; i < num; i++ {
+		// Build genesis txInfo with empty TokenID — PersistGenesisTokenRecord
+		// assigns the canonical DB-counter-based TokenID inside the transaction.
+		txInfo := &models.TransactionInfo{
+			Initiator: did,
+			Owner:     did,
+			Epoch:     int(currentTime.Unix()),
+			Network:   constants.NetworkID_RBT_Local,
+			Tokens: &models.TransactionTokens{
+				RBT: []*models.TokenInfo{
+					{TokenID: "", PreviousTransactionID: ""},
 				},
 			},
 		}
-
-		tcb := &block.TokenChainBlock{
-			BlockType:    block.TokenGeneratedType,
-			TokenOwner:   did,
-			GenesisBlock: gb,
-			TransInfo:    ti,
-			TokenValue:   floatPrecision(1.0, MaxDecimalPlaces),
-			Version:      constants.BlockVersion,
-			Epoch:        int(currentTime.Unix()),
-		}
-
-		ctcb := make(map[string]*block.Block)
-		ctcb[id] = nil
-
-		blk := block.CreateNewBlock(ctcb, tcb)
-
-		if blk == nil {
-			c.log.Error("Failed to create new token chain block")
-			return fmt.Errorf("failed to create new token chain block")
-		}
-		err = blk.UpdateSignature(dc)
+		infoBytes, err := models.SerializeTransactionInfo(txInfo)
 		if err != nil {
-			c.log.Error("Failed to update did signature", "err", err)
-			return fmt.Errorf("failed to update did signature")
+			return fmt.Errorf("generateTestTokens: failed to serialize transaction info: %w", err)
 		}
-		t := &wallet.Token{
-			TokenID:     id,
-			DID:         did,
-			TokenValue:  1,
-			TokenStatus: constants.TokenStatus_Free,
-		}
-		err = c.w.CreateTokenBlock(blk)
+		signatureBytes, err := dc.PvtSign(infoBytes)
 		if err != nil {
-			c.log.Error("Failed to add token chain", "err", err)
+			return fmt.Errorf("generateTestTokens: failed to sign transaction: %w", err)
+		}
+		sigStruct := &models.Signature{InitiatorSignature: hex.EncodeToString(signatureBytes)}
+		sigBytes, err := json.Marshal(sigStruct)
+		if err != nil {
+			return fmt.Errorf("generateTestTokens: failed to marshal signature: %w", err)
+		}
+		txID, err := util.GetTransactionID(txInfo)
+		if err != nil {
+			return fmt.Errorf("generateTestTokens: failed to compute transaction ID: %w", err)
+		}
+
+		mintRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Mint))
+		tokenTypeID := int16(models.GetTokenTypeID(constants.TokenType_RBT))
+		genesisTx := &models.Transactions{
+			ID:        txID,
+			Info:      infoBytes,
+			Signature: json.RawMessage(sigBytes),
+		}
+		t := &models.Token{
+			TokenID:        "", // assigned by PersistGenesisTokenRecord
+			DID:            did,
+			TokenValue:     floatPrecision(1.0, MaxDecimalPlaces),
+			TokenStatus:    int16(constants.TokenStatus_Free),
+			TransactionID:  txID,
+			TokenStateHash: "",
+			TokenType:      tokenTypeID,
+			LatestPosition: 0,
+			LatestRole:     mintRoleID,
+		}
+		if err = c.w.PersistGenesisTokenRecord(genesisTx, t, &models.TokenChain{
+			TokenID:               "", // assigned by PersistGenesisTokenRecord
+			TransactionID:         txID,
+			PreviousTransactionID: nil,
+			Role:                  mintRoleID,
+			Position:              0,
+		}); err != nil {
+			c.log.Error("Failed to persist genesis token record", "err", err)
 			return err
 		}
 
-		tokenIDBuffer := bytes.NewBufferString(id)
-		tokenHash, err := c.w.Add(tokenIDBuffer, did, constants.TokenProviderFunc_Add, true)
-		if err != nil {
-			return fmt.Errorf("createTokensAtLevel: failed to add token to ipfs: %v, err: %v", id, err)
-		}
-
-		if _, err := c.w.Pin(tokenHash, constants.TokenProviderRole_Owner, did, "NA", did, "NA", t.TokenValue); err != nil {
-			return fmt.Errorf("createChildTokensAtLevel: failed to pin child token: %v, err: %v", id, err)
-		}
-
-		err = c.w.CreateToken(t)
-		if err != nil {
-			c.log.Error("Failed to create token", "err", err)
-			return err
-		}
-		// publish the transaction in the network with topic : rubix_txns
-		blockHash, err := blk.GetHash()
-		if err != nil {
-			blockHash = ""
-			c.log.Error("failed to get block hash")
-		}
+		// Publish transaction on the network
 		publishingTxn := &model.PubSubTxnInfo{
-			BlockHash:    blockHash,
-			BlockType:    block.TokenGeneratedType,
+			BlockHash:    txID,
+			BlockType:    "05",
 			AssetType:    RBTTokenType,
 			PublisherDID: dc.GetDID(),
-			TxnBlock:     blk.GetBlock(),
 		}
-
-		err = c.publishTxn(publishingTxn)
-		if err != nil {
+		if err = c.publishTxn(publishingTxn); err != nil {
 			c.log.Error("Failed to publish txn", "err", err)
 			return err
 		}
-	}
-
-	// Store (tokenLevel, numInLevel) for NEXT token; e.g. after 100 tokens → level 10001, number 45
-	tokenLevel, numInLevel, err := token.GetTokenLevelAndNumberForGlobalIndex(finalTokenNumber)
-	if err != nil {
-		return fmt.Errorf("failed to get token level for global index %d, err: %v", finalTokenNumber, err)
-	}
-	if err := c.w.SetLocalTokenlevelAndNumber(tokenLevel, numInLevel); err != nil {
-		return fmt.Errorf("failed to set local test token number, err: %v", err)
 	}
 
 	return nil
@@ -401,27 +348,6 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 		Message:    "Sent all token chain entries",
 		TokenChain: chain,
 	}, http.StatusOK)
-}
-
-func (c *Core) syncTransactionChain(req *ensweb.Request) *ensweb.Result {
-	var syncRequest models.TransactionChainSyncRequest
-	var syncReply models.TransactionChainSyncReply
-	err := c.l.ParseJSON(req, &syncRequest)
-	if err != nil {
-		c.log.Error("failed to parse transaction chain sync request")
-		return c.l.RenderJSON(req, &models.TransactionChainSyncReply{Status: false, Message: "Failed to parse sync request"}, http.StatusOK)
-	}
-	//TODO: Implement GetTransactions function
-	transactions, nextTransactionID, err := c.w.GetTransactions(syncRequest.TokenID, syncRequest.TransactionID)
-	if err != nil {
-		c.log.Error("failed to get transactions")
-		return c.l.RenderJSON(req, &models.TransactionChainSyncReply{Status: false, Message: "Failed to get transactions"}, http.StatusOK)
-	}
-	syncReply.Transactions = transactions
-	syncReply.NextTransactionID = nextTransactionID
-	syncReply.Status = true
-	syncReply.Message = "Successfully got transactions"
-	return c.l.RenderJSON(req, &syncReply, http.StatusOK)
 }
 
 // This function fetches all DIDs from the DID table and it publishes RBT tokens, FT Tokens, NFT Tokens and smart contracts tokens in batches with batch size 500 corresponding to each DID.
@@ -698,7 +624,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 		address := event.PublisherPeerID + "." + detail.Did
 
 		// add publisher to peer did table, if it is alredy NOT there in the PeerDIDTable
-		publisherPeerId := c.w.GetPeerID(detail.Did)
+		publisherPeerId, _ := c.w.GetPeerID(detail.Did)
 		if publisherPeerId != event.PublisherPeerID {
 
 			publisherDetails := &models.DID{
@@ -760,8 +686,8 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			if err != nil {
 				c.log.Error("failed to get latest block hash for the token", detail.Token)
 			}
-			currentOwner := latestBlock.GetOwner()
-			txnID := latestBlock.GetTid()
+			currentOwner, _ := latestBlock.GetOwner()
+			txnID, _ := latestBlock.GetTid()
 			genesisBlock := c.w.GetFullNodeGenesisTokenBlock(detail.Token, detail.TokenType)
 			blocks := ReceivedBlock{
 				GenesisBlock: genesisBlock,
@@ -783,15 +709,8 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 					//To update the token value first look at the genesis block type, If it is migrated type update the token value as whatever publisher published because,
 					// There is no token value in the Mainnet genesis block for migrated tokens.
 					//In rest of the genesis blocks case, read token value from the genesis block and update the sqlite table
-					if genesisBlock != nil {
-						genesisBlockType := genesisBlock.GetTransType()
-						if genesisBlockType == block.TokenMigratedType {
-
-							eventData.TokenValue = detail.TokenValue
-						} else {
-							eventData.TokenValue = genesisBlock.GetTokenValue()
-						}
-					}
+					// TODO(phase07): migration logic removed (block-based); use event token value as default
+					eventData.TokenValue = detail.TokenValue
 
 					c.AddTokenToRespectiveTable(detail.Token, currentOwner, blocks, &eventData, constants.SyncStatus_Unrequired)
 					continue
@@ -840,15 +759,8 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			//To update the token value first look at the genesis block type, If it is migrated type update the token value as whatever publisher published because,
 			// There is no token value in the Mainnet genesis block for migrated tokens.
 			//In rest of the genesis blocks case, read token value from the genesis block and update the sqlite table
-			if genesisBlock != nil {
-				genesisBlockType := genesisBlock.GetTransType()
-				if genesisBlockType == block.TokenMigratedType {
-
-					eventData.TokenValue = detail.TokenValue
-				} else {
-					eventData.TokenValue = genesisBlock.GetTokenValue()
-				}
-			}
+			// TODO(phase07): migration logic removed (block-based); use event token value as default
+			eventData.TokenValue = detail.TokenValue
 
 			c.AddTokenToRespectiveTable(detail.Token, currentOwner, blocks, &eventData, constants.SyncStatus_Unrequired)
 		}
@@ -1198,143 +1110,6 @@ func (c *Core) syncTokenChainFrom(p *ipfsport.Peer, pblkID string, token string,
 	return nil, nil
 }
 
-// findTokenRoleInTxn determines the role a token played in a given transaction
-// by searching through the various token lists in the TransactionInfo.
-func findTokenRoleInTxn(tokenID string, txInfo *models.TransactionInfo) int16 {
-	if txInfo.Tokens != nil {
-		for _, lists := range [][]*models.TokenInfo{
-			txInfo.Tokens.RBT, txInfo.Tokens.NFT,
-			txInfo.Tokens.FT, txInfo.Tokens.SmartContract,
-		} {
-			for _, t := range lists {
-				if t.TokenID == tokenID {
-					return int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
-				}
-			}
-		}
-	}
-
-	for _, t := range txInfo.CommittedTokens {
-		if t.TokenID == tokenID {
-			return int16(models.GetTokenRoleID(constants.TokenRole_Commit))
-		}
-	}
-
-	for _, q := range txInfo.Quorums {
-		for _, t := range q.Tokens {
-			if t.TokenID == tokenID {
-				return int16(models.GetTokenRoleID(constants.TokenRole_Pledge))
-			}
-		}
-	}
-
-	return int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
-}
-
-func (c *Core) syncTransactionChainFrom(p *ipfsport.Peer, previousTransactionID string, token string) (error, *models.TransactionChainSyncReply) {
-	var err error
-
-	//get latest transaction id of the token chain
-	latestTransactionID := c.w.GetLatestTransactionID(token)
-	if latestTransactionID == "" {
-		c.log.Error("failed to get latest transaction id")
-		return err, nil
-	}
-	if latestTransactionID == previousTransactionID {
-		return nil, nil
-	}
-
-	syncReq := models.TransactionChainSyncRequest{
-		TokenID:       token,
-		TransactionID: previousTransactionID,
-	}
-
-	for {
-		var trep models.TransactionChainSyncReply
-		err = p.SendJSONRequest("POST", APISyncTransactionChain, nil, &syncReq, &trep, false)
-		if err != nil {
-			c.log.Error("failed to sync transaction chain")
-			return err, nil
-		}
-		if !trep.Status {
-			c.log.Error("failed to sync transaction chain")
-			return fmt.Errorf(trep.Message), nil
-		}
-		if len(trep.Transactions) > 0 {
-			for _, txn := range trep.Transactions {
-				tx, err := util.TransactionFromBytes(txn)
-				if tx == nil {
-					c.log.Error("failed to convert transaction bytes to transaction")
-					return fmt.Errorf("failed to convert transaction bytes to transaction"), nil
-				}
-				//first we need to check if the token details are there in the tokens table,
-				//If it is there we should update the token details in the tokens table,
-				//If it is not there we should create the token details in the tokens table,
-				//Then we should add the transaction details to the transaction table,
-				//Then we should add into the tokenchain table.
-				var txInfo models.TransactionInfo
-				if err = json.Unmarshal(tx.Info, &txInfo); err != nil {
-					c.log.Error("failed to unmarshal transaction info", "err", err)
-					return fmt.Errorf("failed to unmarshal transaction info: %w", err), nil
-				}
-
-				role := findTokenRoleInTxn(token, &txInfo)
-
-				if err = c.w.CreateTransaction(tx); err != nil {
-					c.log.Error("failed to add transaction to transactions table", "err", err)
-					return fmt.Errorf("failed to add transaction: %w", err), nil
-				}
-
-				tokenDetails, err := c.w.GetTokenByTokenID(token)
-				if err != nil {
-					newToken := models.Token{
-						TokenID:        token,
-						TokenStatus:    constants.TokenStatus_Free,
-						DID:            txInfo.Owner,
-						TransactionID:  tx.ID,
-						TokenType:      int16(models.GetTokenTypeID(constants.TokenType_RBT)),
-						LatestPosition: 0,
-						LatestRole:     role,
-						CreatedAt:      time.Now(),
-						UpdatedAt:      time.Now(),
-					}
-					if createErr := c.w.CreateRBTToken(newToken); createErr != nil {
-						c.log.Error("failed to create token", "err", createErr)
-						return fmt.Errorf("failed to create token: %w", createErr), nil
-					}
-					tokenDetails = newToken
-				} else {
-					tokenDetails.DID = txInfo.Owner
-					tokenDetails.TransactionID = tx.ID
-					tokenDetails.LatestPosition++
-					tokenDetails.LatestRole = role
-					if updateErr := c.w.UpdateToken(tokenDetails); updateErr != nil {
-						c.log.Error("failed to update token", "err", updateErr)
-						return fmt.Errorf("failed to update token: %w", updateErr), nil
-					}
-				}
-
-				entry := &models.TokenChain{
-					TokenID:       token,
-					TransactionID: tx.ID,
-					Role:          role,
-					Position:        tokenDetails.LatestPosition,
-				}
-				if err = c.w.AddTokenChainEntry(entry); err != nil {
-					c.log.Error("failed to add token chain entry", "err", err)
-					return fmt.Errorf("failed to add token chain entry: %w", err), nil
-				}
-			}
-		}
-		if trep.NextTransactionID == "" {
-			break
-		}
-		syncReq.TransactionID = trep.NextTransactionID
-	}
-	return nil, nil
-}
-
-
 // using this function, full node can sync entire token chain of the token
 func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo TokenSyncInfo) error {
 	var err error
@@ -1379,32 +1154,14 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 
 		if strings.Contains(trep.Message, "Sent all blocks") {
 			if len(trep.TCBlock) > 0 {
-				syncerLatestBlk := block.InitBlock(trep.TCBlock[len(trep.TCBlock)-1], nil)
-				if syncerLatestBlk == nil {
-					c.log.Error("Failed to initialize peer's latest block", "token", tokenSyncInfo.TokenID)
-					return fmt.Errorf("failed to initialize peer's latest block")
-				}
-				syncerLatestBlkID, err = syncerLatestBlk.GetBlockID(tokenSyncInfo.TokenID)
-				if err != nil {
-					c.log.Error("Failed to get block hash of synced block", "err", err, "token", tokenSyncInfo.TokenID)
-					return err
-				}
+				// TODO(phase07): block parsing removed; cannot extract latest block ID from raw bytes
+				// Previously: InitBlock on last TCBlock, then GetBlockID to get syncerLatestBlkID
 			}
 		}
 
-		for _, bb := range trep.TCBlock {
-			blk := block.InitBlock(bb, nil)
-			if blk == nil {
-				c.log.Error("Failed to add token chain block, invalid block", "token", tokenSyncInfo.TokenID)
-				return fmt.Errorf("failed to add token chain block, invalid block")
-			}
-
-			err = c.w.AddFullNodeTokenBlock(tokenSyncInfo.TokenID, blk)
-			if err != nil {
-				c.log.Error("Failed to add token chain block, syncing failed", "err", err, "token", tokenSyncInfo.TokenID)
-				return err
-			}
-		}
+		// TODO(phase07): block parsing removed; raw TCBlock bytes not processed
+		// Previously: InitBlock + AddFullNodeTokenBlock for each block
+		_ = trep.TCBlock
 
 		if trep.NextBlockID == "" {
 			break
@@ -1436,8 +1193,8 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 	// syncStatus := constants.SyncStatus_Completed
 	latestBlockAfterSync := c.w.GetFullNodeLatestTokenBlock(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType)
 	if latestBlockAfterSync != nil {
-		ownerDid = latestBlockAfterSync.GetOwner()
-		transactionID = latestBlockAfterSync.GetTid()
+		ownerDid, _ = latestBlockAfterSync.GetOwner()
+		transactionID, _ = latestBlockAfterSync.GetTid()
 		blockHash, err = latestBlockAfterSync.GetHash()
 		// latestBlockID, err = latestBlockAfterSync.GetBlockID(tokenSyncInfo.TokenID)
 		if err != nil {
@@ -1502,62 +1259,16 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 }
 
 func (c *Core) syncMissingBlocks(p *ipfsport.Peer, tokenSyncInfo TokenSyncInfo) error {
-	// read the level db and check the block number sequence and return the block numbers that needs to be synced
-	// if all blocks are synced then mark the token sync status as completed
-	minMissingBlockId, maxMissingblockId, err := c.GetMissingBlockSequence(tokenSyncInfo)
-	if err != nil {
-		c.log.Error("failed to fetch missing block sequence", "error", err)
+	// Validate the full PostgreSQL tokenchain; nil means chain is complete and consistent.
+	if err := c.GetMissingBlockSequence(tokenSyncInfo); err != nil {
+		c.log.Error("Token chain validation failed", "token", tokenSyncInfo.TokenID, "error", err)
 		return err
 	}
 
-	if minMissingBlockId == "" && maxMissingblockId == "" {
-		c.log.Debug("token chain is completely synced")
-		// update token sync status
-		err = c.w.UpdateTokenSyncStatus(tokenSyncInfo.TokenID, constants.SyncStatus_Completed)
-		if err != nil {
-			c.log.Error("failed to update token sync status for token ", tokenSyncInfo.TokenID)
-			return err
-		}
-		return nil
-	}
-	//prepare sync request
-	syncReq := TCBSyncRequest{
-		Token:     tokenSyncInfo.TokenID,
-		TokenType: int(tokenSyncInfo.TokenType),
-		BlockID:   minMissingBlockId,
-	}
-
-	for {
-		var trep TCBSyncReply
-		err := p.SendJSONRequest("POST", APISyncTokenChain, nil, &syncReq, &trep, false)
-		if err != nil {
-			c.log.Error("Failed to sync token chain block", "err", err)
-		}
-		if !trep.Status {
-			c.log.Error("Failed to sync token chain block", "msg", trep.Message)
-		}
-		for _, bb := range trep.TCBlock {
-			blk := block.InitBlock(bb, nil)
-			if blk == nil {
-				c.log.Error("Failed to initiate token chain block, invalid block, sync failed", "err", err)
-			}
-			blkId, err := blk.GetBlockID(tokenSyncInfo.TokenID)
-			if err != nil {
-				c.log.Error("failed to get block Id ")
-			}
-			if blkId == maxMissingblockId {
-				break
-			}
-			err = c.w.AddMissingTokenBlock(syncReq.Token, blk)
-			if err != nil {
-				c.log.Error("Failed to add token chain block, syncing failed", "err", err)
-				return err
-			}
-		}
-		if trep.NextBlockID == maxMissingblockId || trep.NextBlockID == "" {
-			break
-		}
-		syncReq.BlockID = trep.NextBlockID
+	c.log.Debug("Token chain is completely synced", "token", tokenSyncInfo.TokenID)
+	if err := c.w.UpdateTokenSyncStatus(tokenSyncInfo.TokenID, constants.SyncStatus_Completed); err != nil {
+		c.log.Error("Failed to update token sync status", "token", tokenSyncInfo.TokenID, "error", err)
+		return err
 	}
 	return nil
 }
@@ -1592,6 +1303,42 @@ func (c *Core) syncMissingBlocksOfTokenChains(tokenSyncMap map[string][]TokenSyn
 	}
 
 }
+func (c *Core) syncFullTokenChains(tokenSyncMap map[string][]TokenSyncInfo) {
+	start := time.Now()
+	// sync sequencially for each peer
+	for peerAddr, tokenSyncInfo := range tokenSyncMap {
+		p, err := c.getPeer(peerAddr)
+		if err != nil {
+			c.log.Error("failed to sync full token chain, failed to open peer connection with peer ", peerAddr)
+			return
+		}
+		defer p.Close()
+		// start syncing all tokens in queue
+		for _, tokenToSync := range tokenSyncInfo {
+			c.log.Debug("syncing token: " + tokenToSync.TokenID)
+			err := c.SyncFullTokenChainForFullNode(p, tokenToSync)
+			if err != nil {
+				c.log.Error("failed to sync token chain for token ", tokenToSync.TokenID, "error", err)
+				// // update sync status to incomplete
+				// _ = c.w.UpdateTokenSyncStatus(tokenToSync.TokenID, constants.SyncStatus_Incomplete)
+				continue
+			}
+			//Add a logic to write the token details into tokenstorage table
+
+			// // update sync status to completed
+			// err = c.w.UpdateTokenSyncStatus(tokenToSync.TokenID, constants.SyncStatus_Completed)
+			// if err != nil {
+			// 	c.log.Error("failed to update sync status after sync completed, token ", tokenToSync.TokenID, "error: ", err)
+			// 	continue
+			// }
+			c.log.Debug("sync completed, token: " + tokenToSync.TokenID)
+		}
+	}
+	timeTaken := time.Since(start)
+
+	c.log.Info("Time taken to sync all tokens is: ", timeTaken)
+
+}
 
 func (c *Core) syncGenesisAndLatestBlock(req *ensweb.Request) *ensweb.Result {
 	var tr TCBSyncRequest
@@ -1615,7 +1362,7 @@ func (c *Core) syncGenesisAndLatestBlock(req *ensweb.Request) *ensweb.Result {
 			c.log.Error("genesis block is nil, invalid token chain, failed to share token chain")
 			return c.l.RenderJSON(req, &TCBSyncReply{Status: false, Message: "genesis block is nil, invalid token chain"}, http.StatusOK)
 		}
-		trep.GenesisBlock = genesisBlock.GetBlock()
+		trep.GenesisBlock = genesisBlock.GetBlock() // stub returns nil []byte
 		c.log.Debug("adding genesis block bytes for token", tr.Token)
 	}
 
@@ -1631,40 +1378,10 @@ func (c *Core) syncGenesisAndLatestBlock(req *ensweb.Request) *ensweb.Result {
 	}
 
 	if latestBlockHeight != 0 && latestBlockHeight > tr.BlockHeight {
-		trep.LatestBlock = latestBlock.GetBlock()
+		trep.LatestBlock = latestBlock.GetBlock() // stub returns nil []byte
 		c.log.Debug("adding latest block bytes ")
 	}
 	return c.l.RenderJSON(req, &trep, http.StatusOK)
-}
-
-// TODO: Implement this function and complete syncTransaction API
-func (c *Core) syncGenesisAndLatestTransaction(req *ensweb.Request) *ensweb.Result {
-	// var syncRequest models.GenesisAndLatestTransactionSyncRequest
-	// var syncReply models.GenesisAndLatestTransactionSyncReply
-	// err := c.l.ParseJSON(req, &syncRequest)
-	// if err != nil {
-	// 	c.log.Error("failed to parse latest transaction sync request")
-	// 	return c.l.RenderJSON(req, &models.GenesisAndLatestTransactionSyncReply{Status: false, Message: "Failed to parse sync request"}, http.StatusOK)
-	// }
-	// //TODO: Implement GetGenesisTransaction function
-	// genesisTransaction := c.w.GetGenesisTransaction(syncRequest.Token)
-	// if genesisTransaction == nil {
-	// 	c.log.Error("genesis transaction is nil, invalid token chain, failed to share token chain")
-	// 	return c.l.RenderJSON(req, &models.GenesisAndLatestTransactionSyncReply{Status: false, Message: "genesis transaction is nil, invalid token chain"}, http.StatusOK)
-	// }
-
-	// //TODO: Implement GetLatestTransaction function
-	// latestTransaction := c.w.GetLatestTransaction(syncRequest.Token)
-	// if latestTransaction == nil {
-	// 	c.log.Error("latest transaction is nil, invalid token chain, failed to share token chain")
-	// 	return c.l.RenderJSON(req, &models.GenesisAndLatestTransactionSyncReply{Status: false, Message: "latest transaction is nil, invalid token chain"}, http.StatusOK)
-	// }
-	// syncReply.GenesisTransaction = util.TransactionToBytes(genesisTransaction)
-	// syncReply.LatestTransaction = util.TransactionToBytes(latestTransaction)
-	// syncReply.Status = true
-	// syncReply.Message = "Successfully got genesis and latest transaction"
-	return c.l.RenderJSON(req, &models.GenesisAndLatestTransactionSyncReply{Status: true, Message: "Successfully got genesis and latest transaction"}, http.StatusOK)
-
 }
 
 func (c *Core) syncGenesisAndLatestBlockFrom(p *ipfsport.Peer, syncReq TCBSyncRequest) error {
@@ -1680,33 +1397,15 @@ func (c *Core) syncGenesisAndLatestBlockFrom(p *ipfsport.Peer, syncReq TCBSyncRe
 		return fmt.Errorf(trep.Message)
 	}
 
-	// add genesis block
+	// TODO(phase07): block parsing removed; genesis block bytes not processed
+	// Previously: InitBlock + AddTokenBlock for genesis block
 	if trep.GenesisBlock != nil {
-		fmt.Println("adding genesis block")
-		genesisBlock := block.InitBlock(trep.GenesisBlock, nil)
-		if genesisBlock == nil {
-			c.log.Error("Failed to initiate genesis block, invalid block, sync failed", "err", err)
-			return fmt.Errorf("failed to initiate genesis block, invalid block, sync failed")
-		}
-		err = c.w.AddTokenBlock(syncReq.Token, genesisBlock) /// to work on this
-		if err != nil {
-			c.log.Error("Failed to add genesis block, syncing failed", "err", err)
-			return err
-		}
+		_ = trep.GenesisBlock
 	}
-	// add latest block
+	// TODO(phase07): block parsing removed; latest block bytes not processed
+	// Previously: InitBlock + AddTokenBlock for latest block
 	if trep.LatestBlock != nil {
-		fmt.Println("adding latest block")
-		latestBlock := block.InitBlock(trep.LatestBlock, nil)
-		if latestBlock == nil {
-			c.log.Error("Failed to initiate latest block, invalid block, sync failed", "err", err)
-			return fmt.Errorf("failed to initiate latest block, invalid block, sync failed")
-		}
-		err = c.w.AddTokenBlock(syncReq.Token, latestBlock) /// to work on this
-		if err != nil {
-			c.log.Error("Failed to add latest block, syncing failed", "err", err)
-			return err
-		}
+		_ = trep.LatestBlock
 	}
 
 	return nil
@@ -1723,6 +1422,192 @@ func (c *Core) getFromIPFS(path string) ([]byte, error) {
 	b := buf.Bytes()
 	return b, nil
 }
+
+// func (c *Core) tokenStatusCallback(peerID string, topic string, data []byte) {
+// 	// c.log.Debug("Recevied token status request")
+// 	// var tp TokenPublish
+// 	// err := json.Unmarshal(data, &tp)
+// 	// if err != nil {
+// 	// 	return
+// 	// }
+// 	// c.log.Debug("Token recevied", "token", tp.Token)
+// }
+
+// func (c *Core) GetRequiredTokens(did string, txnAmount float64, txnMode int) ([]wallet.Token, float64, error) {
+// 	// Use optimized version for large amounts
+// 	if txnAmount > 100 {
+// 		c.log.Info("Using optimized token fetch for large amount", "amount", txnAmount)
+
+// 		// Use the wallet's own optimized method
+// 		tokens, err := c.w.GetTokensForOptimizedTransfer(did, txnAmount, txnMode)
+// 		if err != nil {
+// 			return nil, 0, err
+// 		}
+
+// 		// Calculate if we have exact amount or need to create change
+// 		var totalValue float64
+// 		for _, t := range tokens {
+// 			totalValue += t.TokenValue
+// 		}
+// 		totalValue = floatPrecision(totalValue, MaxDecimalPlaces)
+// 		remainingAmount := floatPrecision(totalValue-txnAmount, MaxDecimalPlaces)
+// 		return tokens, remainingAmount, nil
+// 	}
+
+// 	// Original logic for smaller amounts
+// 	requiredTokens := make([]wallet.Token, 0)
+// 	var remainingAmount float64
+// 	wholeValue := int(txnAmount)
+// 	//fv := float64(txnAmount)
+// 	decimalValue := txnAmount - float64(wholeValue)
+// 	decimalValue = floatPrecision(decimalValue, MaxDecimalPlaces)
+// 	reqAmt := floatPrecision(txnAmount, MaxDecimalPlaces)
+// 	//check if whole value exists
+// 	if wholeValue != 0 {
+// 		//extract the whole amount part that is the integer value of txn amount
+// 		//serach for the required whole amount
+// 		wholeTokens, remWhole, err := c.w.GetWholeTokens(did, wholeValue, txnMode)
+// 		if err != nil && err.Error() != "no records found" {
+// 			c.w.ReleaseTokens(wholeTokens)
+// 			c.log.Error("failed to search for whole tokens", "err", err)
+// 			return nil, 0.0, err
+// 		}
+
+// 		//if whole tokens are found add thgem to the variable required Tokens
+// 		if len(wholeTokens) != 0 {
+// 			c.log.Debug("found whole tokens in wallet adding them to required tokens list")
+// 			requiredTokens = append(requiredTokens, wholeTokens...)
+// 			//wholeValue = wholeValue - len(requiredTokens)
+// 			reqAmt = reqAmt - float64(len(wholeTokens))
+// 			reqAmt = floatPrecision(reqAmt, MaxDecimalPlaces)
+// 		}
+
+// 		if (len(wholeTokens) != 0 && remWhole > 0) || (len(wholeTokens) != 0 && remWhole == 0) {
+// 			if reqAmt == 0 {
+// 				return requiredTokens, remainingAmount, nil
+// 			}
+// 			c.log.Debug("No more whole token left in wallet , rest of needed amt ", reqAmt)
+// 			allPartTokens, err := c.w.GetAllPartTokens(did)
+// 			if err != nil {
+// 				// In GetAllPartTokens, we first check if there are any part tokens present in
+// 				// TokensTable. Now there could be a situation, where there aren't any part tokens
+// 				// and it Should not error out, but proceed further. The "no records found" error string
+// 				// is usually received from the Read() method the db.
+// 				// Hence, in this case, we simply return with whatever values requiredTokens and reqAmt holds
+// 				if strings.Contains(err.Error(), "no records found") {
+// 					return requiredTokens, reqAmt, nil
+// 				}
+// 				c.w.ReleaseTokens(wholeTokens)
+// 				c.log.Error("failed to lock part tokens", "err", err)
+// 				return nil, 0.0, err
+// 			}
+// 			var sum float64
+// 			for _, partToken := range allPartTokens {
+// 				sum = sum + partToken.TokenValue
+// 				sum = floatPrecision(sum, MaxDecimalPlaces)
+// 			}
+// 			if sum < reqAmt {
+// 				c.w.ReleaseTokens(wholeTokens)
+// 				c.log.Error("There are no Whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
+// 				return nil, 0.0, fmt.Errorf("there are no whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
+// 			}
+// 			// Create a slice to store the indices of elements to be removed
+// 			var indicesToRemove []int
+// 			// Iterate through allPartTokens
+// 			defer c.w.ReleaseTokens(allPartTokens)
+// 			for i, partToken := range allPartTokens {
+// 				// Subtract the partToken value from the txnAmount
+// 				// If the transaction amount is less than the partToken.TokenValue, skip
+// 				if reqAmt < partToken.TokenValue {
+// 					continue
+// 				}
+// 				reqAmt -= partToken.TokenValue
+// 				reqAmt = floatPrecision(reqAmt, MaxDecimalPlaces)
+// 				// Add the partToken to the requiredTokens
+// 				requiredTokens = append(requiredTokens, partToken)
+// 				// Store the index of the element to be removed
+// 				indicesToRemove = append(indicesToRemove, i)
+// 				// Check if txnAmount goes negative
+// 				if reqAmt == 0 {
+// 					break
+// 				}
+// 			}
+// 			// Remove elements from allPartTokens using copy
+// 			for i, idx := range indicesToRemove {
+// 				copy(allPartTokens[idx-i:], allPartTokens[idx-i+1:])
+// 			}
+// 			allPartTokens = allPartTokens[:len(allPartTokens)-len(indicesToRemove)]
+// 			c.w.ReleaseTokens(allPartTokens)
+
+// 			if reqAmt > 0 {
+// 				// Add the remaining amount to the remainingAmount variable
+// 				remainingAmount += reqAmt
+// 				remainingAmount = floatPrecision(remainingAmount, MaxDecimalPlaces)
+// 			}
+// 		}
+
+// 		//if no parts found anf remWhole is also not 0
+// 		if len(wholeTokens) == 0 && remWhole > 0 {
+// 			c.log.Debug("No whole tokens found. proceeding to get part tokens for txn")
+
+// 			allPartTokens, err := c.w.GetAllPartTokens(did)
+// 			if err != nil && err.Error() != "no records found" {
+// 				c.log.Error("failed to search for part tokens", "err", err)
+// 				return nil, 0.0, err
+// 			}
+// 			if len(allPartTokens) == 0 {
+// 				c.log.Error("No part Tokens found , This wallet is empty", "err", err)
+// 				return nil, 0.0, err
+// 			}
+// 			var sum float64
+// 			for _, partToken := range allPartTokens {
+// 				sum = sum + partToken.TokenValue
+// 			}
+// 			if sum < txnAmount {
+// 				c.log.Error("There are no Whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
+// 				return nil, 0.0, fmt.Errorf("there are no whole tokens and the exisitng decimal balance is not sufficient for the transfer, please use smaller amount")
+// 			}
+// 			// Create a slice to store the indices of elements to be removed
+// 			var indicesToRemove []int
+// 			// Iterate through allPartTokens
+// 			defer c.w.ReleaseTokens(allPartTokens)
+// 			for i, partToken := range allPartTokens {
+// 				// Subtract the partToken value from the txnAmount
+// 				// If the transaction amount is less than the partToken.TokenValue, skip
+// 				if txnAmount < partToken.TokenValue {
+// 					continue
+// 				}
+// 				txnAmount -= partToken.TokenValue
+// 				txnAmount = floatPrecision(txnAmount, MaxDecimalPlaces)
+// 				// Add the partToken to the requiredTokens
+// 				requiredTokens = append(requiredTokens, partToken)
+// 				// Store the index of the element to be removed
+// 				indicesToRemove = append(indicesToRemove, i)
+// 				// Check if txnAmount goes negative
+// 				if txnAmount == 0 {
+// 					break
+// 				}
+// 			}
+// 			// Remove elements from allPartTokens using copy
+// 			for i, idx := range indicesToRemove {
+// 				copy(allPartTokens[idx-i:], allPartTokens[idx-i+1:])
+// 			}
+// 			allPartTokens = allPartTokens[:len(allPartTokens)-len(indicesToRemove)]
+// 			c.w.ReleaseTokens(allPartTokens)
+// 			if txnAmount > 0 {
+// 				// Add the remaining amount to the remainingAmount variable
+// 				remainingAmount += txnAmount
+// 				remainingAmount = floatPrecision(remainingAmount, MaxDecimalPlaces)
+// 			}
+
+// 		}
+// 	} else {
+// 		return make([]wallet.Token, 0), reqAmt, nil
+// 	}
+// 	defer c.w.ReleaseTokens(requiredTokens)
+// 	remainingAmount = floatPrecision(remainingAmount, MaxDecimalPlaces)
+// 	return requiredTokens, remainingAmount, nil
+// }
 
 func (c *Core) GetPledgedInfo() ([]model.PledgedTokenStateDetails, error) {
 	wt, err := c.w.GetAllTokenStateHash()
@@ -1750,7 +1635,7 @@ func (c *Core) UpdatePledgedTokenInfo(tokenstatehash string) error {
 	return nil
 }
 
-func (c *Core) GetpinnedTokens(did string) ([]wallet.Token, error) {
+func (c *Core) GetpinnedTokens(did string) ([]models.Token, error) {
 	requiredTokens, err := c.w.GetAllPinnedTokens(did)
 	if err != nil {
 		c.log.Error("Error retrieving pinned tokens from database :", err)
@@ -1875,96 +1760,86 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 
 		currentTime := time.Now()
 
-		gb := &block.GenesisBlock{
-			// Type: block.TokenGeneratedType,
-			Info: []block.GenesisTokenInfo{
-				{Token: id, NetworkID: constants.NetworkID_RBT_Testnet},
-			},
-		}
-		ti := &block.TransInfo{
-			Tokens: []block.TransTokens{
-				{
-					Token:     id,
-					TokenType: token.TestTokenType,
+		// Serialize txInfo once — used for signature, txID, and transactions.info storage
+		// (currentTime is declared at line 1905 inside the loop — do not redeclare)
+		txInfo := &models.TransactionInfo{
+			Initiator: did,
+			Owner:     did,
+			Epoch:     int(currentTime.Unix()),
+			Network:   constants.NetworkID_RBT_Testnet,
+			Tokens: &models.TransactionTokens{
+				RBT: []*models.TokenInfo{
+					{TokenID: id, PreviousTransactionID: ""},
 				},
 			},
 		}
-
-		tcb := &block.TokenChainBlock{
-			BlockType:    block.TokenGeneratedType,
-			TokenOwner:   did,
-			GenesisBlock: gb,
-			TransInfo:    ti,
-			TokenValue:   floatPrecision(1.0, MaxDecimalPlaces),
-			Version:      constants.BlockVersion,
-			Epoch:        int(currentTime.Unix()),
-		}
-
-		ctcb := make(map[string]*block.Block)
-		ctcb[id] = nil
-
-		blk := block.CreateNewBlock(ctcb, tcb)
-		//If error comes after adding in IPFS, removing the pin from that token.
-		if blk == nil {
-			c.log.Error("Failed to create new token chain block")
-			tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(id), nil, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-			if err != nil {
-				return &tokendetail, fmt.Errorf("unable to do IPFS Add operation on Token, err: %v", err)
-			}
-			c.w.Unpin(tokenHash, constants.TokenProviderRole_Owner, did)
-			return &tokendetail, fmt.Errorf("failed to create new token chain block")
-		}
-
-		err = blk.UpdateSignature(dc)
+		infoBytes, err := models.SerializeTransactionInfo(txInfo)
 		if err != nil {
-			c.log.Error("Failed to update did signature", "err", err)
-			tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(id), nil, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-			if err != nil {
-				return &tokendetail, fmt.Errorf("unable to do IPFS Add operation on Token, err: %v", err)
-			}
-			c.w.Unpin(tokenHash, constants.TokenProviderRole_Owner, did)
-			return &tokendetail, fmt.Errorf("failed to update did signature")
+			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to serialize transaction info for token %s: %w", id, err)
 		}
-
-		t := &wallet.Token{
-			TokenID:     id,
-			DID:         did,
-			TokenValue:  1,
-			TokenStatus: constants.TokenStatus_Free,
-		}
-
-		err = c.w.CreateTokenBlock(blk)
+		// Sign serialized txInfo bytes with creator DID (genesis self-signature)
+		signatureBytes, err := dc.PvtSign(infoBytes)
 		if err != nil {
-			c.log.Error("Failed to add token chain", "err", err)
-			tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(id), nil, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-			if err != nil {
-				return &tokendetail, fmt.Errorf("unable to do IPFS Add operation on Token, err: %v", err)
-			}
-			c.w.Unpin(tokenHash, constants.TokenProviderRole_Owner, did)
-			return &tokendetail, err
+			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to sign transaction for token %s: %w", id, err)
+		}
+		sigStruct := &models.Signature{InitiatorSignature: hex.EncodeToString(signatureBytes)}
+		sigBytes, err := json.Marshal(sigStruct)
+		if err != nil {
+			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to marshal signature for token %s: %w", id, err)
+		}
+		txID, err := util.GetTransactionID(txInfo)
+		if err != nil {
+			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to compute transaction ID for token %s: %w", id, err)
 		}
 
-		err = c.w.CreateToken(t)
+		// Add token to IPFS via wallet functions to obtain TokenStateHash
+		tokenHash, err := c.w.Add(bytes.NewBufferString(id), did, constants.TokenProviderFunc_Add, true)
 		if err != nil {
-			c.log.Error("Failed to create token", "err", err)
-			c.w.RemoveTokenChainBlocklatest(t.TokenID, token.TestTokenType)
-			tokenHash, err := c.ipfsOps.Add(bytes.NewBufferString(id), nil, ipfsnode.Pin(false), ipfsnode.OnlyHash(true))
-			if err != nil {
-				return &tokendetail, fmt.Errorf("unable to do IPFS Add operation on Token, err: %v", err)
-			}
-			c.w.Unpin(tokenHash, constants.TokenProviderRole_Owner, did)
+			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to add token to ipfs: %v, err: %v", id, err)
+		}
+		// TODO: if DB persistence below fails, roll back IPFS pin via c.w.Unpin(tokenHash, constants.TokenProviderRole_Owner, did)
+
+		// TODO: RemoveTokenChainBlocklatest equivalent (undefined in new architecture — no-op for now)
+
+		// Atomically and idempotently persist genesis transaction, token, and tokenchain entry
+		mintRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Mint))
+		tokenTypeID := int16(models.GetTokenTypeID(constants.TokenType_RBT))
+		genesisTx := &models.Transactions{
+			ID:        txID,
+			Info:      infoBytes,
+			Signature: json.RawMessage(sigBytes),
+		}
+		t := &models.Token{
+			TokenID:        id,
+			DID:            did,
+			TokenValue:     floatPrecision(1.0, MaxDecimalPlaces),
+			TokenStatus:    int16(constants.TokenStatus_Free),
+			TransactionID:  txID,
+			TokenStateHash: tokenHash,
+			TokenType:      tokenTypeID,
+			LatestPosition: 0,
+			LatestRole:     mintRoleID,
+		}
+		if err = c.w.PersistGenesisTokenRecord(genesisTx, t, &models.TokenChain{
+			TokenID:               id,
+			TransactionID:         txID,
+			PreviousTransactionID: nil,
+			Role:                  mintRoleID,
+			Position:              0,
+		}); err != nil {
+			c.log.Error("Failed to persist genesis token record", "err", err)
 			return &tokendetail, err
 		}
 
 		tokendetail.TotalCount += 1
+
+		// Publish transaction on the network
 		publishingTxn := &model.PubSubTxnInfo{
-			BlockType:    block.TokenGeneratedType,
+			BlockType:    "05",
 			AssetType:    RBTTokenType,
 			PublisherDID: dc.GetDID(),
 		}
-
-		err = c.publishTxn(publishingTxn)
-		if err != nil {
+		if err = c.publishTxn(publishingTxn); err != nil {
 			c.log.Error("Failed to publish txn", "err", err)
 			return &tokendetail, err
 		}
@@ -2050,27 +1925,12 @@ func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse 
 		return br
 	}
 
-	//Validating token chain
-	tokenType := c.TokenType(RBTString)
-	genBlock := c.w.GetGenesisTokenBlock(tokenID, tokenType)
+	// TODO(phase07): block-based token chain validation removed
+	// Previously: GetGenesisTokenBlock + GetSigner to verify faucet DID
+	br.Message = "Token chain validation temporarily unavailable (block removal in progress)"
+	return br
 
-	signers, err := genBlock.GetSigner()
-	if err != nil {
-		br.Message = "Couldn't get signer details"
-		return br
-	}
-
-	if len(signers) != 1 {
-		br.Message = "Invalid signer details"
-		return br
-	}
-	//The did will be hardcoded to match the faucet DID
-	if signers[0] != "bafybmibexoa7owxdkjzfcg3ff3elqthkxsbaeznqoqq65gx6t2xkvm52fe" {
-		br.Message = "Signer DID doesn't match faucet DID"
-		return br
-	}
-
-	response, err := c.ValidateTokenOwner(genBlock, did)
+	response, err := c.ValidateTokenOwner(TokenChainInput{}, did)
 	if err != nil {
 		c.log.Error("msg", response.Message, "err", err)
 		br.Message = "Token Details : " + tokenval + " Couldn't validate token chain"
@@ -2170,77 +2030,41 @@ func VerifyTokens(serverURL string, tokens []string) (TokenVerificationResponse,
 
 }
 
-func (c *Core) GetMissingBlockSequence(tokenSyncInfo TokenSyncInfo) (string, string, error) {
-	blockId := ""
+// GetMissingBlockSequence validates the full PostgreSQL tokenchain for the given token.
+// Returns nil if the chain is complete and consistent; returns an error describing the first
+// detected gap or linkage break. The block-based min/max ID concept has been removed —
+// chain integrity is now defined by position sequentiality and previous_transaction_id linkage.
+func (c *Core) GetMissingBlockSequence(tokenSyncInfo TokenSyncInfo) error {
+	chain, err := c.w.GetTokenChainByTokenID(tokenSyncInfo.TokenID)
+	if err != nil {
+		c.log.Error("Failed to fetch token chain", "token", tokenSyncInfo.TokenID, "error", err)
+		return fmt.Errorf("failed to fetch token chain for %s: %w", tokenSyncInfo.TokenID, err)
+	}
 
-	var blocks [][]byte
-	var nextBlockID string
-	var minMissingBlockId string
-	var maxMissingBlockId string
-	var err error
+	if len(chain) == 0 {
+		c.log.Error("Token chain is empty", "token", tokenSyncInfo.TokenID)
+		return fmt.Errorf("missing token chain for token: %s", tokenSyncInfo.TokenID)
+	}
 
-	//This for loop ensures that we fetch all the blocks in the token chain
-	//starting from genesis block to latest block
-	for {
-		//GetAllTokenBlocks returns next 100 blocks and nextBlockID of the 100th block,
-		//starting from the given block Id, in the direction: genesis to latest block
-		blocks, nextBlockID, err = c.w.GetAllTokenBlocks(tokenSyncInfo.TokenID, tokenSyncInfo.TokenType, blockId)
-		if err != nil {
-			c.log.Error("Failed to get token chain block")
-			return "", "", err
+	for i := 1; i < len(chain); i++ {
+		// Position must be strictly sequential
+		if chain[i].Position != chain[i-1].Position+1 {
+			c.log.Error("Token chain position gap", "token", tokenSyncInfo.TokenID,
+				"position", chain[i].Position, "prev_position", chain[i-1].Position)
+			return fmt.Errorf("tokenchain gap at position %d (expected %d) for token %s",
+				chain[i].Position, chain[i-1].Position+1, tokenSyncInfo.TokenID)
 		}
-		//the nextBlockID of the latest block is empty string
-		blockId = nextBlockID
-		if nextBlockID == "" {
-			break
+		// previous_transaction_id must match the prior entry's transaction_id
+		prev := chain[i].PreviousTransactionID
+		if prev == nil || *prev != chain[i-1].TransactionID {
+			c.log.Error("Token chain linkage broken", "token", tokenSyncInfo.TokenID,
+				"position", chain[i].Position, "expected_prev", chain[i-1].TransactionID, "got_prev", prev)
+			return fmt.Errorf("broken tokenchain linkage at position %d for token %s",
+				chain[i].Position, tokenSyncInfo.TokenID)
 		}
 	}
 
-	if len(blocks) == 0 {
-		c.log.Error("invalid token chain of token ", tokenSyncInfo.TokenID)
-		return "", "", fmt.Errorf("missing token chain of token: %v", tokenSyncInfo.TokenID)
-	}
-
-	// calculate all the missing block numbers
-	for i, blockByte := range blocks {
-		if len(blocks) == i+1 {
-			break
-		}
-		blk := block.InitBlock(blockByte, nil)
-		blockHeight, err := blk.GetBlockNumber(tokenSyncInfo.TokenID)
-		if err != nil {
-			c.log.Error("failed to fetch block height")
-			return "", "", err
-			// TODO : handle
-		}
-		if blocks[i+1] == nil {
-			c.log.Error("invalid block at height ", i+1)
-			return "", "", fmt.Errorf("invalid block at height %v", i+1)
-		}
-		nextBlk := block.InitBlock(blocks[i+1], nil)
-		nextBlockHeight, err := nextBlk.GetBlockNumber(tokenSyncInfo.TokenID)
-		if err != nil {
-			c.log.Error("failed to fetch next block height")
-			return "", "", err
-		}
-
-		// if the block height difference between consecutive blocks is more than 1, that means there are a few blocks missing
-		if nextBlockHeight-blockHeight > 1 {
-			minMissingBlockId, err = blk.GetBlockID(tokenSyncInfo.TokenID)
-			if err != nil {
-				c.log.Error("failed to get min block id")
-				return "", "", err
-			}
-			maxMissingBlockId, err = nextBlk.GetBlockID(tokenSyncInfo.TokenID)
-			if err != nil {
-				c.log.Error("failed to get max block id")
-				return "", "", err
-			}
-			return minMissingBlockId, maxMissingBlockId, nil
-		}
-	}
-
-	return "", "", nil
+	return nil
 }
 
 func (c *Core) RestartIncompleteTokenChainSyncs() {
@@ -2290,31 +2114,11 @@ func (c *Core) RestartIncompleteTokenChainSyncs() {
 func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, receivedBlock ReceivedBlock, event *model.PubSubTxnInfo, syncStatus int) error {
 	// var err error
 	var tokenStatus int
-	txnBlockType := receivedBlock.LatestBlock.GetTransType()
+	// TODO(phase07): replace block type logic with DB token status
+	// Previously: derived tokenStatus from receivedBlock.LatestBlock.GetTransType()
+	// Default to Free since block-based type detection is removed
 	if receivedBlock.LatestBlock != nil {
-		switch txnBlockType {
-		case block.TokenBurntType:
-			tokenStatus = constants.TokenStatus_Burnt
-		case block.TokenGeneratedType, block.TokenTransferredType,
-			block.TokenUnpledgedType, block.TokenMintedType, block.TokenMigratedType:
-			tokenStatus = constants.TokenStatus_Free
-		case block.TokenPledgedType:
-			tokenStatus = constants.TokenStatus_Pledged
-		case block.TokenDeployedType:
-			tokenStatus = constants.TokenStatus_Deployed
-		case block.TokenExecutedType:
-			tokenStatus = constants.TokenStatus_Executed
-		case block.TokenIsBurntForFT:
-			tokenStatus = constants.TokenStatus_BurntForFT
-		case block.TokenCommittedType:
-			tokenStatus = constants.TokenStatus_Committed
-		case block.TokenContractCommited:
-			tokenStatus = constants.TokenStatus_Committed
-		case block.TokenPinnedAsService:
-			tokenStatus = constants.TokenStatus_PinnedAsService
-
-		}
-
+		tokenStatus = constants.TokenStatus_Free
 	}
 
 	switch event.AssetType {
@@ -2336,22 +2140,15 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 					TransactionID: event.TransactionID,
 					PublisherDID:  event.PublisherDID,
 					BlockHeight:   event.LatestBlockHeight,
-					SyncStatus:    syncStatus,
+					SyncStatus:     syncStatus,
 					TokenStatus:   tokenStatus,
 					// TokenValue:    event.TokenValue,
 				}
 				// if event.TokenValue != 0 {
 				// 	tokenInfo.TokenValue = event.TokenValue
 				// }
-				if receivedBlock.GenesisBlock != nil {
-					genesisBlockType := receivedBlock.GenesisBlock.GetTransType()
-					if genesisBlockType == block.TokenMigratedType {
-						tokenInfo.TokenValue = event.TokenValue
-					} else {
-						tokenInfo.TokenValue = receivedBlock.GenesisBlock.GetTokenValue()
-					}
-
-				}
+				// TODO(phase07): migration logic removed (block-based); use event token value as default
+				tokenInfo.TokenValue = event.TokenValue
 
 				err = c.w.AddSyncedRBTToTable(tokenInfo)
 				if err != nil {
@@ -2372,7 +2169,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		syncedRBT.OwnerDID = tokenOwner
 		syncedRBT.TransactionID = event.TransactionID
 		syncedRBT.BlockHash = event.BlockHash
-		syncedRBT.SyncStaus = syncStatus
+		syncedRBT.SyncStatus = syncStatus
 		syncedRBT.BlockHeight = event.LatestBlockHeight
 		syncedRBT.PublisherDID = event.PublisherDID
 		syncedRBT.TokenStatus = tokenStatus
@@ -2382,15 +2179,8 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 
 		//If the token value is  zero, need to update
 		if syncedRBT.TokenValue == 0 {
-			if receivedBlock.GenesisBlock != nil {
-				genesisBlockType := receivedBlock.GenesisBlock.GetTransType()
-				if genesisBlockType == block.TokenMigratedType {
-					syncedRBT.TokenValue = event.TokenValue
-				} else {
-					syncedRBT.TokenValue = receivedBlock.GenesisBlock.GetTokenValue()
-				}
-
-			}
+			// TODO(phase07): migration logic removed (block-based); use event token value as default
+			syncedRBT.TokenValue = event.TokenValue
 		}
 
 		err = c.w.UpdateSyncedRBTToTable(syncedRBT)
@@ -2422,7 +2212,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 				var comment string
 
 				if receivedBlock.GenesisBlock != nil {
-					ftInfo.TokenValue = receivedBlock.GenesisBlock.GetTokenValue()
+					ftInfo.TokenValue, _ = receivedBlock.GenesisBlock.GetTokenValue()
 					//If FT Name is not populated yet, get it from the genesis block comment
 					if ftInfo.FTName == "" {
 						comment = receivedBlock.GenesisBlock.GetComment()
@@ -2468,7 +2258,10 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		syncedSC, err := c.w.ReadSyncedSmartContractFromTable(tokenId)
 		if err != nil {
 			if strings.Contains(err.Error(), "no records found") {
-				scDeployer := receivedBlock.GenesisBlock.GetDeployerDID()
+				var scDeployer string
+				if receivedBlock.GenesisBlock != nil {
+					scDeployer, _ = receivedBlock.GenesisBlock.GetDeployerDID()
+				}
 				scInfo := &wallet.SyncedSmartContract{
 					SmartContractHash: tokenId,
 					Deployer:          scDeployer,
@@ -2513,7 +2306,10 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 			if strings.Contains(err.Error(), "no records found") {
 				c.log.Debug("nft doesn't exist, creating new record")
 
-				nftOwner := receivedBlock.LatestBlock.GetDeployerDID()
+				var nftOwner string
+				if receivedBlock.LatestBlock != nil {
+					nftOwner, _ = receivedBlock.LatestBlock.GetDeployerDID()
+				}
 				nftInfo := &wallet.SyncedNFT{
 					TokenID:       tokenId,
 					OwnerDID:      nftOwner,
@@ -2525,7 +2321,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 					TokenStatus:   tokenStatus,
 				} // TODO : add metadata details
 				if receivedBlock.GenesisBlock != nil {
-					nftInfo.TokenValue = receivedBlock.GenesisBlock.GetTokenValue()
+					nftInfo.TokenValue, _ = receivedBlock.GenesisBlock.GetTokenValue()
 				}
 				err = c.w.AddSyncedNFTToTable(nftInfo)
 
@@ -2834,4 +2630,166 @@ func (c *Core) relaseToken(release *bool, token string) {
 	if *release {
 		c.w.ReleaseToken(token)
 	}
+}
+
+// syncTransactionChain handles a sync request for a token's transaction chain.
+// (upstream addition — Category B)
+func (c *Core) syncTransactionChain(req *ensweb.Request) *ensweb.Result {
+	var syncRequest models.TransactionChainSyncRequest
+	var syncReply models.TransactionChainSyncReply
+	err := c.l.ParseJSON(req, &syncRequest)
+	if err != nil {
+		c.log.Error("failed to parse transaction chain sync request")
+		return c.l.RenderJSON(req, &models.TransactionChainSyncReply{Status: false, Message: "Failed to parse sync request"}, http.StatusOK)
+	}
+	//TODO: Implement GetTransactions function
+	transactions, nextTransactionID, err := c.w.GetTransactions(syncRequest.TokenID, syncRequest.TransactionID)
+	if err != nil {
+		c.log.Error("failed to get transactions")
+		return c.l.RenderJSON(req, &models.TransactionChainSyncReply{Status: false, Message: "Failed to get transactions"}, http.StatusOK)
+	}
+	syncReply.Transactions = transactions
+	syncReply.NextTransactionID = nextTransactionID
+	syncReply.Status = true
+	syncReply.Message = "Successfully got transactions"
+	return c.l.RenderJSON(req, &syncReply, http.StatusOK)
+}
+
+// syncGenesisAndLatestTransaction handles a sync request for genesis and latest transactions.
+// (upstream addition — Category B, stubbed pending wallet implementation)
+// TODO: Implement this function and complete syncTransaction API
+func (c *Core) syncGenesisAndLatestTransaction(req *ensweb.Request) *ensweb.Result {
+	return c.l.RenderJSON(req, &models.GenesisAndLatestTransactionSyncReply{Status: true, Message: "Successfully got genesis and latest transaction"}, http.StatusOK)
+}
+
+// findTokenRoleInTxn determines the role a token played in a given transaction.
+// (upstream addition — Category B)
+func findTokenRoleInTxn(tokenID string, txInfo *models.TransactionInfo) int16 {
+	if txInfo.Tokens != nil {
+		for _, lists := range [][]*models.TokenInfo{
+			txInfo.Tokens.RBT, txInfo.Tokens.NFT,
+			txInfo.Tokens.FT, txInfo.Tokens.SmartContract,
+		} {
+			for _, t := range lists {
+				if t.TokenID == tokenID {
+					return int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
+				}
+			}
+		}
+	}
+
+	for _, t := range txInfo.CommittedTokens {
+		if t.TokenID == tokenID {
+			return int16(models.GetTokenRoleID(constants.TokenRole_Commit))
+		}
+	}
+
+	for _, q := range txInfo.Quorums {
+		for _, t := range q.Tokens {
+			if t.TokenID == tokenID {
+				return int16(models.GetTokenRoleID(constants.TokenRole_Pledge))
+			}
+		}
+	}
+
+	return int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
+}
+
+// syncTransactionChainFrom fetches missing transactions from a peer and writes them locally.
+// (upstream addition — Category B)
+func (c *Core) syncTransactionChainFrom(p *ipfsport.Peer, previousTransactionID string, token string) (error, *models.TransactionChainSyncReply) {
+	var err error
+
+	latestTransactionID := c.w.GetLatestTransactionID(token)
+	if latestTransactionID == "" {
+		c.log.Error("failed to get latest transaction id")
+		return err, nil
+	}
+	if latestTransactionID == previousTransactionID {
+		return nil, nil
+	}
+
+	syncReq := models.TransactionChainSyncRequest{
+		TokenID:       token,
+		TransactionID: previousTransactionID,
+	}
+
+	for {
+		var trep models.TransactionChainSyncReply
+		err = p.SendJSONRequest("POST", APISyncTransactionChain, nil, &syncReq, &trep, false)
+		if err != nil {
+			c.log.Error("failed to sync transaction chain")
+			return err, nil
+		}
+		if !trep.Status {
+			c.log.Error("failed to sync transaction chain")
+			return fmt.Errorf(trep.Message), nil
+		}
+		if len(trep.Transactions) > 0 {
+			for _, txn := range trep.Transactions {
+				tx, err := util.TransactionFromBytes(txn)
+				if tx == nil {
+					c.log.Error("failed to convert transaction bytes to transaction")
+					return fmt.Errorf("failed to convert transaction bytes to transaction"), nil
+				}
+				var txInfo models.TransactionInfo
+				if err = json.Unmarshal(tx.Info, &txInfo); err != nil {
+					c.log.Error("failed to unmarshal transaction info", "err", err)
+					return fmt.Errorf("failed to unmarshal transaction info: %w", err), nil
+				}
+
+				role := findTokenRoleInTxn(token, &txInfo)
+
+				if err = c.w.CreateTransaction(tx); err != nil {
+					c.log.Error("failed to add transaction to transactions table", "err", err)
+					return fmt.Errorf("failed to add transaction: %w", err), nil
+				}
+
+				tokenDetails, err := c.w.GetTokenByTokenID(token)
+				if err != nil {
+					newToken := models.Token{
+						TokenID:        token,
+						TokenStatus:    constants.TokenStatus_Free,
+						DID:            txInfo.Owner,
+						TransactionID:  tx.ID,
+						TokenType:      int16(models.GetTokenTypeID(constants.TokenType_RBT)),
+						LatestPosition: 0,
+						LatestRole:     role,
+						CreatedAt:      time.Now(),
+						UpdatedAt:      time.Now(),
+					}
+					if createErr := c.w.CreateRBTToken(newToken); createErr != nil {
+						c.log.Error("failed to create token", "err", createErr)
+						return fmt.Errorf("failed to create token: %w", createErr), nil
+					}
+					tokenDetails = newToken
+				} else {
+					tokenDetails.DID = txInfo.Owner
+					tokenDetails.TransactionID = tx.ID
+					tokenDetails.LatestPosition++
+					tokenDetails.LatestRole = role
+					if updateErr := c.w.UpdateToken(tokenDetails); updateErr != nil {
+						c.log.Error("failed to update token", "err", updateErr)
+						return fmt.Errorf("failed to update token: %w", updateErr), nil
+					}
+				}
+
+				entry := &models.TokenChain{
+					TokenID:       token,
+					TransactionID: tx.ID,
+					Role:          role,
+					Position:      tokenDetails.LatestPosition,
+				}
+				if err = c.w.AddTokenChainEntry(entry); err != nil {
+					c.log.Error("failed to add token chain entry", "err", err)
+					return fmt.Errorf("failed to add token chain entry: %w", err), nil
+				}
+			}
+		}
+		if trep.NextTransactionID == "" {
+			break
+		}
+		syncReq.TransactionID = trep.NextTransactionID
+	}
+	return nil, nil
 }

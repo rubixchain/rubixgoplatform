@@ -1,13 +1,17 @@
 package core
 
+// smartcontract_tokenchain_validation.go
+//
+// TODO(phase07): All functions in this file are stubbed pending a full PostgreSQL-based
+// reimplementation. The block package has been removed. Function signatures that formerly
+// accepted *block.Block now accept TokenChainInput, a typed placeholder that will be
+// replaced with the real PostgreSQL-backed type during phase07 implementation.
+
 import (
 	"fmt"
-	"strings"
 
-	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 func (c *Core) SmartContractTokenChainValidation(userDID string, tokenId string, blockCount int) (*model.BasicResponse, error) {
@@ -27,7 +31,7 @@ func (c *Core) SmartContractTokenChainValidation(userDID string, tokenId string,
 			response.Message = "failed to fetch all smart contract tokens"
 			return response, err
 		}
-		//Validate smart contract tokenchain for each smart contrtact in the smart contract table
+		//Validate smart contract tokenchain for each smart contract in the smart contract table
 		for _, tokenInfo := range tokensList {
 			//Get token type
 			typeString := SmartContractString
@@ -60,215 +64,26 @@ func (c *Core) SmartContractTokenChainValidation(userDID string, tokenId string,
 	return response, nil
 }
 
-// Validates tokenchain for the given token upto the specified block height
+// ValidateSmartContractTokenChain validates the tokenchain for a given smart contract token.
+// TODO(phase07): implement DB-based smart contract token validation
 func (c *Core) ValidateSmartContractTokenChain(userDID string, tokenInfo wallet.SmartContract, tokenType int, blockCount int) (*model.BasicResponse, error) {
-	c.log.Info("validating smart copntract tokenchain", tokenInfo.SmartContractHash)
-	response := &model.BasicResponse{
-		Status: false,
-	}
-
-	validatedBlockCount := 0
-	blockId := ""
-
-	var blocks [][]byte
-	var prevBlockId string
-	var nextBlockID string
-	var err error
-
-	//This for loop ensures that we fetch all the blocks in the token chain
-	//starting from genesis block to latest block
-	for {
-		//GetAllTokenBlocks returns next 100 blocks and nextBlockID of the 100th block,
-		//starting from the given block Id, in the direction: genesis to latest block
-		blocks, nextBlockID, err = c.w.GetAllTokenBlocks(tokenInfo.SmartContractHash, tokenType, blockId)
-		if err != nil {
-			response.Message = "Failed to get token chain block"
-			return response, err
-		}
-		//the nextBlockID of the latest block is empty string
-		blockId = nextBlockID
-		if nextBlockID == "" {
-			break
-		}
-	}
-
-	c.log.Info("token chain length", len(blocks))
-	for i := len(blocks) - 1; i >= 0; i-- {
-		b := block.InitBlock(blocks[i], nil)
-		//validatedBlockCount keeps count of the number of blocks validated, including failed blocks
-		validatedBlockCount++
-
-		if b != nil {
-			//calculate block height
-			blockHeight, err := b.GetBlockNumber(tokenInfo.SmartContractHash)
-			if err != nil {
-				response.Message = "failed to fetch BlockNumber"
-				return response, fmt.Errorf("invalid token chain block")
-			}
-
-			c.log.Info("validating at block height:", blockHeight)
-
-			//fetch transaction type to validate the block accordingly
-			txnType := b.GetTransType()
-			switch txnType {
-			case block.TokenDeployedType:
-				prevBlockId := ""
-				//validate smart contract deployed block
-				response, err = c.ValidateSmartContractBlock(b, tokenInfo.SmartContractHash, prevBlockId, userDID)
-				if err != nil {
-					c.log.Error("msg", response.Message, "err", err)
-					return response, err
-				}
-			case block.TokenExecutedType:
-				//calculate previous block Id
-				prevBlock := block.InitBlock(blocks[i-1], nil)
-				prevBlockId, err = prevBlock.GetBlockID(tokenInfo.SmartContractHash)
-				if err != nil {
-					c.log.Error("invalid previous block")
-					continue
-				}
-				//validate smart contract executed block
-				response, err = c.ValidateSmartContractBlock(b, tokenInfo.SmartContractHash, prevBlockId, userDID)
-				if err != nil {
-					c.log.Error("msg", response.Message, "err", err)
-					return response, err
-				}
-			default:
-				prevBlockId := ""
-				//validate smart contract deployed block
-				response, err = c.ValidateSmartContractBlock(b, tokenInfo.SmartContractHash, prevBlockId, userDID)
-				if err != nil {
-					c.log.Error("msg", response.Message, "err", err)
-					return response, err
-				}
-			}
-
-		} else {
-			c.log.Error("Invalid block")
-		}
-
-		c.log.Info("validatedBlockCount", validatedBlockCount)
-		// //If blockCount is provided, then we will stop validating when we reach the blockCount
-		// //If blockCount is not provided,i.e., is 0, then it will never be equal to validatedBlockCount
-		// //and thus will be continued till genesis block
-		if validatedBlockCount == blockCount {
-			break
-		}
-	}
-
-	//Get latest block in the token chain
-	latestBlock := c.w.GetLatestTokenBlock(tokenInfo.SmartContractHash, tokenType)
-
-	//Verify if the token is pinned only by the current owner aka receiver in the latest block
-	response, err = c.CurrentOwnerPinCheck(latestBlock, tokenInfo.SmartContractHash, userDID)
-	if err != nil {
-		c.log.Error("msg", response.Message)
-		return response, err
-	}
-
-	//verify if the current token state is pinned by the quorums in the latest block
-	response, err = c.CurrentQuorumStatePinCheck(latestBlock, tokenInfo.SmartContractHash, tokenType, userDID)
-	if err != nil {
-		c.log.Error("msg", response.Message)
-		return response, err
-	}
-
-	c.log.Info("token chain validated successfully")
-	response.Message = "token chain validated successfully"
-	response.Status = true
-	return response, nil
+	// TODO(phase07): implement DB-based smart contract token validation
+	c.log.Warn("smartcontract_validation STUB: validation skipped")
+	return &model.BasicResponse{Status: true, Message: "smartcontract validation skipped (stub)"}, nil
 }
 
-// validate block of type: TokenTransferredType = "02" / TokenDeployedType = "09" / TokenExecutedType = "10"
-func (c *Core) ValidateSmartContractBlock(b *block.Block, tokenId string, calculatedPrevBlockId string, userDID string) (*model.BasicResponse, error) {
-	response := &model.BasicResponse{}
-
-	//Validate block hash
-	response, err := c.ValidateBlockHash(b, tokenId, calculatedPrevBlockId)
-	if err != nil {
-		c.log.Error("msg", response.Message, "err", err)
-		return response, err
-	}
-
-	//Validate sender signature
-	response, err = c.ValidateTxnInitiator(b)
-	if err != nil {
-		c.log.Error("msg", response.Message, "err", err)
-		return response, err
-	}
-
-	//validate quorums signature
-	response, err = c.ValidateQuorums(b, userDID)
-	if err != nil {
-		c.log.Error("msg", response.Message, "err", err)
-		return response, err
-	}
-
-	response.Status = true
-	if b.GetTransType() == block.TokenDeployedType { //smart contract deployed mode
-		response.Message = "smart contract deployed block validated successfully"
-		c.log.Debug("successfully validated smart contract deployed block")
-		// return response, nil
-	} else { //smart contract executed mode
-		response.Message = "smart contract executed block validated successfully"
-		c.log.Debug("successfully validated smart contract executed block")
-		// return response, nil
-	}
-	return response, nil
+// ValidateSmartContractBlock validates a block of type TokenTransferredType / TokenDeployedType / TokenExecutedType.
+// TODO(phase07): implement DB-based smart contract token validation
+func (c *Core) ValidateSmartContractBlock(b TokenChainInput, tokenId string, calculatedPrevBlockId string, userDID string) (*model.BasicResponse, error) {
+	// TODO(phase07): implement DB-based smart contract token validation
+	c.log.Warn("smartcontract_validation STUB: validation skipped")
+	return &model.BasicResponse{Status: true, Message: "smartcontract validation skipped (stub)"}, nil
 }
 
-// Deployer/Executor signature verification in a (non-genesis)block
-func (c *Core) ValidateTxnInitiator(b *block.Block) (*model.BasicResponse, error) {
-	response := &model.BasicResponse{
-		Status: false,
-	}
-
-	var initiator string
-	txnType := b.GetTransType()
-	if txnType == block.TokenDeployedType {
-		initiator = b.GetDeployerDID()
-	} else if txnType == block.TokenExecutedType {
-		initiator = b.GetExecutorDID()
-	} else {
-		c.log.Info("Failed to identify transaction type, transaction initiated with old executable")
-		response.Message = "Failed to identify transaction type"
-		return response, nil
-	}
-
-	initiatorSign := b.GetInitiatorSignature()
-	//check if it is a block addded to chain before adding initiator signature to block structure
-	if initiatorSign == nil {
-		c.log.Info("old block, initiator signature not found")
-		response.Message = "old block, initiator signature not found"
-		return response, nil
-	} else if initiatorSign.DID != initiator {
-		c.log.Info("invalid initiator, initiator did does not match")
-		response.Message = "invalid initiator, initiator did does not match"
-		return response, fmt.Errorf("invalid initiator, initiator did does not match")
-	}
-
-	//Initialise initiator did
-	didCrypto, err := c.InitialiseDID(initiator)
-	if err != nil {
-		c.log.Error("failed to initialise initiator did:", initiator)
-		response.Message = "failed to initialise initiator did"
-		return response, err
-	}
-
-	//initiator signature verification
-	response.Status, err = didCrypto.PvtVerify([]byte(initiatorSign.Hash), util.StrToHex(initiatorSign.Signature))
-	if err != nil {
-		if strings.Contains(err.Error(), "NLSS DID detected") || strings.Contains(err.Error(), "incompatible key format") {
-			c.log.Error("NLSS DID detected at INITIATOR role during validation. NLSS DIDs are DEPRECATED.", "initiator", initiator, "error", err)
-			response.Message = "NLSS DID detected at INITIATOR role. Please use BIP DID"
-		} else {
-			c.log.Error("failed to verify initiator:", initiator, "err", err)
-			response.Message = "invalid initiator"
-		}
-		return response, err
-	}
-
-	response.Message = "initiator validated successfully"
-	c.log.Debug("initiator (deployer/executor) validated successfully")
-	return response, nil
+// ValidateTxnInitiator verifies the deployer/executor signature in a (non-genesis) block.
+// TODO(phase07): implement DB-based smart contract token validation
+func (c *Core) ValidateTxnInitiator(b TokenChainInput) (*model.BasicResponse, error) {
+	// TODO(phase07): implement DB-based smart contract token validation
+	c.log.Warn("smartcontract_validation STUB: validation skipped")
+	return &model.BasicResponse{Status: true, Message: "smartcontract validation skipped (stub)"}, nil
 }

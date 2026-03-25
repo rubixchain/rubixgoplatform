@@ -7,12 +7,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rubixchain/rubixgoplatform/block"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	signModule "github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
@@ -46,7 +45,7 @@ func (c *Core) initiateRecoverRBT(reqID string, req *model.RBTRecoverRequest) *m
 
 	did := req.Sender
 	pinningNodeDID := req.PinningNode
-	pinningNodepeerid := c.w.GetPeerID(pinningNodeDID)
+	pinningNodepeerid, _ := c.w.GetPeerID(pinningNodeDID)
 	if pinningNodepeerid == "" {
 		c.log.Error("Peer ID not found", "did", pinningNodepeerid)
 		resp.Message = "invalid address, Peer ID not found"
@@ -111,8 +110,8 @@ func (c *Core) initiateRecoverRBT(reqID string, req *model.RBTRecoverRequest) *m
 	if !ok {
 		c.log.Debug("Failed to retrieve slice from interface")
 	}
-	// Convert []interface{} to []TokenInfo
-	var tokenInfos []contract.TokenInfo
+	// Convert []interface{} to []ContractTokenInfo
+	var tokenInfos []ContractTokenInfo
 	for _, item := range retrieved {
 		if m, ok := item.(map[string]interface{}); ok {
 			tokenInfo := mapToTokenInfo(m)
@@ -139,46 +138,21 @@ func (c *Core) initiateRecoverRBT(reqID string, req *model.RBTRecoverRequest) *m
 			c.log.Error("Failed to sync token chain block", "msg", trep.Message)
 		}
 
-		for _, bb := range trep.TCBlock {
-			blk := block.InitBlock(bb, nil)
-			if blk == nil {
-				c.log.Error("Failed to add token chain block, invalid block, sync failed", "err", err)
-			}
-			err = c.w.AddTokenBlock(token, blk)
-			if err != nil {
-				c.log.Error("Failed to add token chain block, syncing failed", "err", err)
-			}
-		}
-		var pt string
-		if c.TokenType(PartString) == tokenType {
-			gb := c.w.GetGenesisTokenBlock(token, tokenType)
-			if gb == nil {
-				c.log.Error("failed to get genesis block for token ", token)
-			} else {
-				pt, err = gb.GetParentDetials(token)
-				if err != nil {
-					c.log.Error("failed to get parent details for token ", token, "err : ", err)
-					pt = "" // Ensure pt is reset to empty string if an error occurs
-				}
-			}
-			_, err = c.syncParentToken(p, pt)
-			if err != nil {
-				c.log.Error("Failed to sync parent token chain while recovering token", err)
+		// TODO(phase07): implement DB-based token chain sync (block-based sync removed)
+		c.log.Info("[STUB] skipping block-based token chain sync for token", "token", token)
 
-			}
+		// TODO(phase07): implement parent token sync for part tokens using DB
 
-		}
-
-		tokenDetails := wallet.Token{
+		tokenDetails := &models.Token{
 			TokenID:       token,
-			ParentTokenID: pt,
+			ParentTokenID: pgtype.Text{String: "", Valid: false},
 			TokenValue:    tokenInfo.TokenValue,
 			DID:           tokenInfo.OwnerDID,
-			TokenStatus:   constants.TokenStatus_Free,
+			TokenStatus:   int16(constants.TokenStatus_Free),
 			CreatedAt:     time.Now(),
 			UpdatedAt:     time.Now(),
 		}
-		c.w.CreateToken(&tokenDetails)
+		c.w.CreateToken(tokenDetails)
 	}
 
 	c.log.Info("Tokens recovered successfully")
@@ -220,24 +194,16 @@ func (c *Core) recoverPinnedToken(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to verify signature of sender, Unable to recover tokens"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	tis := make([]contract.TokenInfo, 0)
+	tis := make([]ContractTokenInfo, 0)
 	for i := range recoveredTokens {
 		tts := "rbt"
 		if recoveredTokens[i].TokenValue != 1 {
 			tts = "part"
 		}
 		tt := c.TokenType(tts)
-		blk := c.w.GetLatestTokenBlock(recoveredTokens[i].TokenID, tt)
-		if blk == nil {
-			c.log.Error("failed to get latest block, invalid token chain")
-			crep.Message = "failed to get latest block, invalid token chain"
-		}
-		bid, err := blk.GetBlockID(recoveredTokens[i].TokenID)
-		if err != nil {
-			c.log.Error("failed to get block id", "err", err)
-			crep.Message = "failed to get block id, " + err.Error()
-		}
-		ti := contract.TokenInfo{
+		// TODO(phase07): implement DB-based block ID lookup for recovered tokens
+		bid := "" // BlockID unavailable without block package
+		ti := ContractTokenInfo{
 			Token:      recoveredTokens[i].TokenID,
 			TokenType:  tt,
 			TokenValue: recoveredTokens[i].TokenValue,
@@ -264,7 +230,7 @@ func (c *Core) requestSigningHash(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &crep, http.StatusOK)
 }
 
-func mapToTokenInfo(m map[string]interface{}) contract.TokenInfo {
+func mapToTokenInfo(m map[string]interface{}) ContractTokenInfo {
 	tokenType, err := m["tokenType"].(json.Number)
 	if !err {
 		fmt.Println("invalid type for tokenType :", err)
@@ -281,7 +247,7 @@ func mapToTokenInfo(m map[string]interface{}) contract.TokenInfo {
 	if err3 != nil {
 		fmt.Println("failed to convert tokenValue to float64:", err3)
 	}
-	return contract.TokenInfo{
+	return ContractTokenInfo{
 		Token:      m["token"].(string),
 		TokenType:  int(tokenTypeInt64),
 		TokenValue: tokenValueFloat64,

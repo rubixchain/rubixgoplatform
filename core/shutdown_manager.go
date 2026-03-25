@@ -87,10 +87,7 @@ func NewShutdownManager(core *Core) *ShutdownManager {
 		{
 			Name: "Close Database Connections",
 			Function: func() error {
-				if sm.core.s != nil {
-					sm.core.s.Close()
-				}
-				// Wallet doesn't have a Close method, just log
+				// Legacy storage (s field) removed; DB lifecycle managed by wallet.
 				if sm.core.w != nil {
 					sm.log.Debug("Wallet cleanup completed")
 				}

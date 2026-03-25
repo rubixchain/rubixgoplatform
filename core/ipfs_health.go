@@ -8,7 +8,7 @@ import (
 	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
-	"github.com/rubixchain/rubixgoplatform/core/config"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
@@ -16,7 +16,7 @@ import (
 type IPFSHealthManager struct {
 	ipfs *ipfsnode.Shell
 	log  logger.Logger
-	cfg  *config.Config
+	cfg  *types.RubixConfig
 
 	// Health state
 	mu              sync.RWMutex
@@ -40,7 +40,7 @@ type IPFSHealthManager struct {
 }
 
 // NewIPFSHealthManager creates a new IPFS health manager
-func NewIPFSHealthManager(ipfs *ipfsnode.Shell, cfg *config.Config, log logger.Logger) *IPFSHealthManager {
+func NewIPFSHealthManager(ipfs *ipfsnode.Shell, cfg *types.RubixConfig, log logger.Logger) *IPFSHealthManager {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	hm := &IPFSHealthManager{

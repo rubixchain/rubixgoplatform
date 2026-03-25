@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	cryptorand "crypto/rand"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -19,7 +20,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/did"
 	didm "github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/types"
-	"github.com/rubixchain/rubixgoplatform/util"
+	"github.com/rubixchain/rubixgoplatform/service"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
@@ -142,6 +143,8 @@ type Core struct {
 	mainnet              bool
 	localnet             bool
 	Ctx                  context.Context
+	qm                   *QuorumManager
+	srv                  *service.Service
 }
 
 func newRubixContext() context.Context {
@@ -161,12 +164,14 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 		webReq:            make(map[string]*did.DIDChan),
 		qc:                make(map[string]types.DIDCrypto),
 		pqc:               make(map[string]types.DIDCrypto),
-		secret:            util.GetRandBytes(32),
+		secret:            func() []byte { b := make([]byte, 32); cryptorand.Read(b); return b }(),
 		defaultSetup:      defaultSetup,
 		publishTokenChain: publishTokenChainDetails,
 		fullNode:          fullNode,
 		faucetURL:         faucetURL,
 		Ctx:               newRubixContext(),
+		qm:                &QuorumManager{},
+		srv:               service.New(),
 	}
 
 	switch networkMode {

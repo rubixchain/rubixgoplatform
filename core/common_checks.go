@@ -279,7 +279,7 @@ func (c *Core) ValidateNewTokenContent(tokenContent string, isQuorum bool) error
 		c.log.Debug("token content validated for "+network, tokenContent)
 	}
 
-	MaxPossiblePartTokenNumber := parts.MaxPossiblePartsIndexByMaxDecimalPlaces()
+	MaxPossiblePartTokenNumber := parts.MaxPossiblePartsIndexByMaxDecimalPlaces(uint(constants.MaxSupportedDecimalPlaces))
 	if tokenTypeString == PartString {
 		partTokenNumber, err := strconv.Atoi(devidedParts[2])
 		if err != nil {
@@ -308,7 +308,7 @@ func (c *Core) ValidateTransactionValueAndPledge(txnInfo *models.TransactionInfo
 
 	transactionValue := rubixmath.ZeroFloat()
 	for _, t := range txnInfo.Tokens.RBT {
-		tokenValue, err := parts.GetTokenValueFromIndexedID(t.TokenID)
+		tokenValue, err := util.GetTokenValueFromTokenID(t.TokenID)
 		if err != nil {
 			return fmt.Errorf("failed to get value for RBT token %s: %w", t.TokenID, err)
 		}
@@ -318,7 +318,7 @@ func (c *Core) ValidateTransactionValueAndPledge(txnInfo *models.TransactionInfo
 	totalPledgeValue := rubixmath.ZeroFloat()
 	for _, quorum := range txnInfo.Quorums {
 		for _, t := range quorum.Tokens {
-			tokenValue, err := parts.GetTokenValueFromIndexedID(t.TokenID)
+			tokenValue, err := util.GetTokenValueFromTokenID(t.TokenID)
 			if err != nil {
 				return fmt.Errorf("failed to get value for pledge token %s from quorum %s: %w", t.TokenID, quorum.Did, err)
 			}
@@ -337,43 +337,51 @@ func (c *Core) ValidateTransactionValueAndPledge(txnInfo *models.TransactionInfo
 }
 
 func (c *Core) IsParentTokenBurnt(isFullNode bool, tokenID string) (error, bool) {
-	//First try to get the parent token from the tokens table,If token details are not there in the FullNodeRBT table
-	//then it should compute  the parent tokenID from the given tokenID(currently assume a place holder function for that),
-	//then from the tokenchain table we have to get the genesis txnID of the given tokenID(assume a place holder function for that),
-	//then from the transactions table we have to get transactionInfo corresponding to genesisTxnID,
-	// then check whether the parent tokenID is there in the committed tokens list.
-	// if it is ther it should output nil,true. If it is not there it should output nil,false.
-	// For any other error it should output error,false.
+	// TODO(phase11): IsParentTokenBurnt had a broken brace structure in the upstream.
+	// Rewritten as a clean stub pending reimplementation.
 	var parentTokenID string
 
 	if isFullNode {
 		tokenDetails, err := c.w.GetFullNodeRBTToken(tokenID)
 		if err == nil {
 			if !tokenDetails.ParentTokenID.Valid || tokenDetails.ParentTokenID.String == "" {
-				//instead of return, it should compute parent tokenID from the tokenID
-						// TODO: replace with proper parent tokenID computation once available
-			partTokenID := parts.TokenID(tokenID)
-			parentTokenID, err := partTokenID.GetParentToken()
-			if err != nil {
-				return fmt.Errorf("failed to get parent for token %s: %w", partTokenID, err), false
+				// TODO: replace with proper parent tokenID computation once available
+				partTokenID := parts.TokenID(tokenID)
+				computedParent, err := partTokenID.GetParentToken()
+				if err != nil {
+					return fmt.Errorf("failed to get parent for token %s: %w", partTokenID, err), false
+				}
+				if computedParent == "" {
+					return nil, false
+				}
+				parentTokenID = computedParent
+			} else {
+				parentTokenID = tokenDetails.ParentTokenID.String
 			}
-			if parentTokenID == "" {
-				return nil, false
-			}
-				
-			}
-			parentTokenID = tokenDetails.ParentTokenID.String
 		} else {
 			// TODO: replace with proper parent tokenID computation once available
 			partTokenID := parts.TokenID(tokenID)
-			parentTokenID, err := partTokenID.GetParentToken()
+			computedParent, err := partTokenID.GetParentToken()
 			if err != nil {
 				return fmt.Errorf("failed to get parent id of token %s: %w", partTokenID, err), false
 			}
-			if parentTokenID == "" {
+			if computedParent == "" {
 				return nil, false
 			}
+			parentTokenID = computedParent
 		}
+	} else {
+		// TODO: replace with proper parent tokenID computation once available
+		partTokenID := parts.TokenID(tokenID)
+		computedParent, err := partTokenID.GetParentToken()
+		if err != nil {
+			return fmt.Errorf("failed to get parent id of token %s: %w", partTokenID, err), false
+		}
+		if computedParent == "" {
+			return nil, false
+		}
+		parentTokenID = computedParent
+	}
 
 	var genesisTx *models.Transactions
 	var err error
@@ -394,14 +402,6 @@ func (c *Core) IsParentTokenBurnt(isFullNode bool, tokenID string) (error, bool)
 		return fmt.Errorf("failed to unmarshal transaction info for token %s: %w", tokenID, err), false
 	}
 
-	//If it is not a fullnode, it should get the parent token from the tokens table,
-	//If token details are not there in the tokens table
-	//then it should compute  the parent tokenID from the given tokenID(currently assume a place holder function for that),
-	//then from the tokenchain table we have to get the genesis txnID of the given tokenID(assume a place holder function for that),
-	//then from the transactions table we have to get transactionInfo corresponding to genesisTxnID,
-	// then check whether the parent tokenID is there in the committed tokens list.
-	// if it is ther it should output nil,true. If it is not there it should output nil,false.
-	// For any other error it should output error,false.
 	for _, committedToken := range txInfo.CommittedTokens {
 		if committedToken.TokenID == parentTokenID {
 			return nil, true

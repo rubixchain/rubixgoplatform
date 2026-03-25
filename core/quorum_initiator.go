@@ -124,7 +124,7 @@ func (c *Core) requestPledgeTokenHandler(request *ensweb.Request) *ensweb.Result
 func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result {
 	quorumDid := c.l.GetQuery(request, "did")
 	response := &models.ConsensusResponse{Status: false}
-	quorumDc, err := c.SetupDID(reqID, quorumDid)
+	quorumDc, err := c.SetupDID(request.ID, quorumDid)
 	if err != nil {
 		response.Message = "InitiateTransaction:Failed to setup DID: " + err.Error()
 		return c.l.RenderJSON(request, response, http.StatusInternalServerError)

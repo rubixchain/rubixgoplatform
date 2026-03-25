@@ -14,7 +14,10 @@ func (c *Core) GetTxnDetailsByID(txnID string) (model.TransactionDetails, error)
 	if err != nil {
 		return th, err
 	}
-	return res, nil
+	if res == nil {
+		return th, fmt.Errorf("transaction %q not found", txnID)
+	}
+	return *res, nil
 }
 
 // GetTxnDetailsByDID retrieves transaction details based on a given DID and an optional date range.

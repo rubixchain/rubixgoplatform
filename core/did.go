@@ -155,6 +155,18 @@ func (c *Core) checkPassword(didStr string, pwd string) bool {
 	return true
 }
 
+// InitDIDModule initialises the DID sub-system without the full
+// SetupCore() side-effects (listener, pubsub, peer manager).
+// Must be called after RunIPFS() so that c.ipfs is non-nil.
+func (c *Core) InitDIDModule() {
+	if c.d == nil {
+		// Ensure didDir has a trailing slash -- the did package uses raw string
+		// concatenation (d.dir + DID) and requires a path separator at the end.
+		c.didDir = util.SanitizeDirPath(c.didDir)
+		c.d = did.InitDID(c.didDir, c.log, c.ipfs)
+	}
+}
+
 func (c *Core) CreateDID(didCreate *did.DIDCreate, localDID bool) (did string, err error) {
 	if localDID { // create key pair from mnemonic an d then did from the private key
 		did, err = c.d.CreateDID(didCreate)
@@ -205,7 +217,7 @@ func (c *Core) AddDID(dc *did.DIDCreate) *model.BasicResponse {
 	br := &model.BasicResponse{
 		Status: false,
 	}
-	ds, err := c.d.MigrateDID(dc)
+	ds, err := c.d.CreateDID(dc)
 	if err != nil {
 		br.Message = err.Error()
 		return br
@@ -294,7 +306,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*models.DID, error) {
 		}
 
 		// 2. If missing, try peer table
-		peerID = c.w.GetPeerID(didStr)
+		peerID, _ = c.w.GetPeerID(didStr)
 
 		if peerID != "" {
 			return &models.DID{
@@ -304,7 +316,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*models.DID, error) {
 		}
 	} else {
 		// 1. Try peer table first
-		peerID = c.w.GetPeerID(didStr)
+		peerID, _ = c.w.GetPeerID(didStr)
 
 		if peerID != "" {
 			return &models.DID{
@@ -496,7 +508,7 @@ func (c *Core) removeStaleDIDFromNetwork(reqID, staleDID string) (model.BasicRes
 		return response, fmt.Errorf("DID is not exist")
 	}
 	t := time.Now().String()
-	h := util.CalculateHashString(c.peerID+staleDID+t, "SHA3-256")
+	h := util.HexToStr(util.CalculateHash([]byte(c.peerID+staleDID+t), "SHA3-256"))
 	sig, err := dc.PvtSign([]byte(h))
 	if err != nil {
 		return response, fmt.Errorf("remove stale did, failed to do signature")

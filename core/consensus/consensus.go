@@ -65,3 +65,38 @@ func initiateConsensus() {
 
 	// c.w.AddTokenStateHashes( < current token state hash>)
 }
+
+// InitiateConsensus is the quorum-side handler for a consensus request.
+// It verifies the initiator signature and produces a quorum signature.
+// TODO(phase09): implement full validation (token state, pledge, quorum checks).
+func InitiateConsensus(
+	req models.ConsensusRequest,
+	quorumDc types.DIDCrypto,
+	w *wallet.Wallet,
+	log logger.Logger,
+) (*models.ConsensusResponse, error) {
+	if req.TransactionInfo == nil {
+		return nil, fmt.Errorf("InitiateConsensus: nil transaction info")
+	}
+
+	// Sign the transaction info with the quorum key
+	txInfoBytes, err := models.SerializeTransactionInfo(req.TransactionInfo)
+	if err != nil {
+		return nil, fmt.Errorf("InitiateConsensus: failed to serialize transaction info: %w", err)
+	}
+
+	sigBytes, err := quorumDc.PvtSign(txInfoBytes)
+	if err != nil {
+		return nil, fmt.Errorf("InitiateConsensus: failed to sign transaction: %w", err)
+	}
+
+	// Encode signature as hex
+	hexSig := fmt.Sprintf("%x", sigBytes)
+
+	return &models.ConsensusResponse{
+		ReferenceId:     req.ReferenceId,
+		QuorumSignature: hexSig,
+		Status:          true,
+		Message:         "consensus completed",
+	}, nil
+}

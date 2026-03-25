@@ -10,13 +10,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/types"
 )
 
 // DefaultUnpledgePoolConfig returns the default configuration
-func DefaultUnpledgePoolConfig() config.UnpledgePoolConfig {
-	return config.UnpledgePoolConfig{
+func DefaultUnpledgePoolConfig() types.UnpledgePoolConfig {
+	return types.UnpledgePoolConfig{
 		MaxWorkers:       runtime.NumCPU(),
 		QueueSize:        1000,
 		BatchSize:        50,
@@ -40,7 +40,7 @@ type UnpledgeMetrics struct {
 
 // UnpledgeWorkerPool manages concurrent unpledge operations
 type UnpledgeWorkerPool struct {
-	config    config.UnpledgePoolConfig
+	config    types.UnpledgePoolConfig
 	workers   int
 	taskQueue chan *UnpledgeTask
 	wg        sync.WaitGroup
@@ -72,7 +72,7 @@ type UnpledgeResult struct {
 }
 
 // NewUnpledgeWorkerPool creates a new worker pool with the given configuration
-func NewUnpledgeWorkerPool(cfg config.UnpledgePoolConfig) (*UnpledgeWorkerPool, error) {
+func NewUnpledgeWorkerPool(cfg types.UnpledgePoolConfig) (*UnpledgeWorkerPool, error) {
 	// Validate configuration
 	if cfg.MaxWorkers <= 0 {
 		cfg.MaxWorkers = runtime.NumCPU()

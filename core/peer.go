@@ -258,7 +258,7 @@ func (c *Core) removeStalePeerCallback(peerID string, topic string, data []byte)
 	}
 
 	// verify the signature
-	h := util.CalculateHashString(stalePeer.PeerID+stalePeer.DID+stalePeer.Time, "SHA3-256")
+	h := util.HexToStr(util.CalculateHash([]byte(stalePeer.PeerID+stalePeer.DID+stalePeer.Time), "SHA3-256"))
 	dc, err := c.InitialiseDID(stalePeer.DID)
 	if err != nil {
 		c.log.Error("failed to initialise stale peer")

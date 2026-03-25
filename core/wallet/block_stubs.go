@@ -7,8 +7,39 @@ import (
 // TODO(phase07): block-based wallet methods removed; use DB tokenchain
 
 // BlockStub is a placeholder type replacing block.Block from the removed block package.
-// All Get* wallet methods return nil (*BlockStub), so no method is ever called.
+// All Get* wallet methods return nil (*BlockStub), so no method is ever called on a real value.
+// The stub methods below exist solely so that legacy call sites compile.
 type BlockStub struct{}
+
+// GetBlockID is a dead-code stub; always returns empty string.
+func (b *BlockStub) GetBlockID(token string) (string, error) { return "", nil }
+
+// GetBlockNumber is a dead-code stub; always returns 0.
+func (b *BlockStub) GetBlockNumber(token string) (uint64, error) { return 0, nil }
+
+// GetOwner is a dead-code stub; always returns empty string.
+func (b *BlockStub) GetOwner() (string, error) { return "", nil }
+
+// GetSignerDID is a dead-code stub; always returns empty string.
+func (b *BlockStub) GetSignerDID() (string, error) { return "", nil }
+
+// GetTokenValue is a dead-code stub; always returns 0.
+func (b *BlockStub) GetTokenValue() (float64, error) { return 0, nil }
+
+// GetDeployerDID is a dead-code stub; always returns empty string.
+func (b *BlockStub) GetDeployerDID() (string, error) { return "", nil }
+
+// GetHash is a dead-code stub; always returns empty string.
+func (b *BlockStub) GetHash() (string, error) { return "", nil }
+
+// GetTid is a dead-code stub; always returns empty string.
+func (b *BlockStub) GetTid() (string, error) { return "", nil }
+
+// GetBlock is a dead-code stub; always returns nil (no raw block bytes).
+func (b *BlockStub) GetBlock() []byte { return nil }
+
+// GetComment is a dead-code stub; always returns empty string.
+func (b *BlockStub) GetComment() string { return "" }
 
 // GetLatestTokenBlock was block-based; callers must use DB queries.
 func (w *Wallet) GetLatestTokenBlock(token string, tokenType int) *BlockStub {

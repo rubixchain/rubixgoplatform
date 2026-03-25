@@ -291,3 +291,16 @@ func (w *Wallet) ReadFullNodeTransactionHistoryTable(transactionID string) (*mod
 func (w *Wallet) UpdateFullNodeTransactionHistoryTable(t *model.FullNodeTxnHistoryInfo) error {
 	return nil
 }
+
+// GetLatestTransactionID returns the latest transaction ID for a given token.
+// TODO(phase11-upstream): implement using PostgreSQL tokens.transaction_id lookup.
+func (w *Wallet) GetLatestTransactionID(tokenID string) string {
+	return ""
+}
+
+// GetTransactions returns serialized transactions for a token starting from a given transactionID.
+// Returns (transactions [][]byte, nextTransactionID string, err error).
+// TODO(phase11-upstream): implement using PostgreSQL tokenchain + transactions tables.
+func (w *Wallet) GetTransactions(tokenID string, transactionID string) ([][]byte, string, error) {
+	return nil, "", nil
+}

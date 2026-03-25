@@ -10,7 +10,6 @@ import (
 	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
-	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
@@ -18,7 +17,7 @@ import (
 // workItem represents a token to be validated
 type workItem struct {
 	index int
-	info  contract.TokenInfo
+	info  ContractTokenInfo
 }
 
 // TokenStateValidatorOptimized manages token state validation with caching and optimization
@@ -80,7 +79,7 @@ func NewTokenStateValidatorOptimized(core *Core, did string, quorumList []string
 	tsv.initializeQuorumPeerCache(quorumList)
 
 	// Pre-cache sender peer ID
-	tsv.senderPeerID = core.w.GetPeerID(did)
+	tsv.senderPeerID, _ = core.w.GetPeerID(did)
 
 	return tsv
 }
@@ -105,7 +104,7 @@ func (tsv *TokenStateValidatorOptimized) initializeQuorumPeerCache(quorumList []
 
 // ValidateTokenStatesOptimized validates tokens with extensive caching
 func (tsv *TokenStateValidatorOptimized) ValidateTokenStatesOptimized(
-	ti []contract.TokenInfo,
+	ti []ContractTokenInfo,
 	did string,
 ) []TokenStateCheckResult {
 	total := len(ti)
@@ -230,7 +229,7 @@ func (tsv *TokenStateValidatorOptimized) ValidateTokenStatesOptimized(
 }
 
 // groupTokensByType groups tokens by type for better cache efficiency
-func (tsv *TokenStateValidatorOptimized) groupTokensByType(ti []contract.TokenInfo) map[int][]workItem {
+func (tsv *TokenStateValidatorOptimized) groupTokensByType(ti []ContractTokenInfo) map[int][]workItem {
 	groups := make(map[int][]workItem)
 
 	for i, tokenInfo := range ti {

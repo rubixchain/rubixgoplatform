@@ -6,6 +6,14 @@ import (
 	"github.com/rubixchain/rubixgoplatform/constants"
 )
 
+// Token status sentinel values used by legacy smart contract code.
+const (
+	TokenIsGenerated = 13 // maps to constants.TokenStatus_Generated
+	TokenIsLocked    = 1  // maps to constants.TokenStatus_Locked
+	TokenIsFree      = 0  // maps to constants.TokenStatus_Free
+	TokenIsFetched   = 15 // maps to constants.TokenStatus_Fetched
+)
+
 // SmartContract is a legacy stub type for smart contract tokens.
 type SmartContract struct {
 	SmartContractHash string
@@ -53,4 +61,10 @@ func (w *Wallet) GetSmartContractTokenByDeployer(did string) ([]SmartContract, e
 // TODO(phase07): implement full PostgreSQL query against tokens table.
 func (w *Wallet) GetSmartContractToken(tokenID string) ([]SmartContract, error) {
 	return nil, nil
+}
+
+// GetSmartContractTokenUrl returns the IPFS URL for a smart contract token. Stub.
+// TODO(phase09): implement using PostgreSQL smart_contract_tokens table.
+func (w *Wallet) GetSmartContractTokenUrl(tokenID string) (string, error) {
+	return "", fmt.Errorf("GetSmartContractTokenUrl: not implemented")
 }

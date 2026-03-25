@@ -3,7 +3,6 @@ package core
 import (
 	"fmt"
 
-	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
@@ -57,7 +56,7 @@ func (c *Core) confirmTokenTransfer(req *ensweb.Request) *ensweb.Result {
 }
 
 // sendTokenConfirmation sends confirmation to receiver after finality
-func (c *Core) sendTokenConfirmation(receiverAddress string, txID string, tokens []contract.TokenInfo, tokenType int) error {
+func (c *Core) sendTokenConfirmation(receiverAddress string, txID string, tokens []ContractTokenInfo, tokenType int) error {
 	c.log.Info("Sending token confirmation to receiver",
 		"receiver", receiverAddress,
 		"transaction_id", txID,
@@ -102,7 +101,7 @@ func (c *Core) sendTokenConfirmation(receiverAddress string, txID string, tokens
 }
 
 // rollbackTokenTransfer rolls back pending tokens if consensus fails
-func (c *Core) rollbackTokenTransfer(receiverAddress string, txID string, tokens []contract.TokenInfo, tokenType int) error {
+func (c *Core) rollbackTokenTransfer(receiverAddress string, txID string, tokens []ContractTokenInfo, tokenType int) error {
 	c.log.Info("Rolling back token transfer on receiver",
 		"receiver", receiverAddress,
 		"transaction_id", txID,

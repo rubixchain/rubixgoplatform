@@ -10,7 +10,7 @@ import (
 	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
-	"github.com/rubixchain/rubixgoplatform/core/config"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
@@ -18,7 +18,7 @@ import (
 type IPFSRecoveryManager struct {
 	core *Core
 	log  logger.Logger
-	cfg  *config.Config
+	cfg  *types.RubixConfig
 
 	// Recovery state
 	mu            sync.RWMutex

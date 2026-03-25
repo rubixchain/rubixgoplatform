@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/types"
 )
 
 // InitiateOptimizedUnpledgeProcess performs parallel unpledging with production-grade features
@@ -28,8 +28,14 @@ func (c *Core) InitiateOptimizedUnpledgeProcess() (string, error) {
 
 	c.log.Info("Found unpledge sequences", "count", len(unpledgeSequenceInfo))
 
+	// Convert []wallet.UnpledgeSequenceInfo to []*wallet.UnpledgeSequenceInfo for filterReadyToUnpledge
+	unpledgePtrs := make([]*wallet.UnpledgeSequenceInfo, len(unpledgeSequenceInfo))
+	for i := range unpledgeSequenceInfo {
+		unpledgePtrs[i] = &unpledgeSequenceInfo[i]
+	}
+
 	// Pre-filter ready transactions to avoid unnecessary processing
-	readyTransactions, err := c.filterReadyToUnpledge(unpledgeSequenceInfo)
+	readyTransactions, err := c.filterReadyToUnpledge(unpledgePtrs)
 	if err != nil {
 		c.log.Error("Failed to filter ready transactions", "err", err)
 		return "", fmt.Errorf("failed to filter transactions: %w", err)
@@ -242,11 +248,11 @@ func (c *Core) processUnpledgeTransactions(pool *UnpledgeWorkerPool, transaction
 }
 
 // getOptimalPoolConfig determines optimal configuration based on workload
-func (c *Core) getOptimalPoolConfig(transactionCount int) config.UnpledgePoolConfig {
+func (c *Core) getOptimalPoolConfig(transactionCount int) types.UnpledgePoolConfig {
 	poolConfig := DefaultUnpledgePoolConfig()
 
-	// Check if custom config is provided
-	if c.cfg != nil && c.cfg.CfgData.UnpledgeConfig != nil {
+	// Check if custom config is provided (UnpledgePoolConfig is a value type; use MaxWorkers as sentinel)
+	if c.cfg != nil && c.cfg.CfgData.UnpledgeConfig.MaxWorkers > 0 {
 		// Use custom configuration if provided
 		custom := c.cfg.CfgData.UnpledgeConfig
 		if custom.MaxWorkers > 0 {

@@ -40,8 +40,16 @@ func BuildTransactionInfoFromRequest(
 
 	// --- RBT path (separate — CollectRBTTokens manages its own locking) ---
 	if req.HasRBT() {
-		// The underscore here is the denom count map.
-		rbtTokens, _, err := parts.CollectRBTTokens(dc, w, req.GetRBTAmount(), networkMode, log, pubsub)
+		ownerDID := dc.GetDID()
+		ownedRBTTokens, err := w.LockTokensForSplit(ctx, ownerDID, req.GetRBTAmount())
+		if err != nil {
+			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: lock RBT tokens for split: %w", err)
+		}
+		denomMap, err := w.GetTokenDenomArray(ownerDID)
+		if err != nil {
+			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: get denom array: %w", err)
+		}
+		rbtTokens, _, _, _, err := parts.CollectRBTTokens(dc, w, req.GetRBTAmount(), ownedRBTTokens, denomMap, networkMode, log)
 		if err != nil {
 			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: RBT collection failed: %w", err)
 		}

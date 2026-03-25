@@ -2,8 +2,6 @@ package core
 
 import (
 	"sync"
-	
-	"github.com/rubixchain/rubixgoplatform/contract"
 )
 
 // TokenInfoPool manages a pool of TokenInfo objects to reduce GC pressure
@@ -16,19 +14,19 @@ func NewTokenInfoPool() *TokenInfoPool {
 	return &TokenInfoPool{
 		pool: sync.Pool{
 			New: func() interface{} {
-				return &contract.TokenInfo{}
+				return &ContractTokenInfo{}
 			},
 		},
 	}
 }
 
 // Get retrieves a TokenInfo from the pool
-func (p *TokenInfoPool) Get() *contract.TokenInfo {
-	return p.pool.Get().(*contract.TokenInfo)
+func (p *TokenInfoPool) Get() *ContractTokenInfo {
+	return p.pool.Get().(*ContractTokenInfo)
 }
 
 // Put returns a TokenInfo to the pool after resetting it
-func (p *TokenInfoPool) Put(ti *contract.TokenInfo) {
+func (p *TokenInfoPool) Put(ti *ContractTokenInfo) {
 	// Reset ALL fields to prevent state leakage between transactions
 	ti.Token = ""
 	ti.TokenType = 0
@@ -82,39 +80,39 @@ func NewTokenSlicePool() *TokenSlicePool {
 	return &TokenSlicePool{
 		smallPool: sync.Pool{
 			New: func() interface{} {
-				return make([]*contract.TokenInfo, 0, 100)
+				return make([]*ContractTokenInfo, 0, 100)
 			},
 		},
 		mediumPool: sync.Pool{
 			New: func() interface{} {
-				return make([]*contract.TokenInfo, 0, 1000)
+				return make([]*ContractTokenInfo, 0, 1000)
 			},
 		},
 		largePool: sync.Pool{
 			New: func() interface{} {
-				return make([]*contract.TokenInfo, 0, 10000)
+				return make([]*ContractTokenInfo, 0, 10000)
 			},
 		},
 	}
 }
 
 // Get retrieves a token slice of appropriate size
-func (p *TokenSlicePool) Get(size int) []*contract.TokenInfo {
+func (p *TokenSlicePool) Get(size int) []*ContractTokenInfo {
 	switch {
 	case size <= 100:
-		return p.smallPool.Get().([]*contract.TokenInfo)[:0]
+		return p.smallPool.Get().([]*ContractTokenInfo)[:0]
 	case size <= 1000:
-		return p.mediumPool.Get().([]*contract.TokenInfo)[:0]
+		return p.mediumPool.Get().([]*ContractTokenInfo)[:0]
 	case size <= 10000:
-		return p.largePool.Get().([]*contract.TokenInfo)[:0]
+		return p.largePool.Get().([]*ContractTokenInfo)[:0]
 	default:
 		// For very large sizes, just allocate
-		return make([]*contract.TokenInfo, 0, size)
+		return make([]*ContractTokenInfo, 0, size)
 	}
 }
 
 // Put returns a token slice to the appropriate pool
-func (p *TokenSlicePool) Put(slice []*contract.TokenInfo) {
+func (p *TokenSlicePool) Put(slice []*ContractTokenInfo) {
 	// Clear the slice
 	for i := range slice {
 		slice[i] = nil
