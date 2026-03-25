@@ -1,6 +1,8 @@
 package core
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
@@ -231,8 +233,8 @@ func (c *Core) syncTransactionTokens(
 			if token == nil {
 				continue
 			}
-
-			err := c.syncTokenChainFrom(peer, token.PreviousTransactionID, token.TokenID)
+            //Handling the response in the future.
+			err, _ := c.syncTransactionChainFrom(peer, token.PreviousTransactionID, token.TokenID)
 			if err != nil {
 				return err
 			}
@@ -266,4 +268,22 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 	}
 
 	return c.l.RenderJSON(request, &crep, http.StatusBadRequest)
+}
+
+func (c *Core) GetTransactionByID(txId string) (*models.TransactionInfo, error) {
+	transactionDetail, err := c.w.GetTransactionByID(txId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get transactions details for tx: %v, err: %v", txId, err)
+	}
+
+	var txInfo *models.TransactionInfo
+	if err := json.Unmarshal(transactionDetail.Info, txInfo); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal transaction info, err: %v", err)
+	}
+
+	return txInfo, nil
+}
+
+func (c *Core) GetAllTransactions() ([]models.Transactions, error) {
+	return c.w.GetAllTransactions()
 }

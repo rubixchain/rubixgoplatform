@@ -13,6 +13,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/token"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
 const (
@@ -427,4 +428,20 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 	}
 	c.log.Debug(message)
 	defer response.Body.Close()
+}
+
+func (c *Core) GetAllSmartcontracts() ([]models.Token, error) {
+	smartContracts, err := c.w.GetSmartContractTokens()
+	if err != nil {
+		return nil, err
+	}
+	return smartContracts, nil
+}
+
+func (c *Core) GetSmartContractChain(smartContractID string) ([]models.TokenChainResponse, error) {
+	smartContractTokenChain, err := c.w.GetSmartContractChainByTokenID(smartContractID)
+	if err != nil {
+		return nil, err
+	}
+	return smartContractTokenChain, nil
 }

@@ -44,12 +44,10 @@ const (
 	APIGetTxnByTxnID                    string = "/api/get-by-txnId"
 	APIGetTxnByDID                      string = "/api/get-by-did"
 	APIGetTxnByComment                  string = "/api/get-by-comment"
-	APICreateNFT                        string = "/api/create-nft"
 	APIGetAllNFT                        string = "/api/list-nfts"
 	APIAddNFTSale                       string = "/api/addnftsale"
 	APIDeploySmartContract              string = "/api/deploy-smart-contract"
 	APIExecuteSmartContract             string = "/api/execute-smart-contract"
-	APIGenerateSmartContract            string = "/api/generate-smart-contract"
 	APIFetchSmartContract               string = "/api/fetch-smart-contract"
 	APIPublishContract                  string = "/api/publish-smart-contract"
 	APISubscribecontract                string = "/api/subscribe-smart-contract"
@@ -72,7 +70,7 @@ const (
 	APIValidateTokenChain               string = "/api/validate-token-chain"
 	APIGenerateFaucetTestToken          string = "/api/generate-faucettest-token"
 	APIFaucetTokenCheck                 string = "/api/faucet-token-check"
-	APICreateFT                         string = "/api/create-ft"
+	APICreateFT                         string = "/rubix/v1/fts/mint"
 	APIDumpFTTokenChainBlock            string = "/api/dump-ft-token-chain"
 	APIInitiateFTTransfer               string = "/api/initiate-ft-transfer"
 	APIGetFTInfo                        string = "/api/get-ft-info-by-did"
@@ -109,26 +107,23 @@ const (
 	APIRegisterDID                      string = "/rubix/v1/dids/{did}/register"
 
 	//Below are Explorer-service API endpoints
-	APIGetAllRBTs           string = "/api/de-exp/get-rbt-list"
-	APIGetAllFTs            string = "/api/de-exp/get-ft-list"
-	APIGetAllNFTs           string = "/api/de-exp/get-nft-list"
-	APIGetAllSmartContracts string = "/api/de-exp/get-smart-contract-list"
-
-	APIGetRBTbyDID           string = "/api/de-exp/get-rbt-list-by-did"
-	APIGetFTbyDID            string = "/api/de-exp/get-ft-list-by-did"
-	APIGetNFTbyDID           string = "/api/de-exp/get-nft-list-by-did"
-	APIGetSmartContractbyDID string = "/api/de-exp/get-smart-contract-list-by-did"
-	APIGetTxnAmount          string = "/api/de-exp/get-txn-amount-by-txnID"
-
-	APIGetTokenChain       string = "/api/de-exp/get-token-chain"
-	APIGetTokenChainHeight string = "/api/de-exp/get-token-chain-height"
 
 	APINotifyDeExpBlockUpdate string = "/api/block-update"
 	APINotifyDeExpTokenUpdate string = "/api/token-update"
 
 	APIRemoveStaleDID string = "/api/remove-stale-did"
 
-	APIInitiateTransaction string = "/rubix/v1/token/tx"
+	APIGenerateSmartContract string = "/rubix/v1/smart_contracts/generate"
+	APIListSmartContracts    string = "/rubix/v1/smart_contracts"
+	APIGetSmartContractChain string = "/rubix/v1/smart_contracts/{contract_id}/chain"
+	APICreateNFT             string = "/rubix/v1/nfts/generate"
+	APIListNFTs              string = "/rubix/v1/nfts"
+	APIGetNFTChain           string = "/rubix/v1/nfts/{nft_id}/chain"
+	APITransaction        string = "/rubix/v1/tx"
+	APIGetTransactionByID string = "/rubix/v1/tx/{tx_id}"
+
+	// New endpoints
+	APIListFT string = "/rubix/v1/fts"
 )
 
 // jwt.RegisteredClaims

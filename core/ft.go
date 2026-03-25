@@ -15,12 +15,11 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/rubixchain/rubixgoplatform/block"
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 
@@ -978,4 +977,8 @@ func (c *Core) FixAllFTTokensWithPeerIDAsCreator() ([]wallet.FTTokenFixResult, e
 // GetFTTokenCreatorStats returns statistics about FT token creators
 func (c *Core) GetFTTokenCreatorStats() (map[string]interface{}, error) {
 	return c.w.GetFTTokenCreatorStats()
+}
+
+func (c *Core) ListFTs() ([]*models.FT, error) {
+	return c.w.ListFTs()
 }

@@ -23,7 +23,7 @@ import (
 // @Param        metadata       formData      file  true  "JSON file which contains information about the NFT"
 // @Param        artifact       formData      file    true  "File which is meant to be an NFT"
 // @Success      200  {object}  model.BasicResponse
-// @Router       /api/create-nft [post]
+// @Router       /rubix/v1/nfts/generate [post]
 func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
 	var createNFT core.NFTReq
 	var err error
@@ -342,4 +342,38 @@ func (s *Server) APIFetchNft(req *ensweb.Request) *ensweb.Result {
 	}
 
 	return s.BasicResponse(req, basicResponse.Status, basicResponse.Message, nil)
+}
+
+// NFT godoc
+// @Summary      Get all nfts
+// @Description  This API will return all nfts
+// @Tags         NFT
+// @Produce      json
+// @Success      200  {object}  model.BasicResponse
+// @Router       /rubix/v1/nfts [get]
+
+func (s *Server) APIListNFTs(req *ensweb.Request) *ensweb.Result {
+	response, err := s.c.GetAllNFTs()
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to retrieve nfts", nil)
+	}
+	return s.BasicResponse(req, true, "Nfts retrieved successfully", response)
+}
+
+// NFT godoc
+// @Summary      Get nft chain by token ID
+// @Description  This API will return the nft chain for a given nft token ID
+// @Tags         NFT
+// @Produce      json
+// @Param        nft_id   path      string  true  "NFT Token ID"
+// @Success      200  {object}  model.BasicResponse
+// @Router       /rubix/v1/nfts/{nft_id}/chain [get]
+
+func (s *Server) APIGetNFTChain(req *ensweb.Request) *ensweb.Result {
+	nftID := s.GetRouteVar(req, "nft_id")
+	TokenChainResponse, err := s.c.GetNFTChain(nftID)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to retrieve nft chain data", nil)
+	}
+	return s.BasicResponse(req, true, "Nft chain data retrieved successfully", TokenChainResponse)
 }

@@ -89,7 +89,7 @@ func (s *Server) APIDeploySmartContract(req *ensweb.Request) *ensweb.Result {
 // @Param 		 binaryCodePath	   formData      file    true  "location of binary code hash"
 // @Param 		 rawCodePath	   formData      file    true  "location of raw code hash"
 // @Success      200  {object}  model.BasicResponse
-// @Router       /api/generate-smart-contract [post]
+// @Router       /rubix/v1/smart_contracts/generate [post]
 func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	var deploySC core.GenerateSmartContractRequest
 	var err error
@@ -398,4 +398,38 @@ func (s *Server) APIExecuteSmartContract(req *ensweb.Request) *ensweb.Result {
 	s.c.AddWebReq(req)
 	go s.c.ExecuteSmartContractToken(req.ID, &executeReq)
 	return s.didResponse(req, req.ID)
+}
+
+// SmartContract godoc
+// @Summary      Get all smartcontracts
+// @Description  This API will return all smart contracts
+// @Tags         Smart Contract
+// @Produce      json
+// @Success      200  {object}  model.BasicResponse
+// @Router       /rubix/v1/smart_contracts [get]
+
+func (s *Server) APIListSmartContracts(req *ensweb.Request) *ensweb.Result {
+	response, err := s.c.GetAllSmartcontracts()
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to retrieve smart contracts", nil)
+	}
+	return s.BasicResponse(req, true, "Smart contracts retrieved successfully", response)
+}
+
+// SmartContract godoc
+// @Summary      Get smart contract chain by token ID
+// @Description  This API will return the smart contract chain for a given smart contract token ID
+// @Tags         Smart Contract
+// @Produce      json
+// @Param        contract_id   path      string  true  "Smart Contract Token ID"
+// @Success      200  {object}  model.BasicResponse
+// @Router       /rubix/v1/smart_contracts/{contract_id}/chain [get]
+
+func (s *Server) APIGetSmartContractChain(req *ensweb.Request) *ensweb.Result {
+	smartContractID := s.GetRouteVar(req, "contract_id")
+	TokenChainResponse, err := s.c.GetSmartContractChain(smartContractID)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to retrieve smart contract chain data", nil)
+	}
+	return s.BasicResponse(req, true, "Smart contract chain data retrieved successfully", TokenChainResponse)
 }

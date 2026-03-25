@@ -17,7 +17,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
-	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/types"
@@ -131,7 +130,7 @@ func (c *Core) syncParentToken(p *ipfsport.Peer, parentTokenID string) (int, err
 		}
 	} else {
 		var err error
-		tv, err = parts.GetTokenValueFromIndexedID(string(b))
+		tv, err = util.GetTokenValueFromTokenID(string(b))
 		if err != nil {
 			return -1, fmt.Errorf("syncParentToken: failed while attempting fetch the value for part token: %v, err: %v", parentTokenID, err)
 		}

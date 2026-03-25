@@ -98,12 +98,12 @@ type UnpledgeSequenceInfo struct {
 }
 
 type FT struct {
-	ID         string      `db:"id"`
-	FTName     pgtype.Text `db:"ft_name"`
-	FTCount    pgtype.Int4 `db:"ft_count"`
-	CreatorDID pgtype.Text `db:"creator_did"`
-	CreatedAt  time.Time   `db:"created_at"`
-	UpdatedAt  time.Time   `db:"updated_at"`
+	ID         string    `db:"id"`
+	FTName     string    `db:"ft_name"`
+	FTCount    int64     `db:"ft_count"`
+	CreatorDID string    `db:"creator_did"`
+	CreatedAt  time.Time `db:"created_at"`
+	UpdatedAt  time.Time `db:"updated_at"`
 }
 
 type TokenRecovery struct {
@@ -241,4 +241,29 @@ type FullNodeSmartContract struct {
 	LatestRole     int16     `db:"latest_role"`
 	CreatedAt      time.Time `db:"created_at"`
 	UpdatedAt      time.Time `db:"updated_at"`
+}
+
+// SyncTransactionChainRequest is used by the transaction chain sync API.
+// TODO: dev-team -- expand fields as needed for full sync implementation
+type SyncTransactionChainRequest struct {
+	Did string `json:"did"`
+}
+type GenesisAndLatestTransactionSyncRequest struct {
+	Token string `json:"token"`
+}
+type TransactionChainSyncRequest struct {
+	TokenID       string `json:"token_id"`
+	TransactionID string `json:"transaction_id"`
+}
+type TransactionChainSyncReply struct {
+	Status            bool     `json:"status"`
+	Message           string   `json:"message"`
+	NextTransactionID string   `json:"next_transaction_id"`
+	Transactions      [][]byte `json:"transactions"`
+}
+type GenesisAndLatestTransactionSyncReply struct {
+	Status             bool   `json:"status"`
+	Message            string `json:"message"`
+	GenesisTransaction []byte `json:"genesis_transaction"`
+	LatestTransaction  []byte `json:"latest_transaction"`
 }

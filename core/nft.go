@@ -11,6 +11,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
@@ -216,7 +217,6 @@ func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.
 	//txnDetails.Amount = deployReq.RBTAmount
 	txnDetails.TotalTime = float64(dif.Milliseconds())
 	c.w.AddTransactionHistory(txnDetails)
-
 
 	c.log.Info("NFT Deployed successfully", "duration", dif)
 	resp.Status = true
@@ -612,4 +612,20 @@ func (c *Core) CheckNFTFolderExists(nft string) (string, error) {
 		return "", nil // Folder does not exist
 	}
 	return "", err // Some other error occurred
+}
+
+func (c *Core) GetAllNFTs() ([]models.Token, error) {
+	nfts, err := c.w.GetNFTTokens()
+	if err != nil {
+		return nil, err
+	}
+	return nfts, nil
+}
+
+func (c *Core) GetNFTChain(nftID string) ([]models.TokenChainResponse, error) {
+	nftTokenChain, err := c.w.GetNFTChainByTokenID(nftID)
+	if err != nil {
+		return nil, err
+	}
+	return nftTokenChain, nil
 }

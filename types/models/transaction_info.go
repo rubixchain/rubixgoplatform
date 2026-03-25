@@ -90,3 +90,11 @@ type SendTokensRequest struct {
 	Tokens               *TransactionTokens `json:"tokens"`
 	NFTOwnershipTransfer bool               `json:"nftOwnershipTransfer"`
 }
+
+// TokenChainResponse represents a single transaction in the smart contract token chain
+type TokenChainResponse struct {
+	TransactionID string `json:"transactionId"`
+	Initiator     string `json:"initiator"`
+	Epoch         int    `json:"epoch"`
+	Data          string `json:"data"`
+}
