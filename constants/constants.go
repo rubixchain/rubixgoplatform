@@ -117,3 +117,8 @@ const (
 	RequestStatus_Completed  = 2
 	RequestStatus_Unknown    = 3
 )
+
+const (
+	DidPrefix = "bafybmi"
+	DidLength = 59
+)
