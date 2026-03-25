@@ -1,8 +1,8 @@
 package util
 
 import (
-	"encoding/base64"
 	"bytes"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -58,14 +58,6 @@ func VerifySignature(dc types.DIDCrypto, txInfo *models.TransactionInfo, signatu
 	return nil
 }
 
-func BytesToTransaction(data []byte) *models.Transactions {
-	var tx models.Transactions
-	if err := json.Unmarshal(data, &tx); err != nil {
-		return nil
-	}
-	return &tx
-}
-
 func PublishTransaction(pubsub *types.PubSub, tx *models.TransactionInfo, signature *models.Signature) (*models.Transactions, error) {
 	txID, err := GetTransactionID(tx)
 	if err != nil {
@@ -99,7 +91,6 @@ func PublishTransaction(pubsub *types.PubSub, tx *models.TransactionInfo, signat
 
 	return transaction, nil
 }
-
 
 // TransactionToBytes converts transaction struct into a byte array
 func TransactionToBytes(txn *models.Transactions) ([]byte, error) {
