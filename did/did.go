@@ -56,7 +56,6 @@ func InitDID(dir string, log logger.Logger, ipfs *ipfsnode.Shell) *DID {
 func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 	t1 := time.Now()
 	temp := uuid.New()
-	var _mnemonic []byte
 	dirName := d.dir + temp.String()
 	err := os.MkdirAll(dirName+"/public", os.ModeDir|os.ModePerm)
 	if err != nil {
@@ -71,36 +70,19 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 	}
 
 	//In lite mode, did is simply the SHA-256 hash  of the public key
-
 	if didCreate.PrivPWD == "" {
 		d.log.Error("password required for creating", "err", err)
 		return "", err
 	}
 
-	_, err = os.Stat(didCreate.MnemonicFile)
-
-	if os.IsNotExist(err) {
-		if didCreate.MnemonicFile == "" {
-			d.log.Debug("No mnemonic provided , creating new keypair")
-		} else {
-			d.log.Error("Mnemonic file does not exist ", didCreate.MnemonicFile)
-			os.RemoveAll(dirName)
-			return "", err
-		}
-	} else {
-		_mnemonic, err = os.ReadFile(didCreate.MnemonicFile)
-		if err != nil {
-			d.log.Error("failed to read file", "err", err)
-		}
-	}
-
 	var mnemonic string
-	if _mnemonic == nil {
+	if didCreate.Mnemonic == "" { // create new mnemonic phrase
+		d.log.Debug("No mnemonic provided , creating new keypair")
 		mnemonic = crypto.BIPGenerateMnemonic()
-	} else {
-		mnemonic = string(_mnemonic)
+	} else {                      // use the input mnemonic to re-generate the key pair
+		mnemonic = didCreate.Mnemonic
 	}
-
+	
 	masterKey, err := crypto.BIPGenerateMasterKeyFromMnemonic(mnemonic)
 	if err != nil {
 		d.log.Error("failed to create keypair", "err", err)
@@ -112,48 +94,52 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		d.log.Error("failed to create child", "err", err)
 	}
 
+	// write mnemonic into a file
 	err = util.FileWrite(dirName+"/private/"+MnemonicFileName, []byte(mnemonic))
 	if err != nil {
 		d.log.Error("failed to write mnemonic file", "err", err)
 		return "", err
 	}
 
+	// write private key into a file
 	err = util.FileWrite(dirName+"/private/"+PvtKeyFileName, pvtKey)
 	if err != nil {
 		return "", err
 	}
 
+	// write public key into a file
 	err = util.FileWrite(dirName+"/public/"+PubKeyFileName, pubKey)
 	if err != nil {
 		return "", err
 	}
 
+	// Test the generated key pair by reading it from the file, 
+	// signing on a message using the private key, and verify the signature using the public key
 	privKeyTest, err := ioutil.ReadFile(dirName + "/private/" + PvtKeyFileName)
 	if err != nil {
 		return "", err
 	}
-
 	Privkey, _, err := crypto.DecodeBIPKeyPair(didCreate.PrivPWD, privKeyTest, nil)
 	if err != nil {
 		return "", err
 	}
-
 	privkeyback := secp256k1.PrivKeyFromBytes(Privkey)
 	privKeySer := privkeyback.ToECDSA()
+
+	// sign on the message "test" using the private key
 	pvtKeySign, err := crypto.BIPSign(privKeySer, []byte("test"))
 	if err != nil {
 		return "", err
 	}
+
 	pubKeyTest, err := ioutil.ReadFile(dirName + "/public/" + PubKeyFileName)
 	if err != nil {
 		return "", err
 	}
-
 	_, pubKeyByte, err := crypto.DecodeBIPKeyPair("", nil, pubKeyTest)
 	if err != nil {
 		return "", err
 	}
-
 	pubkeyback, err := secp256k1.ParsePubKey(pubKeyByte)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse public key at creation of DID: %w, use BIP DID", err)
@@ -161,8 +147,9 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 	if pubkeyback == nil {
 		return "", fmt.Errorf("public key parsing returned nil at creation of DID")
 	}
-
 	pubKeySer := pubkeyback.ToECDSA()
+
+	// verify the signature using the public key
 	if !crypto.BIPVerify(pubKeySer, []byte("test"), pvtKeySign) {
 		return "", fmt.Errorf("failed to verify private key singature")
 	}
@@ -196,59 +183,6 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 	t2 := time.Now()
 	dif := t2.Sub(t1)
 	d.log.Info(fmt.Sprintf("DID : %s, Time to create DID & Keys : %v", did, dif))
-	return did, nil
-}
-
-func (d *DID) MigrateDID(didCreate *DIDCreate) (string, error) {
-	t1 := time.Now()
-	temp := uuid.New()
-	dirName := d.dir + temp.String()
-	err := os.MkdirAll(dirName+"/public", os.ModeDir|os.ModePerm)
-	if err != nil {
-		d.log.Error("failed to create directory", "err", err)
-		return "", err
-	}
-
-	err = os.MkdirAll(dirName+"/private", os.ModeDir|os.ModePerm)
-	if err != nil {
-		d.log.Error("failed to create directory", "err", err)
-		return "", err
-	}
-
-	_, err = util.Filecopy(didCreate.PubKeyFile, dirName+"/public/"+PubKeyFileName)
-	if err != nil {
-		d.log.Error("failed to copy pub key", "err", err)
-		return "", err
-	}
-
-	did, err := d.getDirHash(dirName + "/public/")
-	if err != nil {
-		return "", err
-	}
-
-	newDIrName := d.dir + did
-
-	err = os.MkdirAll(newDIrName, os.ModeDir|os.ModePerm)
-	if err != nil {
-		d.log.Error("failed to create directory", "err", err)
-		return "", err
-	}
-
-	err = util.DirCopy(dirName+"/public", newDIrName)
-	if err != nil {
-		d.log.Error("failed to copy directory", "err", err)
-		return "", err
-	}
-
-	err = util.DirCopy(dirName+"/private", newDIrName)
-	if err != nil {
-		d.log.Error("failed to copy directory", "err", err)
-		return "", err
-	}
-	os.RemoveAll(dirName)
-	t2 := time.Now()
-	dif := t2.Sub(t1)
-	fmt.Printf("DID : %s, Time to create DID & Keys : %v", did, dif)
 	return did, nil
 }
 
@@ -321,7 +255,7 @@ func (d *DID) getDirHash(dir string) (string, error) {
 }
 
 // CreateDIDFromPubKey creates a DID from the provided public key for BIP wallet
-func (d *DID) CreateDIDFromPubKey(didCreate *DIDCreate, pubKey string) (string, error) {
+func (d *DID) CreateDIDFromPubKey(didCreate *DIDCreate) (string, error) {
 	t1 := time.Now()
 	temp := uuid.New()
 	dirName := d.dir + temp.String()
@@ -334,7 +268,7 @@ func (d *DID) CreateDIDFromPubKey(didCreate *DIDCreate, pubKey string) (string, 
 	}
 
 	// Convert hex string back to bytes
-	pubKeyBytes, err := hex.DecodeString(pubKey)
+	pubKeyBytes, err := hex.DecodeString(didCreate.PubKey)
 	if err != nil {
 		d.log.Error("Failed to decode hex string, err", err)
 	}

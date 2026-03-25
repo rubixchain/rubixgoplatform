@@ -2273,7 +2273,7 @@ func (c *Core) RestartIncompleteTokenChainSyncs() {
 			}
 			senderDID = txnInfo.SenderDID
 		}
-		if c.IsDIDExist("", senderDID) {
+		if c.IsDIDExist(senderDID) {
 			_ = c.w.UpdateTokenSyncStatus(token.TokenID, constants.SyncStatus_Unrequired)
 			continue
 		}

@@ -155,13 +155,21 @@ func (c *Core) checkPassword(didStr string, pwd string) bool {
 	return true
 }
 
-func (c *Core) CreateDID(didCreate *did.DIDCreate) (string, error) {
-	did, err := c.d.CreateDID(didCreate)
-	if err != nil {
-		return "", err
+func (c *Core) CreateDID(didCreate *did.DIDCreate, localDID bool) (did string, err error) {
+	if localDID { // create key pair from mnemonic an d then did from the private key
+		did, err = c.d.CreateDID(didCreate)
+		if err != nil {
+			return "", fmt.Errorf("Core: CreateDID: faile create did locally, err: %w", err)
+		}
+	} else { // create did from public key
+		did, err = c.d.CreateDIDFromPubKey(didCreate)
+		if err != nil {
+			return "", fmt.Errorf("Core: CreateDID: faile create did from input public key, err: %w", err)
+		}
 	}
-	if didCreate.Dir == "" {
-		didCreate.Dir = did
+
+	if c.IsDIDExist(did) {
+		return did, nil
 	}
 
 	dt := &models.DID{
@@ -188,8 +196,8 @@ func (c *Core) GetDIDs() []models.DID {
 	return dt
 }
 
-func (c *Core) IsDIDExist(dir string, did string) bool {
-	_, err := c.w.GetDIDDir(dir, did)
+func (c *Core) IsDIDExist(did string) bool {
+	_, err := c.w.GetDID(did)
 	return err == nil
 }
 
@@ -203,9 +211,9 @@ func (c *Core) AddDID(dc *did.DIDCreate) *model.BasicResponse {
 		return br
 	}
 	dt := wallet.DID{
-		DID:    ds,
-		DIDDir: dc.Dir,
-		Config: dc.Config,
+		DID: ds,
+		// DIDDir: dc.Dir,
+		// Config: dc.Config,
 	}
 	err = c.w.CreateDID(&dt)
 	if err != nil {
@@ -263,45 +271,6 @@ func (c *Core) registerDID(reqID string, did string) error {
 		return err
 	}
 	return nil
-}
-
-// CreateDIDFromPubKey creates a DID from the provided public key
-func (c *Core) CreateDIDFromPubKey(didCreate *did.DIDCreate, pubKey string) (string, error) {
-	if didCreate.RootDID && c.w.IsRootDIDExist() {
-		c.log.Error("root did is already exist")
-		return "", fmt.Errorf("root did is already exist")
-	}
-
-	// pass public key and other requirements (did type) to create did for the
-	// BIP wallet with corresponding public key
-	did, err := c.d.CreateDIDFromPubKey(didCreate, pubKey)
-	if err != nil {
-		return "", err
-	}
-	if c.w.IsDIDExist(did) {
-		return did, nil
-	}
-	if didCreate.Dir == "" {
-		didCreate.Dir = did
-	}
-
-	dt := wallet.DID{
-		DID:    did,
-		DIDDir: didCreate.Dir,
-		Config: didCreate.Config,
-	}
-	if didCreate.RootDID {
-		dt.RootDID = 1
-	}
-
-	//store the created did in database
-	err = c.w.CreateDID(&dt)
-	if err != nil {
-		c.log.Error("Failed to create did in the wallet", "err", err)
-		return "", err
-	}
-
-	return did, nil
 }
 
 // This function, GetPeerDIDInfo, retrieves information about a peer's DID (Decentralized Identifier)

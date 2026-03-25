@@ -89,7 +89,7 @@ func (rn *RubixNative) CreateDID(ctx context.Context, req *protos.CreateDIDReq) 
 			rn.log.Error(err.Error())
 			return nil, status.Errorf(codes.Internal, err.Error())
 		}
-		dc.PubKeyFile = folderName + "/" + did.PubKeyFileName
+		dc.PubKey = folderName + "/" + did.PubKeyFileName
 	}
 
 	c, err := client.NewClient(rn.cfg, rn.log.Named("grpcclient"), 10*time.Minute)

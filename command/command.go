@@ -19,7 +19,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/contract"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/config"
-	"github.com/rubixchain/rubixgoplatform/did"
 	_ "github.com/rubixchain/rubixgoplatform/docs"
 	"github.com/rubixchain/rubixgoplatform/server"
 	"github.com/rubixchain/rubixgoplatform/types"
@@ -104,7 +103,6 @@ const (
 	SubscribeNFTCmd                string = "subscribe-nft"
 	FetchNftCmd                    string = "fetch-nft"
 	GetNftsByDidCmd                string = "get-nfts-by-did"
-	CreateDIDFromPubKeyCmd         string = "createdidfrompubkey"
 	AddUserAPIKeyCmd               string = "adduserapikey"
 	AddPeerDetailsFromExplorer     string = "exppeerdetails"
 	GetFTTxnDetailsCmd             string = "get-ft-txn-details"
@@ -178,7 +176,6 @@ var commands = []string{VersionCmd,
 	SubscribeNFTCmd,
 	FetchNftCmd,
 	GetNftsByDidCmd,
-	CreateDIDFromPubKeyCmd,
 	AddUserAPIKeyCmd,
 	AddPeerDetailsFromExplorer,
 	GetFTTxnDetailsCmd,
@@ -281,12 +278,9 @@ type Command struct {
 	peerID                       string
 	peers                        []string
 	log                          logger.Logger
-	didRoot                      bool
-	didSecret                    string
 	forcePWD                     bool
 	privPWD                      string
 	quorumPWD                    string
-	privKeyFile                  string
 	pubKeyFile                   string
 	srvName                      string
 	storageType                  string
@@ -331,7 +325,7 @@ type Command struct {
 	latest                       bool
 	quorumAddr                   string
 	links                        []string
-	mnemonicFile                 string
+	mnemonic                     string
 	ChildPath                    int
 	TokenState                   string
 	pinningAddress               string
@@ -687,15 +681,12 @@ func Run(args []string) {
 	flag.StringVar(&cmd.port, "port", "20000", "Server/Host port")
 	flag.StringVar(&cmd.peerID, "peerID", "", "Peerd ID")
 	flag.StringVar(&peers, "peers", "", "Bootstrap peers, mutiple peers will be seprated by comma")
-	flag.BoolVar(&cmd.didRoot, "didRoot", false, "Root DID")
 	flag.IntVar(&cmd.ChildPath, "ChildPath", 0, "BIP child Path")
-	flag.StringVar(&cmd.didSecret, "didSecret", "My DID Secret", "DID creation secret")
 	flag.BoolVar(&cmd.forcePWD, "fp", false, "Force password entry")
 	flag.StringVar(&cmd.privPWD, "privPWD", "mypassword", "Private key password")
 	flag.StringVar(&cmd.quorumPWD, "quorumPWD", "mypassword", "Quorum key password")
-	flag.StringVar(&cmd.mnemonicFile, "mnemonicKeyFile", "", "Mnemonic key file")
-	flag.StringVar(&cmd.privKeyFile, "privKeyFile", did.PvtKeyFileName, "Private key file")
-	flag.StringVar(&cmd.pubKeyFile, "pubKeyFile", did.PubKeyFileName, "Public key file")
+	flag.StringVar(&cmd.mnemonic, "mnemonic", "", "Mnemonic keys")
+	flag.StringVar(&cmd.pubKeyFile, "publicKey", "", "Public key")
 	flag.StringVar(&cmd.srvName, "srvName", "explorer_service", "Service name")
 	flag.StringVar(&cmd.storageType, "storageType", constants.DBType_PostgreSQL, "Storage type")
 	flag.StringVar(&cmd.dbName, "dbName", "rubix", "Service database name")
@@ -955,8 +946,6 @@ func Run(args []string) {
 		cmd.fetchNFT()
 	case GetNftsByDidCmd:
 		cmd.getNFTsByDid()
-	case CreateDIDFromPubKeyCmd:
-		cmd.CreateDIDFromPubKey()
 	case AddUserAPIKeyCmd:
 		cmd.addUserAPIKey()
 	case AddPeerDetailsFromExplorer:

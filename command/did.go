@@ -30,12 +30,12 @@ func (cmd *Command) CreateDID() {
 		}
 		cmd.privPWD = pwd
 	}
+	
 	cfg := did.DIDCreate{
-		Secret:       cmd.didSecret,
-		RootDID:      cmd.didRoot,
-		PrivPWD:      cmd.privPWD,
-		MnemonicFile: cmd.mnemonicFile,
-		ChildPath:    cmd.ChildPath,
+		PrivPWD:   cmd.privPWD,
+		Mnemonic:  cmd.mnemonic,
+		ChildPath: cmd.ChildPath,
+		PubKey:    cmd.pubKeyFile,
 	}
 	msg, status := cmd.c.CreateDID(&cfg)
 	if !status {
@@ -227,15 +227,6 @@ func (cmd *Command) GetAccountInfo() {
 		cmd.log.Info("Successfully got the account information")
 		fmt.Printf("RBT : %10.*f, Locked RBT : %10.*f, Pledged RBT : %10.*f, Pinned RBT : %10.*f\n", core.MaxDecimalPlaces, info.AccountInfo[0].RBTAmount, core.MaxDecimalPlaces, info.AccountInfo[0].LockedRBT, core.MaxDecimalPlaces, info.AccountInfo[0].PledgedRBT, core.MaxDecimalPlaces, info.AccountInfo[0].PinnedRBT)
 	}
-}
-
-// CreateDIDFromPubKey request to create did from provided public key
-func (cmd *Command) CreateDIDFromPubKey() {
-	did, err := cmd.c.CreateDIDFromPubKey(cmd.pubKeyFile)
-	if err != nil {
-		cmd.log.Error("err", err)
-	}
-	cmd.log.Debug("received did", did)
 }
 
 func (cmd *Command) ArbitrarySign() {
