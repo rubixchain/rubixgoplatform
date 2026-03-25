@@ -60,22 +60,40 @@ const (
 	TokenType_SmartContract = "smart_contract"
 )
 
-// Token Statuses
+// Token Statuses -- grouped by lifecycle stage
 const (
-	TokenStatus_Free               = 0
-	TokenStatus_Locked             = 1
-	TokenStatus_Burnt              = 2
-	TokenStatus_Committed          = 3
-	TokenStatus_Pledged            = 4
-	TokenStatus_BurntForFT         = 5
-	TokenStatus_Deployed           = 6
-	TokenStatus_Executed           = 7
-	TokenStatus_PinnedAsService    = 8
-	TokenStatus_Orphaned           = 9
-	TokenStatus_ChainSyncIssue     = 10
-	TokenStatus_BeingDoubleSpent   = 11
-	TokenStatus_QuorumPledged      = 12
-	TokenStatus_Seed               = 99
+	// Active states
+	TokenStatus_Free   = 0
+	TokenStatus_Locked = 1
+
+	// Lifecycle -- creation & acquisition
+	TokenStatus_Generated = 13
+	TokenStatus_Fetched   = 15
+
+	// Lifecycle -- transfer & commitment
+	TokenStatus_Transferred = 14
+	TokenStatus_Committed   = 3
+
+	// Pledge states
+	TokenStatus_Pledged       = 4
+	TokenStatus_QuorumPledged = 12
+
+	// Terminal / destruction
+	TokenStatus_Burnt      = 2
+	TokenStatus_BurntForFT = 5
+
+	// Smart contract lifecycle
+	TokenStatus_Deployed        = 6
+	TokenStatus_Executed        = 7
+	TokenStatus_PinnedAsService = 8
+
+	// Error / edge states
+	TokenStatus_Orphaned         = 9
+	TokenStatus_ChainSyncIssue   = 10
+	TokenStatus_BeingDoubleSpent = 11
+
+	// Special
+	TokenStatus_Seed = 99
 )
 
 // Token sync status constants.

@@ -64,6 +64,7 @@ type Token struct {
 	LatestRole     int16       `db:"latest_role"`
 	CreatedAt      time.Time   `db:"created_at"`
 	UpdatedAt      time.Time   `db:"updated_at"`
+	SyncStatus     int         `db:"-"` // transient field, not persisted
 }
 
 type TransactionUnit struct {
