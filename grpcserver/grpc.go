@@ -3,7 +3,6 @@ package grpcserver
 import (
 	"context"
 	"crypto/tls"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -188,8 +187,8 @@ func (rn *RubixNative) basicResponse(br *model.BasicResponse) (*protos.BasicRepo
 	}
 	resp.SignNeeded = true
 	resp.SignRequest = &protos.SignRequest{
-		ReqID:       sr.ID,
-		Hash:        sr.Hash,
+		ReqID: sr.ID,
+		Hash:  sr.Hash,
 	}
 	return resp, nil
 }
@@ -211,7 +210,7 @@ func (rn *RubixNative) StreamSignature(stream protos.RubixService_StreamSignatur
 		req := &types.SignRespData{
 			ID:        sr.ReqID,
 			Password:  sr.Password,
-			Signature: base64.StdEncoding.EncodeToString(sr.PvtSign),
+			Signature: util.BytesToBase64(sr.PvtSign),
 		}
 		br, err := c.SignatureResponse(req)
 		if err != nil {

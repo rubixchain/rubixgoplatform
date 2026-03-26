@@ -1,7 +1,6 @@
 package parts
 
 import (
-	"encoding/hex"
 	"fmt"
 
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -42,18 +41,13 @@ func createGenesisTransaction(dc types.DIDCrypto,
 		CommittedTokens: committedTokensInfo,
 	}
 
-	txInfoBytes, err := models.SerializeTransactionInfo(txInfo)
-	if err != nil {
-		return nil, nil, fmt.Errorf("createGenesisTransaction: failed to serialize transaction info: %w", err)
-	}
-
-	signatureBytes, err := dc.PvtSign(txInfoBytes)
+	signatureBase64, err := util.SignTransaction(dc, txInfo)
 	if err != nil {
 		return nil, nil, fmt.Errorf("createGenesisTransaction: failed to sign transaction, err: %v", err)
 	}
 
 	signature := &models.Signature{
-		InitiatorSignature: hex.EncodeToString(signatureBytes),
+		InitiatorSignature: signatureBase64,
 	}
 
 	return txInfo, signature, nil

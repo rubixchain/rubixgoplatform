@@ -49,25 +49,7 @@ func (d *DIDQuorumLite) GetDID() string {
 	return d.did
 }
 
-func (d *DIDQuorumLite) GetSignType() int {
-	return constants.BIPVersion
-}
-
-// Sign will return the singature of the DID
-func (d *DIDQuorumLite) Sign(hash string) ([]byte, []byte, error) {
-	pvtKeySign, err := d.PvtSign([]byte(hash))
-	// byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
-
-	if err != nil {
-		fmt.Println(err)
-		return nil, nil, err
-	}
-
-	bs := []byte{}
-	return bs, pvtKeySign, err
-}
-
-func (d *DIDQuorumLite) PvtSign(hash []byte) ([]byte, error) {
+func (d *DIDQuorumLite) Sign(hash []byte) ([]byte, error) {
 	privKey, err := ioutil.ReadFile(d.dir + constants.PvtKeyFileName)
 	if err != nil {
 		fmt.Println("requesting signature from BIP wallet")
@@ -98,7 +80,7 @@ func (d *DIDQuorumLite) PvtSign(hash []byte) ([]byte, error) {
 	}
 	return pvtKeySign, nil
 }
-func (d *DIDQuorumLite) PvtVerify(hash []byte, sign []byte) (bool, error) {
+func (d *DIDQuorumLite) SignVerify(hash []byte, sign []byte) (bool, error) {
 
 	pubKeyPath := d.dir + constants.PubKeyFileName
 	pubKey, err := ioutil.ReadFile(pubKeyPath)

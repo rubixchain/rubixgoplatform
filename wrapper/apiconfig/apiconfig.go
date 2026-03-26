@@ -10,6 +10,8 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 type APIConfig struct {
@@ -88,8 +90,8 @@ func CreateAPIConfig(fileName string, keyStr string, config []byte) error {
 	encData := aesgcm.Seal(nil, nonce, config, nil)
 
 	api := APIConfig{
-		Rand: base64.StdEncoding.EncodeToString(nonce),
-		Data: base64.StdEncoding.EncodeToString(encData),
+		Rand: util.BytesToBase64(nonce),
+		Data: util.BytesToBase64(encData),
 	}
 
 	data, err := json.Marshal(api)

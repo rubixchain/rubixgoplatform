@@ -47,3 +47,7 @@ func Base64ToBytes(base64Str string) ([]byte, error) {
 
 	return signature, nil
 }
+
+func BytesToBase64(bytes []byte) string {
+	return base64.StdEncoding.EncodeToString(bytes)
+}

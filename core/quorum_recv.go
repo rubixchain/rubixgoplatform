@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -82,7 +81,7 @@ func (c *Core) verifyContract(cr *ConensusRequest, self_did string) (bool, *Cons
 		c.log.Error("Failed to get DID", "err", err)
 		return false, nil, "Failed to get DID: " + err.Error()
 	}
-	c.log.Debug("Contract verification starting", "senderDID", sc.GetSenderDID(), "signType", dc.GetSignType())
+	c.log.Debug("Contract verification starting", "senderDID", sc.GetSenderDID())
 	err = sc.VerifySignature(dc)
 	if err != nil {
 		msg := "Failed to verify sender signature"
@@ -93,7 +92,7 @@ func (c *Core) verifyContract(cr *ConensusRequest, self_did string) (bool, *Cons
 				"senderDID", sc.GetSenderDID(),
 				"error", err)
 		} else {
-			c.log.Error("Failed to verify sender signature in verifyContract", "err", err, "senderDID", sc.GetSenderDID(), "signType", dc.GetSignType())
+			c.log.Error("Failed to verify sender signature in verifyContract", "err", err, "senderDID", sc.GetSenderDID())
 		}
 		return false, nil, msg
 	}
@@ -311,7 +310,7 @@ func (c *Core) quorumRBTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	c.log.Debug("Finished Tokenstate check")
 
 	qHash := util.CalculateHash(sc.GetBlock(), "SHA3-256")
-	_, ppb, err := qdc.Sign(util.HexToStr(qHash))
+	ppb, err := qdc.Sign(qHash)
 	if err != nil {
 		c.log.Error("Failed to get quorum signature", "err", err)
 		crep.Message = "Failed to get quorum signature"
@@ -392,7 +391,7 @@ func (c *Core) quorumNFTSaleConsensus(req *ensweb.Request, did string, qdc didcr
 	}
 
 	qHash := util.CalculateHash(sc.GetBlock(), "SHA3-256")
-	_, ppb, err := qdc.Sign(util.HexToStr(qHash))
+	ppb, err := qdc.Sign(qHash)
 	if err != nil {
 		c.log.Error("Failed to get quorum signature", "err", err)
 		crep.Message = "Failed to get quorum signature"
@@ -619,7 +618,7 @@ func (c *Core) quorumSmartContractConsensus(req *ensweb.Request, did string, qdc
 	c.log.Debug("Finished Tokenstate check")
 
 	qHash := util.CalculateHash(consensusContract.GetBlock(), "SHA3-256")
-	_, ppb, err := qdc.Sign(util.HexToStr(qHash))
+	ppb, err := qdc.Sign(qHash)
 	if err != nil {
 		c.log.Error("Failed to get quorum signature", "err", err)
 		consensusReply.Message = "Failed to get quorum signature"
@@ -887,7 +886,7 @@ func (c *Core) quorumNFTConsensus(req *ensweb.Request, did string, qdc didcrypto
 	c.log.Debug("Finished Tokenstate check")
 
 	qHash := util.CalculateHash(consensusContract.GetBlock(), "SHA3-256")
-	_, ppb, err := qdc.Sign(util.HexToStr(qHash))
+	ppb, err := qdc.Sign(qHash)
 	if err != nil {
 		c.log.Error("Failed to get quorum signature", "err", err)
 		consensusReply.Message = "Failed to get quorum signature"
@@ -1109,7 +1108,7 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 		c.log.Debug("Finished FT Tokenstate check for large token amount")
 
 		qHash := util.CalculateHash(sc.GetBlock(), "SHA3-256")
-		_, ppb, err := qdc.Sign(util.HexToStr(qHash))
+		ppb, err := qdc.Sign(qHash)
 		if err != nil {
 			c.log.Error("Failed to get quorum signature", "err", err)
 			crep.Message = "Failed to get quorum signature"
@@ -1169,7 +1168,7 @@ func (c *Core) quorumFTConsensus(req *ensweb.Request, did string, qdc didcrypto.
 	c.log.Debug("Finished FT Tokenstate check")
 
 	qHash := util.CalculateHash(sc.GetBlock(), "SHA3-256")
-	_, ppb, err := qdc.Sign(util.HexToStr(qHash))
+	ppb, err := qdc.Sign(qHash)
 	if err != nil {
 		c.log.Error("Failed to get quorum signature", "err", err)
 		crep.Message = "Failed to get quorum signature"
@@ -1405,7 +1404,7 @@ func (c *Core) quorumCredit(req *ensweb.Request) *ensweb.Result {
 	// to other nodes. While working on Credit Restructing, this function would require changes.
 	// Following nil input to third argument is a temp fix, since quorumCredit is not called anywhere
 	// in this implementation
-	err = c.w.StoreCredit(did, base64.StdEncoding.EncodeToString(jb), nil)
+	err = c.w.StoreCredit(did, util.BytesToBase64(jb), nil)
 	if err != nil {
 		c.log.Error("Failed to store credit", "err", err)
 		crep.Message = "Failed to store credit"

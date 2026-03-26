@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -15,6 +14,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/config"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
@@ -105,7 +105,7 @@ func main_old() {
 	w := c.GetWallet()
 
 	// Step B: Create sender DID (real keypair + IPFS CID + Postgres upsert)
-	senderDID, err := c.CreateDID(&did.DIDCreate{PrivPWD: "test-sender-pwd"}, true)
+	senderDID, err := c.CreateDID(&types.DIDCreate{PrivPWD: "test-sender-pwd"}, true)
 	if err != nil {
 		log.Fatalf("CreateDID(sender) failed: %v", err)
 	}
@@ -116,7 +116,7 @@ func main_old() {
 
 	// Create DIDCrypto instance for sender (used for genesis signing and transfer signing)
 	senderDC := did.InitDIDLiteWithPassword(senderDID, didDir, "test-sender-pwd")
-	for _, fname := range []string{did.PvtKeyFileName, did.PubKeyFileName, did.MnemonicFileName} {
+	for _, fname := range []string{constants.PvtKeyFileName, constants.PubKeyFileName, constants.MnemonicFileName} {
 		fpath := filepath.Join(didDir, senderDID, fname)
 		info, err := os.Stat(fpath)
 		if err != nil {
@@ -165,13 +165,13 @@ func main_old() {
 			log.Fatalf("SerializeTransactionInfo failed for %s: %v", tokenID, err)
 		}
 
-		// Pattern B: genesis signing -- PvtSign(infoBytes) -> hex-encode -> marshal Signature struct
-		genesisSignBytes, err := senderDC.PvtSign(infoBytes)
+		// Pattern B: genesis signing -- Sign(txInfo) -> hex-encode -> marshal Signature struct
+		genesisSignBase64, err := util.SignTransaction(senderDC, txInfo)
 		if err != nil {
-			log.Fatalf("PvtSign failed for genesis token %s: %v", tokenID, err)
+			log.Fatalf("SignTransaction failed for genesis token %s: %v", tokenID, err)
 		}
 		genesisSigStruct := &models.Signature{
-			InitiatorSignature: hex.EncodeToString(genesisSignBytes),
+			InitiatorSignature: genesisSignBase64,
 		}
 		genesisSigJSON, err := json.Marshal(genesisSigStruct)
 		if err != nil {
@@ -380,7 +380,7 @@ func main_old() {
 
 	// Step G: Create receiver DID (real keypair + IPFS CID + Postgres upsert)
 	fmt.Println("\n--- Step G: Create receiver DID ---")
-	receiverDID, err := c.CreateDID(&did.DIDCreate{PrivPWD: "test-receiver-pwd"}, true)
+	receiverDID, err := c.CreateDID(&types.DIDCreate{PrivPWD: "test-receiver-pwd"}, true)
 	if err != nil {
 		log.Fatalf("CreateDID(receiver) failed: %v", err)
 	}
@@ -391,7 +391,7 @@ func main_old() {
 	_ = receiverDC // used in future tasks
 
 	// Step G2: Verify receiver DID artifacts on disk
-	for _, fname := range []string{did.PvtKeyFileName, did.PubKeyFileName, did.MnemonicFileName} {
+	for _, fname := range []string{constants.PvtKeyFileName, constants.PubKeyFileName, constants.MnemonicFileName} {
 		fpath := filepath.Join(didDir, receiverDID, fname)
 		info, err := os.Stat(fpath)
 		if err != nil {

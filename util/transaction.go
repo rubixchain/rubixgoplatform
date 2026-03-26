@@ -24,37 +24,31 @@ func GetTransactionID(txInfo *models.TransactionInfo) (string, error) {
 }
 
 func SignTransaction(dc types.DIDCrypto, txInfo *models.TransactionInfo) (string, error) {
-	infoBytes, err := models.SerializeTransactionInfo(txInfo)
+	transactionId, err := GetTransactionID(txInfo)
 	if err != nil {
-		return "", fmt.Errorf("SignTransaction: failed to serialize TransactionInfo, err: %v", err)
+		return "", fmt.Errorf("SignTransaction: failed to get transaction ID, err: %v", err)
 	}
-	// Hash before signing so the full payload (not just the first 32 bytes) is bound
-	// to the signature. ECDSA operates on a fixed-size digest; passing raw variable-length
-	// JSON allows an attacker to forge a valid signature for a different payload that
-	// shares only the first N bytes (curve-order truncation attack).
-	digest := CalculateHash(infoBytes, constants.HashAlgorithm_SHA3_256)
-	signatureBytes, err := dc.PvtSign(digest)
+	signatureBytes, err := dc.Sign([]byte(transactionId))
 	if err != nil {
 		return "", fmt.Errorf("SignTransaction: failed to sign transaction info, err: %v", err)
 	}
-	signature := hex.EncodeToString(signatureBytes)
+	// convert signature bytes into base64
+	signature := BytesToBase64(signatureBytes)
 	return signature, nil
 }
 
 func VerifySignature(dc types.DIDCrypto, txInfo *models.TransactionInfo, signature string) error {
-	infoBytes, err := models.SerializeTransactionInfo(txInfo)
+	transactionId, err := GetTransactionID(txInfo)
 	if err != nil {
-		return fmt.Errorf("VerifySignature: failed to serialize TransactionInfo, err: %w", err)
+		return fmt.Errorf("SignTransaction: failed to get transaction ID, err: %v", err)
 	}
-	// Must hash identically to SignTransaction so the digest is the same 32-byte value.
-	digest := CalculateHash(infoBytes, constants.HashAlgorithm_SHA3_256)
-
-	signatureBytes, err := hex.DecodeString(signature)
+	// convert base64 signature string to bytes
+	signatureBytes, err := Base64ToBytes(signature)
 	if err != nil {
-		return fmt.Errorf("VerifySignature: failed to decode hex signature, err: %w", err)
+		return fmt.Errorf("VerifySignature: failed to decode base64 signature, err: %w", err)
 	}
 
-	ok, err := dc.PvtVerify(digest, signatureBytes)
+	ok, err := dc.SignVerify([]byte(transactionId), signatureBytes)
 	if err != nil {
 		return fmt.Errorf("VerifySignature: failed to verify signature, err: %w", err)
 	}

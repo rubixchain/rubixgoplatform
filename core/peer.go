@@ -24,7 +24,7 @@ type PeerMap struct {
 	PeerID    string `json:"peer_id"`
 	DID       string `json:"did"`
 	DIDAlgo   int    `json:"did_algo"`
-	Signature []byte `json:"signature"`
+	Signature string `json:"signature"`
 	Time      string `json:"time"`
 }
 
@@ -63,7 +63,12 @@ func (c *Core) peerCallback(peerID string, topic string, data []byte) {
 	if err != nil {
 		return
 	}
-	st, err := dc.PvtVerify([]byte(h), m.Signature)
+	signatureBytes, err := util.Base64ToBytes(m.Signature)
+	 if err != nil {
+		c.log.Error("peerCallback: failed to parse signature, err", err)
+		return
+	}
+	st, err := dc.SignVerify([]byte(h), signatureBytes)
 	if err != nil {
 		if strings.Contains(err.Error(), "NLSS DID detected") || strings.Contains(err.Error(), "incompatible key format") {
 			c.log.Error("NLSS DID detected during peer update. NLSS DIDs are DEPRECATED.", "did", m.DID, "error", err)
@@ -264,7 +269,12 @@ func (c *Core) removeStalePeerCallback(peerID string, topic string, data []byte)
 		c.log.Error("failed to initialise stale peer")
 		return
 	}
-	st, err := dc.PvtVerify([]byte(h), stalePeer.Signature)
+	signatureBytes, err := util.Base64ToBytes(stalePeer.Signature)
+	 if err != nil {
+		c.log.Error("peerCallback: failed to parse signature, err", err)
+		return
+	}
+	st, err := dc.SignVerify([]byte(h), signatureBytes)
 	if err != nil || !st {
 		if err != nil && (strings.Contains(err.Error(), "NLSS DID detected") || strings.Contains(err.Error(), "incompatible key format")) {
 			c.log.Error("NLSS DID detected during stale peer removal. NLSS DIDs are DEPRECATED.", "did", stalePeer.DID, "error", err)

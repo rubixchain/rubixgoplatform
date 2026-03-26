@@ -225,7 +225,7 @@ func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex 
 		if err != nil {
 			return fmt.Errorf("generateTestTokens: failed to serialize transaction info: %w", err)
 		}
-		signatureBytes, err := dc.PvtSign(infoBytes)
+		signatureBytes, err := dc.Sign(infoBytes)
 		if err != nil {
 			return fmt.Errorf("generateTestTokens: failed to sign transaction: %w", err)
 		}
@@ -853,18 +853,18 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 // processRole handles specific roles (as integers) and returns a message
 func (c *Core) processRole(role int) string {
 	roleMessages := map[int]string{
-		constants.TokenProviderRole_Owner:                  "Token chain block does not exist, the pinned role is owner, so this can be a double spend attempt",
-		constants.TokenProviderRole_Quorum:                 "Token chain block does not exist, the pinned role is QuorumRole",
-		constants.TokenProviderRole_PrevSender:             "Token chain block does not exist, the pinned role is PrevSenderRole",
-		constants.TokenProviderRole_Receiver:               "Token chain block does not exist, the pinned role is ReceiverRole",
-		constants.TokenProviderRole_ParentTokenLock:        "Token chain block does not exist, the pinned role is ParentTokenLockRole",
-		constants.TokenProviderRole_DID:                    "Token chain block does not exist, the pinned role is DIDRole",
-		constants.TokenProviderRole_Staking:                "Token chain block does not exist, the pinned role is StakingRole",
-		constants.TokenProviderRole_Pledging:               "Token chain block does not exist, the pinned role is PledgingRole",
-		constants.TokenProviderRole_QuorumPin:              "Token chain block does not exist, the pinned role is QuorumPinRole",
-		constants.TokenProviderRole_QuorumUnpin:            "Token chain block does not exist, the pinned role is QuorumUnpinRole",
-		constants.TokenProviderRole_ParentTokenPin: "Token chain block does not exist, the pinned role is ParentTokenPinByQuorumRole",
-		constants.TokenProviderRole_Pinning:                "Token chain block does not exist, the pinned role is PinningRole",
+		constants.TokenProviderRole_Owner:           "Token chain block does not exist, the pinned role is owner, so this can be a double spend attempt",
+		constants.TokenProviderRole_Quorum:          "Token chain block does not exist, the pinned role is QuorumRole",
+		constants.TokenProviderRole_PrevSender:      "Token chain block does not exist, the pinned role is PrevSenderRole",
+		constants.TokenProviderRole_Receiver:        "Token chain block does not exist, the pinned role is ReceiverRole",
+		constants.TokenProviderRole_ParentTokenLock: "Token chain block does not exist, the pinned role is ParentTokenLockRole",
+		constants.TokenProviderRole_DID:             "Token chain block does not exist, the pinned role is DIDRole",
+		constants.TokenProviderRole_Staking:         "Token chain block does not exist, the pinned role is StakingRole",
+		constants.TokenProviderRole_Pledging:        "Token chain block does not exist, the pinned role is PledgingRole",
+		constants.TokenProviderRole_QuorumPin:       "Token chain block does not exist, the pinned role is QuorumPinRole",
+		constants.TokenProviderRole_QuorumUnpin:     "Token chain block does not exist, the pinned role is QuorumUnpinRole",
+		constants.TokenProviderRole_ParentTokenPin:  "Token chain block does not exist, the pinned role is ParentTokenPinByQuorumRole",
+		constants.TokenProviderRole_Pinning:         "Token chain block does not exist, the pinned role is PinningRole",
 	}
 
 	if message, exists := roleMessages[role]; exists {
@@ -1778,7 +1778,7 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to serialize transaction info for token %s: %w", id, err)
 		}
 		// Sign serialized txInfo bytes with creator DID (genesis self-signature)
-		signatureBytes, err := dc.PvtSign(infoBytes)
+		signatureBytes, err := dc.Sign(infoBytes)
 		if err != nil {
 			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to sign transaction for token %s: %w", id, err)
 		}
@@ -2140,7 +2140,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 					TransactionID: event.TransactionID,
 					PublisherDID:  event.PublisherDID,
 					BlockHeight:   event.LatestBlockHeight,
-					SyncStatus:     syncStatus,
+					SyncStatus:    syncStatus,
 					TokenStatus:   tokenStatus,
 					// TokenValue:    event.TokenValue,
 				}

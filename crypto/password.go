@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rubixchain/rubixgoplatform/util"
 	"golang.org/x/crypto/pbkdf2"
 )
 
@@ -144,7 +145,7 @@ func hashPasswordV1(password string, prf uint, count uint) string {
 	result := make([]byte, len(salt)+len(subkey))
 	copy(result[0:], salt)
 	copy(result[(len(salt)):], subkey)
-	hashStr := fmt.Sprintf("$MYHASH$V1$%d$%s", count, base64.StdEncoding.EncodeToString(result))
+	hashStr := fmt.Sprintf("$MYHASH$V1$%d$%s", count, util.BytesToBase64(result))
 	return hashStr
 }
 
@@ -168,7 +169,7 @@ func hashPasswordV3(password string, prf uint, count uint) string {
 	WriteNetworkOrder(result, 9, uint(len(salt)))
 	copy(result[13:], salt)
 	copy(result[(13+len(salt)):], subkey)
-	return base64.StdEncoding.EncodeToString(result)
+	return util.BytesToBase64(result)
 }
 
 // ReadNetworkOrder ..

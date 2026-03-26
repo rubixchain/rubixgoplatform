@@ -67,7 +67,7 @@ func (d *DIDLite) getPassword() (string, error) {
 		Status:  true,
 		Message: "Password needed",
 		Result: types.SignReqData{
-			ID:   d.ch.ID,
+			ID: d.ch.ID,
 		},
 	}
 	d.ch.OutChan <- sr
@@ -96,22 +96,7 @@ func (d *DIDLite) GetDID() string {
 	return d.did
 }
 
-// When the did creation and signing is done in Light mode,
-// this function returns the sign version as BIPVersion = 0
-func (d *DIDLite) GetSignType() int {
-	return constants.BIPVersion
-}
-
-// PKI based sign in lite mode
-// In lite mode, the sign function returns only the private signature, unlike the basic mode
-func (d *DIDLite) Sign(hash string) ([]byte, []byte, error) { //TODO : should return one signature only
-	pvtKeySign, err := d.PvtSign([]byte(hash))
-	bs := []byte{}
-
-	return bs, pvtKeySign, err
-}
-
-func (d *DIDLite) PvtSign(hash []byte) ([]byte, error) {
+func (d *DIDLite) Sign(hash []byte) ([]byte, error) {
 	privKey, err := os.ReadFile(d.dir + constants.PvtKeyFileName)
 	if err != nil {
 		walletSignature, err := d.getSignature(hash)
@@ -119,7 +104,7 @@ func (d *DIDLite) PvtSign(hash []byte) ([]byte, error) {
 			return nil, err
 		}
 
-		isValidSig, err := d.PvtVerify(hash, walletSignature)
+		isValidSig, err := d.SignVerify(hash, walletSignature)
 		if err != nil || !isValidSig {
 			return nil, err
 		}
@@ -146,7 +131,7 @@ func (d *DIDLite) PvtSign(hash []byte) ([]byte, error) {
 }
 
 // Verify PKI based signature
-func (d *DIDLite) PvtVerify(hash []byte, sign []byte) (bool, error) {
+func (d *DIDLite) SignVerify(hash []byte, sign []byte) (bool, error) {
 	pubKey, err := ioutil.ReadFile(d.dir + constants.PubKeyFileName)
 	if err != nil {
 		return false, err
@@ -180,8 +165,8 @@ func (d *DIDLite) getSignature(hash []byte) ([]byte, error) {
 		Status:  true,
 		Message: "Signature needed",
 		Result: types.SignReqData{
-			ID:          d.ch.ID,
-			Hash:        hash,
+			ID:   d.ch.ID,
+			Hash: hash,
 		},
 	}
 	d.ch.OutChan <- sr

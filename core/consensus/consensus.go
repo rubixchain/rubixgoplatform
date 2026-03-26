@@ -8,6 +8,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
@@ -80,22 +81,14 @@ func InitiateConsensus(
 	}
 
 	// Sign the transaction info with the quorum key
-	txInfoBytes, err := models.SerializeTransactionInfo(req.TransactionInfo)
-	if err != nil {
-		return nil, fmt.Errorf("InitiateConsensus: failed to serialize transaction info: %w", err)
-	}
-
-	sigBytes, err := quorumDc.PvtSign(txInfoBytes)
+	sigBase64, err := util.SignTransaction(quorumDc, req.TransactionInfo)
 	if err != nil {
 		return nil, fmt.Errorf("InitiateConsensus: failed to sign transaction: %w", err)
 	}
 
-	// Encode signature as hex
-	hexSig := fmt.Sprintf("%x", sigBytes)
-
 	return &models.ConsensusResponse{
 		ReferenceId:     req.ReferenceId,
-		QuorumSignature: hexSig,
+		QuorumSignature: sigBase64,
 		Status:          true,
 		Message:         "consensus completed",
 	}, nil
