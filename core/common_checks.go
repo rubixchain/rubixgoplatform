@@ -16,20 +16,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-func (c *Core) ValidateOwnershipOfTheToken(assetType int, tokenID string, initiator string) error {
-	if assetType == RBTTokenType || assetType == FTTokenType || assetType == NFTTokenType {
-		//TODO: fetch owner of the previous transaction from the token chain
-		// owner, err := c.w.GetOwnerOfTheToken(tokenID)
-		// if err != nil {
-		// 	return fmt.Errorf("failed to get owner of the token: %v", err)
-		// }
-		// if owner != initiator {
-		// 	return fmt.Errorf("owner of the token is not the initiator")
-		// }
-	}
-	return nil
-}
-
 // ValidateTokenOwnershipByPrevTxn groups all RBT, FT and NFT tokens by their
 // PreviousTransactionID, fetches each distinct previous transaction once, and
 // verifies that its owner matches the current transaction's initiator.
@@ -123,49 +109,15 @@ func (c *Core) ValidateTransactionInfoFields(txnInfo *models.TransactionInfo) er
 		return fmt.Errorf("invalid network %q: must be one of the supported networks", txnInfo.Network)
 	}
 
-	if txnInfo.Tokens != nil {
-		tokenLists := map[string][]*models.TokenInfo{
-			"RBT":           txnInfo.Tokens.RBT,
-			"NFT":           txnInfo.Tokens.NFT,
-			"FT":            txnInfo.Tokens.FT,
-			"SmartContract": txnInfo.Tokens.SmartContract,
-		}
-		for listName, tokens := range tokenLists {
-			if err := validateTokenInfoList(tokens, "tokens."+listName); err != nil {
-				return err
-			}
-		}
-	}
-
-	if err := validateTokenInfoList(txnInfo.CommittedTokens, "committedTokens"); err != nil {
-		return err
-	}
-
-	for i, quorum := range txnInfo.Quorums {
-		if err := validateDID(quorum.Did, fmt.Sprintf("quorum[%d]", i)); err != nil {
-			return err
-		}
-		if err := validateTokenInfoList(quorum.Tokens, fmt.Sprintf("quorums[%d].tokens", i)); err != nil {
-			return err
-		}
+	if txnInfo.Tokens == nil ||
+		(len(txnInfo.Tokens.RBT) == 0 && len(txnInfo.Tokens.NFT) == 0 &&
+			len(txnInfo.Tokens.FT) == 0 && len(txnInfo.Tokens.SmartContract) == 0) {
+		return fmt.Errorf("transaction must contain at least one transfer token (RBT, NFT, FT, or SmartContract)")
 	}
 
 	return nil
 }
 
-func validateTokenInfoList(tokens []*models.TokenInfo, context string) error {
-	for i, t := range tokens {
-		//CommittedTokens list might be empty, In case if there are no burnt tokens or some kind of cases.
-		if !contains(context, "committedTokens") && t == nil {
-			return fmt.Errorf("nil token entry at %s[%d]", context, i)
-		}
-		if t.TokenID == "" {
-			return fmt.Errorf("empty tokenID at %s[%d]", context, i)
-		}
-
-	}
-	return nil
-}
 
 func (c *Core) TransactionIDIntegrityCheck(transactionID string, transactionInfo *models.TransactionInfo) error {
 
@@ -180,6 +132,7 @@ func (c *Core) TransactionIDIntegrityCheck(transactionID string, transactionInfo
 
 }
 
+// In this function, we are validating the initiator & quorum signatures.
 func (c *Core) SignatureVerificationCheck(tx *models.Transactions) error {
 	var txInfo models.TransactionInfo
 	if err := json.Unmarshal(tx.Info, &txInfo); err != nil {
@@ -217,8 +170,8 @@ func (c *Core) SignatureVerificationCheck(tx *models.Transactions) error {
 
 // In this function, we are validating the token number and level for the new token content.
 // For localnet tokens, only the quorum should validate the token number and level.
-func (c *Core) ValidateNewTokenContent(tokenContent string, isQuorum bool) error {
-	devidedParts := strings.Split(tokenContent, "_")
+func (c *Core) ValidateNewTokenContent(tokenID string, isQuorum bool) error {
+	devidedParts := strings.Split(tokenID, "_")
 
 	tokenTypeString := RBTString
 	if len(devidedParts) == 3 {
@@ -228,16 +181,16 @@ func (c *Core) ValidateNewTokenContent(tokenContent string, isQuorum bool) error
 	// parse level (e.g. "002")
 	level, err := strconv.Atoi(strings.TrimLeft(devidedParts[0], "0"))
 	if err != nil {
-		return fmt.Errorf("invalid token level in token content: %s", tokenContent)
+		return fmt.Errorf("invalid token level in token content: %s", tokenID)
 	}
 
 	// parse token number (e.g. "1000")
 	tokenNo, err := strconv.Atoi(devidedParts[1])
 	if err != nil {
-		return fmt.Errorf("invalid token number in token content: %s", tokenContent)
+		return fmt.Errorf("invalid token number in token content: %s", tokenID)
 	}
-
-	shouldValidate := c.testnet || c.mainnet || (c.localnet && isQuorum)
+	
+	shouldValidate := c.testnet || c.mainnet || (c.localnet && isQuorum) //pass 
 
 	if shouldValidate {
 		mapLevel := level
@@ -254,7 +207,7 @@ func (c *Core) ValidateNewTokenContent(tokenContent string, isQuorum bool) error
 			mapLevel = level - constants.FaucetRBT_Level_Offset
 		} else if c.localnet {
 			network = "localnet"
-			if level <= constants.LocalRBT_Level {
+			if level < constants.LocalRBT_Level {
 				return fmt.Errorf(
 					"invalid local token level %d: localnet level must be > %d",
 					level, constants.LocalRBT_Level,
@@ -276,14 +229,14 @@ func (c *Core) ValidateNewTokenContent(tokenContent string, isQuorum bool) error
 				network, tokenNo, maxAllowed, level,
 			)
 		}
-		c.log.Debug("token content validated for "+network, tokenContent)
+		c.log.Debug("token content validated for "+network, tokenID)
 	}
 
 	MaxPossiblePartTokenNumber := parts.MaxPossiblePartsIndexByMaxDecimalPlaces(uint(constants.MaxSupportedDecimalPlaces))
 	if tokenTypeString == PartString {
 		partTokenNumber, err := strconv.Atoi(devidedParts[2])
 		if err != nil {
-			return fmt.Errorf("invalid part number in token content: %s", tokenContent)
+			return fmt.Errorf("invalid part number in token content: %s", tokenID)
 		}
 		if partTokenNumber > MaxPossiblePartTokenNumber {
 			return fmt.Errorf(
@@ -292,7 +245,7 @@ func (c *Core) ValidateNewTokenContent(tokenContent string, isQuorum bool) error
 			)
 
 		}
-		c.log.Debug("token content validated for the part token", tokenContent)
+		c.log.Debug("token content validated for the part token", tokenID)
 
 	}
 
@@ -340,23 +293,24 @@ func (c *Core) IsParentTokenBurnt(isFullNode bool, tokenID string) (error, bool)
 	// TODO(phase11): IsParentTokenBurnt had a broken brace structure in the upstream.
 	// Rewritten as a clean stub pending reimplementation.
 	var parentTokenID string
+	var err error
+	var tokenDetails models.FullNodeRBT
 
 	if isFullNode {
-		tokenDetails, err := c.w.GetFullNodeRBTToken(tokenID)
+		tokenDetails, err = c.w.GetFullNodeRBTToken(tokenID)
 		if err == nil {
 			if !tokenDetails.ParentTokenID.Valid || tokenDetails.ParentTokenID.String == "" {
+				//instead of return, it should compute parent tokenID from the tokenID
 				// TODO: replace with proper parent tokenID computation once available
 				partTokenID := parts.TokenID(tokenID)
-				computedParent, err := partTokenID.GetParentToken()
+				parentTokenID, err := partTokenID.GetParentToken()
 				if err != nil {
 					return fmt.Errorf("failed to get parent for token %s: %w", partTokenID, err), false
 				}
-				if computedParent == "" {
+				if parentTokenID == "" {
 					return nil, false
 				}
-				parentTokenID = computedParent
-			} else {
-				parentTokenID = tokenDetails.ParentTokenID.String
+
 			}
 		} else {
 			// TODO: replace with proper parent tokenID computation once available
@@ -368,23 +322,9 @@ func (c *Core) IsParentTokenBurnt(isFullNode bool, tokenID string) (error, bool)
 			if computedParent == "" {
 				return nil, false
 			}
-			parentTokenID = computedParent
 		}
-	} else {
-		// TODO: replace with proper parent tokenID computation once available
-		partTokenID := parts.TokenID(tokenID)
-		computedParent, err := partTokenID.GetParentToken()
-		if err != nil {
-			return fmt.Errorf("failed to get parent id of token %s: %w", partTokenID, err), false
-		}
-		if computedParent == "" {
-			return nil, false
-		}
-		parentTokenID = computedParent
 	}
-
 	var genesisTx *models.Transactions
-	var err error
 	if isFullNode {
 		genesisTx, _, err = c.w.GetFullNodeTransactionAndRoleAtHeight(tokenID, 0)
 	} else {
@@ -411,8 +351,260 @@ func (c *Core) IsParentTokenBurnt(isFullNode bool, tokenID string) (error, bool)
 	return nil, false
 }
 
-// In this function, all the validation related functions will get called inside this function.
+func (c *Core) ValidateTokenIDRelatedChecks(tokenID string, isFullNode bool) error {
+	//1. call ValidateNewTokenContent
+	err := c.ValidateNewTokenContent(tokenID, isFullNode)
+	if err != nil {
+		return fmt.Errorf("failed to validate token content: %w", err)
+	}
+	//2. call IsParentTokenBurnt
+	err, isParentTokenBurnt := c.IsParentTokenBurnt(isFullNode, tokenID)
+	if err != nil {
+		return fmt.Errorf("failed to validate parent token burnt: %w", err)
+	}
+	if !isParentTokenBurnt {
+		return fmt.Errorf("parent token is not burnt")
+	}
+	//3. call genuine token creator check
+	err = c.ValidateGenuineTokenCreator(tokenID, isFullNode)
+	if err != nil {
+		return fmt.Errorf("failed to validate genuine token creator: %w", err)
+	}
+	return nil
+}
+
+// This function is used to validate the genuinity of the token creator.Currently it is a placeholder function.needs to complete it.
+func (c *Core) ValidateGenuineTokenCreator(tokenID string, isFullNode bool) error {
+	// Check the level number and see if its Level 1. If so, then it is part of the Premint token series. Here we:
+	// We get the genesis transaction from the tokenchain table
+	// Then use that TransactionID to query the transactionInfo from transactions table.
+	// We get the owner from transaction table.
+	devidedParts := strings.Split(tokenID, "_")
+
+	// parse level (e.g. "002")
+	level, err := strconv.Atoi(strings.TrimLeft(devidedParts[0], "0"))
+	if err != nil {
+		return fmt.Errorf("invalid token level in token content: %s", tokenID)
+	}
+	if level == 1 {
+		//We get the genesis transaction from the tokenchain table
+		genesisTx, err := c.w.GetGenesisTransactionIdByTokenId(tokenID, isFullNode)
+		if err != nil {
+			return fmt.Errorf("failed to get genesis transaction for token %s: %w", tokenID, err)
+		}
+		genesisTxInfo, err := c.w.GetTransactionByID(genesisTx)
+		if err != nil {
+			return fmt.Errorf("failed to get genesis transaction info for token %s: %w", tokenID, err)
+		}
+		if genesisTxInfo == nil {
+			return fmt.Errorf("genesis transaction not found for token %s", tokenID)
+		}
+		//TODO: Get the owner from the genesis transaction info and check whether he is eligible to create the token.
+	}
+
+	return nil
+}
+
+// TokenChainIntigrityCheck checks each token in the TransactionInfo against the
+// tokens table. If the PreviousTransactionID in the incoming transaction does
+// not match the latest TransactionID stored locally, it triggers a chain sync
+// for that token via syncTransactionChainFrom.
+// Then it will check that whether previous transaction of the incoming transaction is same as the latest transaction in the token chain.
+// Then it will check the role of the token in the previous transaction. If the role is pledge, or burnt, or commit then it will return nil,false.
+func (c *Core) TokenChainIntigrityCheck(txnInfo *models.TransactionInfo) (error, bool) {
+	if txnInfo.Tokens == nil {
+		return nil, false
+	}
+
+	tokenLists := [][]*models.TokenInfo{
+		txnInfo.Tokens.RBT,
+		txnInfo.Tokens.FT,
+		txnInfo.Tokens.NFT,
+		txnInfo.Tokens.SmartContract,
+	}
+
+	for _, tokens := range tokenLists {
+		for _, t := range tokens {
+			tokenDetails, err := c.w.GetTokenByTokenID(t.TokenID)
+			if err != nil {
+				c.log.Debug("token not found locally, syncing full chain", "tokenID", t.TokenID)
+				peer, err := c.getPeer(txnInfo.Initiator)
+				if err != nil {
+					c.log.Error("InitiateTransaction: Failed to get peer for receiver", "err", err)
+				}
+				defer peer.Close()
+				if syncErr, _ := c.syncTransactionChainFrom(peer, t.PreviousTransactionID, t.TokenID); syncErr != nil {
+					return fmt.Errorf("failed to sync token chain for %s: %w", t.TokenID, syncErr), false
+				}
+				continue
+			}
+
+			if tokenDetails.TransactionID != t.PreviousTransactionID {
+				c.log.Debug("transaction ID mismatch, syncing chain",
+					"tokenID", t.TokenID,
+					"existingTransactionID", tokenDetails.TransactionID,
+					"incomingTransactionID", t.PreviousTransactionID,
+				)
+			}
+			if tokenDetails.TransactionID != t.PreviousTransactionID {
+				return fmt.Errorf("transaction ID mismatch for token %s: %s != %s", t.TokenID, tokenDetails.TransactionID, t.PreviousTransactionID), false
+			}
+			previousTransaction, err := c.w.GetTransactionByID(t.PreviousTransactionID)
+			if err != nil {
+				return fmt.Errorf("failed to get previous transaction for token %s: %w", t.TokenID, err), false
+			}
+			if previousTransaction == nil {
+				return fmt.Errorf("previous transaction not found for token %s", t.TokenID), false
+			}
+			var previousTransactionInfo models.TransactionInfo
+			if err := json.Unmarshal(previousTransaction.Info, &previousTransactionInfo); err != nil {
+				return fmt.Errorf("failed to unmarshal previous transaction info for token %s: %w", t.TokenID, err), false
+			}
+			//get role of the token in the transaction
+			role := findTokenRoleInTxn(t.TokenID, &previousTransactionInfo)
+			if role == int16(models.GetTokenRoleID(constants.TokenRole_Pledge)) ||
+				role == int16(models.GetTokenRoleID(constants.TokenRole_Burn)) ||
+				role == int16(models.GetTokenRoleID(constants.TokenRole_Commit)) {
+				return nil, false
+			}
+		}
+	}
+
+	return nil, true
+}
+
+func (c *Core) ValidateIPFSPinChecks(txnInfo *models.TransactionInfo, isFullnode bool) error {
+	if txnInfo.Tokens == nil {
+		return nil
+	}
+
+	tokenLists := [][]*models.TokenInfo{
+		txnInfo.Tokens.RBT,
+		txnInfo.Tokens.FT,
+		txnInfo.Tokens.NFT,
+		txnInfo.Tokens.SmartContract,
+	}
+
+	for _, tokens := range tokenLists {
+		for _, t := range tokens {
+			if err := c.checkTokenStateHashPinned(t.TokenID, t.PreviousTransactionID); err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, t := range txnInfo.CommittedTokens {
+		if err := c.checkTokenStateHashPinned(t.TokenID, t.PreviousTransactionID); err != nil {
+			return err
+		}
+	}
+
+	if isFullnode {
+		for _, quorum := range txnInfo.Quorums {
+			for _, t := range quorum.Tokens {
+				if err := c.checkTokenStateHashPinned(t.TokenID, t.PreviousTransactionID); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (c *Core) checkTokenStateHashPinned(tokenID string, previousTransactionID string) error {
+	if previousTransactionID == "" {
+		return nil
+	}
+
+	tokenStateHash := tokenID + "." + previousTransactionID
+
+	record, err := c.ipfsProviderStore.GetProviderByCID(tokenStateHash)
+	if err != nil {
+		return fmt.Errorf("failed to check pin status for %s: %w", tokenStateHash, err)
+	}
+	if record != nil {
+		return fmt.Errorf("token %s is already pinned", tokenStateHash)
+	}
+
+	return nil
+}
+
+// ValidateTransaction orchestrates all validation checks on an incoming transaction.
 func (c *Core) ValidateTransaction(tx *models.Transactions, isFullnode bool) (bool, error) {
+	// 1. Unmarshal the transaction info
+	var txnInfo models.TransactionInfo
+	if err := json.Unmarshal(tx.Info, &txnInfo); err != nil {
+		return false, fmt.Errorf("ValidateTransaction: failed to unmarshal transaction info: %w", err)
+	}
+
+	// 2. Validate TransactionInfo fields (DID format, epoch, network, token lists)
+	if err := c.ValidateTransactionInfoFields(&txnInfo); err != nil {
+		return false, fmt.Errorf("ValidateTransaction: %w", err)
+	}
+
+	// 3. TransactionID integrity check
+	if err := c.TransactionIDIntegrityCheck(tx.ID, &txnInfo); err != nil {
+		return false, fmt.Errorf("ValidateTransaction: %w", err)
+	}
+
+	// 4. Signature verification
+	if err := c.SignatureVerificationCheck(tx); err != nil {
+		return false, fmt.Errorf("ValidateTransaction: %w", err)
+	}
+
+	// 5. Validate token ownership by previous transaction
+	if err := c.ValidateTokenOwnershipByPrevTxn(&txnInfo); err != nil {
+		return false, fmt.Errorf("ValidateTransaction: %w", err)
+	}
+
+	// 6. Sync token chains if needed
+	if syncErr, ok := c.TokenChainIntigrityCheck(&txnInfo); syncErr != nil {
+		return false, fmt.Errorf("ValidateTransaction: %w", syncErr)
+	} else if !ok {
+		return false, fmt.Errorf("ValidateTransaction: token chain sync failed")
+	}
+
+	// 7. ValidateTokenIDRelatedChecks for each token in Tokens and CommittedTokens
+	if txnInfo.Tokens != nil {
+		for _, tokenList := range [][]*models.TokenInfo{
+			txnInfo.Tokens.RBT, txnInfo.Tokens.FT,
+			txnInfo.Tokens.NFT, txnInfo.Tokens.SmartContract,
+		} {
+			for _, t := range tokenList {
+				if err := c.ValidateTokenIDRelatedChecks(t.TokenID, isFullnode); err != nil {
+					return false, fmt.Errorf("ValidateTransaction: token %s: %w", t.TokenID, err)
+				}
+			}
+		}
+	}
+
+	for _, t := range txnInfo.CommittedTokens {
+		if err := c.ValidateTokenIDRelatedChecks(t.TokenID, isFullnode); err != nil {
+			return false, fmt.Errorf("ValidateTransaction: committed token %s: %w", t.TokenID, err)
+		}
+	}
+
+	// If isFullNode, also validate tokens in each Quorum
+	if isFullnode {
+		for _, quorum := range txnInfo.Quorums {
+			for _, t := range quorum.Tokens {
+				if err := c.ValidateTokenIDRelatedChecks(t.TokenID, isFullnode); err != nil {
+					return false, fmt.Errorf("ValidateTransaction: quorum %s token %s: %w", quorum.Did, t.TokenID, err)
+				}
+			}
+		}
+	}
+	//8. If isFullnode, validate the transaction value and pledge
+	if isFullnode {
+		if err := c.ValidateTransactionValueAndPledge(&txnInfo); err != nil {
+			return false, fmt.Errorf("ValidateTransaction: %w", err)
+		}
+	}
+	//9.add the IPFS pin checks here.
+	if err := c.ValidateIPFSPinChecks(&txnInfo, isFullnode); err != nil {
+		return false, fmt.Errorf("ValidateTransaction: %w", err)
+	}
 
 	return true, nil
 }
