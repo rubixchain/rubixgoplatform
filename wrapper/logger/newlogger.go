@@ -84,6 +84,12 @@ func New(opts *LoggerOptions) Logger {
 		output = []io.Writer{DefaultOutput}
 	}
 
+	if len(opts.Color) < len(output) {
+		extended := make([]ColorOption, len(output))
+		copy(extended, opts.Color)
+		opts.Color = extended
+	}
+
 	level := opts.Level
 	if level == NoLevel {
 		level = DefaultLevel

@@ -19,53 +19,53 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	didm "github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/service"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
 const (
-	APIPingPath                     string = "/api/ping"
-	APIPeerStatus                   string = "/api/peerstatus"
-	APICreditStatus                 string = "/api/creditstatus"
-	APIQuorumConsensus              string = "/api/quorum-conensus"
-	APIQuorumCredit                 string = "/api/quorum-credit"
-	APIReqPledgeToken               string = "/api/req-pledge-token"
-	APIUpdatePledgeToken            string = "/api/update-pledge-token"
-	APISignatureRequest             string = "/api/signature-request"
-	APISendReceiverToken            string = "/api/send-receiver-token"
-	APIConfirmTokenTransfer         string = "/api/confirm-token-transfer"
-	APIRollbackTransaction          string = "/api/rollback-transaction"
-	APISyncTokenChain               string = "/api/sync-token-chain"
-	APISyncTransactionChain         string = "/api/sync-transaction-chain"
-	APIDhtProviderCheck             string = "/api/dht-provider-check"
-	APIMapDIDArbitration            string = "/api/map-did-arbitration"
-	APICheckDIDArbitration          string = "/api/check-did-arbitration"
-	APITokenArbitration             string = "/api/token-arbitration"
-	APIGetTokenNumber               string = "/api/get-token-number"
-	APIGetMigratedTokenStatus       string = "/api/get-Migrated-token-status"
-	APISyncDIDArbitration           string = "/api/sync-did-arbitration"
-	APIUnlockTokens                 string = "/api/unlock-tokens"
-	APICheckQuorumStatusPath        string = "/api/check-quorum-status"
-	APIGetPeerInfoPath              string = "/api/get-peer-info"
-	APIUpdateTokenHashDetails       string = "/api/update-tokenhash-details"
-	APIAddUnpledgeDetails           string = "/api/initiate-unpledge"
-	APISelfTransfer                 string = "/api/self-transfer"
-	APIRecoverPinnedRBT             string = "/api/recover-pinned-rbt"
-	APIRequestSigningHash           string = "/api/request-signing-hash"
-	TokenValidatorURL               string = "http://103.209.145.177:8000"
-	APISendFTToken                  string = "/api/send-ft-token"
-	APIGetPrevQrmFromPrevSenderPath string = "/api/get-prev-qrms-info-from-sender"
-	APICheckPinRole                 string = "/api/check-pin-role"
-	APISyncGenesisAndLatestBlock    string = "/api/sync-gennesis-n-lastest-block"
+	APIPingPath                        string = "/api/ping"
+	APIPeerStatus                      string = "/api/peerstatus"
+	APICreditStatus                    string = "/api/creditstatus"
+	APIQuorumConsensus                 string = "/api/quorum-conensus"
+	APIQuorumCredit                    string = "/api/quorum-credit"
+	APIReqPledgeToken                  string = "/api/req-pledge-token"
+	APIUpdatePledgeToken               string = "/api/update-pledge-token"
+	APISignatureRequest                string = "/api/signature-request"
+	APISendReceiverToken               string = "/api/send-receiver-token"
+	APIConfirmTokenTransfer            string = "/api/confirm-token-transfer"
+	APIRollbackTransaction             string = "/api/rollback-transaction"
+	APISyncTokenChain                  string = "/api/sync-token-chain"
+	APISyncTransactionChain            string = "/api/sync-transaction-chain"
+	APIDhtProviderCheck                string = "/api/dht-provider-check"
+	APIMapDIDArbitration               string = "/api/map-did-arbitration"
+	APICheckDIDArbitration             string = "/api/check-did-arbitration"
+	APITokenArbitration                string = "/api/token-arbitration"
+	APIGetTokenNumber                  string = "/api/get-token-number"
+	APIGetMigratedTokenStatus          string = "/api/get-Migrated-token-status"
+	APISyncDIDArbitration              string = "/api/sync-did-arbitration"
+	APIUnlockTokens                    string = "/api/unlock-tokens"
+	APICheckQuorumStatusPath           string = "/api/check-quorum-status"
+	APIGetPeerInfoPath                 string = "/api/get-peer-info"
+	APIUpdateTokenHashDetails          string = "/api/update-tokenhash-details"
+	APIAddUnpledgeDetails              string = "/api/initiate-unpledge"
+	APISelfTransfer                    string = "/api/self-transfer"
+	APIRecoverPinnedRBT                string = "/api/recover-pinned-rbt"
+	APIRequestSigningHash              string = "/api/request-signing-hash"
+	TokenValidatorURL                  string = "http://103.209.145.177:8000"
+	APISendFTToken                     string = "/api/send-ft-token"
+	APIGetPrevQrmFromPrevSenderPath    string = "/api/get-prev-qrms-info-from-sender"
+	APICheckPinRole                    string = "/api/check-pin-role"
+	APISyncGenesisAndLatestBlock       string = "/api/sync-gennesis-n-lastest-block"
 	APISyncGenesisAndLatestTransaction string = "/api/sync-genesis-n-lastest-transaction"
-	APIUpdateStatus                 string = "/api/update-status"
-	APIGetTokenStatus               string = "/api/get-token-status"
-	APIInitiateConsensus            string = "/api/initiate-consensus"
-	APISendTokens                   string = "/api/send-tokens"
-	APIRequestPledgeToken           string = "/api/request-pledge-token"
+	APIUpdateStatus                    string = "/api/update-status"
+	APIGetTokenStatus                  string = "/api/get-token-status"
+	APIInitiateConsensus               string = "/api/initiate-consensus"
+	APISendTokens                      string = "/api/send-tokens"
+	APIRequestPledgeToken              string = "/api/request-pledge-token"
 )
 
 const (
@@ -77,7 +77,7 @@ const (
 	FullNodeTestNetDB        string = "fullnode-rubixtest.db"
 	FullNodeTokensDBName     string = "fullnode_tokens_storage"
 	FullNodeTestTokensDBName string = "fullnode_testtokens_storage"
-	FullNodeTokensDBPort     string = "5432"
+	FullNodeTokensDBPort     string = "5500"
 	MainNetDir               string = "MainNet"
 	TestNetDir               string = "TestNet"
 	LocalNetDir              string = "LocalNet"
@@ -186,6 +186,9 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 		return nil, fmt.Errorf(errMsg)
 	}
 
+	c.log = log.Named("Core")
+	c.didDir = c.cfg.DidDir
+
 	if _, err := os.Stat(c.didDir); os.IsNotExist(err) {
 		err := os.MkdirAll(c.didDir, os.ModeDir|os.ModePerm)
 		if err != nil {
@@ -193,8 +196,6 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 			return nil, err
 		}
 	}
-
-	c.log = log.Named("Core")
 	c.ipfsChan = make(chan bool)
 
 	dbOpts := storage.DBOpts{

@@ -18,7 +18,7 @@ type DBParams struct {
 
 type DBConfig struct {
 	Host     string   `toml:"host"`
-	Port     int      `toml:"-"`
+	Port     int      `toml:"port"`
 	Username string   `toml:"username"`
 	Password string   `toml:"password"`
 	DBName   string   `toml:"db_name"`
