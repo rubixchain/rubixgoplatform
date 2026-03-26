@@ -248,3 +248,49 @@ func (cmd *Command) fetchNFT() {
 	}
 	cmd.log.Info("NFT fetched successfully")
 }
+
+// List all NFTs
+func (cmd *Command) listNFTs() {
+	basicResponse, err := cmd.c.ListNFTs()
+	if err != nil {
+		cmd.log.Error("Failed to list NFTs", "err", err)
+		return
+	}
+	if !basicResponse.Status {
+		cmd.log.Error("Failed to list NFTs", "msg", basicResponse.Message)
+		return
+	}
+	cmd.log.Info("NFTs retrieved successfully")
+	fmt.Printf("Result: %v\n", basicResponse.Result)
+}
+
+// Get NFT chain by NFT ID
+func (cmd *Command) getNFTChain() {
+	if cmd.nft == "" {
+		cmd.log.Info("NFT ID cannot be empty")
+		fmt.Print("Enter NFT ID: ")
+		_, err := fmt.Scan(&cmd.nft)
+		if err != nil {
+			cmd.log.Error("Failed to get NFT ID")
+			return
+		}
+	}
+
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.nft)
+	if len(cmd.nft) != 46 || !strings.HasPrefix(cmd.nft, "Qm") || !isAlphanumeric {
+		cmd.log.Error("Invalid NFT ID")
+		return
+	}
+
+	basicResponse, err := cmd.c.GetNFTChain(cmd.nft)
+	if err != nil {
+		cmd.log.Error("Failed to get NFT chain", "err", err)
+		return
+	}
+	if !basicResponse.Status {
+		cmd.log.Error("Failed to get NFT chain", "msg", basicResponse.Message)
+		return
+	}
+	cmd.log.Info("NFT chain retrieved successfully")
+	fmt.Printf("Result: %v\n", basicResponse.Result)
+}

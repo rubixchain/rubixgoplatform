@@ -5,6 +5,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 type SmartContractRequest struct {
@@ -98,6 +99,36 @@ func (c *Client) ExecuteSmartContract(executeRequest *model.ExecuteSmartContract
 	err := c.sendJSONRequest("POST", setup.APIExecuteSmartContract, nil, executeRequest, &basicResponse, time.Minute*2)
 	if err != nil {
 		c.log.Error("Failed to Execute Smart Contract", "err", err)
+		return nil, err
+	}
+	return &basicResponse, nil
+}
+
+// List all smart contracts
+// GET /rubix/v1/smart_contracts
+func (c *Client) ListSmartContracts() (*model.BasicResponse, error) {
+	var basicResponse model.BasicResponse
+	err := c.sendJSONRequest("GET", setup.APIListSmartContracts, nil, nil, &basicResponse)
+	if err != nil {
+		c.log.Error("Failed to list smart contracts", "err", err)
+		return nil, err
+	}
+	return &basicResponse, nil
+}
+
+// Get smart contract chain by contract ID
+// GET /rubix/v1/smart_contracts/{contract_id}/chain
+func (c *Client) GetSmartContractChain(contractID string) (*model.BasicResponse, error) {
+	endpoint, err := ensweb.SubstitutePathParams(setup.APIGetSmartContractChain, map[string]string{"contract_id": contractID})
+	if err != nil {
+		c.log.Error("Failed to construct endpoint for GetSmartContractChain", "err", err)
+		return nil, err
+	}
+
+	var basicResponse model.BasicResponse
+	err = c.sendJSONRequest("GET", endpoint, nil, nil, &basicResponse, time.Minute*2)
+	if err != nil {
+		c.log.Error("Failed to get smart contract chain", "err", err)
 		return nil, err
 	}
 	return &basicResponse, nil

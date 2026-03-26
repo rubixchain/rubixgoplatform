@@ -5,6 +5,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 type CreateNFTReq struct {
@@ -111,4 +112,34 @@ func (c *Client) FetchNFT(fetchNft *FetchNFTRequest) (*model.BasicResponse, erro
 	}
 	return &basicResponse, nil
 
+}
+
+// List all NFTs
+// GET /rubix/v1/nfts
+func (c *Client) ListNFTs() (*model.BasicResponse, error) {
+	var basicResponse model.BasicResponse
+	err := c.sendJSONRequest("GET", setup.APIListNFTs, nil, nil, &basicResponse)
+	if err != nil {
+		c.log.Error("Failed to list NFTs", "err", err)
+		return nil, err
+	}
+	return &basicResponse, nil
+}
+
+// Get NFT chain by NFT ID
+// GET /rubix/v1/nfts/{nft_id}/chain
+func (c *Client) GetNFTChain(nftID string) (*model.BasicResponse, error) {
+	endpoint, err := ensweb.SubstitutePathParams(setup.APIGetNFTChain, map[string]string{"nft_id": nftID})
+	if err != nil {
+		c.log.Error("Failed to construct endpoint for GetNFTChain", "err", err)
+		return nil, err
+	}
+
+	var basicResponse model.BasicResponse
+	err = c.sendJSONRequest("GET", endpoint, nil, nil, &basicResponse, time.Minute*2)
+	if err != nil {
+		c.log.Error("Failed to get NFT chain", "err", err)
+		return nil, err
+	}
+	return &basicResponse, nil
 }

@@ -114,6 +114,10 @@ const (
 	GetFTCreatorStatsCmd           string = "get-ft-creator-stats"
 	RemoveStaleDIDCmd              string = "removedid"
 	InitCmd                        string = "init"
+	ListSmartContractsCmd          string = "listsmartcontracts"
+	GetSmartContractChainCmd       string = "getsmartcontractchain"
+	ListNFTsCmd                    string = "listnfts"
+	GetNFTChainCmd                 string = "getnftchain"
 )
 
 var commands = []string{VersionCmd,
@@ -186,6 +190,10 @@ var commands = []string{VersionCmd,
 	FixFTCreatorCmd,
 	GetFTCreatorStatsCmd,
 	RemoveStaleDIDCmd,
+	ListSmartContractsCmd,
+	GetSmartContractChainCmd,
+	ListNFTsCmd,
+	GetNFTChainCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -256,6 +264,11 @@ var commandsHelp = []string{"To get tool version",
 	"This command will set the async FT response status",
 	"This command will fix FT tokens that have peer ID as CreatorDID",
 	"This command will get statistics about FT token creators",
+	"",
+	"This command will list all smart contracts",
+	"This command will get the smart contract chain for a given contract ID",
+	"This command will list all NFTs",
+	"This command will get the NFT chain for a given NFT ID",
 }
 
 type Command struct {
@@ -977,6 +990,14 @@ func Run(args []string) {
 		cmd.RemoveStaleDID()
 	case InitCmd:
 		cmd.init()
+	case ListSmartContractsCmd:
+		cmd.listSmartContracts()
+	case GetSmartContractChainCmd:
+		cmd.getSmartContractChain()
+	case ListNFTsCmd:
+		cmd.listNFTs()
+	case GetNFTChainCmd:
+		cmd.getNFTChain()
 	default:
 		cmd.log.Error("Invalid command")
 	}

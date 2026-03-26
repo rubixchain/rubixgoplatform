@@ -285,3 +285,49 @@ func (cmd *Command) executeSmartcontract() {
 	cmd.log.Info("Smart Contract executed successfully")
 
 }
+
+// List all smart contracts
+func (cmd *Command) listSmartContracts() {
+	basicResponse, err := cmd.c.ListSmartContracts()
+	if err != nil {
+		cmd.log.Error("Failed to list smart contracts", "err", err)
+		return
+	}
+	if !basicResponse.Status {
+		cmd.log.Error("Failed to list smart contracts", "msg", basicResponse.Message)
+		return
+	}
+	cmd.log.Info("Smart contracts retrieved successfully")
+	fmt.Printf("Result: %v\n", basicResponse.Result)
+}
+
+// Get smart contract chain by contract ID
+func (cmd *Command) getSmartContractChain() {
+	if cmd.smartContractToken == "" {
+		cmd.log.Info("Smart contract token ID cannot be empty")
+		fmt.Print("Enter Smart Contract Token ID: ")
+		_, err := fmt.Scan(&cmd.smartContractToken)
+		if err != nil {
+			cmd.log.Error("Failed to get Smart Contract Token ID")
+			return
+		}
+	}
+
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
+	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !isAlphanumeric {
+		cmd.log.Error("Invalid smart contract token")
+		return
+	}
+
+	basicResponse, err := cmd.c.GetSmartContractChain(cmd.smartContractToken)
+	if err != nil {
+		cmd.log.Error("Failed to get smart contract chain", "err", err)
+		return
+	}
+	if !basicResponse.Status {
+		cmd.log.Error("Failed to get smart contract chain", "msg", basicResponse.Message)
+		return
+	}
+	cmd.log.Info("Smart contract chain retrieved successfully")
+	fmt.Printf("Result: %v\n", basicResponse.Result)
+}
