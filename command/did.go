@@ -10,6 +10,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/types"
 )
 
 func (cmd *Command) CreateDID() {
@@ -30,8 +31,8 @@ func (cmd *Command) CreateDID() {
 		}
 		cmd.privPWD = pwd
 	}
-	
-	cfg := did.DIDCreate{
+
+	cfg := types.DIDCreate{
 		PrivPWD:   cmd.privPWD,
 		Mnemonic:  cmd.mnemonic,
 		ChildPath: cmd.ChildPath,

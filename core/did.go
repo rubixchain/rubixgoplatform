@@ -16,6 +16,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -142,7 +143,7 @@ func (c *Core) GetDIDChallenge(d string) *model.DIDAccessResponse {
 }
 
 func (c *Core) checkPassword(didStr string, pwd string) bool {
-	privKey, err := ioutil.ReadFile(util.SanitizeDirPath(c.didDir) + didStr + "/" + did.PvtKeyFileName)
+	privKey, err := ioutil.ReadFile(util.SanitizeDirPath(c.didDir) + didStr + "/" + constants.PvtKeyFileName)
 	if err != nil {
 		c.log.Error("Private ket file does not exist", "did", didStr)
 		return false
@@ -167,7 +168,7 @@ func (c *Core) InitDIDModule() {
 	}
 }
 
-func (c *Core) CreateDID(didCreate *did.DIDCreate, localDID bool) (did string, err error) {
+func (c *Core) CreateDID(didCreate *types.DIDCreate, localDID bool) (did string, err error) {
 	if localDID { // create key pair from mnemonic an d then did from the private key
 		did, err = c.d.CreateDID(didCreate)
 		if err != nil {
@@ -213,7 +214,7 @@ func (c *Core) IsDIDExist(did string) bool {
 	return err == nil
 }
 
-func (c *Core) AddDID(dc *did.DIDCreate) *model.BasicResponse {
+func (c *Core) AddDID(dc *types.DIDCreate) *model.BasicResponse {
 	br := &model.BasicResponse{
 		Status: false,
 	}

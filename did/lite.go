@@ -7,6 +7,7 @@ import (
 	"time"
 
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -66,7 +67,7 @@ func (d *DIDLite) getPassword() (string, error) {
 		Message: "Password needed",
 		Result: SignReqData{
 			ID:   d.ch.ID,
-			Mode: LiteDIDMode,
+			Mode: constants.LiteDIDMode,
 		},
 	}
 	d.ch.OutChan <- sr
@@ -98,7 +99,7 @@ func (d *DIDLite) GetDID() string {
 // When the did creation and signing is done in Light mode,
 // this function returns the sign version as BIPVersion = 0
 func (d *DIDLite) GetSignType() int {
-	return BIPVersion
+	return constants.BIPVersion
 }
 
 // PKI based sign in lite mode
@@ -111,7 +112,7 @@ func (d *DIDLite) Sign(hash string) ([]byte, []byte, error) { //TODO : should re
 }
 
 func (d *DIDLite) PvtSign(hash []byte) ([]byte, error) {
-	privKey, err := os.ReadFile(d.dir + PvtKeyFileName)
+	privKey, err := os.ReadFile(d.dir + constants.PvtKeyFileName)
 	if err != nil {
 		walletSignature, err := d.getSignature(hash)
 		if err != nil {
@@ -146,7 +147,7 @@ func (d *DIDLite) PvtSign(hash []byte) ([]byte, error) {
 
 // Verify PKI based signature
 func (d *DIDLite) PvtVerify(hash []byte, sign []byte) (bool, error) {
-	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
+	pubKey, err := ioutil.ReadFile(d.dir + constants.PubKeyFileName)
 	if err != nil {
 		return false, err
 	}
@@ -180,7 +181,7 @@ func (d *DIDLite) getSignature(hash []byte) ([]byte, error) {
 		Message: "Signature needed",
 		Result: SignReqData{
 			ID:          d.ch.ID,
-			Mode:        LiteDIDMode,
+			Mode:        constants.LiteDIDMode,
 			Hash:        hash,
 			OnlyPrivKey: true,
 		},

@@ -6,9 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -47,7 +49,7 @@ func (c *Client) GetAllDIDs() (*model.GetAccountInfo, error) {
 	return &ac, nil
 }
 
-func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
+func (c *Client) CreateDID(cfg *types.DIDCreate) (string, bool) {
 	var dr model.DIDResponse
 	err := c.sendJSONRequest("POST", setup.APICreateDID, nil, cfg, &dr)
 	if err != nil {
@@ -62,11 +64,11 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 	return dr.Result.DID, true
 }
 
-func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
+func (c *Client) SetupDID(dc *types.DIDCreate) (string, bool) {
 
-	if !strings.Contains(dc.PubKey, did.PubKeyFileName) ||
-		!strings.Contains(dc.PrivKey, did.PvtKeyFileName) ||
-		!strings.Contains(dc.Mnemonic, did.MnemonicFileName) {
+	if !strings.Contains(dc.PubKey, constants.PubKeyFileName) ||
+		!strings.Contains(dc.PrivKey, constants.PvtKeyFileName) ||
+		!strings.Contains(dc.Mnemonic, constants.MnemonicFileName) {
 		return "Required files are missing", false
 	}
 

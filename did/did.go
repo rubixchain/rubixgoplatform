@@ -17,7 +17,9 @@ import (
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	files "github.com/ipfs/go-ipfs-files"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/crypto"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
@@ -53,7 +55,7 @@ func InitDID(dir string, log logger.Logger, ipfs *ipfsnode.Shell) *DID {
 	return did
 }
 
-func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
+func (d *DID) CreateDID(didCreate *types.DIDCreate) (string, error) {
 	t1 := time.Now()
 	temp := uuid.New()
 	dirName := d.dir + temp.String()
@@ -79,10 +81,10 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 	if didCreate.Mnemonic == "" { // create new mnemonic phrase
 		d.log.Debug("No mnemonic provided , creating new keypair")
 		mnemonic = crypto.BIPGenerateMnemonic()
-	} else {                      // use the input mnemonic to re-generate the key pair
+	} else { // use the input mnemonic to re-generate the key pair
 		mnemonic = didCreate.Mnemonic
 	}
-	
+
 	masterKey, err := crypto.BIPGenerateMasterKeyFromMnemonic(mnemonic)
 	if err != nil {
 		d.log.Error("failed to create keypair", "err", err)
@@ -95,27 +97,27 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 	}
 
 	// write mnemonic into a file
-	err = util.FileWrite(dirName+"/private/"+MnemonicFileName, []byte(mnemonic))
+	err = util.FileWrite(dirName+"/private/"+constants.MnemonicFileName, []byte(mnemonic))
 	if err != nil {
 		d.log.Error("failed to write mnemonic file", "err", err)
 		return "", err
 	}
 
 	// write private key into a file
-	err = util.FileWrite(dirName+"/private/"+PvtKeyFileName, pvtKey)
+	err = util.FileWrite(dirName+"/private/"+constants.PvtKeyFileName, pvtKey)
 	if err != nil {
 		return "", err
 	}
 
 	// write public key into a file
-	err = util.FileWrite(dirName+"/public/"+PubKeyFileName, pubKey)
+	err = util.FileWrite(dirName+"/public/"+constants.PubKeyFileName, pubKey)
 	if err != nil {
 		return "", err
 	}
 
-	// Test the generated key pair by reading it from the file, 
+	// Test the generated key pair by reading it from the file,
 	// signing on a message using the private key, and verify the signature using the public key
-	privKeyTest, err := ioutil.ReadFile(dirName + "/private/" + PvtKeyFileName)
+	privKeyTest, err := ioutil.ReadFile(dirName + "/private/" + constants.PvtKeyFileName)
 	if err != nil {
 		return "", err
 	}
@@ -132,7 +134,7 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 		return "", err
 	}
 
-	pubKeyTest, err := ioutil.ReadFile(dirName + "/public/" + PubKeyFileName)
+	pubKeyTest, err := ioutil.ReadFile(dirName + "/public/" + constants.PubKeyFileName)
 	if err != nil {
 		return "", err
 	}
@@ -255,7 +257,7 @@ func (d *DID) getDirHash(dir string) (string, error) {
 }
 
 // CreateDIDFromPubKey creates a DID from the provided public key for BIP wallet
-func (d *DID) CreateDIDFromPubKey(didCreate *DIDCreate) (string, error) {
+func (d *DID) CreateDIDFromPubKey(didCreate *types.DIDCreate) (string, error) {
 	t1 := time.Now()
 	temp := uuid.New()
 	dirName := d.dir + temp.String()
@@ -277,12 +279,12 @@ func (d *DID) CreateDIDFromPubKey(didCreate *DIDCreate) (string, error) {
 	// the existing sign-verification function, which includes pem decoding of public key
 	pemEncPub := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubKeyBytes})
 	//write public key into the temporary directory
-	err = util.FileWrite(dirName+"/public/"+PubKeyFileName, pemEncPub)
+	err = util.FileWrite(dirName+"/public/"+constants.PubKeyFileName, pemEncPub)
 	if err != nil {
 		return "", err
 	}
 
-	pubKeyTest, err := os.ReadFile(dirName + "/public/" + PubKeyFileName)
+	pubKeyTest, err := os.ReadFile(dirName + "/public/" + constants.PubKeyFileName)
 	if err != nil {
 		return "", err
 	}
