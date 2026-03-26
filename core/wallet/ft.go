@@ -1,19 +1,12 @@
 package wallet
 
 import (
-	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
 func (w *Wallet) ListFTs() ([]*models.FT, error) {
 	rows, err := w.db.Pool().Query(
-		w.Ctx, `
-			SELECT id, ft_name, ft_count, creator_did FROM tokens WHERE token_type = (
-				SELECT id
-				FROM token_type
-				WHERE name = $1
-			)
-		`, constants.TokenType_FT,
+		w.Ctx, "SELECT id, ft_name, ft_count, creator_did FROM fts",
 	)
 	if err != nil {
 		return nil, err
