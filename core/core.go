@@ -53,8 +53,6 @@ const (
 	APIUpdateTokenHashDetails          string = "/api/update-tokenhash-details"
 	APIAddUnpledgeDetails              string = "/api/initiate-unpledge"
 	APISelfTransfer                    string = "/api/self-transfer"
-	APIRecoverPinnedRBT                string = "/api/recover-pinned-rbt"
-	APIRequestSigningHash              string = "/api/request-signing-hash"
 	TokenValidatorURL                  string = "http://103.209.145.177:8000"
 	APISendFTToken                     string = "/api/send-ft-token"
 	APIGetPrevQrmFromPrevSenderPath    string = "/api/get-prev-qrms-info-from-sender"

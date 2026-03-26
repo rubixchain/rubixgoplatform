@@ -8,7 +8,6 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -102,7 +101,7 @@ func (c *Client) SetupDID(dc *types.DIDCreate) (string, bool) {
 	return br.Result.(string), true
 }
 
-func (c *Client) SignatureResponse(sr *did.SignRespData, timeout ...time.Duration) (*model.BasicResponse, error) {
+func (c *Client) SignatureResponse(sr *types.SignRespData, timeout ...time.Duration) (*model.BasicResponse, error) {
 	var br model.BasicResponse
 	err := c.sendJSONRequest("POST", setup.APISignatureResponse, nil, sr, &br, timeout...)
 	if err != nil {

@@ -79,8 +79,6 @@ func (c *Core) QuroumSetup() {
 	c.l.AddRoute(APIUnlockTokens, "POST", c.unlockTokens)
 	c.l.AddRoute(APIUpdateTokenHashDetails, "POST", c.updateTokenHashDetails)
 	c.l.AddRoute(APIAddUnpledgeDetails, "POST", c.addUnpledgeDetails)
-	c.l.AddRoute(APIRecoverPinnedRBT, "POST", c.recoverPinnedToken)
-	c.l.AddRoute(APIRequestSigningHash, "GET", c.requestSigningHash)
 	c.l.AddRoute(APISendFTToken, "POST", c.updateReceiverFTHandle)
 	c.l.AddRoute(APICheckPinRole, "GET", c.checkPinRole)
 	c.l.AddRoute(APIInitiateConsensus, "POST", c.initiateConsensusHandler)

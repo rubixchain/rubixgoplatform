@@ -10,7 +10,6 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -110,7 +109,7 @@ func (s *Server) didResponse(req *ensweb.Request, reqID string) *ensweb.Result {
 	dc := s.c.GetWebReq(reqID)
 	ch := <-dc.OutChan
 	time.Sleep(time.Millisecond * 10)
-	sr, ok := ch.(*did.SignResponse)
+	sr, ok := ch.(*types.SignResponse)
 	if ok {
 		return s.RenderJSON(req, sr, http.StatusOK)
 	}

@@ -1,7 +1,9 @@
 package util
 
 import (
+	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 
 	"golang.org/x/crypto/sha3"
 
@@ -32,4 +34,16 @@ func CalculateHash(data []byte, method string) []byte {
 	default:
 		return nil
 	}
+}
+
+func Base64ToBytes(base64Str string) ([]byte, error) {
+	signature, err := base64.StdEncoding.DecodeString(base64Str)
+	if err != nil {
+		return nil, fmt.Errorf("invalid signature encoding: %w", err)
+	}
+	if len(signature) != 64 {
+		return nil, fmt.Errorf("invalid signature length: expected 64 bytes, got %d", len(signature))
+	}
+
+	return signature, nil
 }

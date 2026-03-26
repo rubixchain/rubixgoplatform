@@ -31,7 +31,6 @@ const (
 	APIGenerateTestToken                string = "/api/generate-test-token"
 	APIInitiateRBTTransfer              string = "/api/initiate-rbt-transfer"
 	APIGetAccountInfo                   string = "/api/get-account-info"
-	APISignatureResponse                string = "/api/signature-response"
 	APIDumpTokenChainBlock              string = "/api/dump-token-chain"
 	APISetupDID                         string = "/api/setup-did"
 	APIMigrateNode                      string = "/api/migrate-node"
@@ -91,8 +90,6 @@ const (
 	APIGetFTTxnByDID                    string = "/api/get-ft-txn-by-did"
 	APIUpdateTokenStatus                string = "/api/update-token-status"
 	APIGetTokenStatus                   string = "/api/get-token-status"
-	APIArbitrarySign                    string = "/api/sign"
-	APISignVerification                 string = "/api/verify-signature"
 	APIMigrateFTTransactions            string = "/api/migrate-ft-transactions"
 	APIGetFTMigrationStatus             string = "/api/get-ft-migration-status"
 	APIRetryFailedFTDownloads           string = "/api/retry-failed-ft-downloads"
@@ -100,11 +97,15 @@ const (
 	APIRecoverLostTokens                string = "/api/recover-lost-tokens"
 	APIRemoteRecoverTokens              string = "/api/remote-recover-tokens"
 
+	// signatures endpoints
+	APISignatureResponse string = "/rubix/v1/signature"
+	APIArbitrarySign     string = "/rubix/v1/signature/arbitrary"
+	APISignVerification  string = "/rubix/v1/signature/verify"
 
-	// Endpoints on DID module 
-	APICreateDID                        string = "/rubix/v1/dids/create"
-	APIGetAllDID                        string = "/rubix/v1/dids"
-	APIRegisterDID                      string = "/rubix/v1/dids/{did}/register"
+	// Endpoints on DID module
+	APICreateDID   string = "/rubix/v1/dids/create"
+	APIGetAllDID   string = "/rubix/v1/dids"
+	APIRegisterDID string = "/rubix/v1/dids/{did}/register"
 
 	//Below are Explorer-service API endpoints
 
@@ -119,9 +120,9 @@ const (
 	APICreateNFT             string = "/rubix/v1/nfts/generate"
 	APIListNFTs              string = "/rubix/v1/nfts"
 	APIGetNFTChain           string = "/rubix/v1/nfts/{nft_id}/chain"
-	APITransaction        string = "/rubix/v1/tx"
-	APIGetTransactionByID string = "/rubix/v1/tx/{tx_id}"
-	APIInitiateTransaction string = "/api/initiate-transaction"
+	APITransaction           string = "/rubix/v1/tx"
+	APIGetTransactionByID    string = "/rubix/v1/tx/{tx_id}"
+	APIInitiateTransaction   string = "/api/initiate-transaction"
 
 	// New endpoints
 	APIListFT string = "/rubix/v1/fts"

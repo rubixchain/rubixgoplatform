@@ -1,10 +1,6 @@
 package constants
 
 const (
-	LiteDIDMode int = 4 // did creation mode
-)
-
-const (
 	BIPVersion int = iota // signature version
 )
 

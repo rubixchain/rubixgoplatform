@@ -9,6 +9,7 @@ import (
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/crypto"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -62,12 +63,11 @@ func (d *DIDLite) getPassword() (string, error) {
 	}
 
 	// Request password from user
-	sr := &SignResponse{
+	sr := &types.SignResponse{
 		Status:  true,
 		Message: "Password needed",
-		Result: SignReqData{
+		Result: types.SignReqData{
 			ID:   d.ch.ID,
-			Mode: constants.LiteDIDMode,
 		},
 	}
 	d.ch.OutChan <- sr
@@ -79,7 +79,7 @@ func (d *DIDLite) getPassword() (string, error) {
 		return "", fmt.Errorf("Timeout, failed to get password")
 	}
 
-	srd, ok := ch.(SignRespData)
+	srd, ok := ch.(types.SignRespData)
 	if !ok {
 		return "", fmt.Errorf("Invalid data received on the channel")
 	}
@@ -176,14 +176,12 @@ func (d *DIDLite) getSignature(hash []byte) ([]byte, error) {
 	if d.ch == nil || d.ch.InChan == nil || d.ch.OutChan == nil {
 		return nil, fmt.Errorf("invalid configuration")
 	}
-	sr := &SignResponse{
+	sr := &types.SignResponse{
 		Status:  true,
 		Message: "Signature needed",
-		Result: SignReqData{
+		Result: types.SignReqData{
 			ID:          d.ch.ID,
-			Mode:        constants.LiteDIDMode,
 			Hash:        hash,
-			OnlyPrivKey: true,
 		},
 	}
 	d.ch.OutChan <- sr
@@ -194,9 +192,10 @@ func (d *DIDLite) getSignature(hash []byte) ([]byte, error) {
 		return nil, fmt.Errorf("timeout, failed to get signature")
 	}
 
-	srd, ok := ch.(SignRespData)
+	srd, ok := ch.(types.SignRespData)
 	if !ok {
 		return nil, fmt.Errorf("invalid data received on the channel")
 	}
-	return srd.Signature.Signature, nil
+	// convert base64 signature into byte array
+	return util.Base64ToBytes(srd.Signature)
 }
