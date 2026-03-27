@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/core/consensus"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -94,7 +93,6 @@ func (c *Core) SetupToken() {
 	c.l.AddRoute(APISyncTokenChain, "POST", c.syncTokenChain)
 	c.l.AddRoute(APISyncTransactionChain, "POST", c.syncTransactionChain)
 	c.l.AddRoute(APISyncGenesisAndLatestBlock, "POST", c.syncGenesisAndLatestBlock)
-	c.l.AddRoute(APISyncGenesisAndLatestTransaction, "POST", c.syncGenesisAndLatestTransaction)
 	c.l.AddRoute(APIUpdateStatus, "PUT", c.updateStatus)
 	c.l.AddRoute(APIGetTokenStatus, "GET", c.getTokenStatus)
 	c.l.AddRoute(setup.APIRecoverLostTokens, "POST", c.recoverLostTokensHandler)
@@ -854,18 +852,18 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 // processRole handles specific roles (as integers) and returns a message
 func (c *Core) processRole(role int) string {
 	roleMessages := map[int]string{
-		constants.TokenProviderRole_Owner:                  "Token chain block does not exist, the pinned role is owner, so this can be a double spend attempt",
-		constants.TokenProviderRole_Quorum:                 "Token chain block does not exist, the pinned role is QuorumRole",
-		constants.TokenProviderRole_PrevSender:             "Token chain block does not exist, the pinned role is PrevSenderRole",
-		constants.TokenProviderRole_Receiver:               "Token chain block does not exist, the pinned role is ReceiverRole",
-		constants.TokenProviderRole_ParentTokenLock:        "Token chain block does not exist, the pinned role is ParentTokenLockRole",
-		constants.TokenProviderRole_DID:                    "Token chain block does not exist, the pinned role is DIDRole",
-		constants.TokenProviderRole_Staking:                "Token chain block does not exist, the pinned role is StakingRole",
-		constants.TokenProviderRole_Pledging:               "Token chain block does not exist, the pinned role is PledgingRole",
-		constants.TokenProviderRole_QuorumPin:              "Token chain block does not exist, the pinned role is QuorumPinRole",
-		constants.TokenProviderRole_QuorumUnpin:            "Token chain block does not exist, the pinned role is QuorumUnpinRole",
-		constants.TokenProviderRole_ParentTokenPin: "Token chain block does not exist, the pinned role is ParentTokenPinByQuorumRole",
-		constants.TokenProviderRole_Pinning:                "Token chain block does not exist, the pinned role is PinningRole",
+		constants.TokenProviderRole_Owner:           "Token chain block does not exist, the pinned role is owner, so this can be a double spend attempt",
+		constants.TokenProviderRole_Quorum:          "Token chain block does not exist, the pinned role is QuorumRole",
+		constants.TokenProviderRole_PrevSender:      "Token chain block does not exist, the pinned role is PrevSenderRole",
+		constants.TokenProviderRole_Receiver:        "Token chain block does not exist, the pinned role is ReceiverRole",
+		constants.TokenProviderRole_ParentTokenLock: "Token chain block does not exist, the pinned role is ParentTokenLockRole",
+		constants.TokenProviderRole_DID:             "Token chain block does not exist, the pinned role is DIDRole",
+		constants.TokenProviderRole_Staking:         "Token chain block does not exist, the pinned role is StakingRole",
+		constants.TokenProviderRole_Pledging:        "Token chain block does not exist, the pinned role is PledgingRole",
+		constants.TokenProviderRole_QuorumPin:       "Token chain block does not exist, the pinned role is QuorumPinRole",
+		constants.TokenProviderRole_QuorumUnpin:     "Token chain block does not exist, the pinned role is QuorumUnpinRole",
+		constants.TokenProviderRole_ParentTokenPin:  "Token chain block does not exist, the pinned role is ParentTokenPinByQuorumRole",
+		constants.TokenProviderRole_Pinning:         "Token chain block does not exist, the pinned role is PinningRole",
 	}
 
 	if message, exists := roleMessages[role]; exists {
@@ -2656,14 +2654,3 @@ func (c *Core) syncTransactionChain(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &syncReply, http.StatusOK)
 }
 
-// syncGenesisAndLatestTransaction handles a sync request for genesis and latest transactions.
-// (upstream addition — Category B, stubbed pending wallet implementation)
-// TODO: Implement this function and complete syncTransaction API
-func (c *Core) syncGenesisAndLatestTransaction(req *ensweb.Request) *ensweb.Result {
-	return c.l.RenderJSON(req, &models.GenesisAndLatestTransactionSyncReply{Status: true, Message: "Successfully got genesis and latest transaction"}, http.StatusOK)
-}
-
-
-func (c *Core) syncTransactionChainFrom(p *ipfsport.Peer, previousTransactionID string, token string) (error, *models.TransactionChainSyncReply) {
-	return consensus.SyncTransactionChainFrom(p, previousTransactionID, token, c.w, c.log)
-}

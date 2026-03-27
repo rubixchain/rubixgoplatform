@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/rubixchain/rubixgoplatform/core/consensus"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -244,7 +245,7 @@ func (c *Core) syncTransactionTokens(
 				continue
 			}
 			//Handling the response in the future.
-			err, _ := c.syncTransactionChainFrom(peer, token.PreviousTransactionID, token.TokenID)
+			err, _ := consensus.SyncTransactionChainFrom(peer, token.PreviousTransactionID, token.TokenID, c.w, c.log)
 			if err != nil {
 				return err
 			}
