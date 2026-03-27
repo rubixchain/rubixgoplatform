@@ -49,7 +49,6 @@ const (
 	APIExecuteSmartContract             string = "/api/execute-smart-contract"
 	APIFetchSmartContract               string = "/api/fetch-smart-contract"
 	APIPublishContract                  string = "/api/publish-smart-contract"
-	APISubscribecontract                string = "/api/subscribe-smart-contract"
 	APIDumpSmartContractTokenChainBlock string = "/api/dump-smart-contract-token-chain"
 	APIGetSmartContractTokenData        string = "/api/get-smart-contract-token-chain-data"
 	APIRegisterCallBackURL              string = "/api/register-callback-url"
@@ -79,7 +78,6 @@ const (
 	APIDeployNFT                        string = "/api/deploy-nft"
 	APIExecuteNFT                       string = "/api/execute-nft"
 	APIDumpNFTTokenChain                string = "/api/dump-nft-token-chain"
-	APISubscribeNFT                     string = "/api/subscribe-nft"
 	APIGetNFTTokenChainData             string = "/api/get-nft-token-chain-data"
 	APIFetchNft                         string = "/api/fetch-nft"
 	APIGetNftsByDid                     string = "/api/get-nfts-by-did"
@@ -121,6 +119,8 @@ const (
 	APIGetNFTChain           string = "/rubix/v1/nfts/{nft_id}/chain"
 	APITransaction           string = "/rubix/v1/tx"
 	APIGetTransactionByID    string = "/rubix/v1/tx/{tx_id}"
+	APISubscribecontract     string = "/rubix/v1/smart_contracts/subscribe"
+	APISubscribeNFT          string = "/rubix/v1/nfts/subscribe"
 
 	// New endpoints
 	APIListFT string = "/rubix/v1/fts"

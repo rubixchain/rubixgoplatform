@@ -12,7 +12,6 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -295,7 +294,6 @@ func (c *Core) publishNewEvent(newEvent *model.NewContractEvent) error {
 
 func (c *Core) SubsribeContractSetup(requestID string, topic string) error {
 	reqID = requestID
-	c.l.AddRoute(APIPeerStatus, "GET", c.peerStatus)
 	err := c.ps.SubscribeTopic(topic, c.ContractCallBack)
 	if err != nil {
 		c.log.Error("Unable to subscribe smart contract ", topic)
@@ -304,6 +302,7 @@ func (c *Core) SubsribeContractSetup(requestID string, topic string) error {
 	return err
 }
 
+// ContractCallback updated with the syncTransactionChainFrom function
 func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 	var newEvent model.NewContractEvent
 	var fetchSC FetchSmartContractRequest
@@ -364,14 +363,13 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 	}
 	publisherPeerID := peerID
 	did := newEvent.Did
-	tokenType := token.SmartContractTokenType
 	address := publisherPeerID + "." + did
 	p, err := c.getPeer(address)
 	if err != nil {
 		c.log.Error("Failed to get peer", "err", err)
 		return
 	}
-	err, _ = c.syncTokenChainFrom(p, "", smartContractToken, tokenType)
+	err, _ = c.syncTransactionChainFrom(p, "", smartContractToken)
 	if err != nil {
 		c.log.Error("Failed to sync token chain block", "err", err)
 		return
