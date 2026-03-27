@@ -51,7 +51,6 @@ const (
 	APIPublishContract                  string = "/api/publish-smart-contract"
 	APIDumpSmartContractTokenChainBlock string = "/api/dump-smart-contract-token-chain"
 	APIGetSmartContractTokenData        string = "/api/get-smart-contract-token-chain-data"
-	APIRegisterCallBackURL              string = "/api/register-callback-url"
 	APIGetTxnByNode                     string = "/api/get-by-node"
 	APIRemoveTokenChainBlock            string = "/api/remove-token-chain-block"
 	APIPeerID                           string = "/api/get-peer-id"
@@ -120,6 +119,7 @@ const (
 	APIGetTransactionByID    string = "/rubix/v1/tx/{tx_id}"
 	APISubscribecontract     string = "/rubix/v1/smart_contracts/subscribe"
 	APISubscribeNFT          string = "/rubix/v1/nfts/subscribe"
+	APIRegisterCallBackURL   string = "/rubix/v1/smart_contracts/register_callback"
 
 	// New endpoints
 	APIListFT string = "/rubix/v1/fts"

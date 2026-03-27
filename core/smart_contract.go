@@ -428,6 +428,27 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 	defer response.Body.Close()
 }
 
+// RegisterCallBackURL registers a callback URL for smart contract events.
+func (c *Core) RegisterCallBackURL(req *model.RegisterCallBackUrlReq) *model.BasicResponse {
+	// Validate input
+	if req.SmartContractToken == "" {
+		return &model.BasicResponse{Status: false, Message: "smart contract token is required"}
+	}
+	if req.CallBackURL == "" {
+		return &model.BasicResponse{Status: false, Message: "callback URL is required"}
+	}
+
+	// Register the callback URL in the database
+	err := c.w.RegisterCallbackURL(req.SmartContractToken, req.CallBackURL)
+	if err != nil {
+		c.log.Error("Failed to register callback URL", "smart_contract", req.SmartContractToken, "err", err)
+		return &model.BasicResponse{Status: false, Message: fmt.Sprintf("failed to register callback URL: %v", err)}
+	}
+
+	c.log.Info("Callback URL registered successfully", "smart_contract", req.SmartContractToken, "callback_url", req.CallBackURL)
+	return &model.BasicResponse{Status: true, Message: "callback URL registered successfully"}
+}
+
 func (c *Core) GetAllSmartcontracts() ([]models.Token, error) {
 	smartContracts, err := c.w.GetSmartContractTokens()
 	if err != nil {

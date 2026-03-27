@@ -35,12 +35,6 @@ func (c *Core) GetNFTTokenChainData(req *model.SmartContractTokenChainDataReq) *
 	return &model.NFTDataReply{BasicResponse: model.BasicResponse{Status: false, Message: "not implemented"}}
 }
 
-// RegisterCallBackURL registers a callback URL for smart contract events.
-// TODO(phase11-upstream): implement callback registration.
-func (c *Core) RegisterCallBackURL(req *model.RegisterCallBackUrlReq) *model.BasicResponse {
-	return &model.BasicResponse{Status: false, Message: "not implemented"}
-}
-
 // RemoveTokenChainBlock removes a token chain block (diagnostic/admin operation).
 // TODO(phase11-upstream): implement using PostgreSQL tokenchain queries.
 func (c *Core) RemoveTokenChainBlock(req *model.TCRemoveRequest) *model.TCRemoveReply {
