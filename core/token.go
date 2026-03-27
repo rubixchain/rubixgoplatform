@@ -93,7 +93,6 @@ func (c *Core) SetupToken() {
 	c.l.AddRoute(APISyncTokenChain, "POST", c.syncTokenChain)
 	c.l.AddRoute(APISyncTransactionChain, "POST", c.syncTransactionChain)
 	c.l.AddRoute(APISyncGenesisAndLatestBlock, "POST", c.syncGenesisAndLatestBlock)
-	c.l.AddRoute(APISyncGenesisAndLatestTransaction, "POST", c.syncGenesisAndLatestTransaction)
 	c.l.AddRoute(APIUpdateStatus, "PUT", c.updateStatus)
 	c.l.AddRoute(APIGetTokenStatus, "GET", c.getTokenStatus)
 	c.l.AddRoute(setup.APIRecoverLostTokens, "POST", c.recoverLostTokensHandler)
@@ -853,18 +852,18 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 // processRole handles specific roles (as integers) and returns a message
 func (c *Core) processRole(role int) string {
 	roleMessages := map[int]string{
-		constants.TokenProviderRole_Owner:                  "Token chain block does not exist, the pinned role is owner, so this can be a double spend attempt",
-		constants.TokenProviderRole_Quorum:                 "Token chain block does not exist, the pinned role is QuorumRole",
-		constants.TokenProviderRole_PrevSender:             "Token chain block does not exist, the pinned role is PrevSenderRole",
-		constants.TokenProviderRole_Receiver:               "Token chain block does not exist, the pinned role is ReceiverRole",
-		constants.TokenProviderRole_ParentTokenLock:        "Token chain block does not exist, the pinned role is ParentTokenLockRole",
-		constants.TokenProviderRole_DID:                    "Token chain block does not exist, the pinned role is DIDRole",
-		constants.TokenProviderRole_Staking:                "Token chain block does not exist, the pinned role is StakingRole",
-		constants.TokenProviderRole_Pledging:               "Token chain block does not exist, the pinned role is PledgingRole",
-		constants.TokenProviderRole_QuorumPin:              "Token chain block does not exist, the pinned role is QuorumPinRole",
-		constants.TokenProviderRole_QuorumUnpin:            "Token chain block does not exist, the pinned role is QuorumUnpinRole",
-		constants.TokenProviderRole_ParentTokenPin: "Token chain block does not exist, the pinned role is ParentTokenPinByQuorumRole",
-		constants.TokenProviderRole_Pinning:                "Token chain block does not exist, the pinned role is PinningRole",
+		constants.TokenProviderRole_Owner:           "Token chain block does not exist, the pinned role is owner, so this can be a double spend attempt",
+		constants.TokenProviderRole_Quorum:          "Token chain block does not exist, the pinned role is QuorumRole",
+		constants.TokenProviderRole_PrevSender:      "Token chain block does not exist, the pinned role is PrevSenderRole",
+		constants.TokenProviderRole_Receiver:        "Token chain block does not exist, the pinned role is ReceiverRole",
+		constants.TokenProviderRole_ParentTokenLock: "Token chain block does not exist, the pinned role is ParentTokenLockRole",
+		constants.TokenProviderRole_DID:             "Token chain block does not exist, the pinned role is DIDRole",
+		constants.TokenProviderRole_Staking:         "Token chain block does not exist, the pinned role is StakingRole",
+		constants.TokenProviderRole_Pledging:        "Token chain block does not exist, the pinned role is PledgingRole",
+		constants.TokenProviderRole_QuorumPin:       "Token chain block does not exist, the pinned role is QuorumPinRole",
+		constants.TokenProviderRole_QuorumUnpin:     "Token chain block does not exist, the pinned role is QuorumUnpinRole",
+		constants.TokenProviderRole_ParentTokenPin:  "Token chain block does not exist, the pinned role is ParentTokenPinByQuorumRole",
+		constants.TokenProviderRole_Pinning:         "Token chain block does not exist, the pinned role is PinningRole",
 	}
 
 	if message, exists := roleMessages[role]; exists {
@@ -2655,141 +2654,3 @@ func (c *Core) syncTransactionChain(req *ensweb.Request) *ensweb.Result {
 	return c.l.RenderJSON(req, &syncReply, http.StatusOK)
 }
 
-// syncGenesisAndLatestTransaction handles a sync request for genesis and latest transactions.
-// (upstream addition — Category B, stubbed pending wallet implementation)
-// TODO: Implement this function and complete syncTransaction API
-func (c *Core) syncGenesisAndLatestTransaction(req *ensweb.Request) *ensweb.Result {
-	return c.l.RenderJSON(req, &models.GenesisAndLatestTransactionSyncReply{Status: true, Message: "Successfully got genesis and latest transaction"}, http.StatusOK)
-}
-
-// findTokenRoleInTxn determines the role a token played in a given transaction.
-// (upstream addition — Category B)
-func findTokenRoleInTxn(tokenID string, txInfo *models.TransactionInfo) int16 {
-	if txInfo.Tokens != nil {
-		for _, lists := range [][]*models.TokenInfo{
-			txInfo.Tokens.RBT, txInfo.Tokens.NFT,
-			txInfo.Tokens.FT, txInfo.Tokens.SmartContract,
-		} {
-			for _, t := range lists {
-				if t.TokenID == tokenID {
-					return int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
-				}
-			}
-		}
-	}
-
-	for _, t := range txInfo.CommittedTokens {
-		if t.TokenID == tokenID {
-			return int16(models.GetTokenRoleID(constants.TokenRole_Commit))
-		}
-	}
-
-	for _, q := range txInfo.Quorums {
-		for _, t := range q.Tokens {
-			if t.TokenID == tokenID {
-				return int16(models.GetTokenRoleID(constants.TokenRole_Pledge))
-			}
-		}
-	}
-
-	return int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
-}
-
-// syncTransactionChainFrom fetches missing transactions from a peer and writes them locally.
-// (upstream addition — Category B)
-func (c *Core) syncTransactionChainFrom(p *ipfsport.Peer, previousTransactionID string, token string) (error, *models.TransactionChainSyncReply) {
-	var err error
-
-	latestTransactionID := c.w.GetLatestTransactionID(token)
-	if latestTransactionID == "" {
-		c.log.Error("failed to get latest transaction id")
-		return err, nil
-	}
-	if latestTransactionID == previousTransactionID {
-		return nil, nil
-	}
-
-	syncReq := models.TransactionChainSyncRequest{
-		TokenID:       token,
-		TransactionID: previousTransactionID,
-	}
-
-	for {
-		var trep models.TransactionChainSyncReply
-		err = p.SendJSONRequest("POST", APISyncTransactionChain, nil, &syncReq, &trep, false)
-		if err != nil {
-			c.log.Error("failed to sync transaction chain")
-			return err, nil
-		}
-		if !trep.Status {
-			c.log.Error("failed to sync transaction chain")
-			return fmt.Errorf(trep.Message), nil
-		}
-		if len(trep.Transactions) > 0 {
-			for _, txn := range trep.Transactions {
-				tx, err := util.TransactionFromBytes(txn)
-				if tx == nil {
-					c.log.Error("failed to convert transaction bytes to transaction")
-					return fmt.Errorf("failed to convert transaction bytes to transaction"), nil
-				}
-				var txInfo models.TransactionInfo
-				if err = json.Unmarshal(tx.Info, &txInfo); err != nil {
-					c.log.Error("failed to unmarshal transaction info", "err", err)
-					return fmt.Errorf("failed to unmarshal transaction info: %w", err), nil
-				}
-
-				role := findTokenRoleInTxn(token, &txInfo)
-
-				if err = c.w.CreateTransaction(tx); err != nil {
-					c.log.Error("failed to add transaction to transactions table", "err", err)
-					return fmt.Errorf("failed to add transaction: %w", err), nil
-				}
-
-				tokenDetails, err := c.w.GetTokenByTokenID(token)
-				if err != nil {
-					newToken := models.Token{
-						TokenID:        token,
-						TokenStatus:    constants.TokenStatus_Free,
-						DID:            txInfo.Owner,
-						TransactionID:  tx.ID,
-						TokenType:      int16(models.GetTokenTypeID(constants.TokenType_RBT)),
-						LatestPosition: 0,
-						LatestRole:     role,
-						CreatedAt:      time.Now(),
-						UpdatedAt:      time.Now(),
-					}
-					if createErr := c.w.CreateRBTToken(newToken); createErr != nil {
-						c.log.Error("failed to create token", "err", createErr)
-						return fmt.Errorf("failed to create token: %w", createErr), nil
-					}
-					tokenDetails = newToken
-				} else {
-					tokenDetails.DID = txInfo.Owner
-					tokenDetails.TransactionID = tx.ID
-					tokenDetails.LatestPosition++
-					tokenDetails.LatestRole = role
-					if updateErr := c.w.UpdateToken(tokenDetails); updateErr != nil {
-						c.log.Error("failed to update token", "err", updateErr)
-						return fmt.Errorf("failed to update token: %w", updateErr), nil
-					}
-				}
-
-				entry := &models.TokenChain{
-					TokenID:       token,
-					TransactionID: tx.ID,
-					Role:          role,
-					Position:      tokenDetails.LatestPosition,
-				}
-				if err = c.w.AddTokenChainEntry(entry); err != nil {
-					c.log.Error("failed to add token chain entry", "err", err)
-					return fmt.Errorf("failed to add token chain entry: %w", err), nil
-				}
-			}
-		}
-		if trep.NextTransactionID == "" {
-			break
-		}
-		syncReq.TransactionID = trep.NextTransactionID
-	}
-	return nil, nil
-}
