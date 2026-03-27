@@ -6,7 +6,6 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/config"
-	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
@@ -43,7 +42,7 @@ func setupDev() (*core.Core, types.RubixConfig) {
 func createDIDs(c *core.Core, count int) []string {
 	dids := make([]string, 0, count)
 	for range count {
-		didID, err := c.CreateDID(&did.DIDCreate{
+		didID, err := c.CreateDID(&types.DIDCreate{
 			PrivPWD: "pwd-1",
 		}, true)
 		if err != nil {

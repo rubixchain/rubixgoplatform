@@ -12,7 +12,6 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/config"
-	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/protos"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 	"golang.org/x/net/context"
