@@ -923,8 +923,6 @@ func Run(args []string) {
 		cmd.getFTinfo()
 	case ValidateTokenCmd:
 		cmd.ValidateToken()
-	case ExecuteNFTCmd:
-		cmd.executeNFT()
 	case DeployNFTCmd:
 		cmd.deployNFT()
 	case DumpNFTTokenChainCmd:

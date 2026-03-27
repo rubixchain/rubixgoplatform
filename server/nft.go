@@ -213,48 +213,6 @@ type ExecuteNFTSwaggoInput struct {
 	NFTData    string  `json:"nft_data"`
 }
 
-// NFT godoc
-// @Summary      Execution of NFT
-// @Description  This API will add a new block which indicates either transfer of ownership of NFT or internal state change through self-execution
-// @Tags         NFT
-// @Accept       json
-// @Produce      json
-// @Param		 input body ExecuteNFTSwaggoInput true "Transfer the ownership of particular NFT or self-execution with some data if 'receiver' is empty "
-// @Success      200  {object}  model.BasicResponse
-// @Router       /api/execute-nft [post]
-func (s *Server) APIExecuteNFT(req *ensweb.Request) *ensweb.Result {
-	var executeReq model.ExecuteNFTRequest
-	err := s.ParseJSON(req, &executeReq)
-	if err != nil {
-		return s.BasicResponse(req, false, "Invalid input", err)
-	}
-	_, did, ok := util.ParseAddress(executeReq.Executor)
-	if !ok {
-		return s.BasicResponse(req, false, "Invalid Owner address", nil)
-	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(executeReq.NFT)
-	if len(executeReq.NFT) != 46 || !strings.HasPrefix(executeReq.NFT, "Qm") || !is_alphanumeric {
-		s.log.Error("Invalid NFT")
-		return s.BasicResponse(req, false, "Invalid NFT", nil)
-	}
-	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
-	s.log.Info("The did trying to transfer the nft :", executeReq.Executor)
-	if !strings.HasPrefix(executeReq.Executor, "bafybmi") || len(executeReq.Executor) != 59 || !is_alphanumeric {
-		s.log.Error("Invalid owner DID")
-		return s.BasicResponse(req, false, "Invalid owner DID", nil)
-	}
-	if executeReq.QuorumType < 1 || executeReq.QuorumType > 2 {
-		s.log.Error("Invalid quorum type")
-		return s.BasicResponse(req, false, "Invalid quorum type", nil)
-	}
-	if !s.validateDIDAccess(req, did) {
-		return s.BasicResponse(req, false, "DID does not have an access", nil)
-	}
-	s.c.AddWebReq(req)
-	go s.c.ExecuteNFT(req.ID, &executeReq)
-	return s.didResponse(req, req.ID)
-}
-
 type NewNFTSwaggoInput struct {
 	NFT string `json:"nft"`
 }

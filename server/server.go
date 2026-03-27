@@ -120,7 +120,6 @@ func (s *Server) RegisterRoutes() {
 	// s.AddRoute(setup.APIAddNFTSale, "GET", s.AuthHandle(s.APIAddNFTSale, true, s.AuthError, false))
 	s.AddRoute(setup.APICreateNFT, "POST", s.AuthHandle(s.APICreateNFT, true, s.AuthError, false))
 	s.AddRoute(setup.APIDeployNFT, "POST", s.AuthHandle(s.APIDeployNFT, true, s.AuthError, false))
-	s.AddRoute(setup.APIExecuteNFT, "POST", s.AuthHandle(s.APIExecuteNFT, true, s.AuthError, false))
 	s.AddRoute(setup.APIDeploySmartContract, "POST", s.AuthHandle(s.APIDeploySmartContract, true, s.AuthError, false))
 	s.AddRoute(setup.APIGenerateSmartContract, "POST", s.AuthHandle(s.APIGenerateSmartContract, true, s.AuthError, false))
 	s.AddRoute(setup.APIFetchSmartContract, "GET", s.AuthHandle(s.APIFetchSmartContract, true, s.AuthError, false))
