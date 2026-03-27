@@ -76,86 +76,6 @@
                 }
             }
         },
-        "/api/create-ft": {
-            "post": {
-                "description": "This API endpoint will create FTs.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "FT"
-                ],
-                "summary": "Create FT",
-                "parameters": [
-                    {
-                        "description": "Create FT",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.CreateFTReqSwaggoInput"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/create-nft": {
-            "post": {
-                "description": "This API will create new NFT",
-                "consumes": [
-                    "multipart/form-data"
-                ],
-                "produces": [
-                    "multipart/form-data"
-                ],
-                "tags": [
-                    "NFT"
-                ],
-                "summary": "Create NFT",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "DID",
-                        "name": "did",
-                        "in": "formData",
-                        "required": true
-                    },
-                    {
-                        "type": "file",
-                        "description": "JSON file which contains information about the NFT",
-                        "name": "metadata",
-                        "in": "formData",
-                        "required": true
-                    },
-                    {
-                        "type": "file",
-                        "description": "File which is meant to be an NFT",
-                        "name": "artifact",
-                        "in": "formData",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/deploy-nft": {
             "post": {
                 "description": "This API will deploy the NFT",
@@ -356,52 +276,6 @@
                 }
             }
         },
-        "/api/generate-smart-contract": {
-            "post": {
-                "description": "This API will Generate smart contract Token",
-                "consumes": [
-                    "multipart/form-data"
-                ],
-                "produces": [
-                    "multipart/form-data"
-                ],
-                "tags": [
-                    "Smart Contract"
-                ],
-                "summary": "Generate Smart Contract",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "DID",
-                        "name": "did",
-                        "in": "formData",
-                        "required": true
-                    },
-                    {
-                        "type": "file",
-                        "description": "location of binary code hash",
-                        "name": "binaryCodePath",
-                        "in": "formData",
-                        "required": true
-                    },
-                    {
-                        "type": "file",
-                        "description": "location of raw code hash",
-                        "name": "rawCodePath",
-                        "in": "formData",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/get-account-info": {
             "get": {
                 "description": "For a mentioned DID, check the account balance",
@@ -420,147 +294,6 @@
                         "type": "string",
                         "description": "User DID",
                         "name": "did",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/get-by-comment": {
-            "get": {
-                "description": "Retrieves the details of a transaction based on its comment.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Account"
-                ],
-                "summary": "Get transaction details by Transcation Comment",
-                "operationId": "get-by-comment",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Comment to identify the transaction",
-                        "name": "Comment",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/get-by-did": {
-            "get": {
-                "description": "Retrieves the details of a transaction based on DID and date range (on and after start date and before end date).",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Account"
-                ],
-                "summary": "Get transaction details by dID",
-                "operationId": "get-by-did",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "DID of sender/receiver",
-                        "name": "DID",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by role as sender or receiver",
-                        "name": "Role",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Start date of the date range (format: YYYY-MM-DD)",
-                        "name": "StartDate",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "End date of the date range (format: YYYY-MM-DD)",
-                        "name": "EndDate",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/get-by-node": {
-            "get": {
-                "description": "Get count of incoming and outgoing txns of the DID ins a node.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Account"
-                ],
-                "summary": "Get count of incoming and outgoing txns of the DID ins a node",
-                "operationId": "get-txn-details-by-node",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.TxnCountForDID"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/get-by-txnId": {
-            "get": {
-                "description": "Retrieves the details of a transaction based on its ID.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Account"
-                ],
-                "summary": "Get transaction details by Transcation ID",
-                "operationId": "get-txn-details-by-id",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "The ID of the transaction to retrieve",
-                        "name": "txnID",
                         "in": "query",
                         "required": true
                     }
@@ -669,57 +402,6 @@
                         "description": "Successful response with token chain data",
                         "schema": {
                             "$ref": "#/definitions/model.GetTokenChainResponce"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/get-ft-txn-by-did": {
-            "get": {
-                "description": "Retrieves the details of a FT transaction based on DID, role (sender or receiver) and date range (on and after start date and before end date).",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "FT"
-                ],
-                "summary": "Get FT transaction details by DID",
-                "operationId": "get-ft-txn-by-did",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "DID of sender/receiver",
-                        "name": "DID",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by role as sender or receiver",
-                        "name": "Role",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Start date of the date range (format: YYYY-MM-DD)",
-                        "name": "StartDate",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "End date of the date range (format: YYYY-MM-DD)",
-                        "name": "EndDate",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
                         }
                     }
                 }
@@ -883,76 +565,6 @@
                 }
             }
         },
-        "/api/initiate-pin-token": {
-            "post": {
-                "description": "This API will pin token in the Pinning node on behalf of the sender",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Account"
-                ],
-                "summary": "Initiate Pin Token",
-                "operationId": "initiate-pin-token",
-                "parameters": [
-                    {
-                        "description": "Intitate Pin Token",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.RBTPinRequestSwaggoInput"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/initiate-rbt-transfer": {
-            "post": {
-                "description": "This API will initiate RBT transfer to the specified dID",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Account"
-                ],
-                "summary": "Initiate RBT Transfer",
-                "operationId": "initiate-rbt-transfer",
-                "parameters": [
-                    {
-                        "description": "Intitate RBT transfer",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.RBTTransferRequestSwaggoInput"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/initiate-self-transfer": {
             "post": {
                 "description": "This API will initiate self RBT transfer for a specific DID",
@@ -1042,41 +654,6 @@
                         "required": true,
                         "schema": {
                             "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/recover-token": {
-            "post": {
-                "description": "This API will recover token and tokenchain from the Pinning node to the node which has pinned the token",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Account"
-                ],
-                "summary": "Recover Token and Tokenchain from the pinning node",
-                "operationId": "recover-token",
-                "parameters": [
-                    {
-                        "description": "Recover-Token",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.RBTRecoverRequestSwaggoInput"
                         }
                     }
                 ],
@@ -1186,41 +763,6 @@
                 }
             }
         },
-        "/api/request-did-for-pubkey": {
-            "post": {
-                "description": "This API will returns DID for corresponding public key",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Account"
-                ],
-                "summary": "Returns DID for corresponding public key",
-                "operationId": "request-did-for-pubkey",
-                "parameters": [
-                    {
-                        "description": "Get DID from Public Key",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.DIDFromPubKeySwaggoRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.DIDFromPubKeyResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/retry-failed-ft-downloads": {
             "post": {
                 "description": "This API retries downloading failed FT tokens",
@@ -1246,30 +788,6 @@
                         }
                     }
                 ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/run-unpledge": {
-            "post": {
-                "description": "This API will unpledge all Pledged RBT tokens",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Account"
-                ],
-                "summary": "Run Unpledge",
-                "operationId": "run-unpledge",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1499,6 +1017,245 @@
                     }
                 }
             }
+        },
+        "/rubix/v1/fts": {
+            "get": {
+                "description": "This API endpoint will list FTs.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fts"
+                ],
+                "summary": "List FTs",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/fts/mint": {
+            "post": {
+                "description": "This API endpoint will create FTs.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FT"
+                ],
+                "summary": "Create FT",
+                "parameters": [
+                    {
+                        "description": "Create FT",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.CreateFTReqSwaggoInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/nfts/generate": {
+            "post": {
+                "description": "This API will create new NFT",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "multipart/form-data"
+                ],
+                "tags": [
+                    "NFT"
+                ],
+                "summary": "Create NFT",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "DID",
+                        "name": "did",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "JSON file which contains information about the NFT",
+                        "name": "metadata",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "File which is meant to be an NFT",
+                        "name": "artifact",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/smart_contracts/generate": {
+            "post": {
+                "description": "This API will Generate smart contract Token",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "multipart/form-data"
+                ],
+                "tags": [
+                    "Smart Contract"
+                ],
+                "summary": "Generate Smart Contract",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "DID",
+                        "name": "did",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "location of binary code hash",
+                        "name": "binaryCodePath",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "location of raw code hash",
+                        "name": "rawCodePath",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/tx": {
+            "get": {
+                "description": "List transactions",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tx"
+                ],
+                "summary": "List transactions",
+                "operationId": "tx-k",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Initiate a transaction",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tx"
+                ],
+                "summary": "Initiates a transaction",
+                "operationId": "tx-s",
+                "parameters": [
+                    {
+                        "description": "transaction",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.TransactionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/tx/{tx_id}": {
+            "get": {
+                "description": "Get Transactions by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tx"
+                ],
+                "summary": "Get Transactions by ID",
+                "operationId": "tx-d",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Transaction ID",
+                        "name": "tx_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -1522,14 +1279,6 @@
                 "result": {},
                 "status": {
                     "type": "boolean"
-                }
-            }
-        },
-        "model.DIDFromPubKeyResponse": {
-            "type": "object",
-            "properties": {
-                "did": {
-                    "type": "string"
                 }
             }
         },
@@ -1651,35 +1400,91 @@
                 }
             }
         },
-        "model.TransactionCount": {
+        "models.FTInfo": {
             "type": "object",
             "properties": {
-                "did": {
+                "creatorDID": {
                     "type": "string"
                 },
-                "txnReceived": {
-                    "type": "integer"
+                "ftName": {
+                    "type": "string"
                 },
-                "txnSend": {
-                    "type": "integer"
+                "numberOfFts": {
+                    "type": "number"
                 }
             }
         },
-        "model.TxnCountForDID": {
+        "models.NFTInfo": {
             "type": "object",
             "properties": {
-                "message": {
+                "data": {
                     "type": "string"
                 },
-                "result": {},
-                "status": {
-                    "type": "boolean"
+                "nftId": {
+                    "type": "string"
                 },
-                "txnCount": {
+                "value": {
+                    "type": "number"
+                }
+            }
+        },
+        "models.SmartContractInfo": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "string"
+                },
+                "smartContractId": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                }
+            }
+        },
+        "models.TransactionRequest": {
+            "type": "object",
+            "properties": {
+                "initiator": {
+                    "type": "string"
+                },
+                "memo": {
+                    "type": "string"
+                },
+                "owner": {
+                    "type": "string"
+                },
+                "tokens": {
+                    "$ref": "#/definitions/models.TransactionTokenDetails"
+                }
+            }
+        },
+        "models.TransactionTokenDetails": {
+            "type": "object",
+            "properties": {
+                "ft": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/model.TransactionCount"
+                        "$ref": "#/definitions/models.FTInfo"
                     }
+                },
+                "nft": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.NFTInfo"
+                    }
+                },
+                "rbt": {
+                    "type": "number"
+                },
+                "smartContract": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.SmartContractInfo"
+                    }
+                },
+                "transferNftOwnership": {
+                    "type": "boolean"
                 }
             }
         },
@@ -1700,14 +1505,6 @@
                 },
                 "token_count": {
                     "type": "integer"
-                }
-            }
-        },
-        "server.DIDFromPubKeySwaggoRequest": {
-            "type": "object",
-            "properties": {
-                "public_key": {
-                    "type": "string"
                 }
             }
         },
@@ -1849,68 +1646,11 @@
                 }
             }
         },
-        "server.RBTPinRequestSwaggoInput": {
-            "type": "object",
-            "properties": {
-                "comment": {
-                    "type": "string"
-                },
-                "pinningNode": {
-                    "type": "string"
-                },
-                "sender": {
-                    "type": "string"
-                },
-                "tokenCOunt": {
-                    "type": "number"
-                },
-                "type": {
-                    "type": "integer"
-                }
-            }
-        },
-        "server.RBTRecoverRequestSwaggoInput": {
-            "type": "object",
-            "properties": {
-                "password": {
-                    "type": "string"
-                },
-                "pinningNode": {
-                    "type": "string"
-                },
-                "sender": {
-                    "type": "string"
-                },
-                "tokenCOunt": {
-                    "type": "number"
-                }
-            }
-        },
         "server.RBTSelfTransferRequestSwaggoInput": {
             "type": "object",
             "properties": {
                 "sender": {
                     "type": "string"
-                },
-                "type": {
-                    "type": "integer"
-                }
-            }
-        },
-        "server.RBTTransferRequestSwaggoInput": {
-            "type": "object",
-            "properties": {
-                "comment": {
-                    "type": "string"
-                },
-                "receiver": {
-                    "type": "string"
-                },
-                "sender": {
-                    "type": "string"
-                },
-                "tokenCOunt": {
-                    "type": "number"
                 },
                 "type": {
                     "type": "integer"

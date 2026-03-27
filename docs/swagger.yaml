@@ -14,11 +14,6 @@ definitions:
       status:
         type: boolean
     type: object
-  model.DIDFromPubKeyResponse:
-    properties:
-      did:
-        type: string
-    type: object
   model.FTInfo:
     properties:
       creator_did:
@@ -97,26 +92,62 @@ definitions:
           $ref: '#/definitions/model.PledgedTokenStateDetails'
         type: array
     type: object
-  model.TransactionCount:
+  models.FTInfo:
     properties:
-      did:
+      creatorDID:
         type: string
-      txnReceived:
-        type: integer
-      txnSend:
-        type: integer
+      ftName:
+        type: string
+      numberOfFts:
+        type: number
     type: object
-  model.TxnCountForDID:
+  models.NFTInfo:
     properties:
-      message:
+      data:
         type: string
-      result: {}
-      status:
-        type: boolean
-      txnCount:
+      nftId:
+        type: string
+      value:
+        type: number
+    type: object
+  models.SmartContractInfo:
+    properties:
+      data:
+        type: string
+      smartContractId:
+        type: string
+      value:
+        type: number
+    type: object
+  models.TransactionRequest:
+    properties:
+      initiator:
+        type: string
+      memo:
+        type: string
+      owner:
+        type: string
+      tokens:
+        $ref: '#/definitions/models.TransactionTokenDetails'
+    type: object
+  models.TransactionTokenDetails:
+    properties:
+      ft:
         items:
-          $ref: '#/definitions/model.TransactionCount'
+          $ref: '#/definitions/models.FTInfo'
         type: array
+      nft:
+        items:
+          $ref: '#/definitions/models.NFTInfo'
+        type: array
+      rbt:
+        type: number
+      smartContract:
+        items:
+          $ref: '#/definitions/models.SmartContractInfo'
+        type: array
+      transferNftOwnership:
+        type: boolean
     type: object
   server.CreateFTReqSwaggoInput:
     properties:
@@ -130,11 +161,6 @@ definitions:
         type: integer
       token_count:
         type: integer
-    type: object
-  server.DIDFromPubKeySwaggoRequest:
-    properties:
-      public_key:
-        type: string
     type: object
   server.DIDPeerMapTemp:
     properties:
@@ -225,47 +251,10 @@ definitions:
       smartContractToken:
         type: string
     type: object
-  server.RBTPinRequestSwaggoInput:
-    properties:
-      comment:
-        type: string
-      pinningNode:
-        type: string
-      sender:
-        type: string
-      tokenCOunt:
-        type: number
-      type:
-        type: integer
-    type: object
-  server.RBTRecoverRequestSwaggoInput:
-    properties:
-      password:
-        type: string
-      pinningNode:
-        type: string
-      sender:
-        type: string
-      tokenCOunt:
-        type: number
-    type: object
   server.RBTSelfTransferRequestSwaggoInput:
     properties:
       sender:
         type: string
-      type:
-        type: integer
-    type: object
-  server.RBTTransferRequestSwaggoInput:
-    properties:
-      comment:
-        type: string
-      receiver:
-        type: string
-      sender:
-        type: string
-      tokenCOunt:
-        type: number
       type:
         type: integer
     type: object
@@ -361,59 +350,6 @@ paths:
       summary: Check for exhausted token state hash
       tags:
       - Account
-  /api/create-ft:
-    post:
-      consumes:
-      - application/json
-      description: This API endpoint will create FTs.
-      parameters:
-      - description: Create FT
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.CreateFTReqSwaggoInput'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Create FT
-      tags:
-      - FT
-  /api/create-nft:
-    post:
-      consumes:
-      - multipart/form-data
-      description: This API will create new NFT
-      parameters:
-      - description: DID
-        in: formData
-        name: did
-        required: true
-        type: string
-      - description: JSON file which contains information about the NFT
-        in: formData
-        name: metadata
-        required: true
-        type: file
-      - description: File which is meant to be an NFT
-        in: formData
-        name: artifact
-        required: true
-        type: file
-      produces:
-      - multipart/form-data
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Create NFT
-      tags:
-      - NFT
   /api/deploy-nft:
     post:
       consumes:
@@ -546,37 +482,6 @@ paths:
       summary: Fetch Smart Contract
       tags:
       - Smart Contract
-  /api/generate-smart-contract:
-    post:
-      consumes:
-      - multipart/form-data
-      description: This API will Generate smart contract Token
-      parameters:
-      - description: DID
-        in: formData
-        name: did
-        required: true
-        type: string
-      - description: location of binary code hash
-        in: formData
-        name: binaryCodePath
-        required: true
-        type: file
-      - description: location of raw code hash
-        in: formData
-        name: rawCodePath
-        required: true
-        type: file
-      produces:
-      - multipart/form-data
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Generate Smart Contract
-      tags:
-      - Smart Contract
   /api/get-account-info:
     get:
       consumes:
@@ -596,101 +501,6 @@ paths:
           schema:
             $ref: '#/definitions/model.BasicResponse'
       summary: Check account balance
-      tags:
-      - Account
-  /api/get-by-comment:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves the details of a transaction based on its comment.
-      operationId: get-by-comment
-      parameters:
-      - description: Comment to identify the transaction
-        in: query
-        name: Comment
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Get transaction details by Transcation Comment
-      tags:
-      - Account
-  /api/get-by-did:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves the details of a transaction based on DID and date range
-        (on and after start date and before end date).
-      operationId: get-by-did
-      parameters:
-      - description: DID of sender/receiver
-        in: query
-        name: DID
-        required: true
-        type: string
-      - description: Filter by role as sender or receiver
-        in: query
-        name: Role
-        type: string
-      - description: 'Start date of the date range (format: YYYY-MM-DD)'
-        in: query
-        name: StartDate
-        type: string
-      - description: 'End date of the date range (format: YYYY-MM-DD)'
-        in: query
-        name: EndDate
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Get transaction details by dID
-      tags:
-      - Account
-  /api/get-by-node:
-    get:
-      consumes:
-      - application/json
-      description: Get count of incoming and outgoing txns of the DID ins a node.
-      operationId: get-txn-details-by-node
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.TxnCountForDID'
-      summary: Get count of incoming and outgoing txns of the DID ins a node
-      tags:
-      - Account
-  /api/get-by-txnId:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves the details of a transaction based on its ID.
-      operationId: get-txn-details-by-id
-      parameters:
-      - description: The ID of the transaction to retrieve
-        in: query
-        name: txnID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Get transaction details by Transcation ID
       tags:
       - Account
   /api/get-failed-ft-download-status:
@@ -757,41 +567,6 @@ paths:
           schema:
             $ref: '#/definitions/model.GetTokenChainResponce'
       summary: Get FT Token Chain Data
-      tags:
-      - FT
-  /api/get-ft-txn-by-did:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves the details of a FT transaction based on DID, role (sender
-        or receiver) and date range (on and after start date and before end date).
-      operationId: get-ft-txn-by-did
-      parameters:
-      - description: DID of sender/receiver
-        in: query
-        name: DID
-        required: true
-        type: string
-      - description: Filter by role as sender or receiver
-        in: query
-        name: Role
-        type: string
-      - description: 'Start date of the date range (format: YYYY-MM-DD)'
-        in: query
-        name: StartDate
-        type: string
-      - description: 'End date of the date range (format: YYYY-MM-DD)'
-        in: query
-        name: EndDate
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Get FT transaction details by DID
       tags:
       - FT
   /api/get-nft-token-chain-data:
@@ -898,52 +673,6 @@ paths:
       summary: Initiate an FT transfer
       tags:
       - FT
-  /api/initiate-pin-token:
-    post:
-      consumes:
-      - application/json
-      description: This API will pin token in the Pinning node on behalf of the sender
-      operationId: initiate-pin-token
-      parameters:
-      - description: Intitate Pin Token
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.RBTPinRequestSwaggoInput'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Initiate Pin Token
-      tags:
-      - Account
-  /api/initiate-rbt-transfer:
-    post:
-      consumes:
-      - application/json
-      description: This API will initiate RBT transfer to the specified dID
-      operationId: initiate-rbt-transfer
-      parameters:
-      - description: Intitate RBT transfer
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.RBTTransferRequestSwaggoInput'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Initiate RBT Transfer
-      tags:
-      - Account
   /api/initiate-self-transfer:
     post:
       consumes:
@@ -1012,30 +741,6 @@ paths:
       summary: Recover lost tokens
       tags:
       - FT
-  /api/recover-token:
-    post:
-      consumes:
-      - application/json
-      description: This API will recover token and tokenchain from the Pinning node
-        to the node which has pinned the token
-      operationId: recover-token
-      parameters:
-      - description: Recover-Token
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.RBTRecoverRequestSwaggoInput'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Recover Token and Tokenchain from the pinning node
-      tags:
-      - Account
   /api/register-callback-url:
     post:
       consumes:
@@ -1100,29 +805,6 @@ paths:
       summary: Initiate remote token recovery
       tags:
       - FT
-  /api/request-did-for-pubkey:
-    post:
-      consumes:
-      - application/json
-      description: This API will returns DID for corresponding public key
-      operationId: request-did-for-pubkey
-      parameters:
-      - description: Get DID from Public Key
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.DIDFromPubKeySwaggoRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.DIDFromPubKeyResponse'
-      summary: Returns DID for corresponding public key
-      tags:
-      - Account
   /api/retry-failed-ft-downloads:
     post:
       consumes:
@@ -1146,22 +828,6 @@ paths:
       summary: Retry Failed FT Downloads
       tags:
       - FT
-  /api/run-unpledge:
-    post:
-      consumes:
-      - application/json
-      description: This API will unpledge all Pledged RBT tokens
-      operationId: run-unpledge
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Run Unpledge
-      tags:
-      - Account
   /api/sign:
     post:
       consumes:
@@ -1308,6 +974,165 @@ paths:
       summary: Verify Arbitrary Signature
       tags:
       - Signature
+  /rubix/v1/fts:
+    get:
+      consumes:
+      - application/json
+      description: This API endpoint will list FTs.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: List FTs
+      tags:
+      - fts
+  /rubix/v1/fts/mint:
+    post:
+      consumes:
+      - application/json
+      description: This API endpoint will create FTs.
+      parameters:
+      - description: Create FT
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.CreateFTReqSwaggoInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Create FT
+      tags:
+      - FT
+  /rubix/v1/nfts/generate:
+    post:
+      consumes:
+      - multipart/form-data
+      description: This API will create new NFT
+      parameters:
+      - description: DID
+        in: formData
+        name: did
+        required: true
+        type: string
+      - description: JSON file which contains information about the NFT
+        in: formData
+        name: metadata
+        required: true
+        type: file
+      - description: File which is meant to be an NFT
+        in: formData
+        name: artifact
+        required: true
+        type: file
+      produces:
+      - multipart/form-data
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Create NFT
+      tags:
+      - NFT
+  /rubix/v1/smart_contracts/generate:
+    post:
+      consumes:
+      - multipart/form-data
+      description: This API will Generate smart contract Token
+      parameters:
+      - description: DID
+        in: formData
+        name: did
+        required: true
+        type: string
+      - description: location of binary code hash
+        in: formData
+        name: binaryCodePath
+        required: true
+        type: file
+      - description: location of raw code hash
+        in: formData
+        name: rawCodePath
+        required: true
+        type: file
+      produces:
+      - multipart/form-data
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Generate Smart Contract
+      tags:
+      - Smart Contract
+  /rubix/v1/tx:
+    get:
+      consumes:
+      - application/json
+      description: List transactions
+      operationId: tx-k
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: List transactions
+      tags:
+      - tx
+    post:
+      consumes:
+      - application/json
+      description: Initiate a transaction
+      operationId: tx-s
+      parameters:
+      - description: transaction
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/models.TransactionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Initiates a transaction
+      tags:
+      - tx
+  /rubix/v1/tx/{tx_id}:
+    get:
+      consumes:
+      - application/json
+      description: Get Transactions by ID
+      operationId: tx-d
+      parameters:
+      - description: Transaction ID
+        in: path
+        name: tx_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get Transactions by ID
+      tags:
+      - tx
 securityDefinitions:
   SessionToken:
     in: header
