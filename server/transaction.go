@@ -7,11 +7,11 @@ import (
 
 // @Summary Initiates a transaction
 // @Description Initiate a transaction
-// @ID tx
+// @ID txInit
 // @Tags tx
 // @Accept json
 // @Produce json
-// @Param   input body models.TransactionRequest true ""
+// @Param   input body models.TransactionRequest true "transaction"
 // @Success 200 {object} model.BasicResponse
 // @Router /rubix/v1/tx [post]
 func (s *Server) APIInitiateTransaction(req *ensweb.Request) *ensweb.Result {
@@ -29,9 +29,10 @@ func (s *Server) APIInitiateTransaction(req *ensweb.Request) *ensweb.Result {
 // @Summary      Get Transactions by ID
 // @Description  Get Transactions by ID
 // @Tags         tx
-// @ID           tx
+// @ID           txQuery
 // @Accept       json
 // @Produce      json
+// @Param 		 tx_id path string true "Transaction ID"
 // @Success      200  {object}  model.BasicResponse
 // @Router       /rubix/v1/tx/{tx_id} [get]
 func (s *Server) APIGetTransactionByID(req *ensweb.Request) *ensweb.Result {
@@ -52,7 +53,7 @@ func (s *Server) APIGetTransactionByID(req *ensweb.Request) *ensweb.Result {
 // @Summary      List transactions
 // @Description  List transactions
 // @Tags         tx
-// @ID           tx
+// @ID           getAllTx
 // @Accept       json
 // @Produce      json
 // @Success      200  {object}  model.BasicResponse

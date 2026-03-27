@@ -7,15 +7,17 @@ import (
 )
 
 func (w *Wallet) AddQuorum(quorumAddressInfo models.QuorumManager) error {
-	if rows, err := w.db.Pool().Exec(w.Ctx, `
+	rows, err := w.db.Pool().Exec(w.Ctx, `
 		INSERT INTO quorum_manager(did) 
 		VALUES ($1)
 		ON CONFLICT(did) DO NOTHING;
-	`, quorumAddressInfo.Did); err != nil {
-		if rows.RowsAffected() == 0 {
-			return fmt.Errorf("quorum did %v already exists", quorumAddressInfo.Did)
-		}
+	`, quorumAddressInfo.Did)
+	if err != nil {
 		return fmt.Errorf("failed to add quorum info for did: %v, err: %v", quorumAddressInfo.Did, err)
+	}
+
+	if rows.RowsAffected() == 0 {
+		return fmt.Errorf("quorum did %v already exists", quorumAddressInfo.Did)
 	}
 
 	return nil
@@ -63,7 +65,7 @@ func (w *Wallet) IsQuorumExist(did string) (bool, error) {
 func (w *Wallet) GetAllQuorums() ([]models.QuorumManager, error) {
 	rows, err := w.db.Pool().Query(
 		w.Ctx,
-		`SELECT did FROM quorum_manager WHERE did=$1`,
+		`SELECT did FROM quorum_manager`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("GetAllQuorums: query failed: %w", err)

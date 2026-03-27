@@ -32,8 +32,8 @@ func (w *Wallet) GetFreeRBTTokens(ownerDid string) ([]models.Token, []string, er
 			SELECT id
 			FROM token_type
 			WHERE name = $1
-		) AND did = $2 AND token_status = 0
-		`, constants.TokenType_RBT, ownerDid,
+		) AND did = $2 AND token_status = $3
+		`, constants.TokenType_RBT, ownerDid, constants.TokenStatus_Free,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -119,7 +119,7 @@ func (w *Wallet) LockTokensByID(tokenIDs []string) error {
 
 func (w *Wallet) LockTokenByID(tokenID string) error {
 	if _, err := w.db.Pool().Exec(w.Ctx,
-		`UPDATE tokens SET token_status=$1 where token_id = 2`, constants.TokenStatus_Locked, tokenID,
+		`UPDATE tokens SET token_status=$1 where token_id = $2`, constants.TokenStatus_Locked, tokenID,
 	); err != nil {
 		return fmt.Errorf("unable to lock tokens, err: %v", err)
 	}
@@ -377,7 +377,7 @@ func (w *Wallet) ReleaseTokens(tokens []*models.TokenInfo) {
 func (w *Wallet) IsDIDExist(did string) bool {
 	var exists bool
 	err := w.db.Pool().QueryRow(w.Ctx,
-		`SELECT EXISTS(SELECT 1 FROM did_table WHERE did=$1)`, did,
+		`SELECT EXISTS(SELECT 1 FROM dids WHERE did=$1)`, did,
 	).Scan(&exists)
 	if err != nil {
 		return false

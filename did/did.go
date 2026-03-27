@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"sync"
 	"time"
@@ -58,14 +59,14 @@ func InitDID(dir string, log logger.Logger, ipfs *ipfsnode.Shell) *DID {
 func (d *DID) CreateDID(didCreate *types.DIDCreate) (string, error) {
 	t1 := time.Now()
 	temp := uuid.New()
-	dirName := d.dir + temp.String()
-	err := os.MkdirAll(dirName+"/public", os.ModeDir|os.ModePerm)
+	dirName := path.Join(d.dir, temp.String())
+	err := os.MkdirAll(path.Join(dirName, "public"), os.ModeDir|os.ModePerm)
 	if err != nil {
 		d.log.Error("failed to create directory", "err", err)
 		return "", err
 	}
 
-	err = os.MkdirAll(dirName+"/private", os.ModeDir|os.ModePerm)
+	err = os.MkdirAll(path.Join(dirName, "private"), os.ModeDir|os.ModePerm)
 	if err != nil {
 		d.log.Error("failed to create directory", "err", err)
 		return "", err
@@ -97,27 +98,27 @@ func (d *DID) CreateDID(didCreate *types.DIDCreate) (string, error) {
 	}
 
 	// write mnemonic into a file
-	err = util.FileWrite(dirName+"/private/"+constants.MnemonicFileName, []byte(mnemonic))
+	err = util.FileWrite(path.Join(dirName, "private", constants.MnemonicFileName), []byte(mnemonic))
 	if err != nil {
 		d.log.Error("failed to write mnemonic file", "err", err)
 		return "", err
 	}
 
 	// write private key into a file
-	err = util.FileWrite(dirName+"/private/"+constants.PvtKeyFileName, pvtKey)
+	err = util.FileWrite(path.Join(dirName, "private", constants.PvtKeyFileName), pvtKey)
 	if err != nil {
 		return "", err
 	}
 
 	// write public key into a file
-	err = util.FileWrite(dirName+"/public/"+constants.PubKeyFileName, pubKey)
+	err = util.FileWrite(path.Join(dirName, "public", constants.PubKeyFileName), pubKey)
 	if err != nil {
 		return "", err
 	}
 
 	// Test the generated key pair by reading it from the file,
 	// signing on a message using the private key, and verify the signature using the public key
-	privKeyTest, err := ioutil.ReadFile(dirName + "/private/" + constants.PvtKeyFileName)
+	privKeyTest, err := ioutil.ReadFile(path.Join(dirName, "private", constants.PvtKeyFileName))
 	if err != nil {
 		return "", err
 	}
@@ -134,7 +135,7 @@ func (d *DID) CreateDID(didCreate *types.DIDCreate) (string, error) {
 		return "", err
 	}
 
-	pubKeyTest, err := ioutil.ReadFile(dirName + "/public/" + constants.PubKeyFileName)
+	pubKeyTest, err := ioutil.ReadFile(path.Join(dirName, "public", constants.PubKeyFileName))
 	if err != nil {
 		return "", err
 	}
@@ -157,26 +158,26 @@ func (d *DID) CreateDID(didCreate *types.DIDCreate) (string, error) {
 	}
 
 	//passing the diroctory of public key file to add it to ipfs and exctract the hash
-	did, err := d.getDirHash(dirName + "/public/")
+	did, err := d.getDirHash(path.Join(dirName, "public"))
 	if err != nil {
 		return "", err
 	}
 
-	newDIrName := d.dir + did
+	destDidDirectory := path.Join(d.dir, did)
 
-	err = os.MkdirAll(newDIrName, os.ModeDir|os.ModePerm)
+	err = os.MkdirAll(destDidDirectory, os.ModeDir|os.ModePerm)
 	if err != nil {
 		d.log.Error("failed to create directory", "err", err)
 		return "", err
 	}
 
-	err = util.DirCopy(dirName+"/public", newDIrName)
+	err = util.DirCopy(path.Join(dirName, "public"), destDidDirectory)
 	if err != nil {
 		d.log.Error("failed to copy directory", "err", err)
 		return "", err
 	}
 
-	err = util.DirCopy(dirName+"/private", newDIrName)
+	err = util.DirCopy(path.Join(dirName, "private"), destDidDirectory)
 	if err != nil {
 		d.log.Error("failed to copy directory", "err", err)
 		return "", err
