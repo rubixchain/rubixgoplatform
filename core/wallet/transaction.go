@@ -32,7 +32,7 @@ func (w *Wallet) GetTransactionByID(id string) (*models.Transactions, error) {
 	).Scan(&tx.ID, &tx.Info, &tx.Signature, &tx.CreatedAt, &tx.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, nil
+			return nil, fmt.Errorf("transaction ID: %v is not present", id)
 		}
 		return nil, fmt.Errorf("failed to get transaction: %w", err)
 	}

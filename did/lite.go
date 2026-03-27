@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"time"
 
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -21,11 +22,11 @@ type DIDLite struct {
 
 // InitDIDLite will return the Lite did handle
 func InitDIDLite(did string, baseDir string, ch *DIDChan) *DIDLite {
-	return &DIDLite{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", ch: ch}
+	return &DIDLite{did: did, dir: path.Join(util.SanitizeDirPath(baseDir), did), ch: ch}
 }
 
 func InitDIDLiteWithPassword(did string, baseDir string, pwd string) *DIDLite {
-	return &DIDLite{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
+	return &DIDLite{did: did, dir: path.Join(util.SanitizeDirPath(baseDir), did), pwd: pwd}
 }
 
 func (d *DIDLite) getPassword() (string, error) {
@@ -111,7 +112,7 @@ func (d *DIDLite) Sign(hash string) ([]byte, []byte, error) { //TODO : should re
 }
 
 func (d *DIDLite) PvtSign(hash []byte) ([]byte, error) {
-	privKey, err := os.ReadFile(d.dir + PvtKeyFileName)
+	privKey, err := os.ReadFile(path.Join(d.dir, PvtKeyFileName))
 	if err != nil {
 		walletSignature, err := d.getSignature(hash)
 		if err != nil {
@@ -146,7 +147,7 @@ func (d *DIDLite) PvtSign(hash []byte) ([]byte, error) {
 
 // Verify PKI based signature
 func (d *DIDLite) PvtVerify(hash []byte, sign []byte) (bool, error) {
-	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
+	pubKey, err := ioutil.ReadFile(path.Join(d.dir, PubKeyFileName))
 	if err != nil {
 		return false, err
 	}
