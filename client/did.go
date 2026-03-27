@@ -10,6 +10,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -49,7 +50,7 @@ func (c *Client) GetAllDIDs() (*model.GetAccountInfo, error) {
 }
 
 func (c *Client) CreateDID(cfg *types.DIDCreate) (string, bool) {
-	var dr model.DIDResponse
+	var dr model.BasicResponse
 	err := c.sendJSONRequest("POST", setup.APICreateDID, nil, cfg, &dr)
 	if err != nil {
 		c.log.Error("Invalid response from the node", "err", err)
@@ -59,8 +60,11 @@ func (c *Client) CreateDID(cfg *types.DIDCreate) (string, bool) {
 		c.log.Error("Failed to create DID", "message", dr.Message)
 		return "Failed to create DID, " + dr.Message, false
 	}
-	c.log.Info(fmt.Sprintf("DID %v Created successfully", dr.Result.DID))
-	return dr.Result.DID, true
+	didResult, err := util.ExtractResult[model.DIDResult](dr.Result)
+	if err != nil {
+		return "Failed to parse DID result, " + err.Error(), false
+	}
+	return didResult.DID, true
 }
 
 func (c *Client) SetupDID(dc *types.DIDCreate) (string, bool) {

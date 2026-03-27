@@ -58,13 +58,18 @@ func (c *Core) peerCallback(peerID string, topic string, data []byte) {
 		c.log.Error("failed to parse explorer data", "err", err)
 		return
 	}
+	// If it is a local DID, no need to create separate did folder or to update DB
+	if m.PeerID == c.peerID {
+		return
+	}
+	
 	h := util.CalculateHash([]byte(m.PeerID+m.DID+m.Time), constants.HashAlgorithm_SHA3_256)
 	dc, err := c.InitialiseDID(m.DID)
 	if err != nil {
 		return
 	}
 	signatureBytes, err := util.Base64ToBytes(m.Signature)
-	 if err != nil {
+	if err != nil {
 		c.log.Error("peerCallback: failed to parse signature, err", err)
 		return
 	}
@@ -270,7 +275,7 @@ func (c *Core) removeStalePeerCallback(peerID string, topic string, data []byte)
 		return
 	}
 	signatureBytes, err := util.Base64ToBytes(stalePeer.Signature)
-	 if err != nil {
+	if err != nil {
 		c.log.Error("peerCallback: failed to parse signature, err", err)
 		return
 	}

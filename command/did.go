@@ -185,8 +185,7 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 
 			br, err = cmd.c.SignatureResponse(&sresp, timeout...)
 			if err != nil {
-				cmd.log.Error("Failed to generate RBT", "err", err)
-				return "Failed in signature response, " + err.Error(), false
+				return "Failed signature response, " + err.Error(), false
 			}
 
 		case string:

@@ -84,3 +84,15 @@ func ConvertToTokenChainResponses(transactions []models.Transactions) ([]models.
 
 	return responses, nil
 }
+
+func ExtractResult[T any](result interface{}) (T, error) {
+    var target T
+    b, err := json.Marshal(result)
+    if err != nil {
+        return target, fmt.Errorf("failed to marshal result: %w", err)
+    }
+    if err := json.Unmarshal(b, &target); err != nil {
+        return target, fmt.Errorf("failed to unmarshal result: %w", err)
+    }
+    return target, nil
+}
