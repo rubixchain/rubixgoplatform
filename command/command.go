@@ -543,6 +543,7 @@ func (cmd *Command) runApp() {
 		cmd.log.Error(fmt.Sprintf("failed to get rubix config, err: %v", err))
 	}
 	cmd.cfg = rubixConfig
+	cmd.cfg.CfgData.Ports = cmd.cfg.PortConfig
 
 	if cmd.disableTrustedNetwork {
 		cmd.cfg.TrustedNetwork = false
@@ -579,7 +580,7 @@ func (cmd *Command) runApp() {
 	serverConfig := &server.Config{
 		Config: srvcfg.Config{
 			HostAddress: "localhost",
-			HostPort:    string(cmd.cfg.PortConfig.RubixServerPort),
+			HostPort:    fmt.Sprintf("%d", cmd.cfg.PortConfig.RubixServerPort),
 			Production:  "false",
 
 			DBName:     cmd.cfg.DBConfig.DBName,

@@ -177,8 +177,6 @@ func (s *Server) RegisterRoutes() {
 	//Below are De-Explorer APIs
 	s.AddRoute(setup.APIRemoveStaleDID, "POST", s.AuthHandle(s.APIRemoveStaleDID, true, s.AuthError, false))
 
-	s.AddRoute(setup.APIInitiateTransaction, "POST", s.AuthHandle(s.APIInitiateTransaction, true, s.AuthError, false))
-
 	s.AddRoute(setup.APIListSmartContracts, "GET", s.AuthHandle(s.APIListSmartContracts, true, s.AuthError, false))
 	s.AddRoute(setup.APIListNFTs, "GET", s.AuthHandle(s.APIListNFTs, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetNFTChain, "GET", s.AuthHandle(s.APIGetNFTChain, true, s.AuthError, false))

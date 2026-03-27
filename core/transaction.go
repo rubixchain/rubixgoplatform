@@ -53,7 +53,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		return resp
 	}
 
-	// Fetch the listt if dids from quorum_m,anager tavble
+	// Fetch the list of dids from quorum_manager table
 	//	We then loop over that list and queried from did table and pfetch the peerid
 	quorumAddresses, err := c.GetAllQuorum()
 	if err != nil {
@@ -243,7 +243,7 @@ func (c *Core) syncTransactionTokens(
 			if token == nil {
 				continue
 			}
-            //Handling the response in the future.
+			//Handling the response in the future.
 			err, _ := c.syncTransactionChainFrom(peer, token.PreviousTransactionID, token.TokenID)
 			if err != nil {
 				return err
@@ -267,7 +267,7 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 	}
 	peer, err := c.getPeer(did)
 	if err != nil {
-		c.log.Error("InitiateTransaction: Failed to get peer for receiver", "err", err)
+		c.log.Error("SendTokens: Failed to get peer for receiver", "err", err)
 	}
 	defer peer.Close()
 	err = c.syncTransactionTokens(peer, sendTokensRequest.Tokens, sendTokensRequest.NFTOwnershipTransfer)
