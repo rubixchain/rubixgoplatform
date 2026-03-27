@@ -245,7 +245,7 @@ func (c *Core) syncTransactionTokens(
 				continue
 			}
 			//Handling the response in the future.
-			err, _ := consensus.SyncTransactionChainFrom(peer, token.PreviousTransactionID, token.TokenID, c.w, c.log)
+			err, _ := consensus.SyncTransactionChainFrom(peer, token.TokenID, c.w, c.log)
 			if err != nil {
 				return err
 			}
