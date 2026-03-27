@@ -100,11 +100,10 @@ const (
 	APIRecoverLostTokens                string = "/api/recover-lost-tokens"
 	APIRemoteRecoverTokens              string = "/api/remote-recover-tokens"
 
-
-	// Endpoints on DID module 
-	APICreateDID                        string = "/rubix/v1/dids/create"
-	APIGetAllDID                        string = "/rubix/v1/dids"
-	APIRegisterDID                      string = "/rubix/v1/dids/{did}/register"
+	// Endpoints on DID module
+	APICreateDID   string = "/rubix/v1/dids/create"
+	APIGetAllDID   string = "/rubix/v1/dids"
+	APIRegisterDID string = "/rubix/v1/dids/{did}/register"
 
 	//Below are Explorer-service API endpoints
 
@@ -119,9 +118,8 @@ const (
 	APICreateNFT             string = "/rubix/v1/nfts/generate"
 	APIListNFTs              string = "/rubix/v1/nfts"
 	APIGetNFTChain           string = "/rubix/v1/nfts/{nft_id}/chain"
-	APITransaction        string = "/rubix/v1/tx"
-	APIGetTransactionByID string = "/rubix/v1/tx/{tx_id}"
-	APIInitiateTransaction string = "/api/initiate-transaction"
+	APITransaction           string = "/rubix/v1/tx"
+	APIGetTransactionByID    string = "/rubix/v1/tx/{tx_id}"
 
 	// New endpoints
 	APIListFT string = "/rubix/v1/fts"

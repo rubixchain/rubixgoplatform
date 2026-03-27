@@ -60,16 +60,6 @@ type RBTTransferRequestSwaggoInput struct {
 	Type       int     `json:"type"`
 }
 
-// ShowAccount godoc
-// @Summary     Recover Token and Tokenchain from the pinning node
-// @Description This API will recover token and tokenchain from the Pinning node to the node which has pinned the token
-// @Tags        Account
-// @ID 			recover-token
-// @Accept      json
-// @Produce     json
-// @Param 		input body RBTRecoverRequestSwaggoInput true "Recover-Token"
-// @Success 200 {object} model.BasicResponse
-// @Router /api/recover-token [post]
 func (s *Server) APIRecoverRBT(req *ensweb.Request) *ensweb.Result {
 	var rbtReq model.RBTRecoverRequest
 	err := s.ParseJSON(req, &rbtReq)
