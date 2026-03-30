@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -85,64 +84,100 @@ func (w *Wallet) GetLatestTransaction(tokenId string, isFullNode bool) (*models.
 
 // get latest transaction id of the given token id
 func (w *Wallet) GetGenesisTransactionIdByTokenId(tokenID string, isFullNode bool) (string, error) {
-	var tableName string
+	var row pgx.Row
+	var err error
 	if isFullNode {
-		tableName = constants.FullnodeTokenchainIndexTable
+		row, err = w.db.Pool().Query(w.Ctx,
+			`SELECT transaction_id 
+     		FROM fullnode_tokenchain 
+     		WHERE id = (
+				SELECT index[1] 
+				FROM fullnode_tokenchain_index 
+				WHERE token_id = $1
+			)`,
+			tokenID,
+		)
 	} else {
-		tableName = constants.TokenchainIndexTable
+		row, err = w.db.Pool().Query(w.Ctx,
+			`SELECT transaction_id 
+     		FROM tokenchain 
+     		WHERE id = (
+				SELECT index[1] 
+				FROM tokenchain_index 
+				WHERE token_id = $1
+			)`,
+			tokenID,
+		)
 	}
-	query := fmt.Sprintf(`SELECT index[1] FROM %s WHERE token_id = $1 AND previous_transaction_id = ''`, pgx.Identifier{tableName}.Sanitize())
-
-	row, err := w.db.Pool().Query(w.Ctx, query, tokenID)
 	if err != nil {
 		return "", fmt.Errorf("GetGenesisTransactionIdByTokenId: %w", err)
 	}
-	var genesisTxnIdIndex int
-	if err := row.Scan(&genesisTxnIdIndex); err != nil {
+	var genesisTxnId string
+	if err := row.Scan(&genesisTxnId); err != nil {
 		if err == pgx.ErrNoRows {
-			return "", fmt.Errorf("latest transaction id not found for token %s", tokenID)
+			return "", fmt.Errorf("genesis transaction id not found for the token %s", tokenID)
 		}
-		return "", fmt.Errorf("GetLatestTransactionIdByTokenId scan: %w", err)
+		return "", fmt.Errorf("GetTransactionIdByIndex scan: %w", err)
 	}
-
-	return w.GetTransactionIdByIndex(int16(genesisTxnIdIndex), isFullNode)
+	return genesisTxnId, nil
 }
 
 // get latest transaction id of the given token id
 func (w *Wallet) GetLatestTransactionIdByTokenId(tokenID string, isFullNode bool) (string, error) {
-	var tableName string
+	var row pgx.Row
+	var err error
 	if isFullNode {
-		tableName = constants.FullnodeTokenchainIndexTable
+		row, err = w.db.Pool().Query(w.Ctx,
+			`SELECT transaction_id 
+			FROM fullnode_tokenchain 
+			WHERE id = (
+				SELECT index[array_upper(index, 1)] 
+				FROM fullnode_tokenchain_index
+				WHERE token_id = $1
+			)`,
+			tokenID,
+		)
 	} else {
-		tableName = constants.TokenchainIndexTable
+		row, err = w.db.Pool().Query(w.Ctx,
+			`SELECT transaction_id 
+			FROM fullnode_tokenchain 
+			WHERE id = (
+				SELECT index[array_upper(index, 1)] 
+				FROM tokenchain_index 
+				WHERE token_id = $1 
+			)`,
+			tokenID,
+		)
 	}
-	query := fmt.Sprintf(`SELECT index[array_upper(index, 1)] FROM %s WHERE token_id = $1`, pgx.Identifier{tableName}.Sanitize())
-
-	row, err := w.db.Pool().Query(w.Ctx, query, tokenID)
 	if err != nil {
 		return "", fmt.Errorf("GetLatestTransactionIdByTokenId: %w", err)
 	}
-	var latestTxnIdIndex int
-	if err := row.Scan(&latestTxnIdIndex); err != nil {
+	var latestTxnId string
+	if err := row.Scan(&latestTxnId); err != nil {
 		if err == pgx.ErrNoRows {
 			return "", fmt.Errorf("latest transaction id not found for token %s", tokenID)
 		}
 		return "", fmt.Errorf("GetLatestTransactionIdByTokenId scan: %w", err)
 	}
 
-	return w.GetTransactionIdByIndex(int16(latestTxnIdIndex), isFullNode)
+	return latestTxnId, nil
 }
 
 // get transaction id by Index id
 func (w *Wallet) GetTransactionIdByIndex(index int16, isFullNode bool) (string, error) {
-	var tableName string
+	var row pgx.Row
+	var err error
 	if isFullNode {
-		tableName = constants.FullnodeTokenchainTable
+		row, err = w.db.Pool().Query(w.Ctx,
+			`SELECT transaction_id FROM fullnode_tokenchain WHERE id = $1`,
+			index,
+		)
 	} else {
-		tableName = constants.TokenchainTable
+		row, err = w.db.Pool().Query(w.Ctx,
+			`SELECT transaction_id FROM tokenchain WHERE id = $1`,
+			index,
+		)
 	}
-	query := fmt.Sprintf(`SELECT transaction_id FROM %s WHERE id = $1`, pgx.Identifier{tableName}.Sanitize())
-	row, err := w.db.Pool().Query(w.Ctx, query, index)
 	if err != nil {
 		return "", fmt.Errorf("GetTransactionIdByIndex: %w", err)
 	}

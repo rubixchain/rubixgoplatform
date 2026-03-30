@@ -281,14 +281,22 @@ func (w *Wallet) GetLatestTransactionAndRoleByTokenID(tokenID string) (*models.T
 
 // GetRoleOfTokenIdInLatestTxn returns the token role in the latest transaction for a given token ID.
 func (w *Wallet) GetRoleOfTokenIdInLatestTxn(tokenID string, isFullNode bool) (int16, error) {
-	var tableName string
+	var row pgx.Row
+	var err error
 	if isFullNode {
-		tableName = "fullnode_tokenchain"
+		row, err = w.db.Pool().Query(w.Ctx,
+			`SELECT role FROM fullnode_tokenchain WHERE token_id = $1 ORDER BY position DESC LIMIT 1`,
+			tokenID,
+		)
 	} else {
-		tableName = "tokenchain"
+		row, err = w.db.Pool().Query(w.Ctx,
+			`SELECT role FROM %tokenchain WHERE token_id = $1 ORDER BY position DESC LIMIT 1`,
+			tokenID,
+		)
 	}
-	query := fmt.Sprintf(`SELECT role FROM %s WHERE token_id = $1 ORDER BY position DESC LIMIT 1`, pgx.Identifier{tableName}.Sanitize())
-	row := w.db.Pool().QueryRow(w.Ctx, query, tokenID)
+	if err != nil {
+		return -1, fmt.Errorf("GetRoleOfTokenIdInLatestTxn: %w", err)
+	}
 	var role int16
 	if err := row.Scan(&role); err != nil {
 		if err == pgx.ErrNoRows {
@@ -353,7 +361,7 @@ func (w *Wallet) GetTransactionAndRoleAtHeight(tokenID string, height int64) (*m
 
 func (w *Wallet) GetFullNodeTransactionAndRoleAtHeight(tokenID string, height int64) (*models.Transactions, int16, error) {
 	row := w.db.Pool().QueryRow(w.Ctx, `
-		SELECT transaction_id, role FROM fullnode_tokenchain WHERE token_id = $1 AND height = $2
+		SELECT transaction_id, role FROM fullnode_tokenchain WHERE token_id = $1 AND position = $2
 		ORDER BY created_at DESC LIMIT 1`, tokenID, height,
 	)
 	var txID string
