@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/rubixchain/rubixgoplatform/core/consensus"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	rubixsync "github.com/rubixchain/rubixgoplatform/core/sync"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -280,7 +280,7 @@ func (c *Core) syncTransactionTokens(
 				continue
 			}
 			//Handling the response in the future.
-			err, _ := consensus.SyncTransactionChainFrom(peer, token.PreviousTransactionID, token.TokenID, c.w, c.log)
+			err, _ := rubixsync.SyncTransactionChainFrom(peer, token.TokenID, c.w, c.log)
 			if err != nil {
 				return err
 			}

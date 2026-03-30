@@ -14,6 +14,7 @@ import (
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/core/api"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -311,6 +312,8 @@ func (c *Core) SetupCore() error {
 	c.SetupToken()
 	c.QuroumSetup()
 	c.PinService()
+	api.SetupAPI(c.l, c.w, c.log)
+
 	// c.RestartIncompleteTokenChainSyncs()
 	//c.UnlockFTs()
 	// c.selfTransferService()
