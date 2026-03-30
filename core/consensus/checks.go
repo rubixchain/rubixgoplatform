@@ -11,6 +11,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
+	rubixsync "github.com/rubixchain/rubixgoplatform/core/sync"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/token"
@@ -23,8 +24,6 @@ import (
 const (
 	RBTString  string = "rbt"
 	PartString string = "part"
-
-	APISyncTransactionChain string = "/api/sync-transaction-chain"
 )
 
 var validNetworks = map[string]struct{}{
@@ -424,99 +423,99 @@ func FindTokenRoleInTxn(tokenID string, txInfo *models.TransactionInfo) int16 {
 	return int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
 }
 
-func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, w *wallet.Wallet, log logger.Logger) (error, *models.TransactionChainSyncReply) {
-	var err error
+// func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, w *wallet.Wallet, log logger.Logger) (error, *models.TransactionChainSyncReply) {
+// 	var err error
 
-	latestTransactionID := w.GetLatestTransactionID(tokenID)
-	if latestTransactionID == "" {
-		log.Error("failed to get latest transaction id")
-		return err, nil
-	}
+// 	latestTransactionID := w.GetLatestTransactionID(tokenID)
+// 	if latestTransactionID == "" {
+// 		log.Error("failed to get latest transaction id")
+// 		return err, nil
+// 	}
 
-	syncReq := models.TransactionChainSyncRequest{
-		TokenID:       tokenID,
-		TransactionID: latestTransactionID,
-	}
+// 	syncReq := models.TransactionChainSyncRequest{
+// 		TokenID:       tokenID,
+// 		TransactionID: latestTransactionID,
+// 	}
 
-	for {
-		var trep models.TransactionChainSyncReply
-		err = p.SendJSONRequest("POST", APISyncTransactionChain, nil, &syncReq, &trep, false)
-		if err != nil {
-			log.Error("failed to sync transaction chain")
-			return err, nil
-		}
-		if !trep.Status {
-			log.Error("failed to sync transaction chain")
-			return fmt.Errorf(trep.Message), nil
-		}
-		if len(trep.Transactions) > 0 {
-			for _, txn := range trep.Transactions {
-				tx, err := util.TransactionFromBytes(txn)
-				if tx == nil {
-					log.Error("failed to convert transaction bytes to transaction")
-					return fmt.Errorf("failed to convert transaction bytes to transaction"), nil
-				}
-				var txInfo models.TransactionInfo
-				if err = json.Unmarshal(tx.Info, &txInfo); err != nil {
-					log.Error("failed to unmarshal transaction info", "err", err)
-					return fmt.Errorf("failed to unmarshal transaction info: %w", err), nil
-				}
+// 	for {
+// 		var trep models.TransactionChainSyncReply
+// 		err = p.SendJSONRequest("POST", APISyncTransactionChain, nil, &syncReq, &trep, false)
+// 		if err != nil {
+// 			log.Error("failed to sync transaction chain")
+// 			return err, nil
+// 		}
+// 		if !trep.Status {
+// 			log.Error("failed to sync transaction chain")
+// 			return fmt.Errorf(trep.Message), nil
+// 		}
+// 		if len(trep.Transactions) > 0 {
+// 			for _, txn := range trep.Transactions {
+// 				tx, err := util.TransactionFromBytes(txn)
+// 				if tx == nil {
+// 					log.Error("failed to convert transaction bytes to transaction")
+// 					return fmt.Errorf("failed to convert transaction bytes to transaction"), nil
+// 				}
+// 				var txInfo models.TransactionInfo
+// 				if err = json.Unmarshal(tx.Info, &txInfo); err != nil {
+// 					log.Error("failed to unmarshal transaction info", "err", err)
+// 					return fmt.Errorf("failed to unmarshal transaction info: %w", err), nil
+// 				}
 
-				role := FindTokenRoleInTxn(tokenID, &txInfo)
+// 				role := FindTokenRoleInTxn(tokenID, &txInfo)
 
-				if err = w.CreateTransaction(tx); err != nil {
-					log.Error("failed to add transaction to transactions table", "err", err)
-					return fmt.Errorf("failed to add transaction: %w", err), nil
-				}
+// 				if err = w.CreateTransaction(tx); err != nil {
+// 					log.Error("failed to add transaction to transactions table", "err", err)
+// 					return fmt.Errorf("failed to add transaction: %w", err), nil
+// 				}
 
-				tokenDetails, err := w.GetTokenByTokenID(tokenID)
-				if err != nil {
-					newToken := models.Token{
-						TokenID:        tokenID,
-						TokenStatus:    constants.TokenStatus_Free,
-						DID:            txInfo.Owner,
-						TransactionID:  tx.ID,
-						TokenType:      int16(models.GetTokenTypeID(constants.TokenType_RBT)),
-						LatestPosition: 0,
-						LatestRole:     role,
-						CreatedAt:      time.Now(),
-						UpdatedAt:      time.Now(),
-					}
-					if createErr := w.CreateRBTToken(newToken); createErr != nil {
-						log.Error("failed to create token", "err", createErr)
-						return fmt.Errorf("failed to create token: %w", createErr), nil
-					}
-					tokenDetails = newToken
-				} else {
-					tokenDetails.DID = txInfo.Owner
-					tokenDetails.TransactionID = tx.ID
-					tokenDetails.LatestPosition++
-					tokenDetails.LatestRole = role
-					if updateErr := w.UpdateToken(tokenDetails); updateErr != nil {
-						log.Error("failed to update token", "err", updateErr)
-						return fmt.Errorf("failed to update token: %w", updateErr), nil
-					}
-				}
+// 				tokenDetails, err := w.GetTokenByTokenID(tokenID)
+// 				if err != nil {
+// 					newToken := models.Token{
+// 						TokenID:        tokenID,
+// 						TokenStatus:    constants.TokenStatus_Free,
+// 						DID:            txInfo.Owner,
+// 						TransactionID:  tx.ID,
+// 						TokenType:      int16(models.GetTokenTypeID(constants.TokenType_RBT)),
+// 						LatestPosition: 0,
+// 						LatestRole:     role,
+// 						CreatedAt:      time.Now(),
+// 						UpdatedAt:      time.Now(),
+// 					}
+// 					if createErr := w.CreateRBTToken(newToken); createErr != nil {
+// 						log.Error("failed to create token", "err", createErr)
+// 						return fmt.Errorf("failed to create token: %w", createErr), nil
+// 					}
+// 					tokenDetails = newToken
+// 				} else {
+// 					tokenDetails.DID = txInfo.Owner
+// 					tokenDetails.TransactionID = tx.ID
+// 					tokenDetails.LatestPosition++
+// 					tokenDetails.LatestRole = role
+// 					if updateErr := w.UpdateToken(tokenDetails); updateErr != nil {
+// 						log.Error("failed to update token", "err", updateErr)
+// 						return fmt.Errorf("failed to update token: %w", updateErr), nil
+// 					}
+// 				}
 
-				entry := &models.TokenChain{
-					TokenID:       tokenID,
-					TransactionID: tx.ID,
-					Role:          role,
-					Position:      tokenDetails.LatestPosition,
-				}
-				if err = w.AddTokenChainEntry(entry); err != nil {
-					log.Error("failed to add token chain entry", "err", err)
-					return fmt.Errorf("failed to add token chain entry: %w", err), nil
-				}
-			}
-		}
-		if trep.NextTransactionID == "" {
-			break
-		}
-		syncReq.TransactionID = trep.NextTransactionID
-	}
-	return nil, nil
-}
+// 				entry := &models.TokenChain{
+// 					TokenID:       tokenID,
+// 					TransactionID: tx.ID,
+// 					Role:          role,
+// 					Position:      tokenDetails.LatestPosition,
+// 				}
+// 				if err = w.AddTokenChainEntry(entry); err != nil {
+// 					log.Error("failed to add token chain entry", "err", err)
+// 					return fmt.Errorf("failed to add token chain entry: %w", err), nil
+// 				}
+// 			}
+// 		}
+// 		if trep.NextTransactionID == "" {
+// 			break
+// 		}
+// 		syncReq.TransactionID = trep.NextTransactionID
+// 	}
+// 	return nil, nil
+// }
 
 // TokenChainIntigrityCheck verifies each token's chain integrity.
 // peer is the pre-resolved peer for the initiator (caller obtains via getPeer).
@@ -537,7 +536,7 @@ func TokenChainIntigrityCheck(txnInfo *models.TransactionInfo, peer *ipfsport.Pe
 			tokenDetails, err := w.GetTokenByTokenID(t.TokenID)
 			if err != nil {
 				log.Debug("token not found locally, syncing full chain", "tokenID", t.TokenID)
-				if syncErr, _ := SyncTransactionChainFrom(peer, t.TokenID, w, log); syncErr != nil {
+				if syncErr, _ := rubixsync.SyncTransactionChainFrom(peer, t.TokenID, w, log); syncErr != nil {
 					return fmt.Errorf("failed to sync token chain for %s: %w", t.TokenID, syncErr), false
 				}
 				continue
@@ -565,7 +564,7 @@ func TokenChainIntigrityCheck(txnInfo *models.TransactionInfo, peer *ipfsport.Pe
 			if err := json.Unmarshal(previousTransaction.Info, &previousTransactionInfo); err != nil {
 				return fmt.Errorf("failed to unmarshal previous transaction info for token %s: %w", t.TokenID, err), false
 			}
-			role := FindTokenRoleInTxn(t.TokenID, &previousTransactionInfo)
+			role := rubixsync.FindTokenRoleInTxn(t.TokenID, &previousTransactionInfo)
 			if role == int16(models.GetTokenRoleID(constants.TokenRole_Pledge)) ||
 				role == int16(models.GetTokenRoleID(constants.TokenRole_Burn)) ||
 				role == int16(models.GetTokenRoleID(constants.TokenRole_Commit)) {
@@ -581,7 +580,7 @@ func TokenChainIntigrityCheck(txnInfo *models.TransactionInfo, peer *ipfsport.Pe
 					if err != nil {
 						log.Debug("token not found locally, syncing full chain", "tokenID", t.TokenID)
 
-						if syncErr, _ := SyncTransactionChainFrom(peer, t.TokenID, w, log); syncErr != nil {
+						if syncErr, _ := rubixsync.SyncTransactionChainFrom(peer, t.TokenID, w, log); syncErr != nil {
 							return fmt.Errorf("failed to sync token chain for %s: %w", t.TokenID, syncErr), false
 						}
 
