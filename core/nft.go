@@ -278,16 +278,53 @@ func (c *Core) FetchNFT(fetchNFTRequest *FetchNFTRequest) *model.BasicResponse {
 	return basicResponse
 }
 
-func (c *Core) publishNewNftEvent(newEvent *model.NFTEvent) error {
-	topic := newEvent.NFT
-	if c.ps != nil {
-		err := c.ps.Publish(topic, newEvent)
-		if err != nil {
-			c.log.Error("Failed to publish new event", "err", err)
-		}
-		c.log.Info("New state published on NFT " + topic)
+func (c *Core) publishNewNftEvent(newNFTEvent *models.EventNFTPublishInfo) error {
+	if c.ps == nil {
+		return nil
 	}
+
+	topic := newNFTEvent.NFTid
+
+	if err := c.ps.Publish(topic, newNFTEvent); err != nil {
+		c.log.Error("Failed to publish NFT event", "topic", topic, "err", err)
+		return err
+	}
+
+	c.log.Info("New state published on NFT ", "topic", topic)
+
 	return nil
+}
+
+func (c *Core) publishNFTEvents(
+	request *models.TransactionRequest,
+	transactionId string,
+	initiatorDID string,
+	initiatorSignature string,
+	epoch int,
+) {
+
+	nfts := request.GetAllNFTs()
+
+	baseEvent := models.EventNFTPublishInfo{
+		TransactionID:      transactionId,
+		Initiator:          initiatorDID,
+		InitiatorSignature: initiatorSignature,
+		Epoch:              epoch,
+	}
+
+	for _, nft := range nfts {
+
+		event := baseEvent
+		event.NFTid = nft.NFTId
+		event.NFTData = nft.Data
+
+		if err := c.publishNewNftEvent(&event); err != nil {
+			c.log.Error("NFT event publish failed",
+				"nft", nft.NFTId,
+				"err", err,
+			)
+		}
+	}
 }
 
 // CheckNFTFolderExists stubs NFT folder existence check.

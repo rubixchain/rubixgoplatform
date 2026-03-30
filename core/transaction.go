@@ -180,7 +180,13 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		c.log.Error("InitiateTransaction: failed to persist post-consensus state", "err", err)
 	}
 
-	//PUBLISHING of the smartcontract and NFT Event needs to be added
+	if request.HasSmartContract() {
+		c.publishSmartContractEvents(request, transactionId, initiatorDID, initiatorSignature, transactionInfo.Epoch)
+	}
+
+	if request.HasNFT() {
+		c.publishNFTEvents(request, transactionId, initiatorDID, initiatorSignature, transactionInfo.Epoch)
+	}
 
 	//Publish transaction to the network
 	util.PublishTransaction(c.ps, transactionInfo, signatureTobePublished)

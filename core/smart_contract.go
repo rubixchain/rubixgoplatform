@@ -276,20 +276,54 @@ func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *F
 	return basicResponse
 }
 
-func (c *Core) PublishNewEvent(nc *model.NewContractEvent) {
-	c.publishNewEvent(nc)
+// updating PublishNewEvent to PublishSmartContractEvent with new structs
+func (c *Core) publishNewSmartContractEvent(newSCEvent *models.EventSmartContractPublishInfo) error {
+	if c.ps == nil {
+		return nil
+	}
+
+	topic := newSCEvent.SmartContractID
+
+	if err := c.ps.Publish(topic, newSCEvent); err != nil {
+		c.log.Error("Failed to publish smart contract event", "topic", topic, "err", err)
+		return err
+	}
+
+	c.log.Info("New state published on smart contract", "topic", topic)
+
+	return nil
 }
 
-func (c *Core) publishNewEvent(newEvent *model.NewContractEvent) error {
-	topic := newEvent.SmartContractToken
-	if c.ps != nil {
-		err := c.ps.Publish(topic, newEvent)
-		if err != nil {
-			c.log.Error("Failed to publish new event", "err", err)
-		}
-		c.log.Info("New state published on smart contract " + topic)
+func (c *Core) publishSmartContractEvents(
+	request *models.TransactionRequest,
+	transactionId string,
+	initiatorDID string,
+	initiatorSignature string,
+	epoch int,
+) {
+
+	smartContracts := request.GetAllSmartContracts()
+
+	baseEvent := models.EventSmartContractPublishInfo{
+		TransactionID:      transactionId,
+		Initiator:          initiatorDID,
+		InitiatorSignature: initiatorSignature,
+		Epoch:              epoch,
 	}
-	return nil
+
+	for _, sc := range smartContracts {
+
+		event := baseEvent
+		event.SmartContractID = sc.SmartContractId
+		event.SmartContractData = sc.Data
+
+		if err := c.publishNewSmartContractEvent(&event); err != nil {
+			c.log.Error("Smart contract event publish failed",
+				"smartcontract", sc.SmartContractId,
+				"err", err,
+			)
+		}
+	}
 }
 
 func (c *Core) SubsribeContractSetup(requestID string, topic string) error {
