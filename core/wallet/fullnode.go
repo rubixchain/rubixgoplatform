@@ -10,14 +10,14 @@ import (
 func (w *Wallet) GetFullNodeRBTToken(tokenID string) (models.FullNodeRBT, error) {
 	row := w.db.Pool().QueryRow(w.Ctx,
 		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
-		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+		 token_state_hash, latest_position, latest_role, created_at, updated_at
 		 FROM fullnode_rbt WHERE token_id = $1`, tokenID,
 	)
 
 	var t models.FullNodeRBT
 	if err := row.Scan(
 		&t.TokenID, &t.ParentTokenID, &t.TokenValue, &t.TokenStatus,
-		&t.DID, &t.TransactionID, &t.TokenStateHash, &t.TokenType,
+		&t.DID, &t.TransactionID, &t.TokenStateHash, 
 		&t.LatestPosition, &t.LatestRole, &t.CreatedAt, &t.UpdatedAt,
 	); err != nil {
 		if err == pgx.ErrNoRows {
@@ -32,14 +32,14 @@ func (w *Wallet) GetFullNodeRBTToken(tokenID string) (models.FullNodeRBT, error)
 func (w *Wallet) GetFullNodeFTToken(tokenID string) (models.FullNodeFT, error) {
 	row := w.db.Pool().QueryRow(w.Ctx,
 		`SELECT token_id, token_value, token_status, did, transaction_id,
-		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+		 token_state_hash, latest_position, latest_role, created_at, updated_at
 		 FROM fullnode_ft WHERE token_id = $1`, tokenID,
 	)
 
 	var t models.FullNodeFT
 	if err := row.Scan(
 		&t.TokenID, &t.TokenValue, &t.TokenStatus,
-		&t.DID, &t.TransactionID, &t.TokenStateHash, &t.TokenType,
+		&t.DID, &t.TransactionID, &t.TokenStateHash, 
 		&t.LatestPosition, &t.LatestRole, &t.CreatedAt, &t.UpdatedAt,
 	); err != nil {
 		if err == pgx.ErrNoRows {
@@ -54,14 +54,14 @@ func (w *Wallet) GetFullNodeFTToken(tokenID string) (models.FullNodeFT, error) {
 func (w *Wallet) GetFullNodeNFTToken(tokenID string) (models.FullNodeNFT, error) {
 	row := w.db.Pool().QueryRow(w.Ctx,
 		`SELECT token_id, token_value, token_status, did, transaction_id,
-		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+		 token_state_hash,latest_position, latest_role, created_at, updated_at
 		 FROM fullnode_nft WHERE token_id = $1`, tokenID,
 	)
 
 	var t models.FullNodeNFT
 	if err := row.Scan(
 		&t.TokenID, &t.TokenValue, &t.TokenStatus,
-		&t.DID, &t.TransactionID, &t.TokenStateHash, &t.TokenType,
+		&t.DID, &t.TransactionID, &t.TokenStateHash, 
 		&t.LatestPosition, &t.LatestRole, &t.CreatedAt, &t.UpdatedAt,
 	); err != nil {
 		if err == pgx.ErrNoRows {
@@ -76,14 +76,14 @@ func (w *Wallet) GetFullNodeNFTToken(tokenID string) (models.FullNodeNFT, error)
 func (w *Wallet) GetFullNodeSmartContractToken(tokenID string) (models.FullNodeSmartContract, error) {
 	row := w.db.Pool().QueryRow(w.Ctx,
 		`SELECT token_id, token_value, token_status, transaction_id,
-		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+		 token_state_hash,  latest_position, latest_role, created_at, updated_at
 		 FROM fullnode_smart_contract WHERE token_id = $1`, tokenID,
 	)
 
 	var t models.FullNodeSmartContract
 	if err := row.Scan(
 		&t.TokenID, &t.TokenValue, &t.TokenStatus,
-		&t.TransactionID, &t.TokenStateHash, &t.TokenType,
+		&t.TransactionID, &t.TokenStateHash, 
 		&t.LatestPosition, &t.LatestRole, &t.CreatedAt, &t.UpdatedAt,
 	); err != nil {
 		if err == pgx.ErrNoRows {
