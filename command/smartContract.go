@@ -85,15 +85,8 @@ func (cmd *Command) fetchSmartContract() {
 		cmd.log.Error("Invalid smart contract token")
 		return
 	}
-	smartContractTokenRequest := core.FetchSmartContractRequest{
-		SmartContractToken: cmd.smartContractToken,
-	}
 
-	request := client.FetchSmartContractRequest{
-		SmartContractToken: smartContractTokenRequest.SmartContractToken,
-	}
-
-	basicResponse, err := cmd.c.FetchSmartContract(&request)
+	basicResponse, err := cmd.c.FetchSmartContract(cmd.smartContractToken)
 	if err != nil {
 		cmd.log.Error("Failed to fetch smart contract token", "err", err)
 		return

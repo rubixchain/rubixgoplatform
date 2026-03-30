@@ -5,13 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -46,11 +45,6 @@ type SmartContractToken struct {
 	PeerID         string `json:"peerID"`
 }
 
-type FetchSmartContractRequest struct {
-	SmartContractToken     string
-	SmartContractTokenPath string
-}
-
 type SmartContractTokenResponse struct {
 	Message string `json:"message"`
 	Result  string `json:"result"`
@@ -69,6 +63,9 @@ func (c *Core) GenerateSmartContractToken(requestID string, smartContractTokenRe
 
 }
 
+// In the generateSmartContractToken function we are adding each of the file in ipfs and getting the hash
+// Instead here we can change it to exactly how we are doing with NFT. Instead of putting each file to ipfs
+// Create a folder then add that folder to ipfs.
 func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRequest *GenerateSmartContractRequest) *model.BasicResponse {
 	basicResponse := &model.BasicResponse{
 		Status: false,
@@ -140,11 +137,16 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 		c.log.Error("Failed to rename SC folder", "err", err)
 		return basicResponse
 	}
-	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: smartContractTokenHash, Deployer: smartContractTokenRequest.DID, BinaryCodeHash: binaryCodeHash, RawCodeHash: rawCodeHash, ContractStatus: wallet.TokenIsGenerated})
-	if err != nil {
-		c.log.Error("Failed to create smart contract token", "err", err)
-		return basicResponse
-	}
+
+	// So after generation of the contract we are not storing anything on to the db. So in the deploying scenario we will check the db
+	// whether the tokenid exists or not and then add the deployment details there.
+
+	// This function is adding the info to a table which is not existing. looks like added to fix the issue while compiling
+	// err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: smartContractTokenHash, Deployer: smartContractTokenRequest.DID, BinaryCodeHash: binaryCodeHash, RawCodeHash: rawCodeHash, ContractStatus: wallet.TokenIsGenerated})
+	// if err != nil {
+	// 	c.log.Error("Failed to create smart contract token", "err", err)
+	// 	return basicResponse
+	// }
 
 	// Set the response values
 	basicResponse.Status = true
@@ -154,126 +156,149 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 	return basicResponse
 }
 
-func (c *Core) FetchSmartContract(requestID string, fetchSmartContractRequest *FetchSmartContractRequest) *model.BasicResponse {
+// FetchSmartContract fetches a smart contract from IPFS and stores it locally.
+// It handles the complete lifecycle: folder management, metadata fetching, file storage, and token chain sync.
+func (c *Core) FetchSmartContract(requestID string, smartContractToken string) *model.BasicResponse {
+	c.log.Info("FetchSmartContract: Fetching smart contract", "request_id", requestID, "token", smartContractToken)
 
-	basicResponse := &model.BasicResponse{
-		Status: false,
-	}
-
-	smartContractTokenJSON, err := c.ipfsOps.Cat(fetchSmartContractRequest.SmartContractToken)
+	scFolderPath, err := c.prepareSmartContractFolder(smartContractToken)
 	if err != nil {
-		c.log.Error("Failed to get smart contract from network", "err", err)
-		return basicResponse
+		c.log.Error("FetchSmartContract: Failed to prepare smart contract folder", "token", smartContractToken, "err", err)
+		return &model.BasicResponse{Status: false, Message: err.Error()}
 	}
 
-	// Read the smart contract token JSON
-	smartContractTokenJSONBytes, err := ioutil.ReadAll(smartContractTokenJSON)
+	metadata, err := c.fetchSmartContractMetadata(smartContractToken)
 	if err != nil {
-		c.log.Error("Failed to read smart contract token from network", "err", err)
-		return basicResponse
+		c.log.Error("FetchSmartContract: Failed to fetch smart contract metadata", "token", smartContractToken, "err", err)
+		return &model.BasicResponse{Status: false, Message: err.Error()}
 	}
 
-	// Close the smart contract token JSON reader
-	smartContractTokenJSON.Close()
-
-	// Parse smart contract token JSON into SmartContractToken struct
-	var smartContractToken SmartContractToken
-	err = json.Unmarshal(smartContractTokenJSONBytes, &smartContractToken)
-	if err != nil {
-		c.log.Error("Failed to parse smart contract token", "err", err)
-		return basicResponse
+	if err := c.storeSmartContractFiles(scFolderPath, metadata); err != nil {
+		c.log.Error("FetchSmartContract: Failed to store smart contract files", "token", smartContractToken, "err", err)
+		return &model.BasicResponse{Status: false, Message: err.Error()}
 	}
 
-	// Fetch and store the binary code file
-	binaryCodeFile, err := c.ipfsOps.Cat(smartContractToken.BinaryCodeHash)
-	if err != nil {
-		c.log.Error("Failed to fetch binary code file from network", "err", err)
-		return basicResponse
-	}
-	defer binaryCodeFile.Close()
-
-	binaryCodeFilePath := fetchSmartContractRequest.SmartContractTokenPath
-	err = os.MkdirAll(binaryCodeFilePath, 0755)
-	if err != nil {
-		c.log.Error("Failed to create binary code directory", "err", err)
-		return basicResponse
+	if err := c.syncSmartContractTransaction(smartContractToken, metadata); err != nil {
+		c.log.Warn("FetchSmartContract: Failed to sync transaction chain", "token", smartContractToken, "err", err)
+		return &model.BasicResponse{Status: false, Message: err.Error()}
 	}
 
-	binaryCodeFileDestPath := filepath.Join(binaryCodeFilePath, "binaryCodeFile")
-
-	// Read the content of binaryCodeFile
-	binaryCodeContent, err := ioutil.ReadAll(binaryCodeFile)
-	if err != nil {
-		c.log.Error("Failed to read binary code file", "err", err)
-		return basicResponse
+	c.log.Info("FetchSmartContract: Successfully fetched smart contract", "token", smartContractToken)
+	return &model.BasicResponse{
+		Status:  true,
+		Message: "Successfully fetched smart contract",
+		Result:  metadata,
 	}
+}
 
-	// Write the content to binaryCodeFileDestPath
-	err = ioutil.WriteFile(binaryCodeFileDestPath+".wasm", binaryCodeContent, 0644)
-	if err != nil {
-		c.log.Error("Failed to write binary code file", "err", err)
-		return basicResponse
-	}
+// prepareSmartContractFolder ensures the smart contract folder is ready.
+// It removes any existing folder and creates a new one.
+func (c *Core) prepareSmartContractFolder(smartContractToken string) (string, error) {
+	scFolderPath := path.Join(c.smartContractDir, smartContractToken)
 
-	// Fetch and store the raw code file
-	rawCodeFile, err := c.ipfsOps.Cat(smartContractToken.RawCodeHash)
-	if err != nil {
-		c.log.Error("Failed to fetch raw code file from IPFS", "err", err)
-		return basicResponse
-	}
-	defer rawCodeFile.Close()
-
-	rawCodeFilePath := fetchSmartContractRequest.SmartContractTokenPath
-	err = os.MkdirAll(rawCodeFilePath, 0755)
-	if err != nil {
-		c.log.Error("Failed to create raw code directory", "err", err)
-		return basicResponse
-	}
-
-	rawCodeFileDestPath := filepath.Join(rawCodeFilePath, "rawCodeFile")
-
-	// Read the content of rawCodeFile
-	rawCodeContent, err := ioutil.ReadAll(rawCodeFile)
-	if err != nil {
-		c.log.Error("Failed to read raw code file", "err", err)
-		return basicResponse
-	}
-
-	// Write the content to rawCodeFileDestPath
-	err = ioutil.WriteFile(rawCodeFileDestPath, rawCodeContent, 0644)
-	if err != nil {
-		c.log.Error("Failed to write raw code file", "err", err)
-		return basicResponse
-	}
-
-	err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: fetchSmartContractRequest.SmartContractToken, Deployer: smartContractToken.DID, BinaryCodeHash: smartContractToken.BinaryCodeHash, RawCodeHash: smartContractToken.RawCodeHash, ContractStatus: wallet.TokenIsFetched})
-	if err != nil {
-		basicResponse.Message = "unable to add Smart contract record to DB, err: " + err.Error()
-		return basicResponse
-	}
-
-	if smartContractToken.PeerID != "" {
-		smartContractOriginPeer, err := c.getPeer(smartContractToken.PeerID + "." + smartContractToken.DID)
-		if err != nil {
-			basicResponse.Message = fmt.Sprintf("unable to get the peer for DID: %v, err: %v ", smartContractToken.DID, err)
-			return basicResponse
+	// Remove existing folder if present
+	if _, err := os.Stat(scFolderPath); err == nil {
+		c.log.Debug("Removing existing smart contract folder", "path", scFolderPath)
+		if err := os.RemoveAll(scFolderPath); err != nil {
+			return "", fmt.Errorf("failed to remove existing folder: %w", err)
 		}
-
-		errSync, _ := c.syncTokenChainFrom(smartContractOriginPeer, "", fetchSmartContractRequest.SmartContractToken, c.TokenType("sc"))
-		if errSync != nil {
-			basicResponse.Message = fmt.Sprintf("unable to sync token chain for contract: %v, err: %v", fetchSmartContractRequest.SmartContractToken, errSync)
-			return basicResponse
-		}
-	} else {
-		c.log.Debug(fmt.Sprintf("Unable to fetch Smart Contract %v deployer's PeerID, skipping token chain sync", fetchSmartContractRequest.SmartContractToken))
 	}
 
-	// Set the response values
-	basicResponse.Status = true
-	basicResponse.Message = "Successfully fetched smart contract"
-	basicResponse.Result = smartContractToken
+	// Create fresh folder
+	if err := os.MkdirAll(scFolderPath, 0755); err != nil {
+		return "", fmt.Errorf("failed to create smart contract folder: %w", err)
+	}
 
-	return basicResponse
+	return scFolderPath, nil
+}
+
+// fetchSmartContractMetadata retrieves and parses the smart contract metadata from IPFS.
+func (c *Core) fetchSmartContractMetadata(smartContractToken string) (*SmartContractToken, error) {
+	// Fetch metadata JSON from IPFS
+	reader, err := c.ipfsOps.Cat(smartContractToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch from IPFS: %w", err)
+	}
+	defer reader.Close()
+
+	// Read JSON bytes
+	metadataBytes, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read metadata: %w", err)
+	}
+
+	// Parse into struct
+	var metadata SmartContractToken
+	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+		return nil, fmt.Errorf("failed to parse metadata JSON: %w", err)
+	}
+
+	return &metadata, nil
+}
+
+// storeSmartContractFiles downloads and saves binary and raw code files to the local filesystem.
+func (c *Core) storeSmartContractFiles(scFolderPath string, metadata *SmartContractToken) error {
+	// Download and store binary WASM file
+	binaryPath := filepath.Join(scFolderPath, "binaryCodeFile.wasm")
+	if err := c.downloadIPFSFile(metadata.BinaryCodeHash, binaryPath); err != nil {
+		return fmt.Errorf("failed to store binary code: %w", err)
+	}
+
+	// Download and store raw source code file
+	rawPath := filepath.Join(scFolderPath, "rawCodeFile")
+	if err := c.downloadIPFSFile(metadata.RawCodeHash, rawPath); err != nil {
+		return fmt.Errorf("failed to store raw code: %w", err)
+	}
+
+	return nil
+}
+
+// downloadIPFSFile is a helper that fetches a file from IPFS and writes it to the local filesystem.
+func (c *Core) downloadIPFSFile(ipfsHash, destPath string) error {
+	// Fetch from IPFS
+	reader, err := c.ipfsOps.Cat(ipfsHash)
+	if err != nil {
+		return fmt.Errorf("failed to fetch %s: %w", ipfsHash, err)
+	}
+	defer reader.Close()
+
+	// Read content
+	content, err := io.ReadAll(reader)
+	if err != nil {
+		return fmt.Errorf("failed to read content: %w", err)
+	}
+
+	// Write to file
+	if err := os.WriteFile(destPath, content, 0644); err != nil {
+		return fmt.Errorf("failed to write to %s: %w", destPath, err)
+	}
+
+	return nil
+}
+
+// syncSmartContractTokenChain syncs the token chain from the deployer's peer if available.
+func (c *Core) syncSmartContractTransaction(smartContractToken string, metadata *SmartContractToken) error {
+	if metadata.PeerID == "" {
+		c.log.Debug("syncSmartContractTransaction: No peer ID available, skipping token chain sync", "token", smartContractToken)
+		return nil
+	}
+
+	// Get the deployer's peer
+	peerAddr := metadata.PeerID + "." + metadata.DID
+	peer, err := c.getPeer(peerAddr)
+	if err != nil {
+		c.log.Error("syncSmartContractTransaction: Failed to get peer", "peer_addr", peerAddr, "err", err)
+		return fmt.Errorf("syncSmartContractTransaction: failed to get peer %s: %w", peerAddr, err)
+	}
+
+	// Sync transaction chain
+	if err, _ := c.syncTransactionChainFrom(peer, "", smartContractToken); err != nil {
+		c.log.Error("syncSmartContractTransaction: Failed to sync transaction chain", "token", smartContractToken, "err", err)
+		return fmt.Errorf("syncSmartContractTransaction: failed to sync transaction chain: %w", err)
+	}
+
+	c.log.Debug("syncSmartContractTransaction: Successfully synced transaction chain", "token", smartContractToken)
+	return nil
 }
 
 // updating PublishNewEvent to PublishSmartContractEvent with new structs
@@ -328,92 +353,78 @@ func (c *Core) publishSmartContractEvents(
 
 func (c *Core) SubsribeContractSetup(requestID string, topic string) error {
 	reqID = requestID
+
+	// Subscribe to smart contract topic
 	err := c.ps.SubscribeTopic(topic, c.ContractCallBack)
 	if err != nil {
-		c.log.Error("Unable to subscribe smart contract ", topic)
+		c.log.Error("Failed to subscribe to smart contract topic", "topic", topic, "err", err)
+		return fmt.Errorf("failed to subscribe to smart contract topic %s: %w", topic, err)
 	}
-	c.log.Info("Subscribing smart contract " + topic + " is successful")
-	return err
+
+	// Check if smart contract folder exists
+	scFolderPath := path.Join(c.smartContractDir, topic)
+	if _, err := os.Stat(scFolderPath); os.IsNotExist(err) {
+		c.log.Info("Smart contract not found locally, fetching from network", "token", topic)
+
+		// Fetch smart contract from IPFS
+		response := c.FetchSmartContract(reqID, topic)
+		if !response.Status {
+			c.log.Error("Failed to fetch smart contract", "token", topic, "error", response.Message)
+			return fmt.Errorf("failed to fetch smart contract %s: %s", topic, response.Message)
+		}
+
+		c.log.Info("Smart contract fetched successfully", "token", topic)
+	} else {
+		c.log.Debug("Smart contract already exists locally", "token", topic, "path", scFolderPath)
+	}
+
+	c.log.Info("Successfully subscribed to smart contract", "topic", topic)
+	return nil
 }
 
 // ContractCallback updated with the syncTransactionChainFrom function
 func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 	var newEvent model.NewContractEvent
-	var fetchSC FetchSmartContractRequest
-	requestID := reqID
+
 	err := json.Unmarshal(data, &newEvent)
 	if err != nil {
-		c.log.Error("Failed to get contract details", "err", err)
+		c.log.Error("ContractCallBack: Failed to unmarshal contract event", "err", err)
+		return
 	}
-	c.log.Info("Update on smart contract " + newEvent.SmartContractToken)
-	if newEvent.Type == 1 {
-		fetchSC.SmartContractToken = newEvent.SmartContractToken
-		fetchSC.SmartContractTokenPath, err = c.CreateSCTempFolder()
-		if err != nil {
-			c.log.Error("Fetch smart contract failed, failed to create smartcontract folder", "err", err)
-			return
-		}
-		// oldScFolder is set to path of the smartcontract folder
-		oldScFolder := c.cfg.NodeConfigDir + "SmartContract/" + fetchSC.SmartContractToken
-		var isPathExist bool
-		//info is set to FileInfo describing the oldScFolder
-		info, err := os.Stat(oldScFolder)
-		//If directory doesn't exist, isPathExist is set to false
-		if os.IsNotExist(err) {
-			isPathExist = false
-		} else {
-			isPathExist = info.IsDir()
 
-		}
-		//If isPathExist true, removing the existing folder which was generated while generating the smartcontract hash
-		if isPathExist {
-			c.log.Debug("removing the existing folder:", oldScFolder, "to add the new folder")
-			os.RemoveAll(oldScFolder)
-		}
-		fetchSC.SmartContractTokenPath, err = c.RenameSCFolder(fetchSC.SmartContractTokenPath, fetchSC.SmartContractToken)
-		if err != nil {
-			c.log.Error("Fetch smart contract failed, failed to create SC folder", "err", err)
-			return
-		}
-		c.FetchSmartContract(requestID, &fetchSC)
-		c.log.Info("Smart contract " + fetchSC.SmartContractToken + " files fetching succesful")
-	}
+	c.log.Info("ContractCallBack: Received update on smart contract", "token", newEvent.SmartContractToken)
+
 	smartContractToken := newEvent.SmartContractToken
-	scFolderPath := c.cfg.NodeConfigDir + "SmartContract/" + smartContractToken
+	scFolderPath := path.Join(c.smartContractDir, smartContractToken)
+
 	if _, err := os.Stat(scFolderPath); os.IsNotExist(err) {
-		fetchSC.SmartContractToken = smartContractToken
-		fetchSC.SmartContractTokenPath, err = c.CreateSCTempFolder()
-		if err != nil {
-			c.log.Error("Fetch smart contract failed, failed to create smart contract folder", "err", err)
-			return
-		}
-		fetchSC.SmartContractTokenPath, err = c.RenameSCFolder(fetchSC.SmartContractTokenPath, smartContractToken)
-		if err != nil {
-			c.log.Error("Fetch smart contract failed, failed to create SC folder", "err", err)
-			return
-		}
-		c.FetchSmartContract(requestID, &fetchSC)
-		c.log.Info("Smart contract " + smartContractToken + " files fetching successful")
+		c.log.Warn("ContractCallBack: Smart contract folder does not exist", "token", smartContractToken)
 	}
+
 	publisherPeerID := peerID
 	did := newEvent.Did
 	address := publisherPeerID + "." + did
+
 	p, err := c.getPeer(address)
 	if err != nil {
-		c.log.Error("Failed to get peer", "err", err)
+		c.log.Error("ContractCallBack: Failed to get peer", "address", address, "err", err)
 		return
 	}
+
 	err, _ = c.syncTransactionChainFrom(p, "", smartContractToken)
 	if err != nil {
-		c.log.Error("Failed to sync token chain block", "err", err)
+		c.log.Error("ContractCallBack: Failed to sync transaction chain", "token", smartContractToken, "err", err)
 		return
 	}
-	c.log.Info("Token chain of " + smartContractToken + " syncing successful")
+
+	c.log.Info("ContractCallBack: Transaction chain synced successfully", "token", smartContractToken)
+
 	curlUrl, err := c.w.GetSmartContractTokenUrl(smartContractToken)
 	if err != nil {
-		c.log.Error("Failed to get smart contract token URL", "err", err)
+		c.log.Error("ContractCallBack: Failed to get smart contract callback URL", "token", smartContractToken, "err", err)
 		return
 	}
+
 	payload := map[string]interface{}{
 		"smart_contract_hash": newEvent.SmartContractToken,
 		"port":                c.cfg.NodePort,
@@ -423,43 +434,50 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 
 	payLoadBytes, err := json.Marshal(payload)
 	if err != nil {
-		c.log.Error("Failed to marshal JSON", "err", err)
+		c.log.Error("ContractCallBack: Failed to marshal callback payload", "err", err)
 		return
 	}
+
 	request, err := http.NewRequest("POST", curlUrl, bytes.NewBuffer(payLoadBytes))
 	if err != nil {
-		fmt.Println("Error creating HTTP request for smart contract statefile updationcallback: ", err)
+		c.log.Error("ContractCallBack: Failed to create HTTP request", "url", curlUrl, "err", err)
 		return
 	}
+
 	request.Header.Set("Content-Type", "application/json; charset=UTF-8")
+
 	client := &http.Client{}
 	response, err := client.Do(request)
 	if err != nil {
-		fmt.Println("Error sending HTTP request for smart contract statefile updation: ", err)
+		c.log.Error("ContractCallBack: Failed to send HTTP request to callback URL", "url", curlUrl, "err", err)
 		return
 	}
+	defer response.Body.Close()
+
 	if response.StatusCode != http.StatusOK {
-		c.log.Error("Error getting response from SC", "status", response.Status)
+		c.log.Error("ContractCallBack: Received non-OK status from callback", "status", response.Status, "url", curlUrl)
 		return
 	}
+
 	responseBodyBytes, err := io.ReadAll(response.Body)
 	if err != nil {
 		fmt.Printf("Error reading response body: %s\n", err)
 		return
 	}
-	responseBody := string(responseBodyBytes)
+
 	var responseData map[string]interface{}
-	if err := json.Unmarshal([]byte(responseBody), &responseData); err != nil {
+	if err := json.Unmarshal(responseBodyBytes, &responseData); err != nil {
 		c.log.Error("Error parsing JSON:", err)
 		return
 	}
+
 	message, ok := responseData["message"].(string)
 	if !ok {
 		c.log.Error("Error: 'message' field not found or not a string")
 		return
 	}
+
 	c.log.Debug(message)
-	defer response.Body.Close()
 }
 
 // RegisterCallBackURL registers a callback URL for smart contract events.

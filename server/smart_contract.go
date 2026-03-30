@@ -257,37 +257,17 @@ func moveFile(src, dst string) error {
 // @Success      200  {object}  model.BasicResponse
 // @Router       /api/fetch-smart-contract [get]
 func (s *Server) APIFetchSmartContract(req *ensweb.Request) *ensweb.Result {
-	var fetchSC core.FetchSmartContractRequest
-	var err error
+	smartContractToken := s.GetQuery(req, "smartContractToken")
 
-	fetchSC.SmartContractToken = s.GetQuery(req, "smartContractToken")
-
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(fetchSC.SmartContractToken)
-	if len(fetchSC.SmartContractToken) != 46 || !strings.HasPrefix(fetchSC.SmartContractToken, "Qm") || !is_alphanumeric {
+	// Validate smart contract token format
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(smartContractToken)
+	if len(smartContractToken) != 46 || !strings.HasPrefix(smartContractToken, "Qm") || !is_alphanumeric {
 		s.log.Error("Invalid smart contract token")
 		return s.BasicResponse(req, false, "Invalid smart contract token", nil)
 	}
 
-	fetchSC.SmartContractTokenPath, err = s.c.CreateSCTempFolder()
-	if err != nil {
-		s.log.Error("Fetch smart contract failed, failed to create smartcontract folder", "err", err)
-		return s.BasicResponse(req, false, "Fetch smart contract failed, failed to create smartcontract folder", nil)
-	}
-
-	fetchSC.SmartContractTokenPath, err = s.c.RenameSCFolder(fetchSC.SmartContractTokenPath, fetchSC.SmartContractToken)
-	if err != nil {
-		s.log.Error("Fetch smart contract failed, failed to rename smart contract folder", "err", err)
-		return s.BasicResponse(req, false, "Fetch smart contract failed, failed to rename smart contract folder", nil)
-	} else {
-		// The following condition indicates that the Smart Contract directory
-		// already exists in the node directory
-		if fetchSC.SmartContractTokenPath == "" {
-			s.log.Debug("Smart contract directory already exists")
-			return s.BasicResponse(req, true, "Smart contract directory already exists", nil)
-		}
-	}
-
-	basicResponse := s.c.FetchSmartContract("", &fetchSC)
+	// Fetch smart contract (handles all folder management internally)
+	basicResponse := s.c.FetchSmartContract("", smartContractToken)
 
 	if !basicResponse.Status {
 		return s.BasicResponse(req, false, fmt.Sprintf("failed to fetch Smart Contract: %v", basicResponse.Message), nil)

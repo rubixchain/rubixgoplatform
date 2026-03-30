@@ -14,11 +14,6 @@ type SmartContractRequest struct {
 	SCPath     string
 }
 
-type FetchSmartContractRequest struct {
-	SmartContractToken     string
-	SmartContractTokenPath string
-}
-
 func (c *Client) DeploySmartContract(deployRequest *model.DeploySmartContractRequest) (*model.BasicResponse, error) {
 	var basicResponse model.BasicResponse
 	err := c.sendJSONRequest("POST", setup.APIDeploySmartContract, nil, deployRequest, &basicResponse, time.Minute*2)
@@ -52,10 +47,10 @@ func (c *Client) GenerateSmartContractToken(smartContractRequest *SmartContractR
 
 }
 
-func (c *Client) FetchSmartContract(fetchSmartContractRequest *FetchSmartContractRequest) (*model.BasicResponse, error) {
+func (c *Client) FetchSmartContract(smartContractToken string) (*model.BasicResponse, error) {
 	fields := make(map[string]string)
-	if fetchSmartContractRequest.SmartContractToken != "" {
-		fields["smartContractToken"] = fetchSmartContractRequest.SmartContractToken
+	if smartContractToken != "" {
+		fields["smartContractToken"] = smartContractToken
 	}
 
 	var basicResponse model.BasicResponse
@@ -64,7 +59,6 @@ func (c *Client) FetchSmartContract(fetchSmartContractRequest *FetchSmartContrac
 		return nil, err
 	}
 	return &basicResponse, nil
-
 }
 
 func (c *Client) PublishNewEvent(smartContractToken string, did string, publishType int, block string) (*model.BasicResponse, error) {
