@@ -2,14 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/config"
@@ -129,7 +127,16 @@ func main_old() {
 	}
 
 	// Step C: Seed 3 genesis RBT tokens (idempotent -- check existence first)
+	ctx := context.Background()
 	for i := 1; i <= 3; i++ {
+		currentTime := int(time.Now().Unix())
+
+		tx, err := w.BeginTx(ctx)
+		if err != nil {
+			fmt.Printf("PersistGenesisTokenRecord: begin tx: %w", err)
+		}
+		defer tx.Rollback(ctx) //nolint:errcheck
+
 		tokenID := fmt.Sprintf("QmTestToken%03d", i)
 
 		existing, readErr := w.ReadToken(tokenID)
@@ -138,74 +145,8 @@ func main_old() {
 			continue
 		}
 
-		// Token not found -- build and persist
-		txInfo := &models.TransactionInfo{
-			Initiator: senderDID,
-			Owner:     senderDID,
-			Epoch:     0,
-			Network:   constants.NetworkID_RBT_Local,
-			Tokens: &models.TransactionTokens{
-				RBT: []*models.TokenInfo{
-					{
-						TokenID:    tokenID,
-						TokenValue: 1.0,
-						DID:        senderDID,
-					},
-				},
-			},
-		}
-
-		txID, err := util.GetTransactionID(txInfo)
+		txID, err := w.PersistGenesisTokenRecord(tx, senderDC, nil, tokenID, senderDID, constants.NetworkMode_Localnet, currentTime)
 		if err != nil {
-			log.Fatalf("ComputeTransactionID failed for %s: %v", tokenID, err)
-		}
-
-		infoBytes, err := models.SerializeTransactionInfo(txInfo)
-		if err != nil {
-			log.Fatalf("SerializeTransactionInfo failed for %s: %v", tokenID, err)
-		}
-
-		// Pattern B: genesis signing -- PvtSign(infoBytes) -> hex-encode -> marshal Signature struct
-		genesisSignBytes, err := senderDC.PvtSign(infoBytes)
-		if err != nil {
-			log.Fatalf("PvtSign failed for genesis token %s: %v", tokenID, err)
-		}
-		genesisSigStruct := &models.Signature{
-			InitiatorSignature: hex.EncodeToString(genesisSignBytes),
-		}
-		genesisSigJSON, err := json.Marshal(genesisSigStruct)
-		if err != nil {
-			log.Fatalf("json.Marshal(genesis signature) failed for %s: %v", tokenID, err)
-		}
-
-		txRecord := &models.Transactions{
-			ID:        txID,
-			Info:      infoBytes,
-			Signature: genesisSigJSON,
-		}
-
-		token := &models.Token{
-			TokenID:        tokenID,
-			ParentTokenID:  pgtype.Text{},
-			TokenValue:     1.0,
-			TokenStatus:    int16(constants.TokenStatus_Free),
-			DID:            senderDID,
-			TransactionID:  txID,
-			TokenStateHash: "",
-			TokenType:      int16(models.GetTokenTypeID(constants.TokenType_RBT)),
-			LatestPosition: 0,
-			LatestRole:     int16(models.GetTokenRoleID(constants.TokenRole_Mint)),
-		}
-
-		entry := &models.TokenChain{
-			TokenID:               tokenID,
-			TransactionID:         txID,
-			PreviousTransactionID: nil,
-			Role:                  int16(models.GetTokenRoleID(constants.TokenRole_Mint)),
-			Position:              0,
-		}
-
-		if err := w.PersistGenesisTokenRecord(txRecord, token, entry); err != nil {
 			log.Fatalf("PersistGenesisTokenRecord failed for %s: %v", tokenID, err)
 		}
 		fmt.Printf("Token %s seeded successfully (txID: %s).\n", tokenID, txID)
@@ -297,7 +238,6 @@ func main_old() {
 		Quorums:            nil,
 	}
 
-	ctx := context.Background()
 	if err := w.PersistPostConsensus(ctx, &wallet.PostConsensusPersistenceRequest{
 		TransactionInfo: transferTxInfo,
 		Signature:       transferSig,

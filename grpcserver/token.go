@@ -7,6 +7,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/protos"
 )
+
 const defaultStartIndex = -1
 
 func (rn *RubixNative) GenerateRBT(ctx context.Context, in *protos.GenerateReq) (*protos.BasicReponse, error) {
@@ -14,7 +15,7 @@ func (rn *RubixNative) GenerateRBT(ctx context.Context, in *protos.GenerateReq) 
 	if err != nil {
 		return nil, err
 	}
-	br, err := c.GenerateTestRBT(int(in.TokenCount), rn.c.GetTokenDID(tkn), defaultStartIndex)
+	br, err := c.GenerateLocalRBT(int(in.TokenCount), rn.c.GetTokenDID(tkn), defaultStartIndex)
 	if err != nil {
 		return nil, err
 	}

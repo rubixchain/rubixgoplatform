@@ -105,7 +105,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIGetAllQuorum, "GET", s.AuthHandle(s.APIGetAllQuorum, true, s.AuthError, true))
 	s.AddRoute(setup.APIRemoveAllQuorum, "GET", s.AuthHandle(s.APIRemoveAllQuorum, true, s.AuthError, true))
 	s.AddRoute(setup.APISetupQuorum, "POST", s.AuthHandle(s.APISetupQuorum, true, s.AuthError, true))
-	s.AddRoute(setup.APIGenerateTestToken, "POST", s.AuthHandle(s.APIGenerateTestToken, true, s.AuthError, false))
+	s.AddRoute(setup.APIGenerateLocalRBT, "POST", s.AuthHandle(s.APIGenerateLocalRBT, true, s.AuthError, false))
 	s.AddRoute(setup.APITransaction, "POST", s.AuthHandle(s.APIInitiateRBTTransfer, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetAccountInfo, "GET", s.AuthHandle(s.APIGetAccountInfo, true, s.AuthError, false))
 	s.AddRoute(setup.APISignatureResponse, "POST", s.AuthHandle(s.APISignatureResponse, true, s.AuthError, false))

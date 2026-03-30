@@ -10,8 +10,8 @@ const (
 )
 
 const (
-	FaucetRBT_Level_Offset int = 50000
-	LocalRBT_Level         int = 10000
+	TestnetRBT_Level_Offset int = 50000
+	LocalRBT_Level_Offset   int = 10000
 )
 
 // DB types
