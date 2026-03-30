@@ -28,7 +28,7 @@ const (
 	APIRemoveAllQuorum                  string = "/api/removeallquorum"
 	APISetupQuorum                      string = "/api/setup-quorum"
 	APISetupService                     string = "/api/setup-service"
-	APIGenerateTestToken                string = "/api/generate-test-token"
+	APIGenerateLocalRBT                 string = "/api/generate-local-rbt"
 	APIInitiateRBTTransfer              string = "/api/initiate-rbt-transfer"
 	APIGetAccountInfo                   string = "/api/get-account-info"
 	APISignatureResponse                string = "/api/signature-response"

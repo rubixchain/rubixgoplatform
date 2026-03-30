@@ -3,7 +3,6 @@ package core
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,6 +21,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/token"
+	tokenmap "github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -168,11 +168,11 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 	return info, nil
 }
 
-func (c *Core) GenerateTestTokens(reqID string, num int, did string, startIndex int) {
-	err := c.generateTestTokens(reqID, num, did, startIndex)
+func (c *Core) GenerateLocalRBT(reqID string, num int, did string, startIndex int) {
+	err := c.generateLocalRBT(reqID, num, did, startIndex)
 	br := model.BasicResponse{
 		Status:  true,
-		Message: "Test tokens generated successfully",
+		Message: "Local RBT tokens generated successfully",
 	}
 	if err != nil {
 		br.Status = false
@@ -193,7 +193,7 @@ func (c *Core) getTokenIDForLocalTestTokens(tokenLevel int, tokenNumber int) (st
 	return idValue, nil
 }
 
-func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex int) error {
+func (c *Core) generateLocalRBT(reqID string, num int, did string, startIndex int) error {
 	if !c.localnet {
 		return fmt.Errorf("generate test token is available in 'localnet' mode. Run rubix in localnet mode by providing -localnet flag")
 	}
@@ -202,81 +202,32 @@ func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex 
 	if err != nil {
 		return fmt.Errorf("DID is not exist")
 	}
-	currentTime := time.Now()
 
 	// TokenID is assigned atomically inside PersistGenesisTokenRecord using the
 	// global DB counter (GetNextTokenNumber). startIndex is retained in the
 	// signature for API compatibility but is no longer used.
 	for i := 0; i < num; i++ {
-		// Build genesis txInfo with empty TokenID — PersistGenesisTokenRecord
-		// assigns the canonical DB-counter-based TokenID inside the transaction.
-		txInfo := &models.TransactionInfo{
-			Initiator: did,
-			Owner:     did,
-			Epoch:     int(currentTime.Unix()),
-			Network:   constants.NetworkID_RBT_Local,
-			Tokens: &models.TransactionTokens{
-				RBT: []*models.TokenInfo{
-					{TokenID: "", PreviousTransactionID: ""},
-				},
-			},
-		}
-		infoBytes, err := models.SerializeTransactionInfo(txInfo)
-		if err != nil {
-			return fmt.Errorf("generateTestTokens: failed to serialize transaction info: %w", err)
-		}
-		signatureBytes, err := dc.PvtSign(infoBytes)
-		if err != nil {
-			return fmt.Errorf("generateTestTokens: failed to sign transaction: %w", err)
-		}
-		sigStruct := &models.Signature{InitiatorSignature: hex.EncodeToString(signatureBytes)}
-		sigBytes, err := json.Marshal(sigStruct)
-		if err != nil {
-			return fmt.Errorf("generateTestTokens: failed to marshal signature: %w", err)
-		}
-		txID, err := util.GetTransactionID(txInfo)
-		if err != nil {
-			return fmt.Errorf("generateTestTokens: failed to compute transaction ID: %w", err)
-		}
+		currentTime := int(time.Now().Unix())
 
-		mintRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Mint))
-		tokenTypeID := int16(models.GetTokenTypeID(constants.TokenType_RBT))
-		genesisTx := &models.Transactions{
-			ID:        txID,
-			Info:      infoBytes,
-			Signature: json.RawMessage(sigBytes),
+		tx, err := c.w.BeginTx(c.w.Ctx)
+		if err != nil {
+			return fmt.Errorf("PersistGenesisTokenRecord: begin tx: %w", err)
 		}
-		t := &models.Token{
-			TokenID:        "", // assigned by PersistGenesisTokenRecord
-			DID:            did,
-			TokenValue:     floatPrecision(1.0, MaxDecimalPlaces),
-			TokenStatus:    int16(constants.TokenStatus_Free),
-			TransactionID:  txID,
-			TokenStateHash: "",
-			TokenType:      tokenTypeID,
-			LatestPosition: 0,
-			LatestRole:     mintRoleID,
+		defer tx.Rollback(c.w.Ctx) //nolint:errcheck
+
+		// Get the tokenID based on a canonical index
+		globalIndex, err := c.w.GetNextTokenNumber(c.w.Ctx, tx)
+		if err != nil {
+			return fmt.Errorf("PersistGenesisTokenRecord: GetNextTokenNumber: %w", err)
 		}
-		if err = c.w.PersistGenesisTokenRecord(genesisTx, t, &models.TokenChain{
-			TokenID:               "", // assigned by PersistGenesisTokenRecord
-			TransactionID:         txID,
-			PreviousTransactionID: nil,
-			Role:                  mintRoleID,
-			Position:              0,
-		}); err != nil {
+		tokenLevel, numInLevel, err := tokenmap.GetTokenLevelAndNumberForGlobalIndex(globalIndex)
+		if err != nil {
+			return fmt.Errorf("PersistGenesisTokenRecord: GetTokenLevelAndNumberForGlobalIndex(%d): %w", globalIndex, err)
+		}
+		tokenID := fmt.Sprintf("%d_%d", tokenLevel, numInLevel)
+
+		if _, err = c.w.PersistGenesisTokenRecord(tx, dc, c.ps, tokenID, did, constants.NetworkID_RBT_Local, currentTime); err != nil {
 			c.log.Error("Failed to persist genesis token record", "err", err)
-			return err
-		}
-
-		// Publish transaction on the network
-		publishingTxn := &model.PubSubTxnInfo{
-			BlockHash:    txID,
-			BlockType:    "05",
-			AssetType:    RBTTokenType,
-			PublisherDID: dc.GetDID(),
-		}
-		if err = c.publishTxn(publishingTxn); err != nil {
-			c.log.Error("Failed to publish txn", "err", err)
 			return err
 		}
 	}
@@ -853,18 +804,18 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 // processRole handles specific roles (as integers) and returns a message
 func (c *Core) processRole(role int) string {
 	roleMessages := map[int]string{
-		constants.TokenProviderRole_Owner:                  "Token chain block does not exist, the pinned role is owner, so this can be a double spend attempt",
-		constants.TokenProviderRole_Quorum:                 "Token chain block does not exist, the pinned role is QuorumRole",
-		constants.TokenProviderRole_PrevSender:             "Token chain block does not exist, the pinned role is PrevSenderRole",
-		constants.TokenProviderRole_Receiver:               "Token chain block does not exist, the pinned role is ReceiverRole",
-		constants.TokenProviderRole_ParentTokenLock:        "Token chain block does not exist, the pinned role is ParentTokenLockRole",
-		constants.TokenProviderRole_DID:                    "Token chain block does not exist, the pinned role is DIDRole",
-		constants.TokenProviderRole_Staking:                "Token chain block does not exist, the pinned role is StakingRole",
-		constants.TokenProviderRole_Pledging:               "Token chain block does not exist, the pinned role is PledgingRole",
-		constants.TokenProviderRole_QuorumPin:              "Token chain block does not exist, the pinned role is QuorumPinRole",
-		constants.TokenProviderRole_QuorumUnpin:            "Token chain block does not exist, the pinned role is QuorumUnpinRole",
-		constants.TokenProviderRole_ParentTokenPin: "Token chain block does not exist, the pinned role is ParentTokenPinByQuorumRole",
-		constants.TokenProviderRole_Pinning:                "Token chain block does not exist, the pinned role is PinningRole",
+		constants.TokenProviderRole_Owner:           "Token chain block does not exist, the pinned role is owner, so this can be a double spend attempt",
+		constants.TokenProviderRole_Quorum:          "Token chain block does not exist, the pinned role is QuorumRole",
+		constants.TokenProviderRole_PrevSender:      "Token chain block does not exist, the pinned role is PrevSenderRole",
+		constants.TokenProviderRole_Receiver:        "Token chain block does not exist, the pinned role is ReceiverRole",
+		constants.TokenProviderRole_ParentTokenLock: "Token chain block does not exist, the pinned role is ParentTokenLockRole",
+		constants.TokenProviderRole_DID:             "Token chain block does not exist, the pinned role is DIDRole",
+		constants.TokenProviderRole_Staking:         "Token chain block does not exist, the pinned role is StakingRole",
+		constants.TokenProviderRole_Pledging:        "Token chain block does not exist, the pinned role is PledgingRole",
+		constants.TokenProviderRole_QuorumPin:       "Token chain block does not exist, the pinned role is QuorumPinRole",
+		constants.TokenProviderRole_QuorumUnpin:     "Token chain block does not exist, the pinned role is QuorumUnpinRole",
+		constants.TokenProviderRole_ParentTokenPin:  "Token chain block does not exist, the pinned role is ParentTokenPinByQuorumRole",
+		constants.TokenProviderRole_Pinning:         "Token chain block does not exist, the pinned role is PinningRole",
 	}
 
 	if message, exists := roleMessages[role]; exists {
@@ -1651,8 +1602,7 @@ func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string
 		Message: "",
 	}
 
-	tokenDetails, err := c.generateTestTokensFaucet(reqID, tokenCount, did)
-
+	tokenDetails, err := c.generateTestRBT(reqID, tokenCount, did)
 	if err != nil {
 		c.log.Error("Failed to get token details from generateTestTokensFaucet", "err", err)
 		br.Status = false
@@ -1705,13 +1655,12 @@ func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string
 	dc.OutChan <- &br
 }
 
-func (c *Core) getFaucetTestTokensID(tokenLevel int, tokenNumber int) (string, error) {
+func (c *Core) getTestTokensID(tokenLevel int, tokenNumber int) (string, error) {
 	idStrVal := fmt.Sprintf("%d_%d", tokenLevel, tokenNumber)
 	return idStrVal, nil
 }
 
-func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string) (*token.FaucetToken, error) {
-
+func (c *Core) generateTestRBT(reqID string, numTokens int, did string) (*token.FaucetToken, error) {
 	if !c.testnet {
 		return nil, fmt.Errorf("generate test token is available in test net")
 	}
@@ -1742,107 +1691,36 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 	}
 	//Updating the Faucet token details with each new token
 	for i := 0; i < numTokens; i++ {
+		currentTime := int(time.Now().Unix())
+
+		tx, err := c.w.BeginTx(c.w.Ctx)
+		if err != nil {
+			return nil, fmt.Errorf("PersistGenesisTokenRecord: begin tx: %w", err)
+		}
+		defer tx.Rollback(c.w.Ctx) //nolint:errcheck
+
 		tokendetail.CurrentTokenNumber += 1
 
 		//If the latest token number to be generated is more than the max token value of previous token, increase the token level
-		levelOffset := tokendetail.TokenLevel - constants.FaucetRBT_Level_Offset
+		levelOffset := tokendetail.TokenLevel - constants.TestnetRBT_Level_Offset
 		maxTokens := token.TokenMap[levelOffset]
 		if tokendetail.CurrentTokenNumber == maxTokens+1 {
 			tokendetail.TokenLevel += 1
 			tokendetail.CurrentTokenNumber = 1
 		}
 
-		id, err := c.getFaucetTestTokensID(tokendetail.TokenLevel, tokendetail.CurrentTokenNumber)
+		id, err := c.getTestTokensID(tokendetail.TokenLevel, tokendetail.CurrentTokenNumber)
 		if err != nil {
 			c.log.Error("Failed to get token ID from IPFS", "err", err)
 			return &tokendetail, fmt.Errorf("failed to get token ID from IPFS")
 		}
 
-		currentTime := time.Now()
-
-		// Serialize txInfo once — used for signature, txID, and transactions.info storage
-		// (currentTime is declared at line 1905 inside the loop — do not redeclare)
-		txInfo := &models.TransactionInfo{
-			Initiator: did,
-			Owner:     did,
-			Epoch:     int(currentTime.Unix()),
-			Network:   constants.NetworkID_RBT_Testnet,
-			Tokens: &models.TransactionTokens{
-				RBT: []*models.TokenInfo{
-					{TokenID: id, PreviousTransactionID: ""},
-				},
-			},
-		}
-		infoBytes, err := models.SerializeTransactionInfo(txInfo)
-		if err != nil {
-			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to serialize transaction info for token %s: %w", id, err)
-		}
-		// Sign serialized txInfo bytes with creator DID (genesis self-signature)
-		signatureBytes, err := dc.PvtSign(infoBytes)
-		if err != nil {
-			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to sign transaction for token %s: %w", id, err)
-		}
-		sigStruct := &models.Signature{InitiatorSignature: hex.EncodeToString(signatureBytes)}
-		sigBytes, err := json.Marshal(sigStruct)
-		if err != nil {
-			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to marshal signature for token %s: %w", id, err)
-		}
-		txID, err := util.GetTransactionID(txInfo)
-		if err != nil {
-			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to compute transaction ID for token %s: %w", id, err)
-		}
-
-		// Add token to IPFS via wallet functions to obtain TokenStateHash
-		tokenHash, err := c.w.Add(bytes.NewBufferString(id), did, constants.TokenProviderFunc_Add, true)
-		if err != nil {
-			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to add token to ipfs: %v, err: %v", id, err)
-		}
-		// TODO: if DB persistence below fails, roll back IPFS pin via c.w.Unpin(tokenHash, constants.TokenProviderRole_Owner, did)
-
-		// TODO: RemoveTokenChainBlocklatest equivalent (undefined in new architecture — no-op for now)
-
-		// Atomically and idempotently persist genesis transaction, token, and tokenchain entry
-		mintRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Mint))
-		tokenTypeID := int16(models.GetTokenTypeID(constants.TokenType_RBT))
-		genesisTx := &models.Transactions{
-			ID:        txID,
-			Info:      infoBytes,
-			Signature: json.RawMessage(sigBytes),
-		}
-		t := &models.Token{
-			TokenID:        id,
-			DID:            did,
-			TokenValue:     floatPrecision(1.0, MaxDecimalPlaces),
-			TokenStatus:    int16(constants.TokenStatus_Free),
-			TransactionID:  txID,
-			TokenStateHash: tokenHash,
-			TokenType:      tokenTypeID,
-			LatestPosition: 0,
-			LatestRole:     mintRoleID,
-		}
-		if err = c.w.PersistGenesisTokenRecord(genesisTx, t, &models.TokenChain{
-			TokenID:               id,
-			TransactionID:         txID,
-			PreviousTransactionID: nil,
-			Role:                  mintRoleID,
-			Position:              0,
-		}); err != nil {
+		if _, err = c.w.PersistGenesisTokenRecord(tx, dc, c.ps, id, did, constants.NetworkMode_Testnet, currentTime); err != nil {
 			c.log.Error("Failed to persist genesis token record", "err", err)
 			return &tokendetail, err
 		}
 
 		tokendetail.TotalCount += 1
-
-		// Publish transaction on the network
-		publishingTxn := &model.PubSubTxnInfo{
-			BlockType:    "05",
-			AssetType:    RBTTokenType,
-			PublisherDID: dc.GetDID(),
-		}
-		if err = c.publishTxn(publishingTxn); err != nil {
-			c.log.Error("Failed to publish txn", "err", err)
-			return &tokendetail, err
-		}
 	}
 
 	return &tokendetail, nil
@@ -2140,7 +2018,7 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 					TransactionID: event.TransactionID,
 					PublisherDID:  event.PublisherDID,
 					BlockHeight:   event.LatestBlockHeight,
-					SyncStatus:     syncStatus,
+					SyncStatus:    syncStatus,
 					TokenStatus:   tokenStatus,
 					// TokenValue:    event.TokenValue,
 				}

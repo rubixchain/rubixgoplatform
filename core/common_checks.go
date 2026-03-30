@@ -245,22 +245,22 @@ func (c *Core) ValidateNewTokenContent(tokenContent string, isQuorum bool) error
 
 		if c.testnet {
 			network = "testnet"
-			if level < constants.FaucetRBT_Level_Offset {
+			if level < constants.TestnetRBT_Level_Offset {
 				return fmt.Errorf(
 					"invalid testnet token level %d: testnet level must be >= %d",
-					level, constants.FaucetRBT_Level_Offset,
+					level, constants.TestnetRBT_Level_Offset,
 				)
 			}
-			mapLevel = level - constants.FaucetRBT_Level_Offset
+			mapLevel = level - constants.TestnetRBT_Level_Offset
 		} else if c.localnet {
 			network = "localnet"
-			if level <= constants.LocalRBT_Level {
+			if level <= constants.LocalRBT_Level_Offset {
 				return fmt.Errorf(
 					"invalid local token level %d: localnet level must be > %d",
-					level, constants.LocalRBT_Level,
+					level, constants.LocalRBT_Level_Offset,
 				)
 			}
-			mapLevel = level - constants.LocalRBT_Level
+			mapLevel = level - constants.LocalRBT_Level_Offset
 		}
 
 		maxAllowed, ok := token.TokenMap[mapLevel]

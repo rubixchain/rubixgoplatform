@@ -49,7 +49,7 @@ const (
 	GetAllQuorumCmd                string = "getallquorum"
 	RemoveAllQuorumCmd             string = "removeallquorum"
 	SetupQuorumCmd                 string = "setupquorum"
-	GenerateTestRBTCmd             string = "generatetestrbt"
+	GenerateLocalRBTCmd            string = "generatelocalrbt"
 	TransferRBTCmd                 string = "transferrbt"
 	GetAccountInfoCmd              string = "getaccountinfo"
 	DumpTokenChainCmd              string = "dumptokenchain"
@@ -129,7 +129,7 @@ var commands = []string{VersionCmd,
 	GetAllQuorumCmd,
 	RemoveAllQuorumCmd,
 	SetupQuorumCmd,
-	GenerateTestRBTCmd,
+	GenerateLocalRBTCmd,
 	TransferRBTCmd,
 	GetAccountInfoCmd,
 	DumpTokenChainCmd,
@@ -556,16 +556,10 @@ func (cmd *Command) runApp() {
 
 	sc := make(chan bool, 1)
 
-	networkMode, err := getNetworkMode(cmd.testnet, cmd.mainnet, cmd.localnet)
-	if err != nil {
-		cmd.log.Error(fmt.Sprintf("failed to get the network mode: %v", err.Error()))
-		return
-	}
-
 	rubixCore, err := core.NewCore(
 		&cmd.cfg,
 		cmd.log,
-		networkMode,
+		userConfig.Core.NetworkMode,
 		cmd.defaultSetup,
 		cmd.publishTokenChainDetails,
 		cmd.fullNode,
@@ -855,8 +849,8 @@ func Run(args []string) {
 		cmd.RemoveAllQuorum()
 	case SetupQuorumCmd:
 		cmd.SetupQuorum()
-	case GenerateTestRBTCmd:
-		cmd.GenerateTestRBT()
+	case GenerateLocalRBTCmd:
+		cmd.GenerateLocalRBT()
 	case TransferRBTCmd:
 		cmd.TransferRBT()
 	case GetAccountInfoCmd:
