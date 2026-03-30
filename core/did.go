@@ -188,7 +188,7 @@ func (c *Core) CreateDID(didCreate *types.DIDCreate, localDID bool) (did string,
 	dt := &models.DID{
 		DID:    did,
 		PeerID: c.peerID,
-		Local:  true,
+		Local:  localDID,
 		AlgoID: int64(models.GetDidAlgoType(constants.DidAlgo_SECP256K1)),
 	}
 
@@ -269,7 +269,7 @@ func (c *Core) registerDID(reqID string, did string) error {
 	h := util.CalculateHash([]byte(c.peerID+did+t), constants.HashAlgorithm_SHA3_256)
 	sig, err := dc.Sign(h)
 	if err != nil {
-		return fmt.Errorf("register did, failed to do signature")
+		return fmt.Errorf("register did, failed to do signature, err: %w", err)
 	}
 
 	pm := &PeerMap{

@@ -102,31 +102,31 @@ func (d *DIDLite) Sign(hash []byte) ([]byte, error) {
 	if err != nil {
 		walletSignature, err := d.getSignature(hash)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Sign: failed to get signature; %w", err)
 		}
 
 		isValidSig, err := d.SignVerify(hash, walletSignature)
 		if err != nil || !isValidSig {
-			return nil, err
+			return nil, fmt.Errorf("Sign: failed to verify signature; %w", err)
 		}
 		return walletSignature, nil
 	}
 
 	pwd, err := d.getPassword()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Sign: failed to get password; %w", err)
 	}
 
 	Privatekey, _, err := crypto.DecodeBIPKeyPair(pwd, privKey, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Sign: failed to decode priv key; %w", err)
 	}
 
 	privkeyback := secp256k1.PrivKeyFromBytes(Privatekey)
 	privKeySer := privkeyback.ToECDSA()
 	pvtKeySign, err := crypto.BIPSign(privKeySer, hash)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Sign: failed to sign; %w", err)
 	}
 	return pvtKeySign, nil
 }
@@ -135,12 +135,12 @@ func (d *DIDLite) Sign(hash []byte) ([]byte, error) {
 func (d *DIDLite) SignVerify(hash []byte, sign []byte) (bool, error) {
 	pubKey, err := ioutil.ReadFile(path.Join(d.dir, constants.PubKeyFileName))
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("SignVerify: failed to read public key; %w", err)
 	}
 
 	_, pubKeyByte, err := crypto.DecodeBIPKeyPair("", nil, pubKey)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("SignVerify: failed to decode public key; %w", err)
 	}
 
 	pubkeyback, err := secp256k1.ParsePubKey(pubKeyByte)

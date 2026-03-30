@@ -8,9 +8,9 @@ type DIDCrypto interface {
 }
 
 type DIDCreate struct {
-	PrivPWD   string `json:"priv_pwd"`
-	PubKey    string `json:"pub_key"`
-	PrivKey   string `json:"priv_key"`
+	PrivPWD   string `json:"password"`
+	PubKey    string `json:"public_key"`
+	PrivKey   string `json:"private_key"`
 	Mnemonic  string `json:"mnemonic"`
 	ChildPath int    `json:"childPath"`
 }
