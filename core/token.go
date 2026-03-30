@@ -3,7 +3,6 @@ package core
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,6 +21,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/token"
+	tokenmap "github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -91,9 +91,8 @@ type PubSubEnvelope struct {
 
 func (c *Core) SetupToken() {
 	c.l.AddRoute(APISyncTokenChain, "POST", c.syncTokenChain)
-	c.l.AddRoute(APISyncTransactionChain, "POST", c.syncTransactionChain)
+	// c.l.AddRoute(APISyncTransactionChain, "POST", c.syncTransactionChain)
 	c.l.AddRoute(APISyncGenesisAndLatestBlock, "POST", c.syncGenesisAndLatestBlock)
-	c.l.AddRoute(APISyncGenesisAndLatestTransaction, "POST", c.syncGenesisAndLatestTransaction)
 	c.l.AddRoute(APIUpdateStatus, "PUT", c.updateStatus)
 	c.l.AddRoute(APIGetTokenStatus, "GET", c.getTokenStatus)
 	c.l.AddRoute(setup.APIRecoverLostTokens, "POST", c.recoverLostTokensHandler)
@@ -168,11 +167,11 @@ func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
 	return info, nil
 }
 
-func (c *Core) GenerateTestTokens(reqID string, num int, did string, startIndex int) {
-	err := c.generateTestTokens(reqID, num, did, startIndex)
+func (c *Core) GenerateLocalRBT(reqID string, num int, did string, startIndex int) {
+	err := c.generateLocalRBT(reqID, num, did, startIndex)
 	br := model.BasicResponse{
 		Status:  true,
-		Message: "Test tokens generated successfully",
+		Message: "Local RBT tokens generated successfully",
 	}
 	if err != nil {
 		br.Status = false
@@ -193,7 +192,7 @@ func (c *Core) getTokenIDForLocalTestTokens(tokenLevel int, tokenNumber int) (st
 	return idValue, nil
 }
 
-func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex int) error {
+func (c *Core) generateLocalRBT(reqID string, num int, did string, startIndex int) error {
 	if !c.localnet {
 		return fmt.Errorf("generate test token is available in 'localnet' mode. Run rubix in localnet mode by providing -localnet flag")
 	}
@@ -202,81 +201,32 @@ func (c *Core) generateTestTokens(reqID string, num int, did string, startIndex 
 	if err != nil {
 		return fmt.Errorf("DID is not exist")
 	}
-	currentTime := time.Now()
 
 	// TokenID is assigned atomically inside PersistGenesisTokenRecord using the
 	// global DB counter (GetNextTokenNumber). startIndex is retained in the
 	// signature for API compatibility but is no longer used.
 	for i := 0; i < num; i++ {
-		// Build genesis txInfo with empty TokenID — PersistGenesisTokenRecord
-		// assigns the canonical DB-counter-based TokenID inside the transaction.
-		txInfo := &models.TransactionInfo{
-			Initiator: did,
-			Owner:     did,
-			Epoch:     int(currentTime.Unix()),
-			Network:   constants.NetworkID_RBT_Local,
-			Tokens: &models.TransactionTokens{
-				RBT: []*models.TokenInfo{
-					{TokenID: "", PreviousTransactionID: ""},
-				},
-			},
-		}
-		infoBytes, err := models.SerializeTransactionInfo(txInfo)
-		if err != nil {
-			return fmt.Errorf("generateTestTokens: failed to serialize transaction info: %w", err)
-		}
-		signatureBytes, err := dc.Sign(infoBytes)
-		if err != nil {
-			return fmt.Errorf("generateTestTokens: failed to sign transaction: %w", err)
-		}
-		sigStruct := &models.Signature{InitiatorSignature: hex.EncodeToString(signatureBytes)}
-		sigBytes, err := json.Marshal(sigStruct)
-		if err != nil {
-			return fmt.Errorf("generateTestTokens: failed to marshal signature: %w", err)
-		}
-		txID, err := util.GetTransactionID(txInfo)
-		if err != nil {
-			return fmt.Errorf("generateTestTokens: failed to compute transaction ID: %w", err)
-		}
+		currentTime := int(time.Now().Unix())
 
-		mintRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Mint))
-		tokenTypeID := int16(models.GetTokenTypeID(constants.TokenType_RBT))
-		genesisTx := &models.Transactions{
-			ID:        txID,
-			Info:      infoBytes,
-			Signature: json.RawMessage(sigBytes),
+		tx, err := c.w.BeginTx(c.w.Ctx)
+		if err != nil {
+			return fmt.Errorf("PersistGenesisTokenRecord: begin tx: %w", err)
 		}
-		t := &models.Token{
-			TokenID:        "", // assigned by PersistGenesisTokenRecord
-			DID:            did,
-			TokenValue:     floatPrecision(1.0, MaxDecimalPlaces),
-			TokenStatus:    int16(constants.TokenStatus_Free),
-			TransactionID:  txID,
-			TokenStateHash: "",
-			TokenType:      tokenTypeID,
-			LatestPosition: 0,
-			LatestRole:     mintRoleID,
+		defer tx.Rollback(c.w.Ctx) //nolint:errcheck
+
+		// Get the tokenID based on a canonical index
+		globalIndex, err := c.w.GetNextTokenNumber(c.w.Ctx, tx)
+		if err != nil {
+			return fmt.Errorf("PersistGenesisTokenRecord: GetNextTokenNumber: %w", err)
 		}
-		if err = c.w.PersistGenesisTokenRecord(genesisTx, t, &models.TokenChain{
-			TokenID:               "", // assigned by PersistGenesisTokenRecord
-			TransactionID:         txID,
-			PreviousTransactionID: nil,
-			Role:                  mintRoleID,
-			Position:              0,
-		}); err != nil {
+		tokenLevel, numInLevel, err := tokenmap.GetTokenLevelAndNumberForGlobalIndex(globalIndex)
+		if err != nil {
+			return fmt.Errorf("PersistGenesisTokenRecord: GetTokenLevelAndNumberForGlobalIndex(%d): %w", globalIndex, err)
+		}
+		tokenID := fmt.Sprintf("%d_%d", tokenLevel, numInLevel)
+
+		if _, err = c.w.PersistGenesisTokenRecord(tx, dc, c.ps, tokenID, did, constants.NetworkID_RBT_Local, currentTime); err != nil {
 			c.log.Error("Failed to persist genesis token record", "err", err)
-			return err
-		}
-
-		// Publish transaction on the network
-		publishingTxn := &model.PubSubTxnInfo{
-			BlockHash:    txID,
-			BlockType:    "05",
-			AssetType:    RBTTokenType,
-			PublisherDID: dc.GetDID(),
-		}
-		if err = c.publishTxn(publishingTxn); err != nil {
-			c.log.Error("Failed to publish txn", "err", err)
 			return err
 		}
 	}
@@ -1651,8 +1601,7 @@ func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string
 		Message: "",
 	}
 
-	tokenDetails, err := c.generateTestTokensFaucet(reqID, tokenCount, did)
-
+	tokenDetails, err := c.generateTestRBT(reqID, tokenCount, did)
 	if err != nil {
 		c.log.Error("Failed to get token details from generateTestTokensFaucet", "err", err)
 		br.Status = false
@@ -1705,13 +1654,12 @@ func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string
 	dc.OutChan <- &br
 }
 
-func (c *Core) getFaucetTestTokensID(tokenLevel int, tokenNumber int) (string, error) {
+func (c *Core) getTestTokensID(tokenLevel int, tokenNumber int) (string, error) {
 	idStrVal := fmt.Sprintf("%d_%d", tokenLevel, tokenNumber)
 	return idStrVal, nil
 }
 
-func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string) (*token.FaucetToken, error) {
-
+func (c *Core) generateTestRBT(reqID string, numTokens int, did string) (*token.FaucetToken, error) {
 	if !c.testnet {
 		return nil, fmt.Errorf("generate test token is available in test net")
 	}
@@ -1742,107 +1690,36 @@ func (c *Core) generateTestTokensFaucet(reqID string, numTokens int, did string)
 	}
 	//Updating the Faucet token details with each new token
 	for i := 0; i < numTokens; i++ {
+		currentTime := int(time.Now().Unix())
+
+		tx, err := c.w.BeginTx(c.w.Ctx)
+		if err != nil {
+			return nil, fmt.Errorf("PersistGenesisTokenRecord: begin tx: %w", err)
+		}
+		defer tx.Rollback(c.w.Ctx) //nolint:errcheck
+
 		tokendetail.CurrentTokenNumber += 1
 
 		//If the latest token number to be generated is more than the max token value of previous token, increase the token level
-		levelOffset := tokendetail.TokenLevel - constants.FaucetRBT_Level_Offset
+		levelOffset := tokendetail.TokenLevel - constants.TestnetRBT_Level_Offset
 		maxTokens := token.TokenMap[levelOffset]
 		if tokendetail.CurrentTokenNumber == maxTokens+1 {
 			tokendetail.TokenLevel += 1
 			tokendetail.CurrentTokenNumber = 1
 		}
 
-		id, err := c.getFaucetTestTokensID(tokendetail.TokenLevel, tokendetail.CurrentTokenNumber)
+		id, err := c.getTestTokensID(tokendetail.TokenLevel, tokendetail.CurrentTokenNumber)
 		if err != nil {
 			c.log.Error("Failed to get token ID from IPFS", "err", err)
 			return &tokendetail, fmt.Errorf("failed to get token ID from IPFS")
 		}
 
-		currentTime := time.Now()
-
-		// Serialize txInfo once — used for signature, txID, and transactions.info storage
-		// (currentTime is declared at line 1905 inside the loop — do not redeclare)
-		txInfo := &models.TransactionInfo{
-			Initiator: did,
-			Owner:     did,
-			Epoch:     int(currentTime.Unix()),
-			Network:   constants.NetworkID_RBT_Testnet,
-			Tokens: &models.TransactionTokens{
-				RBT: []*models.TokenInfo{
-					{TokenID: id, PreviousTransactionID: ""},
-				},
-			},
-		}
-		infoBytes, err := models.SerializeTransactionInfo(txInfo)
-		if err != nil {
-			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to serialize transaction info for token %s: %w", id, err)
-		}
-		// Sign serialized txInfo bytes with creator DID (genesis self-signature)
-		signatureBytes, err := dc.Sign(infoBytes)
-		if err != nil {
-			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to sign transaction for token %s: %w", id, err)
-		}
-		sigStruct := &models.Signature{InitiatorSignature: hex.EncodeToString(signatureBytes)}
-		sigBytes, err := json.Marshal(sigStruct)
-		if err != nil {
-			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to marshal signature for token %s: %w", id, err)
-		}
-		txID, err := util.GetTransactionID(txInfo)
-		if err != nil {
-			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to compute transaction ID for token %s: %w", id, err)
-		}
-
-		// Add token to IPFS via wallet functions to obtain TokenStateHash
-		tokenHash, err := c.w.Add(bytes.NewBufferString(id), did, constants.TokenProviderFunc_Add, true)
-		if err != nil {
-			return &tokendetail, fmt.Errorf("generateTestTokensFaucet: failed to add token to ipfs: %v, err: %v", id, err)
-		}
-		// TODO: if DB persistence below fails, roll back IPFS pin via c.w.Unpin(tokenHash, constants.TokenProviderRole_Owner, did)
-
-		// TODO: RemoveTokenChainBlocklatest equivalent (undefined in new architecture — no-op for now)
-
-		// Atomically and idempotently persist genesis transaction, token, and tokenchain entry
-		mintRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Mint))
-		tokenTypeID := int16(models.GetTokenTypeID(constants.TokenType_RBT))
-		genesisTx := &models.Transactions{
-			ID:        txID,
-			Info:      infoBytes,
-			Signature: json.RawMessage(sigBytes),
-		}
-		t := &models.Token{
-			TokenID:        id,
-			DID:            did,
-			TokenValue:     floatPrecision(1.0, MaxDecimalPlaces),
-			TokenStatus:    int16(constants.TokenStatus_Free),
-			TransactionID:  txID,
-			TokenStateHash: tokenHash,
-			TokenType:      tokenTypeID,
-			LatestPosition: 0,
-			LatestRole:     mintRoleID,
-		}
-		if err = c.w.PersistGenesisTokenRecord(genesisTx, t, &models.TokenChain{
-			TokenID:               id,
-			TransactionID:         txID,
-			PreviousTransactionID: nil,
-			Role:                  mintRoleID,
-			Position:              0,
-		}); err != nil {
+		if _, err = c.w.PersistGenesisTokenRecord(tx, dc, c.ps, id, did, constants.NetworkMode_Testnet, currentTime); err != nil {
 			c.log.Error("Failed to persist genesis token record", "err", err)
 			return &tokendetail, err
 		}
 
 		tokendetail.TotalCount += 1
-
-		// Publish transaction on the network
-		publishingTxn := &model.PubSubTxnInfo{
-			BlockType:    "05",
-			AssetType:    RBTTokenType,
-			PublisherDID: dc.GetDID(),
-		}
-		if err = c.publishTxn(publishingTxn); err != nil {
-			c.log.Error("Failed to publish txn", "err", err)
-			return &tokendetail, err
-		}
 	}
 
 	return &tokendetail, nil
@@ -2633,163 +2510,106 @@ func (c *Core) relaseToken(release *bool, token string) {
 }
 
 // syncTransactionChain handles a sync request for a token's transaction chain.
-// (upstream addition — Category B)
-func (c *Core) syncTransactionChain(req *ensweb.Request) *ensweb.Result {
-	var syncRequest models.TransactionChainSyncRequest
-	var syncReply models.TransactionChainSyncReply
-	err := c.l.ParseJSON(req, &syncRequest)
-	if err != nil {
-		c.log.Error("failed to parse transaction chain sync request")
-		return c.l.RenderJSON(req, &models.TransactionChainSyncReply{Status: false, Message: "Failed to parse sync request"}, http.StatusOK)
-	}
-	//TODO: Implement GetTransactions function
-	transactions, nextTransactionID, err := c.w.GetTransactions(syncRequest.TokenID, syncRequest.TransactionID)
-	if err != nil {
-		c.log.Error("failed to get transactions")
-		return c.l.RenderJSON(req, &models.TransactionChainSyncReply{Status: false, Message: "Failed to get transactions"}, http.StatusOK)
-	}
-	syncReply.Transactions = transactions
-	syncReply.NextTransactionID = nextTransactionID
-	syncReply.Status = true
-	syncReply.Message = "Successfully got transactions"
-	return c.l.RenderJSON(req, &syncReply, http.StatusOK)
-}
-
-// syncGenesisAndLatestTransaction handles a sync request for genesis and latest transactions.
-// (upstream addition — Category B, stubbed pending wallet implementation)
-// TODO: Implement this function and complete syncTransaction API
-func (c *Core) syncGenesisAndLatestTransaction(req *ensweb.Request) *ensweb.Result {
-	return c.l.RenderJSON(req, &models.GenesisAndLatestTransactionSyncReply{Status: true, Message: "Successfully got genesis and latest transaction"}, http.StatusOK)
-}
-
-// findTokenRoleInTxn determines the role a token played in a given transaction.
-// (upstream addition — Category B)
-func findTokenRoleInTxn(tokenID string, txInfo *models.TransactionInfo) int16 {
-	if txInfo.Tokens != nil {
-		for _, lists := range [][]*models.TokenInfo{
-			txInfo.Tokens.RBT, txInfo.Tokens.NFT,
-			txInfo.Tokens.FT, txInfo.Tokens.SmartContract,
-		} {
-			for _, t := range lists {
-				if t.TokenID == tokenID {
-					return int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
-				}
-			}
-		}
-	}
-
-	for _, t := range txInfo.CommittedTokens {
-		if t.TokenID == tokenID {
-			return int16(models.GetTokenRoleID(constants.TokenRole_Commit))
-		}
-	}
-
-	for _, q := range txInfo.Quorums {
-		for _, t := range q.Tokens {
-			if t.TokenID == tokenID {
-				return int16(models.GetTokenRoleID(constants.TokenRole_Pledge))
-			}
-		}
-	}
-
-	return int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
-}
+// // (upstream addition — Category B)
+// func (c *Core) syncTransactionChain(req *ensweb.Request) *ensweb.Result {
+// 	return rubixsync.SyncTransactionChain(req, c.l, c.w, c.log)
+// }
 
 // syncTransactionChainFrom fetches missing transactions from a peer and writes them locally.
 // (upstream addition — Category B)
-func (c *Core) syncTransactionChainFrom(p *ipfsport.Peer, previousTransactionID string, token string) (error, *models.TransactionChainSyncReply) {
-	var err error
+// func (c *Core) SyncTransactionChainFrom(p *ipfsport.Peer, token string) (error, *models.TransactionChainSyncReply) {
+// 	var err error
 
-	latestTransactionID := c.w.GetLatestTransactionID(token)
-	if latestTransactionID == "" {
-		c.log.Error("failed to get latest transaction id")
-		return err, nil
-	}
-	if latestTransactionID == previousTransactionID {
-		return nil, nil
-	}
+// 	latestTransactionID := c.w.GetLatestTransactionID(token)
+// 	if latestTransactionID == "" {
+// 		c.log.Error("failed to get latest transaction id")
+// 		return err, nil
+// 	}
+// 	// if latestTransactionID == previousTransactionID {
+// 	// 	return nil, nil
+// 	// }
 
-	syncReq := models.TransactionChainSyncRequest{
-		TokenID:       token,
-		TransactionID: previousTransactionID,
-	}
+// 	syncReq := models.TransactionChainSyncRequest{
+// 		TokenID:       token,
+// 		TransactionID: latestTransactionID,
+// 	}
 
-	for {
-		var trep models.TransactionChainSyncReply
-		err = p.SendJSONRequest("POST", APISyncTransactionChain, nil, &syncReq, &trep, false)
-		if err != nil {
-			c.log.Error("failed to sync transaction chain")
-			return err, nil
-		}
-		if !trep.Status {
-			c.log.Error("failed to sync transaction chain")
-			return fmt.Errorf(trep.Message), nil
-		}
-		if len(trep.Transactions) > 0 {
-			for _, txn := range trep.Transactions {
-				tx, err := util.TransactionFromBytes(txn)
-				if tx == nil {
-					c.log.Error("failed to convert transaction bytes to transaction")
-					return fmt.Errorf("failed to convert transaction bytes to transaction"), nil
-				}
-				var txInfo models.TransactionInfo
-				if err = json.Unmarshal(tx.Info, &txInfo); err != nil {
-					c.log.Error("failed to unmarshal transaction info", "err", err)
-					return fmt.Errorf("failed to unmarshal transaction info: %w", err), nil
-				}
+// 	for {
+// 		var trep models.TransactionChainSyncReply
+// 		err = p.SendJSONRequest("POST", APISyncTransactionChain, nil, &syncReq, &trep, false)
+// 		if err != nil {
+// 			c.log.Error("failed to sync transaction chain")
+// 			return err, nil
+// 		}
+// 		if !trep.Status {
+// 			c.log.Error("failed to sync transaction chain")
+// 			return fmt.Errorf(trep.Message), nil
+// 		}
+// 		if len(trep.Transactions) > 0 {
+// 			for _, txn := range trep.Transactions {
+// 				tx, err := util.TransactionFromBytes(txn)
+// 				if tx == nil {
+// 					c.log.Error("failed to convert transaction bytes to transaction")
+// 					return fmt.Errorf("failed to convert transaction bytes to transaction"), nil
+// 				}
+// 				var txInfo models.TransactionInfo
+// 				if err = json.Unmarshal(tx.Info, &txInfo); err != nil {
+// 					c.log.Error("failed to unmarshal transaction info", "err", err)
+// 					return fmt.Errorf("failed to unmarshal transaction info: %w", err), nil
+// 				}
 
-				role := findTokenRoleInTxn(token, &txInfo)
+// 				role := rubixsync.FindTokenRoleInTxn(token, &txInfo)
 
-				if err = c.w.CreateTransaction(tx); err != nil {
-					c.log.Error("failed to add transaction to transactions table", "err", err)
-					return fmt.Errorf("failed to add transaction: %w", err), nil
-				}
+// 				if err = c.w.CreateTransaction(tx); err != nil {
+// 					c.log.Error("failed to add transaction to transactions table", "err", err)
+// 					return fmt.Errorf("failed to add transaction: %w", err), nil
+// 				}
 
-				tokenDetails, err := c.w.GetTokenByTokenID(token)
-				if err != nil {
-					newToken := models.Token{
-						TokenID:        token,
-						TokenStatus:    constants.TokenStatus_Free,
-						DID:            txInfo.Owner,
-						TransactionID:  tx.ID,
-						TokenType:      int16(models.GetTokenTypeID(constants.TokenType_RBT)),
-						LatestPosition: 0,
-						LatestRole:     role,
-						CreatedAt:      time.Now(),
-						UpdatedAt:      time.Now(),
-					}
-					if createErr := c.w.CreateRBTToken(newToken); createErr != nil {
-						c.log.Error("failed to create token", "err", createErr)
-						return fmt.Errorf("failed to create token: %w", createErr), nil
-					}
-					tokenDetails = newToken
-				} else {
-					tokenDetails.DID = txInfo.Owner
-					tokenDetails.TransactionID = tx.ID
-					tokenDetails.LatestPosition++
-					tokenDetails.LatestRole = role
-					if updateErr := c.w.UpdateToken(tokenDetails); updateErr != nil {
-						c.log.Error("failed to update token", "err", updateErr)
-						return fmt.Errorf("failed to update token: %w", updateErr), nil
-					}
-				}
+// 				tokenDetails, err := c.w.GetTokenByTokenID(token)
+// 				if err != nil {
+// 					newToken := models.Token{
+// 						TokenID:        token,
+// 						TokenStatus:    constants.TokenStatus_Free,
+// 						DID:            txInfo.Owner,
+// 						TransactionID:  tx.ID,
+// 						TokenType:      int16(models.GetTokenTypeID(constants.TokenType_RBT)),
+// 						LatestPosition: 0,
+// 						LatestRole:     role,
+// 						CreatedAt:      time.Now(),
+// 						UpdatedAt:      time.Now(),
+// 					}
+// 					if createErr := c.w.CreateRBTToken(newToken); createErr != nil {
+// 						c.log.Error("failed to create token", "err", createErr)
+// 						return fmt.Errorf("failed to create token: %w", createErr), nil
+// 					}
+// 					tokenDetails = newToken
+// 				} else {
+// 					tokenDetails.DID = txInfo.Owner
+// 					tokenDetails.TransactionID = tx.ID
+// 					tokenDetails.LatestPosition++
+// 					tokenDetails.LatestRole = role
+// 					if updateErr := c.w.UpdateToken(tokenDetails); updateErr != nil {
+// 						c.log.Error("failed to update token", "err", updateErr)
+// 						return fmt.Errorf("failed to update token: %w", updateErr), nil
+// 					}
+// 				}
 
-				entry := &models.TokenChain{
-					TokenID:       token,
-					TransactionID: tx.ID,
-					Role:          role,
-					Position:      tokenDetails.LatestPosition,
-				}
-				if err = c.w.AddTokenChainEntry(entry); err != nil {
-					c.log.Error("failed to add token chain entry", "err", err)
-					return fmt.Errorf("failed to add token chain entry: %w", err), nil
-				}
-			}
-		}
-		if trep.NextTransactionID == "" {
-			break
-		}
-		syncReq.TransactionID = trep.NextTransactionID
-	}
-	return nil, nil
-}
+// 				entry := &models.TokenChain{
+// 					TokenID:       token,
+// 					TransactionID: tx.ID,
+// 					Role:          role,
+// 					Position:      tokenDetails.LatestPosition,
+// 				}
+// 				if err = c.w.AddTokenChainEntry(entry); err != nil {
+// 					c.log.Error("failed to add token chain entry", "err", err)
+// 					return fmt.Errorf("failed to add token chain entry: %w", err), nil
+// 				}
+// 			}
+// 		}
+// 		if trep.NextTransactionID == "" {
+// 			break
+// 		}
+// 		syncReq.TransactionID = trep.NextTransactionID
+// 	}
+// 	return nil, nil
+// }

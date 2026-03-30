@@ -22,6 +22,10 @@ func ZeroFloat() float64 {
 	return FloatPrecision(0.0)
 }
 
+func OneFloat() float64 {
+	return FloatPrecision(1.0)
+}
+
 func AddFloat(a float64, b float64) float64 {
 	return FloatPrecision(a + b)
 }

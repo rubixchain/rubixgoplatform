@@ -9,14 +9,14 @@ import (
 	"github.com/rubixchain/rubixgoplatform/setup"
 )
 
-func (c *Client) GenerateTestRBT(numTokens int, didStr string, startIndex int) (*model.BasicResponse, error) {
-	m := model.RBTGenerateRequest{
+func (c *Client) GenerateLocalRBT(numTokens int, didStr string, startIndex int) (*model.BasicResponse, error) {
+	m := model.GenerateLocalRBTRequest{
 		NumberOfTokens: numTokens,
 		DID:            didStr,
 		StartIndex:     startIndex,
 	}
 	var rm model.BasicResponse
-	err := c.sendJSONRequest("POST", setup.APIGenerateTestToken, nil, &m, &rm)
+	err := c.sendJSONRequest("POST", setup.APIGenerateLocalRBT, nil, &m, &rm)
 	if err != nil {
 		return nil, err
 	}

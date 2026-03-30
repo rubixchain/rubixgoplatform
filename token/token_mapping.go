@@ -10,7 +10,6 @@ const FaucetName = "faucettestrbt"
 
 // LocalTestTokenLevelBase is the starting level for local test tokens. Level 10001 corresponds to level 1 (4300000 tokens), etc.
 
-
 var TokenMap = map[int]int{
 	1:  4300000,
 	2:  2425000,
@@ -106,7 +105,7 @@ func GetTokenLevelAndNumberForGlobalIndex(globalIndex int) (tokenLevel int, numI
 			return 0, 0, fmt.Errorf("global index %d exceeds max token levels", globalIndex)
 		}
 		if globalIndex <= cumulative+maxCount {
-			tokenLevel = constants.LocalRBT_Level + mapLevel
+			tokenLevel = constants.LocalRBT_Level_Offset + mapLevel
 			numInLevel = globalIndex - cumulative
 			return tokenLevel, numInLevel, nil
 		}

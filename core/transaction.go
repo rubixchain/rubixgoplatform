@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	rubixsync "github.com/rubixchain/rubixgoplatform/core/sync"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -178,25 +180,53 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	}
 	//Publish transaction to the network
 	util.PublishTransaction(c.ps, transactionInfo, signatureTobePublished)
-	// Sending token information to the receiver
-	// We need to send the genesis information, the previous transaction information and the latest transaction information.
-	//sync api :
-	// 1. Send information to receiver
-	receiverPeer, err := c.getPeer(nextOwnerDID)
+
+	// Send tokens to receiver asynchronously in background
+	go c.sendTokensToReceiver(nextOwnerDID, transactionId, transactionInfo, request)
+
+	// Return immediately - receiver sync happens in background
+	resp.Status = true
+	resp.Message = "Transfer initiated successfully"
+	return resp
+}
+
+// sendTokensToReceiver sends transaction tokens to the receiver asynchronously.
+// This function is designed to run as a goroutine and handles all errors internally.
+// It will not block or fail the main transaction flow.
+func (c *Core) sendTokensToReceiver(
+	receiverDID string,
+	transactionID string,
+	txInfo *models.TransactionInfo,
+	request *models.TransactionRequest,
+) {
+	c.log.Debug("sendTokensToReceiver: Starting async receiver sync",
+		"receiver", receiverDID,
+		"transactionID", transactionID)
+
+	// Get receiver peer connection
+	receiverPeer, err := c.getPeer(receiverDID)
 	if err != nil {
-		c.log.Error("InitiateTransaction: Failed to get peer for receiver", "err", err)
+		c.log.Warn("sendTokensToReceiver: Receiver offline, will sync later",
+			"receiver", receiverDID,
+			"transactionID", transactionID,
+			"err", err)
+		return
 	}
 	defer receiverPeer.Close()
-	// The check for whether this is an asset which needs to be sent to the receiver need to be checked here.
-	// For smartcontracts we need not send the token information to the receriver, we just need to publish it.
-	// For NFTs we need to check the particular boolean on the in the request for sending.
+
+	// Prepare sync request
+	// For smartcontracts we need not send the token information to the receiver, we just need to publish it.
+	// For NFTs we need to check the particular boolean in the request for sending.
 	// For RBTs we need to send the entire token information.
 	var sendTokensRequest models.SendTokensRequest
 	var sendTokensResponse model.BasicResponse
-	sendTokensRequest.Tokens = transactionInfo.Tokens
+	sendTokensRequest.Tokens = txInfo.Tokens
 	if request.HasNFT() {
 		sendTokensRequest.NFTOwnershipTransfer = request.Tokens.TransferNFTOwnership
 	}
+
+	// Send tokens to receiver with 2-minute timeout
+	// SendJSONRequest has built-in retry logic (3 attempts with exponential backoff)
 	err = receiverPeer.SendJSONRequest(
 		"POST",
 		APISendTokens,
@@ -204,14 +234,20 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		&sendTokensRequest,
 		&sendTokensResponse,
 		true,
+		2*time.Minute, // Timeout for the entire operation
 	)
-	if err != nil {
-		c.log.Error("InitiateTransaction: Failed to send transaction info to receiver", "err", err)
-	}
-	resp.Status = true
-	resp.Message = "Transfer initiated successfully"
 
-	return resp
+	if err != nil {
+		c.log.Warn("sendTokensToReceiver: Failed to sync tokens to receiver (will retry later)",
+			"receiver", receiverDID,
+			"transactionID", transactionID,
+			"err", err)
+		return
+	}
+
+	c.log.Info("sendTokensToReceiver: Receiver sync completed successfully",
+		"receiver", receiverDID,
+		"transactionID", transactionID)
 }
 
 // This has been added here since this is part of the transaction flow.
@@ -244,7 +280,7 @@ func (c *Core) syncTransactionTokens(
 				continue
 			}
 			//Handling the response in the future.
-			err, _ := c.syncTransactionChainFrom(peer, token.PreviousTransactionID, token.TokenID)
+			err, _ := rubixsync.SyncTransactionChainFrom(peer, token.TokenID, c.w, c.log)
 			if err != nil {
 				return err
 			}
@@ -268,6 +304,8 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 	peer, err := c.getPeer(did)
 	if err != nil {
 		c.log.Error("SendTokens: Failed to get peer for receiver", "err", err)
+		crep.Message = "SendTokens: Failed to get peer for receiver"
+		return c.l.RenderJSON(request, &crep, http.StatusBadRequest)
 	}
 	defer peer.Close()
 	err = c.syncTransactionTokens(peer, sendTokensRequest.Tokens, sendTokensRequest.NFTOwnershipTransfer)
@@ -277,7 +315,9 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(request, &crep, http.StatusBadRequest)
 	}
 
-	return c.l.RenderJSON(request, &crep, http.StatusBadRequest)
+	crep.Status = true
+	crep.Message = "Tokens synced successfully"
+	return c.l.RenderJSON(request, &crep, http.StatusOK)
 }
 
 func (c *Core) GetTransactionByID(txId string) (*models.TransactionInfo, error) {

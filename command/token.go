@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func (cmd *Command) GenerateTestRBT() {
+func (cmd *Command) GenerateLocalRBT() {
 	if cmd.did == "" {
 		cmd.log.Info("DID cannot be empty")
 		fmt.Print("Enter DID : ")
@@ -26,7 +26,7 @@ func (cmd *Command) GenerateTestRBT() {
 		return
 	}
 
-	br, err := cmd.c.GenerateTestRBT(cmd.numTokens, cmd.did, cmd.startIndex)
+	br, err := cmd.c.GenerateLocalRBT(cmd.numTokens, cmd.did, cmd.startIndex)
 
 	if err != nil {
 		cmd.log.Error("Failed to generate RBT", "err", err)
