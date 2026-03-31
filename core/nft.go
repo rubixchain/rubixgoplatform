@@ -11,7 +11,9 @@ import (
 	"os"
 	"path"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	rubixsync "github.com/rubixchain/rubixgoplatform/core/sync"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -150,7 +152,7 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 	}
 
 	// Sync transaction chain from publisher
-	err, _ = c.syncTransactionChainFrom(publisherPeer, "", nft)
+	err, _ = rubixsync.SyncTransactionChainFrom(publisherPeer, nft, models.GetTokenTypeID(constants.TokenType_NFT), c.w, c.log)
 	if err != nil {
 		c.log.Error("NFTCallBack: Failed to sync transaction chain", "nft_token", nft, "err", err)
 		return
@@ -220,7 +222,7 @@ func (c *Core) syncNFTTransaction(nftToken string, nft *models.IPFSContractInfo)
 	c.log.Info("syncNFTTransaction: Successfully retrieved peer", "nft_token", nftToken, "address", address)
 
 	// Sync the transaction chain from the peer
-	err, _ = c.syncTransactionChainFrom(peer, "", nftToken)
+	err, _ = rubixsync.SyncTransactionChainFrom(peer, nftToken, models.GetTokenTypeID(constants.TokenType_NFT), c.w, c.log)
 	if err != nil {
 		c.log.Error("syncNFTTransaction: Failed to sync transaction chain", "nft_token", nftToken, "peer", address, "err", err)
 		return fmt.Errorf("failed to sync transaction chain for NFT %s: %w", nftToken, err)

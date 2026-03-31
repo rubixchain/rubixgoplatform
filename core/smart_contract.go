@@ -9,7 +9,9 @@ import (
 	"os"
 	"path"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	rubixsync "github.com/rubixchain/rubixgoplatform/core/sync"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -198,7 +200,7 @@ func (c *Core) syncSmartContractTransaction(smartContractToken string, metadata 
 	}
 
 	// Sync transaction chain
-	if err, _ := c.syncTransactionChainFrom(peer, "", smartContractToken); err != nil {
+	if err, _ := rubixsync.SyncTransactionChainFrom(peer, smartContractToken, models.GetTokenTypeID(constants.TokenType_SmartContract), c.w, c.log); err != nil {
 		c.log.Error("syncSmartContractTransaction: Failed to sync transaction chain", "token", smartContractToken, "err", err)
 		return fmt.Errorf("syncSmartContractTransaction: failed to sync transaction chain: %w", err)
 	}
@@ -317,7 +319,7 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		return
 	}
 
-	err, _ = c.syncTransactionChainFrom(p, "", smartContractToken)
+	err, _ = rubixsync.SyncTransactionChainFrom(p, smartContractToken, models.GetTokenTypeID(constants.TokenType_SmartContract), c.w, c.log)
 	if err != nil {
 		c.log.Error("ContractCallBack: Failed to sync transaction chain", "token", smartContractToken, "err", err)
 		return
