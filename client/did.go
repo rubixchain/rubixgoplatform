@@ -40,8 +40,8 @@ func (c *Client) GetDIDAccess(req *model.GetDIDAccess) (string, error) {
 	return resp.Token, nil
 }
 
-func (c *Client) GetAllDIDs() (*model.GetAccountInfo, error) {
-	var ac model.GetAccountInfo
+func (c *Client) GetAllDIDs() (*model.BasicResponse, error) {
+	var ac model.BasicResponse
 	err := c.sendJSONRequest("GET", setup.APIGetAllDID, nil, nil, &ac)
 	if err != nil {
 		return nil, err

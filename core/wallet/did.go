@@ -56,21 +56,19 @@ func (w *Wallet) GetPeerID(did string) (string, error) {
 	return peerID, nil
 }
 
-func (w *Wallet) GetAllDID() ([]models.DID, error) {
+func (w *Wallet) GetAllDID() ([]string, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
-		`SELECT did, peer_id, local, algo_id FROM dids`,
+		`SELECT did FROM dids`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("GetAllDID: failed to query dids table, err: %v", err)
 	}
 	defer rows.Close()
 
-	var dids []models.DID = make([]models.DID, 0)
+	dids := make([]string, 0)
 	for rows.Next() {
-		var did models.DID
-		err := rows.Scan(
-			&did.DID, &did.PeerID, &did.Local, &did.AlgoID,
-		)
+		var did string
+		err := rows.Scan(&did)
 		if err != nil {
 			return nil, fmt.Errorf("GetAllDID: error while scanning rows, err: %v", err)
 		}

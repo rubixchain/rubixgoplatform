@@ -71,23 +71,13 @@ func (s *Server) APIGetAllDID(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Unathuriozed access", nil)
 	}
 
-	dt := s.c.GetDIDs()
-	ai := model.GetAccountInfo{
-		BasicResponse: model.BasicResponse{
-			Status:  true,
-			Message: "Got all DIDs",
-		},
-		AccountInfo: make([]model.DIDAccountInfo, 0),
+	didList := s.c.GetDIDs()
+	didResponse := model.BasicResponse{
+		Status:  true,
+		Message: "Got all DIDs",
+		Result:  didList,
 	}
-	for _, d := range dt {
-		a, err := s.c.GetAccountInfo(d.DID)
-		if err == nil {
-			ai.AccountInfo = append(ai.AccountInfo, a)
-		} else {
-			ai.AccountInfo = append(ai.AccountInfo, model.DIDAccountInfo{DID: d.DID})
-		}
-	}
-	return s.RenderJSON(req, &ai, http.StatusOK)
+	return s.RenderJSON(req, &didResponse, http.StatusOK)
 }
 
 func (s *Server) validateDIDAccess(req *ensweb.Request, did string) bool {

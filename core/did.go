@@ -201,7 +201,7 @@ func (c *Core) CreateDID(didCreate *types.DIDCreate, localDID bool) (did string,
 	return did, nil
 }
 
-func (c *Core) GetDIDs() []models.DID {
+func (c *Core) GetDIDs() []string {
 	dt, err := c.w.GetAllDID()
 	if err != nil {
 		return nil

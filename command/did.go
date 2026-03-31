@@ -55,8 +55,9 @@ func (cmd *Command) GetAllDID() {
 		cmd.log.Error("Failed to get DIDs", "message", response.Message)
 		return
 	}
-	for i := range response.AccountInfo {
-		fmt.Printf("Address : %s\n", response.AccountInfo[i].DID)
+	didList := response.Result.([]interface{})
+	for _, did := range didList {
+		fmt.Printf("Address : %s\n", did.(string))
 	}
 	cmd.log.Info("Got all DID successfully")
 }
@@ -178,7 +179,7 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 			}
 
 			sresp := types.SignRespData{
-				ID:   sr.ID,
+				ID: sr.ID,
 			}
 
 			sresp.Password = password
