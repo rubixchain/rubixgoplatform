@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/base64"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -11,6 +10,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/grpcserver"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
@@ -56,7 +56,7 @@ func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan
 		if cfg.SessionKey == "" {
 			rb := make([]byte, 32)
 			rand.Read(rb)
-			cfg.SessionKey = base64.StdEncoding.EncodeToString(rb)
+			cfg.SessionKey = util.BytesToBase64(rb)
 		}
 		s.CreateSessionStore(cfg.SessionName, "hello", sessions.Options{Path: "/api", HttpOnly: true})
 	}
@@ -141,7 +141,6 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APISelfTransfer, "POST", s.AuthHandle(s.SelfTransferHandle, false, s.AuthError, true))
 	s.AddRoute(setup.APIRunUnpledge, "POST", s.AuthHandle(s.RunUnpledgeHandle, false, s.AuthError, true))
 	s.AddRoute(setup.APIInitiatePinRBT, "POST", s.AuthHandle(s.APIInitiatePinRBT, true, s.AuthError, false))
-	s.AddRoute(setup.APIRecoverRBT, "POST", s.AuthHandle(s.APIRecoverRBT, true, s.AuthError, false))
 	s.AddRoute(setup.APIValidateTokenChain, "GET", s.AuthHandle(s.APIValidateTokenChain, false, s.AuthError, false))
 	s.AddRoute(setup.APIGenerateFaucetTestToken, "POST", s.AuthHandle(s.APIGenerateFaucetTestToken, true, s.AuthError, false))
 	s.AddRoute(setup.APIFaucetTokenCheck, "GET", s.AuthHandle(s.APIFaucetTokenCheck, false, s.AuthError, false))

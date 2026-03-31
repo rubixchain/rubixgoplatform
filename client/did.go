@@ -6,9 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -47,8 +49,8 @@ func (c *Client) GetAllDIDs() (*model.GetAccountInfo, error) {
 	return &ac, nil
 }
 
-func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
-	var dr model.DIDResponse
+func (c *Client) CreateDID(cfg *types.DIDCreate) (string, bool) {
+	var dr model.BasicResponse
 	err := c.sendJSONRequest("POST", setup.APICreateDID, nil, cfg, &dr)
 	if err != nil {
 		c.log.Error("Invalid response from the node", "err", err)
@@ -58,15 +60,18 @@ func (c *Client) CreateDID(cfg *did.DIDCreate) (string, bool) {
 		c.log.Error("Failed to create DID", "message", dr.Message)
 		return "Failed to create DID, " + dr.Message, false
 	}
-	c.log.Info(fmt.Sprintf("DID %v Created successfully", dr.Result.DID))
-	return dr.Result.DID, true
+	didResult, err := util.ExtractResult[model.DIDResult](dr.Result)
+	if err != nil {
+		return "Failed to parse DID result, " + err.Error(), false
+	}
+	return didResult.DID, true
 }
 
-func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
+func (c *Client) SetupDID(dc *types.DIDCreate) (string, bool) {
 
-	if !strings.Contains(dc.PubKey, did.PubKeyFileName) ||
-		!strings.Contains(dc.PrivKey, did.PvtKeyFileName) ||
-		!strings.Contains(dc.Mnemonic, did.MnemonicFileName) {
+	if !strings.Contains(dc.PubKey, constants.PubKeyFileName) ||
+		!strings.Contains(dc.PrivKey, constants.PvtKeyFileName) ||
+		!strings.Contains(dc.Mnemonic, constants.MnemonicFileName) {
 		return "Required files are missing", false
 	}
 
@@ -100,7 +105,7 @@ func (c *Client) SetupDID(dc *did.DIDCreate) (string, bool) {
 	return br.Result.(string), true
 }
 
-func (c *Client) SignatureResponse(sr *did.SignRespData, timeout ...time.Duration) (*model.BasicResponse, error) {
+func (c *Client) SignatureResponse(sr *types.SignRespData, timeout ...time.Duration) (*model.BasicResponse, error) {
 	var br model.BasicResponse
 	err := c.sendJSONRequest("POST", setup.APISignatureResponse, nil, sr, &br, timeout...)
 	if err != nil {

@@ -4,7 +4,6 @@ import (
 	"context"
 	cryptorand "crypto/rand"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -19,7 +18,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
-	didm "github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/service"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -54,8 +52,6 @@ const (
 	APIUpdateTokenHashDetails          string = "/api/update-tokenhash-details"
 	APIAddUnpledgeDetails              string = "/api/initiate-unpledge"
 	APISelfTransfer                    string = "/api/self-transfer"
-	APIRecoverPinnedRBT                string = "/api/recover-pinned-rbt"
-	APIRequestSigningHash              string = "/api/request-signing-hash"
 	TokenValidatorURL                  string = "http://103.209.145.177:8000"
 	APISendFTToken                     string = "/api/send-ft-token"
 	APIGetPrevQrmFromPrevSenderPath    string = "/api/get-prev-qrms-info-from-sender"
@@ -587,15 +583,8 @@ func (c *Core) FetchDID(did string) error {
 		}
 		err = c.ipfsOps.Get(did, didDir+"/")
 		if err == nil {
-			_, e := os.Stat(didDir + "/" + didm.MasterDIDFileName)
-			// Fetch the master DID also
-			if e == nil {
-				var rb []byte
-				rb, err = ioutil.ReadFile(didDir + "/" + didm.MasterDIDFileName)
-				if err == nil {
-					return c.FetchDID(string(rb))
-				}
-			}
+			c.log.Error("failed to perform ipfs get on input did", "err", err)
+			return err
 		}
 		return err
 	}

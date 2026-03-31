@@ -16,6 +16,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -107,7 +108,7 @@ func (c *Core) GetDIDAccess(req *model.GetDIDAccess) *model.DIDAccessResponse {
 		return resp
 	}
 	dc := did.InitDIDLite(req.DID, c.didDir, nil)
-	ok, err := dc.PvtVerify([]byte(req.Token), req.Signature)
+	ok, err := dc.SignVerify([]byte(req.Token), req.Signature)
 	if err != nil {
 		if strings.Contains(err.Error(), "NLSS DID detected") || strings.Contains(err.Error(), "incompatible key format") {
 			c.log.Error("NLSS DID detected during authentication. NLSS DIDs are DEPRECATED. Please use BIP DID", "did", req.DID, "error", err)
@@ -142,7 +143,7 @@ func (c *Core) GetDIDChallenge(d string) *model.DIDAccessResponse {
 }
 
 func (c *Core) checkPassword(didStr string, pwd string) bool {
-	privKey, err := ioutil.ReadFile(util.SanitizeDirPath(c.didDir) + didStr + "/" + did.PvtKeyFileName)
+	privKey, err := ioutil.ReadFile(util.SanitizeDirPath(c.didDir) + didStr + "/" + constants.PvtKeyFileName)
 	if err != nil {
 		c.log.Error("Private ket file does not exist", "did", didStr)
 		return false
@@ -167,7 +168,7 @@ func (c *Core) InitDIDModule() {
 	}
 }
 
-func (c *Core) CreateDID(didCreate *did.DIDCreate, localDID bool) (did string, err error) {
+func (c *Core) CreateDID(didCreate *types.DIDCreate, localDID bool) (did string, err error) {
 	if localDID { // create key pair from mnemonic an d then did from the private key
 		did, err = c.d.CreateDID(didCreate)
 		if err != nil {
@@ -187,7 +188,7 @@ func (c *Core) CreateDID(didCreate *did.DIDCreate, localDID bool) (did string, e
 	dt := &models.DID{
 		DID:    did,
 		PeerID: c.peerID,
-		Local:  true,
+		Local:  localDID,
 		AlgoID: int64(models.GetDidAlgoType(constants.DidAlgo_SECP256K1)),
 	}
 
@@ -213,7 +214,7 @@ func (c *Core) IsDIDExist(did string) bool {
 	return err == nil
 }
 
-func (c *Core) AddDID(dc *did.DIDCreate) *model.BasicResponse {
+func (c *Core) AddDID(dc *types.DIDCreate) *model.BasicResponse {
 	br := &model.BasicResponse{
 		Status: false,
 	}
@@ -266,15 +267,15 @@ func (c *Core) registerDID(reqID string, did string) error {
 	}
 	t := time.Now().String()
 	h := util.CalculateHash([]byte(c.peerID+did+t), constants.HashAlgorithm_SHA3_256)
-	sig, err := dc.PvtSign([]byte(h))
+	sig, err := dc.Sign(h)
 	if err != nil {
-		return fmt.Errorf("register did, failed to do signature")
+		return fmt.Errorf("register did, failed to do signature, err: %w", err)
 	}
 
 	pm := &PeerMap{
 		PeerID:    c.peerID,
 		DID:       did,
-		Signature: sig,
+		Signature: util.BytesToBase64(sig),
 		Time:      t,
 	}
 	err = c.publishPeerMap(pm)
@@ -374,7 +375,7 @@ func (c *Core) arbitrarySign(reqID string, signReq *model.ArbitrarySignRequest) 
 	}
 
 	// sign the given message with private key
-	signatureBytes, err := didCrypto.PvtSign([]byte(signReq.MsgToSign))
+	signatureBytes, err := didCrypto.Sign([]byte(signReq.MsgToSign))
 	if err != nil {
 		errMsg := fmt.Sprintf("arbitrary sign failed, err : %v", err)
 		c.log.Error(errMsg)
@@ -382,10 +383,10 @@ func (c *Core) arbitrarySign(reqID string, signReq *model.ArbitrarySignRequest) 
 		return signResp
 	}
 	// convert signature bytes into string
-	signature := util.HexToStr(signatureBytes)
+	signature := util.BytesToBase64(signatureBytes)
 
 	// verify the signature before returning
-	verificationResult, err := didCrypto.PvtVerify([]byte(signReq.MsgToSign), signatureBytes)
+	verificationResult, err := didCrypto.SignVerify([]byte(signReq.MsgToSign), signatureBytes)
 	if err != nil {
 		errMsg := fmt.Sprintf("arbitrary sign failed, failed to verify signature, err : %v", err)
 		c.log.Error(errMsg)
@@ -422,9 +423,15 @@ func (c *Core) ArbitrarySignVerification(reqID string, verificationReq *model.Si
 		return verificationResp, fmt.Errorf("%v", errMsg)
 	}
 
-	signatureBytes := util.StrToHex(verificationReq.Signature)
+	signatureBytes, err := util.Base64ToBytes(verificationReq.Signature)
+	if err != nil {
+		errMsg := fmt.Sprintf("ArbitrarySignVerification: failed to convert signature bytes to base64, err : %v", err)
+		c.log.Error(errMsg)
+		verificationResp.Message = errMsg
+		return verificationResp, fmt.Errorf("%v", errMsg)
+	}
 
-	verificationResult, err := didCrypto.PvtVerify([]byte(verificationReq.SignedMsg), signatureBytes)
+	verificationResult, err := didCrypto.SignVerify([]byte(verificationReq.SignedMsg), signatureBytes)
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to verify signature, err : %v", err)
 		c.log.Error(errMsg)
@@ -508,8 +515,8 @@ func (c *Core) removeStaleDIDFromNetwork(reqID, staleDID string) (model.BasicRes
 		return response, fmt.Errorf("DID is not exist")
 	}
 	t := time.Now().String()
-	h := util.HexToStr(util.CalculateHash([]byte(c.peerID+staleDID+t), "SHA3-256"))
-	sig, err := dc.PvtSign([]byte(h))
+	h := util.CalculateHash([]byte(c.peerID+staleDID+t), "SHA3-256")
+	sig, err := dc.Sign(h)
 	if err != nil {
 		return response, fmt.Errorf("remove stale did, failed to do signature")
 	}
@@ -518,7 +525,7 @@ func (c *Core) removeStaleDIDFromNetwork(reqID, staleDID string) (model.BasicRes
 	pm := &PeerMap{
 		PeerID:    c.peerID,
 		DID:       staleDID,
-		Signature: sig,
+		Signature: util.BytesToBase64(sig),
 		Time:      t,
 	}
 

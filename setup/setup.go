@@ -31,7 +31,6 @@ const (
 	APIGenerateLocalRBT                 string = "/api/generate-local-rbt"
 	APIInitiateRBTTransfer              string = "/api/initiate-rbt-transfer"
 	APIGetAccountInfo                   string = "/api/get-account-info"
-	APISignatureResponse                string = "/api/signature-response"
 	APIDumpTokenChainBlock              string = "/api/dump-token-chain"
 	APISetupDID                         string = "/api/setup-did"
 	APIMigrateNode                      string = "/api/migrate-node"
@@ -66,7 +65,6 @@ const (
 	APIRunUnpledge                      string = "/api/run-unpledge"
 	APIUnpledgePOWPledgeTokens          string = "/api/unpledge-pow-unpledge-tokens"
 	APIInitiatePinRBT                   string = "/api/initiate-pin-token"
-	APIRecoverRBT                       string = "/api/recover-token"
 	APIValidateTokenChain               string = "/api/validate-token-chain"
 	APIGenerateFaucetTestToken          string = "/api/generate-faucettest-token"
 	APIFaucetTokenCheck                 string = "/api/faucet-token-check"
@@ -91,14 +89,17 @@ const (
 	APIGetFTTxnByDID                    string = "/api/get-ft-txn-by-did"
 	APIUpdateTokenStatus                string = "/api/update-token-status"
 	APIGetTokenStatus                   string = "/api/get-token-status"
-	APIArbitrarySign                    string = "/api/sign"
-	APISignVerification                 string = "/api/verify-signature"
 	APIMigrateFTTransactions            string = "/api/migrate-ft-transactions"
 	APIGetFTMigrationStatus             string = "/api/get-ft-migration-status"
 	APIRetryFailedFTDownloads           string = "/api/retry-failed-ft-downloads"
 	APIGetFailedFTDownloadStatus        string = "/api/get-failed-ft-download-status"
 	APIRecoverLostTokens                string = "/api/recover-lost-tokens"
 	APIRemoteRecoverTokens              string = "/api/remote-recover-tokens"
+
+	// signatures endpoints
+	APISignatureResponse string = "/rubix/v1/signature"
+	APIArbitrarySign     string = "/rubix/v1/signature/arbitrary"
+	APISignVerification  string = "/rubix/v1/signature/verify"
 
 	// Endpoints on DID module
 	APICreateDID   string = "/rubix/v1/dids/create"

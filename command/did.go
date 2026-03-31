@@ -9,7 +9,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/types"
 )
 
 func (cmd *Command) CreateDID() {
@@ -30,8 +30,8 @@ func (cmd *Command) CreateDID() {
 		}
 		cmd.privPWD = pwd
 	}
-	
-	cfg := did.DIDCreate{
+
+	cfg := types.DIDCreate{
 		PrivPWD:   cmd.privPWD,
 		Mnemonic:  cmd.mnemonic,
 		ChildPath: cmd.ChildPath,
@@ -163,7 +163,7 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 				return "Invalid response, " + err.Error(), false
 			}
 
-			var sr did.SignReqData
+			var sr types.SignReqData
 			err = json.Unmarshal(jb, &sr)
 			if err != nil {
 				return "Invalid response, " + err.Error(), false
@@ -177,17 +177,15 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 				pwdSet = true
 			}
 
-			sresp := did.SignRespData{
+			sresp := types.SignRespData{
 				ID:   sr.ID,
-				Mode: sr.Mode,
 			}
 
 			sresp.Password = password
 
 			br, err = cmd.c.SignatureResponse(&sresp, timeout...)
 			if err != nil {
-				cmd.log.Error("Failed to generate RBT", "err", err)
-				return "Failed in signature response, " + err.Error(), false
+				return "Failed signature response, " + err.Error(), false
 			}
 
 		case string:

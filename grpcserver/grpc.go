@@ -14,8 +14,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/client"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/protos"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/config"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
@@ -180,17 +180,15 @@ func (rn *RubixNative) basicResponse(br *model.BasicResponse) (*protos.BasicRepo
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
-	var sr did.SignReqData
+	var sr types.SignReqData
 	err = json.Unmarshal(jb, &sr)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
 	resp.SignNeeded = true
 	resp.SignRequest = &protos.SignRequest{
-		ReqID:       sr.ID,
-		Mode:        int32(sr.Mode),
-		Hash:        sr.Hash,
-		OnlyPrivKey: sr.OnlyPrivKey,
+		ReqID: sr.ID,
+		Hash:  sr.Hash,
 	}
 	return resp, nil
 }
@@ -209,14 +207,10 @@ func (rn *RubixNative) StreamSignature(stream protos.RubixService_StreamSignatur
 		if err != nil {
 			return err
 		}
-		req := &did.SignRespData{
-			ID:       sr.ReqID,
-			Mode:     int(sr.Mode),
-			Password: sr.Password,
-			Signature: did.DIDSignature{
-				Pixels:    sr.ImgSign,
-				Signature: sr.PvtSign,
-			},
+		req := &types.SignRespData{
+			ID:        sr.ReqID,
+			Password:  sr.Password,
+			Signature: util.BytesToBase64(sr.PvtSign),
 		}
 		br, err := c.SignatureResponse(req)
 		if err != nil {

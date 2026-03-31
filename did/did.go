@@ -18,7 +18,9 @@ import (
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	files "github.com/ipfs/go-ipfs-files"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/crypto"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
@@ -54,75 +56,91 @@ func InitDID(dir string, log logger.Logger, ipfs *ipfsnode.Shell) *DID {
 	return did
 }
 
-func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
+func (d *DID) CreateDID(didCreate *types.DIDCreate) (string, error) {
 	t1 := time.Now()
 	temp := uuid.New()
 	dirName := path.Join(d.dir, temp.String())
 	err := os.MkdirAll(path.Join(dirName, "public"), os.ModeDir|os.ModePerm)
 	if err != nil {
-		d.log.Error("failed to create directory", "err", err)
-		return "", err
+		errStr := fmt.Sprintf("DID: failed to create public directory, err: %v", err)
+		d.log.Error(errStr)
+		return "", fmt.Errorf("%s", errStr)
 	}
 
 	err = os.MkdirAll(path.Join(dirName, "private"), os.ModeDir|os.ModePerm)
 	if err != nil {
-		d.log.Error("failed to create directory", "err", err)
-		return "", err
+		errStr := fmt.Sprintf("DID: failed to create private directory, err: %v", err)
+		d.log.Error(errStr)
+		return "", fmt.Errorf("%s", errStr)
 	}
 
 	//In lite mode, did is simply the SHA-256 hash  of the public key
 	if didCreate.PrivPWD == "" {
-		d.log.Error("password required for creating", "err", err)
-		return "", err
+		errStr := fmt.Sprintln("password required for creating did")
+		d.log.Error(errStr)
+		return "", fmt.Errorf("%s", errStr)
 	}
 
 	var mnemonic string
 	if didCreate.Mnemonic == "" { // create new mnemonic phrase
 		d.log.Debug("No mnemonic provided , creating new keypair")
 		mnemonic = crypto.BIPGenerateMnemonic()
-	} else {                      // use the input mnemonic to re-generate the key pair
+	} else { // use the input mnemonic to re-generate the key pair
 		mnemonic = didCreate.Mnemonic
 	}
-	
+
 	masterKey, err := crypto.BIPGenerateMasterKeyFromMnemonic(mnemonic)
 	if err != nil {
-		d.log.Error("failed to create keypair", "err", err)
+		errStr := fmt.Sprintf("DID: failed to create keypair, err: %v", err)
+		d.log.Error(errStr)
+		return "", fmt.Errorf("%s", errStr)
 	}
 
 	//generating private and public key pair
 	pvtKey, pubKey, err := crypto.BIPGenerateChild(string(masterKey), didCreate.ChildPath, didCreate.PrivPWD)
 	if err != nil {
-		d.log.Error("failed to create child", "err", err)
+		errStr := fmt.Sprintf("DID: failed to create child, err: %v", err)
+		d.log.Error(errStr)
+		return "", fmt.Errorf("%s", errStr)
 	}
 
 	// write mnemonic into a file
-	err = util.FileWrite(path.Join(dirName, "private", MnemonicFileName), []byte(mnemonic))
+	err = util.FileWrite(path.Join(dirName, "private", constants.MnemonicFileName), []byte(mnemonic))
 	if err != nil {
-		d.log.Error("failed to write mnemonic file", "err", err)
-		return "", err
+		errStr := fmt.Sprintf("DID: failed to write mnemonic file, err: %v", err)
+		d.log.Error(errStr)
+		return "", fmt.Errorf("%s", errStr)
 	}
 
 	// write private key into a file
-	err = util.FileWrite(path.Join(dirName, "private", PvtKeyFileName), pvtKey)
+	err = util.FileWrite(path.Join(dirName, "private", constants.PvtKeyFileName), pvtKey)
 	if err != nil {
-		return "", err
+		errStr := fmt.Sprintf("DID: failed to write private key file, err: %v", err)
+		d.log.Error(errStr)
+		return "", fmt.Errorf("%s", errStr)
 	}
 
 	// write public key into a file
-	err = util.FileWrite(path.Join(dirName, "public", PubKeyFileName), pubKey)
+	err = util.FileWrite(path.Join(dirName, "public", constants.PubKeyFileName), pubKey)
 	if err != nil {
-		return "", err
+		errStr := fmt.Sprintf("DID: failed to write public key file, err: %v", err)
+		d.log.Error(errStr)
+		return "", fmt.Errorf("%s", errStr)
 	}
 
-	// Test the generated key pair by reading it from the file, 
+	// Test the generated key pair by reading it from the file,
 	// signing on a message using the private key, and verify the signature using the public key
-	privKeyTest, err := ioutil.ReadFile(path.Join(dirName, "private", PvtKeyFileName))
+	privKeyTest, err := ioutil.ReadFile(path.Join(dirName, "private", constants.PvtKeyFileName))
 	if err != nil {
-		return "", err
+		errStr := fmt.Sprintf("DID: failed to read private key from file, err: %v", err)
+		d.log.Error(errStr)
+		return "", fmt.Errorf("%s", errStr)
 	}
 	Privkey, _, err := crypto.DecodeBIPKeyPair(didCreate.PrivPWD, privKeyTest, nil)
 	if err != nil {
-		return "", err
+		errStr := fmt.Sprintf("DID: failed to decode privat key, err: %v", err)
+		d.log.Error(errStr)
+		return "", fmt.Errorf("%s", errStr)
 	}
 	privkeyback := secp256k1.PrivKeyFromBytes(Privkey)
 	privKeySer := privkeyback.ToECDSA()
@@ -130,16 +148,22 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 	// sign on the message "test" using the private key
 	pvtKeySign, err := crypto.BIPSign(privKeySer, []byte("test"))
 	if err != nil {
-		return "", err
+		errStr := fmt.Sprintf("DID: invalid private key created, test signature failed, err: %v", err)
+		d.log.Error(errStr)
+		return "", fmt.Errorf("%s", errStr)
 	}
 
-	pubKeyTest, err := ioutil.ReadFile(path.Join(dirName, "public", PubKeyFileName))
+	pubKeyTest, err := ioutil.ReadFile(path.Join(dirName, "public", constants.PubKeyFileName))
 	if err != nil {
-		return "", err
+		errStr := fmt.Sprintf("DID: invalid key pair created, test sign verification failed, err: %v", err)
+		d.log.Error(errStr)
+		return "", fmt.Errorf("%s", errStr)
 	}
 	_, pubKeyByte, err := crypto.DecodeBIPKeyPair("", nil, pubKeyTest)
 	if err != nil {
-		return "", err
+		errStr := fmt.Sprintf("DID: failed to decode public key, err: %v", err)
+		d.log.Error(errStr)
+		return "", fmt.Errorf("%s", errStr)
 	}
 	pubkeyback, err := secp256k1.ParsePubKey(pubKeyByte)
 	if err != nil {
@@ -158,27 +182,33 @@ func (d *DID) CreateDID(didCreate *DIDCreate) (string, error) {
 	//passing the diroctory of public key file to add it to ipfs and exctract the hash
 	did, err := d.getDirHash(path.Join(dirName, "public"))
 	if err != nil {
-		return "", err
+		errStr := fmt.Sprintf("DID: failed to create did, err: %w", err)
+		d.log.Error(errStr)
+		return "", fmt.Errorf("%s", errStr)
 	}
 
 	destDidDirectory := path.Join(d.dir, did)
 
 	err = os.MkdirAll(destDidDirectory, os.ModeDir|os.ModePerm)
 	if err != nil {
-		d.log.Error("failed to create directory", "err", err)
-		return "", err
+		errStr := fmt.Sprintf("DID: failed to create final directory, err: %w", err)
+		d.log.Error(errStr)
+		return "", fmt.Errorf("%s", errStr)
 	}
 
 	err = util.DirCopy(path.Join(dirName, "public"), destDidDirectory)
 	if err != nil {
-		d.log.Error("failed to copy directory", "err", err)
-		return "", err
+		errStr := fmt.Sprintf("DID: failed to copy public key to final directory, err: %w", err)
+		d.log.Error(errStr)
+		return "", fmt.Errorf("%s", errStr)
 	}
 
 	err = util.DirCopy(path.Join(dirName, "private"), destDidDirectory)
 	if err != nil {
 		d.log.Error("failed to copy directory", "err", err)
-		return "", err
+		errStr := fmt.Sprintf("DID: failed to copy private key to final directory, err: %w", err)
+		d.log.Error(errStr)
+		return "", fmt.Errorf("%s", errStr)
 	}
 	os.RemoveAll(dirName)
 	t2 := time.Now()
@@ -256,13 +286,13 @@ func (d *DID) getDirHash(dir string) (string, error) {
 }
 
 // CreateDIDFromPubKey creates a DID from the provided public key for BIP wallet
-func (d *DID) CreateDIDFromPubKey(didCreate *DIDCreate) (string, error) {
+func (d *DID) CreateDIDFromPubKey(didCreate *types.DIDCreate) (string, error) {
 	t1 := time.Now()
 	temp := uuid.New()
 	dirName := d.dir + temp.String()
 
 	//create a temporary directory
-	err := os.MkdirAll(dirName+"/public", os.ModeDir|os.ModePerm)
+	err := os.MkdirAll(path.Join(dirName, "public"), os.ModeDir|os.ModePerm)
 	if err != nil {
 		d.log.Error("failed to create directory", "err", err)
 		return "", err
@@ -272,18 +302,25 @@ func (d *DID) CreateDIDFromPubKey(didCreate *DIDCreate) (string, error) {
 	pubKeyBytes, err := hex.DecodeString(didCreate.PubKey)
 	if err != nil {
 		d.log.Error("Failed to decode hex string, err", err)
+		return "", err
+	}
+
+	if len(pubKeyBytes) != 65 {
+		errStr := fmt.Sprintf("invalid public key length, expected 130, length is %d", len(pubKeyBytes))
+		d.log.Error(errStr)
+		return "", fmt.Errorf("%s", errStr)
 	}
 
 	// It is important to save the pem encrypted public key, so that the quorums can use
 	// the existing sign-verification function, which includes pem decoding of public key
 	pemEncPub := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubKeyBytes})
 	//write public key into the temporary directory
-	err = util.FileWrite(dirName+"/public/"+PubKeyFileName, pemEncPub)
+	err = util.FileWrite(path.Join(dirName, "public", constants.PubKeyFileName), pemEncPub)
 	if err != nil {
 		return "", err
 	}
 
-	pubKeyTest, err := os.ReadFile(dirName + "/public/" + PubKeyFileName)
+	pubKeyTest, err := os.ReadFile(path.Join(dirName, "public", constants.PubKeyFileName))
 	if err != nil {
 		return "", err
 	}
@@ -300,13 +337,13 @@ func (d *DID) CreateDIDFromPubKey(didCreate *DIDCreate) (string, error) {
 	}
 
 	//passing the temp diroctory of public key file to add it to ipfs and exctract the hash
-	did, err := d.getDirHash(dirName + "/public/")
+	did, err := d.getDirHash(path.Join(dirName, "public"))
 	if err != nil {
 		return "", err
 	}
 
 	//create new directory with the name including newly created did,
-	newDIrName := d.dir + did
+	newDIrName := path.Join(d.dir, did)
 	err = os.MkdirAll(newDIrName, os.ModeDir|os.ModePerm)
 	if err != nil {
 		d.log.Error("failed to create directory", "err", err)
@@ -314,7 +351,7 @@ func (d *DID) CreateDIDFromPubKey(didCreate *DIDCreate) (string, error) {
 	}
 
 	// and store the public key in the new directory
-	err = util.DirCopy(dirName+"/public", newDIrName)
+	err = util.DirCopy(path.Join(dirName, "public"), newDIrName)
 	if err != nil {
 		d.log.Error("failed to copy directory", "err", err)
 		return "", err

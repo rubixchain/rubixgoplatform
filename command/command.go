@@ -86,7 +86,6 @@ const (
 	RunUnpledge                    string = "run-unpledge"
 	UnpledgePOWPledgeTokens        string = "unpledge-pow-pledge-tokens"
 	PinTokenCmd                    string = "pinToken"
-	RecoverTokensCmd               string = "recoverToken"
 	GenerateFaucetTestRBTCmd       string = "generatefaucetrbt"
 	FaucetTokenCheck               string = "faucettokencheck"
 	ValidateTokenchainCmd          string = "validatetokenchain"
@@ -161,7 +160,6 @@ var commands = []string{VersionCmd,
 	RunUnpledge,
 	UnpledgePOWPledgeTokens,
 	PinTokenCmd,
-	RecoverTokensCmd,
 	CheckQuorumStatusCmd,
 	ValidateTokenchainCmd,
 	CreateFTCmd,
@@ -909,8 +907,6 @@ func Run(args []string) {
 		cmd.UnpledgePOWBasedPledgedTokens()
 	case PinTokenCmd:
 		cmd.PinRBT()
-	case RecoverTokensCmd:
-		cmd.RecoverTokens()
 	case ValidateTokenchainCmd:
 		cmd.ValidateTokenchain()
 	case GenerateFaucetTestRBTCmd:

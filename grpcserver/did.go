@@ -9,10 +9,11 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/rubixchain/rubixgoplatform/client"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/protos"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -72,7 +73,7 @@ func createFile(fileName string, data string, decode bool) error {
 
 func (rn *RubixNative) CreateDID(ctx context.Context, req *protos.CreateDIDReq) (*protos.CreateDIDRes, error) {
 	// TODO(phase11-upstream): Secret and MasterDID fields removed from DIDCreate; upstream gRPC params ignored.
-	dc := &did.DIDCreate{
+	dc := &types.DIDCreate{
 		PrivPWD: req.PrivKeyPwd,
 	}
 	folderName, err := rn.c.CreateTempFolder()
@@ -83,12 +84,12 @@ func (rn *RubixNative) CreateDID(ctx context.Context, req *protos.CreateDIDReq) 
 	defer os.RemoveAll(folderName)
 
 	if req.PublicKey != "" {
-		err = createFile(folderName+"/"+did.PubKeyFileName, req.PublicKey, false)
+		err = createFile(folderName+"/"+constants.PubKeyFileName, req.PublicKey, false)
 		if err != nil {
 			rn.log.Error(err.Error())
 			return nil, status.Errorf(codes.Internal, err.Error())
 		}
-		dc.PubKey = folderName + "/" + did.PubKeyFileName
+		dc.PubKey = folderName + "/" + constants.PubKeyFileName
 	}
 
 	c, err := client.NewClient(rn.cfg, rn.log.Named("grpcclient"), 10*time.Minute)

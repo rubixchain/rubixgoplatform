@@ -10,8 +10,8 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/config"
-	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/protos"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 	"golang.org/x/net/context"
@@ -175,13 +175,13 @@ func runCommand() {
 	flag.BoolVar(&cmd.forcePWD, "fp", false, "Force password entry")
 	flag.StringVar(&cmd.privPWD, "privPWD", "mypassword", "Private key password")
 	flag.StringVar(&cmd.quorumPWD, "quorumPWD", "mypassword", "Quorum key password")
-	flag.StringVar(&cmd.imgFile, "imgFile", did.ImgFileName, "DID creation image")
-	flag.StringVar(&cmd.didImgFile, "didImgFile", did.DIDImgFileName, "DID image")
-	flag.StringVar(&cmd.privImgFile, "privImgFile", did.PvtShareFileName, "DID public share image")
-	flag.StringVar(&cmd.pubImgFile, "pubImgFile", did.PubShareFileName, "DID public share image")
-	flag.StringVar(&cmd.mnemonicFile, "mnemonicKeyFile", did.MnemonicFileName, "Mnemonic key file")
-	flag.StringVar(&cmd.privKeyFile, "privKeyFile", did.PvtKeyFileName, "Private key file")
-	flag.StringVar(&cmd.pubKeyFile, "pubKeyFile", did.PubKeyFileName, "Public key file")
+	// flag.StringVar(&cmd.imgFile, "imgFile", did.ImgFileName, "DID creation image")
+	// flag.StringVar(&cmd.didImgFile, "didImgFile", did.DIDImgFileName, "DID image")
+	// flag.StringVar(&cmd.privImgFile, "privImgFile", did.PvtShareFileName, "DID public share image")
+	// flag.StringVar(&cmd.pubImgFile, "pubImgFile", did.PubShareFileName, "DID public share image")
+	flag.StringVar(&cmd.mnemonicFile, "mnemonicKeyFile", constants.MnemonicFileName, "Mnemonic key file")
+	flag.StringVar(&cmd.privKeyFile, "privKeyFile", constants.PvtKeyFileName, "Private key file")
+	flag.StringVar(&cmd.pubKeyFile, "pubKeyFile", constants.PubKeyFileName, "Public key file")
 	flag.StringVar(&cmd.quorumList, "quorumList", "quorumlist.json", "Quorum list")
 	flag.StringVar(&cmd.srvName, "srvName", "explorer_service", "Service name")
 	flag.IntVar(&cmd.storageType, "storageType", 1, "Storage type")

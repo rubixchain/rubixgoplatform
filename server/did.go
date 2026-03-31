@@ -8,9 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -36,7 +37,7 @@ func (s *Server) APIGetDIDChallenge(req *ensweb.Request) *ensweb.Result {
 
 // APICreateDID will create new DID
 func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
-	var didCreate did.DIDCreate
+	var didCreate types.DIDCreate
 	err := s.ParseJSON(req, &didCreate)
 	if err != nil {
 		s.log.Error("failed to parse did configuration", "err", err)
@@ -56,16 +57,11 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("failed to create did", "err", err)
 		return s.BasicResponse(req, false, err.Error(), nil)
 	}
-	didResp := model.DIDResponse{
-		Status:  true,
-		Message: "DID created successfully",
-		Result: model.DIDResult{
-			DID:    did,
-			PeerID: s.c.GetPeerID(),
-		},
+	didResp := model.DIDResult{
+		DID:    did,
+		PeerID: s.c.GetPeerID(),
 	}
-
-	return s.BasicResponse(req, true, didResp.Message, &didResp)
+	return s.BasicResponse(req, true, "DID created successfully", didResp)
 }
 
 // APIGetAllDID will get all DID
@@ -108,7 +104,7 @@ func (s *Server) didResponse(req *ensweb.Request, reqID string) *ensweb.Result {
 	dc := s.c.GetWebReq(reqID)
 	ch := <-dc.OutChan
 	time.Sleep(time.Millisecond * 10)
-	sr, ok := ch.(*did.SignResponse)
+	sr, ok := ch.(*types.SignResponse)
 	if ok {
 		return s.RenderJSON(req, sr, http.StatusOK)
 	}
@@ -150,7 +146,7 @@ func (s *Server) APISetupDID(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("missing did configuration")
 		return s.BasicResponse(req, false, "missing did configuration", nil)
 	}
-	var didCreate did.DIDCreate
+	var didCreate types.DIDCreate
 	err = json.Unmarshal([]byte(fields[0]), &didCreate)
 	if err != nil {
 		s.log.Error("failed to parse did configuration", "err", err)
@@ -159,10 +155,10 @@ func (s *Server) APISetupDID(req *ensweb.Request) *ensweb.Result {
 
 	for _, fileName := range fileNames {
 
-		if strings.Contains(fileName, did.PvtKeyFileName) {
+		if strings.Contains(fileName, constants.PvtKeyFileName) {
 			didCreate.PrivKey = fileName
 		}
-		if strings.Contains(fileName, did.PubKeyFileName) {
+		if strings.Contains(fileName, constants.PubKeyFileName) {
 			didCreate.PubKey = fileName
 		}
 	}

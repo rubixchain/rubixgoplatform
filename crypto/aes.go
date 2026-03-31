@@ -7,6 +7,8 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"io"
+
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 /*CBC encryption Follow the example code of the golang standard library
@@ -84,7 +86,7 @@ func Encrypt(rawData, key []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return base64.StdEncoding.EncodeToString(data), nil
+	return util.BytesToBase64(data), nil
 }
 
 func Decrypt(rawData string, key []byte) (string, error) {

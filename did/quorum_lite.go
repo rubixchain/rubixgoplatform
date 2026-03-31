@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -22,7 +23,7 @@ type DIDQuorumLite struct {
 func InitDIDQuorumLite(did string, baseDir string, pwd string) *DIDQuorumLite {
 	d := &DIDQuorumLite{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
 	if d.pwd != "" {
-		privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
+		privKey, err := ioutil.ReadFile(d.dir + constants.PvtKeyFileName)
 		if err != nil {
 			fmt.Println("private key must be in wallet")
 		} else {
@@ -33,7 +34,7 @@ func InitDIDQuorumLite(did string, baseDir string, pwd string) *DIDQuorumLite {
 		}
 	}
 
-	pubKey, err := ioutil.ReadFile(d.dir + PubKeyFileName)
+	pubKey, err := ioutil.ReadFile(d.dir + constants.PubKeyFileName)
 	if err != nil {
 		return nil
 	}
@@ -48,26 +49,8 @@ func (d *DIDQuorumLite) GetDID() string {
 	return d.did
 }
 
-func (d *DIDQuorumLite) GetSignType() int {
-	return BIPVersion
-}
-
-// Sign will return the singature of the DID
-func (d *DIDQuorumLite) Sign(hash string) ([]byte, []byte, error) {
-	pvtKeySign, err := d.PvtSign([]byte(hash))
-	// byteImg, err := util.GetPNGImagePixels(d.dir + PvtShareFileName)
-
-	if err != nil {
-		fmt.Println(err)
-		return nil, nil, err
-	}
-
-	bs := []byte{}
-	return bs, pvtKeySign, err
-}
-
-func (d *DIDQuorumLite) PvtSign(hash []byte) ([]byte, error) {
-	privKey, err := ioutil.ReadFile(d.dir + PvtKeyFileName)
+func (d *DIDQuorumLite) Sign(hash []byte) ([]byte, error) {
+	privKey, err := ioutil.ReadFile(d.dir + constants.PvtKeyFileName)
 	if err != nil {
 		fmt.Println("requesting signature from BIP wallet")
 		// _, walletSignature, err := d.signRequest(hash)
@@ -97,9 +80,9 @@ func (d *DIDQuorumLite) PvtSign(hash []byte) ([]byte, error) {
 	}
 	return pvtKeySign, nil
 }
-func (d *DIDQuorumLite) PvtVerify(hash []byte, sign []byte) (bool, error) {
+func (d *DIDQuorumLite) SignVerify(hash []byte, sign []byte) (bool, error) {
 
-	pubKeyPath := d.dir + PubKeyFileName
+	pubKeyPath := d.dir + constants.PubKeyFileName
 	pubKey, err := ioutil.ReadFile(pubKeyPath)
 	if err != nil {
 		return false, err

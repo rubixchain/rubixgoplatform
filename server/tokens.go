@@ -8,8 +8,7 @@ import (
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/util"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -58,24 +57,6 @@ type RBTTransferRequestSwaggoInput struct {
 	TokenCount float64 `json:"tokenCOunt"`
 	Comment    string  `json:"comment"`
 	Type       int     `json:"type"`
-}
-
-func (s *Server) APIRecoverRBT(req *ensweb.Request) *ensweb.Result {
-	var rbtReq model.RBTRecoverRequest
-	err := s.ParseJSON(req, &rbtReq)
-	if err != nil {
-		return s.BasicResponse(req, false, "Invalid input", nil)
-	}
-	_, did, ok := util.ParseAddress(rbtReq.Sender)
-	if !ok {
-		return s.BasicResponse(req, false, "Invalid sender address", nil)
-	}
-	if !s.validateDIDAccess(req, did) {
-		return s.BasicResponse(req, false, "DID does not have an access", nil)
-	}
-	s.c.AddWebReq(req)
-	go s.c.InitiateRecoverRBT(req.ID, &rbtReq)
-	return s.didResponse(req, req.ID)
 }
 
 // ShowAccount godoc
@@ -131,7 +112,7 @@ type SignatureResponseSwaggoInput struct {
 // @Success 	200		{object}	model.BasicResponse
 // @Router /api/signature-response [post]
 func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
-	var resp did.SignRespData
+	var resp types.SignRespData
 	err := s.ParseJSON(req, &resp)
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)

@@ -8,7 +8,9 @@ import (
 	"time"
 
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/crypto"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -62,12 +64,11 @@ func (d *DIDLite) getPassword() (string, error) {
 	}
 
 	// Request password from user
-	sr := &SignResponse{
+	sr := &types.SignResponse{
 		Status:  true,
 		Message: "Password needed",
-		Result: SignReqData{
-			ID:   d.ch.ID,
-			Mode: LiteDIDMode,
+		Result: types.SignReqData{
+			ID: d.ch.ID,
 		},
 	}
 	d.ch.OutChan <- sr
@@ -79,7 +80,7 @@ func (d *DIDLite) getPassword() (string, error) {
 		return "", fmt.Errorf("Timeout, failed to get password")
 	}
 
-	srd, ok := ch.(SignRespData)
+	srd, ok := ch.(types.SignRespData)
 	if !ok {
 		return "", fmt.Errorf("Invalid data received on the channel")
 	}
@@ -96,65 +97,50 @@ func (d *DIDLite) GetDID() string {
 	return d.did
 }
 
-// When the did creation and signing is done in Light mode,
-// this function returns the sign version as BIPVersion = 0
-func (d *DIDLite) GetSignType() int {
-	return BIPVersion
-}
-
-// PKI based sign in lite mode
-// In lite mode, the sign function returns only the private signature, unlike the basic mode
-func (d *DIDLite) Sign(hash string) ([]byte, []byte, error) { //TODO : should return one signature only
-	pvtKeySign, err := d.PvtSign([]byte(hash))
-	bs := []byte{}
-
-	return bs, pvtKeySign, err
-}
-
-func (d *DIDLite) PvtSign(hash []byte) ([]byte, error) {
-	privKey, err := os.ReadFile(path.Join(d.dir, PvtKeyFileName))
+func (d *DIDLite) Sign(hash []byte) ([]byte, error) {
+	privKey, err := os.ReadFile(path.Join(d.dir, constants.PvtKeyFileName))
 	if err != nil {
 		walletSignature, err := d.getSignature(hash)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Sign: failed to get signature; %w", err)
 		}
 
-		isValidSig, err := d.PvtVerify(hash, walletSignature)
+		isValidSig, err := d.SignVerify(hash, walletSignature)
 		if err != nil || !isValidSig {
-			return nil, err
+			return nil, fmt.Errorf("Sign: failed to verify signature; %w", err)
 		}
 		return walletSignature, nil
 	}
 
 	pwd, err := d.getPassword()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Sign: failed to get password; %w", err)
 	}
 
 	Privatekey, _, err := crypto.DecodeBIPKeyPair(pwd, privKey, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Sign: failed to decode priv key; %w", err)
 	}
 
 	privkeyback := secp256k1.PrivKeyFromBytes(Privatekey)
 	privKeySer := privkeyback.ToECDSA()
 	pvtKeySign, err := crypto.BIPSign(privKeySer, hash)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Sign: failed to sign; %w", err)
 	}
 	return pvtKeySign, nil
 }
 
 // Verify PKI based signature
-func (d *DIDLite) PvtVerify(hash []byte, sign []byte) (bool, error) {
-	pubKey, err := ioutil.ReadFile(path.Join(d.dir, PubKeyFileName))
+func (d *DIDLite) SignVerify(hash []byte, sign []byte) (bool, error) {
+	pubKey, err := ioutil.ReadFile(path.Join(d.dir, constants.PubKeyFileName))
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("SignVerify: failed to read public key; %w", err)
 	}
 
 	_, pubKeyByte, err := crypto.DecodeBIPKeyPair("", nil, pubKey)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("SignVerify: failed to decode public key; %w", err)
 	}
 
 	pubkeyback, err := secp256k1.ParsePubKey(pubKeyByte)
@@ -176,14 +162,12 @@ func (d *DIDLite) getSignature(hash []byte) ([]byte, error) {
 	if d.ch == nil || d.ch.InChan == nil || d.ch.OutChan == nil {
 		return nil, fmt.Errorf("invalid configuration")
 	}
-	sr := &SignResponse{
+	sr := &types.SignResponse{
 		Status:  true,
 		Message: "Signature needed",
-		Result: SignReqData{
-			ID:          d.ch.ID,
-			Mode:        LiteDIDMode,
-			Hash:        hash,
-			OnlyPrivKey: true,
+		Result: types.SignReqData{
+			ID:   d.ch.ID,
+			Hash: hash,
 		},
 	}
 	d.ch.OutChan <- sr
@@ -194,9 +178,10 @@ func (d *DIDLite) getSignature(hash []byte) ([]byte, error) {
 		return nil, fmt.Errorf("timeout, failed to get signature")
 	}
 
-	srd, ok := ch.(SignRespData)
+	srd, ok := ch.(types.SignRespData)
 	if !ok {
 		return nil, fmt.Errorf("invalid data received on the channel")
 	}
-	return srd.Signature.Signature, nil
+	// convert base64 signature into byte array
+	return util.Base64ToBytes(srd.Signature)
 }
