@@ -78,7 +78,7 @@ func FindTokenRoleInTxn(tokenID string, txInfo *models.TransactionInfo) int16 {
 }
 
 // SyncTransactionChainFrom fetches missing transactions from a peer and writes them locally.
-func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, w *wallet.Wallet, log logger.Logger) (error, *models.TransactionChainSyncReply) {
+func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, tokenType int, w *wallet.Wallet, log logger.Logger) (error, *models.TransactionChainSyncReply) {
 	var err error
 
 	latestTransactionID := w.GetLatestTransactionID(tokenID)
@@ -130,13 +130,13 @@ func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, w *wallet.Wallet
 						TokenStatus:    constants.TokenStatus_Free,
 						DID:            txInfo.Owner,
 						TransactionID:  tx.ID,
-						TokenType:      int16(models.GetTokenTypeID(constants.TokenType_RBT)),
+						TokenType:      int16(tokenType),
 						LatestPosition: 0,
 						LatestRole:     role,
 						CreatedAt:      time.Now(),
 						UpdatedAt:      time.Now(),
 					}
-					if createErr := w.CreateRBTToken(newToken); createErr != nil {
+					if createErr := w.CreateToken(&newToken); createErr != nil {
 						log.Error("failed to create token", "err", createErr)
 						return fmt.Errorf("failed to create token: %w", createErr), nil
 					}
