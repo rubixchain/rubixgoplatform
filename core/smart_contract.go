@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"path/filepath"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/types/models"
@@ -38,13 +37,6 @@ type GenerateSmartContractRequest struct {
 	SCPath     string
 }
 
-type SmartContractToken struct {
-	BinaryCodeHash string `json:"binaryCodeHash"`
-	RawCodeHash    string `json:"rawCodeHash"`
-	DID            string `json:"did"`
-	PeerID         string `json:"peerID"`
-}
-
 type SmartContractTokenResponse struct {
 	Message string `json:"message"`
 	Result  string `json:"result"`
@@ -63,68 +55,44 @@ func (c *Core) GenerateSmartContractToken(requestID string, smartContractTokenRe
 
 }
 
-// In the generateSmartContractToken function we are adding each of the file in ipfs and getting the hash
-// Instead here we can change it to exactly how we are doing with NFT. Instead of putting each file to ipfs
-// Create a folder then add that folder to ipfs.
+// generateSmartContractToken uses folder-based IPFS approach (same as NFT)
+// Adds the entire smart contract folder to IPFS instead of individual files
 func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRequest *GenerateSmartContractRequest) *model.BasicResponse {
 	basicResponse := &model.BasicResponse{
 		Status: false,
 	}
 
-	binaryCodeFile, err := os.Open(smartContractTokenRequest.BinaryCode)
+	// Add entire smart contract folder to IPFS (contains .wasm and .rs files)
+	scFolderHash, err := c.ipfsOps.AddDir(smartContractTokenRequest.SCPath)
 	if err != nil {
-		c.log.Error("Failed to open binary code file", "err", err)
-		return basicResponse
-	}
-	defer binaryCodeFile.Close()
-
-	// Add binary code file to IPFS
-	binaryCodeHash, err := IpfsAddWithBackoff(c.ipfs, binaryCodeFile)
-	if err != nil {
-		c.log.Error("Failed to add binary code file to IPFS", "err", err)
+		c.log.Error("Failed to add smart contract folder to IPFS", "err", err)
 		return basicResponse
 	}
 
-	// Open raw code file
-	rawCodeFile, err := os.Open(smartContractTokenRequest.RawCode)
-	if err != nil {
-		c.log.Error("Failed to open raw code file", "err", err)
-		return basicResponse
-	}
-	defer rawCodeFile.Close()
-
-	// Add raw code file to IPFS
-	rawCodeHash, err := IpfsAddWithBackoff(c.ipfs, rawCodeFile)
-	if err != nil {
-		c.log.Error("Failed to add raw code file to IPFS", "err", err)
-		return basicResponse
+	// Create data pointing to the folder hash
+	// This was SmartContractToken before which is updated to IPFSContractInfo
+	// So that this struct remains same for NFTs and SmartContracts
+	smartContractToken := models.IPFSContractInfo{
+		ArtifactHash: scFolderHash,
+		DID:          smartContractTokenRequest.DID,
+		PeerID:       c.peerID,
 	}
 
-	smartContractToken := SmartContractToken{
-		BinaryCodeHash: binaryCodeHash,
-		RawCodeHash:    rawCodeHash,
-		DID:            smartContractTokenRequest.DID,
-		PeerID:         c.peerID,
-	}
-
-	if err != nil {
-		c.log.Error("Failed to create smart contract token", "err", err)
-		return basicResponse
-	}
-
+	// Marshal metadata to JSON
 	smartContractTokenJSON, err := json.MarshalIndent(smartContractToken, "", "  ")
 	if err != nil {
 		c.log.Error("Failed to marshal SmartContractToken struct", "err", err)
 		return basicResponse
 	}
 
+	// Add metadata JSON to IPFS - this hash becomes the token ID
 	smartContractTokenHash, err := IpfsAddWithBackoff(c.ipfs, bytes.NewReader(smartContractTokenJSON))
 	if err != nil {
 		c.log.Error("Failed to add SmartContractToken to IPFS", "err", err)
 		return basicResponse
 	}
 
-	c.log.Info("smartContractTokenHash ", smartContractTokenHash)
+	c.log.Info("Smart contract token hash generated", "token_hash", smartContractTokenHash)
 
 	// Set the response status and message
 	smartContractTokenResponse := &SmartContractTokenResponse{
@@ -132,21 +100,12 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 		Result:  smartContractTokenHash,
 	}
 
+	// Rename folder from temp UUID to token hash
 	_, err = c.RenameSCFolder(smartContractTokenRequest.SCPath, smartContractTokenHash)
 	if err != nil {
 		c.log.Error("Failed to rename SC folder", "err", err)
 		return basicResponse
 	}
-
-	// So after generation of the contract we are not storing anything on to the db. So in the deploying scenario we will check the db
-	// whether the tokenid exists or not and then add the deployment details there.
-
-	// This function is adding the info to a table which is not existing. looks like added to fix the issue while compiling
-	// err = c.w.CreateSmartContractToken(&wallet.SmartContract{SmartContractHash: smartContractTokenHash, Deployer: smartContractTokenRequest.DID, BinaryCodeHash: binaryCodeHash, RawCodeHash: rawCodeHash, ContractStatus: wallet.TokenIsGenerated})
-	// if err != nil {
-	// 	c.log.Error("Failed to create smart contract token", "err", err)
-	// 	return basicResponse
-	// }
 
 	// Set the response values
 	basicResponse.Status = true
@@ -236,41 +195,12 @@ func (c *Core) fetchSmartContractMetadata(smartContractToken string) (*SmartCont
 	return &metadata, nil
 }
 
-// storeSmartContractFiles downloads and saves binary and raw code files to the local filesystem.
+// storeSmartContractFiles downloads the entire smart contract folder from IPFS using the folder hash.
 func (c *Core) storeSmartContractFiles(scFolderPath string, metadata *SmartContractToken) error {
-	// Download and store binary WASM file
-	binaryPath := filepath.Join(scFolderPath, "binaryCodeFile.wasm")
-	if err := c.downloadIPFSFile(metadata.BinaryCodeHash, binaryPath); err != nil {
-		return fmt.Errorf("failed to store binary code: %w", err)
-	}
-
-	// Download and store raw source code file
-	rawPath := filepath.Join(scFolderPath, "rawCodeFile")
-	if err := c.downloadIPFSFile(metadata.RawCodeHash, rawPath); err != nil {
-		return fmt.Errorf("failed to store raw code: %w", err)
-	}
-
-	return nil
-}
-
-// downloadIPFSFile is a helper that fetches a file from IPFS and writes it to the local filesystem.
-func (c *Core) downloadIPFSFile(ipfsHash, destPath string) error {
-	// Fetch from IPFS
-	reader, err := c.ipfsOps.Cat(ipfsHash)
+	// Get the entire folder from IPFS using the artifact hash
+	err := c.ipfsOps.Get(metadata.ArtifactHash, scFolderPath)
 	if err != nil {
-		return fmt.Errorf("failed to fetch %s: %w", ipfsHash, err)
-	}
-	defer reader.Close()
-
-	// Read content
-	content, err := io.ReadAll(reader)
-	if err != nil {
-		return fmt.Errorf("failed to read content: %w", err)
-	}
-
-	// Write to file
-	if err := os.WriteFile(destPath, content, 0644); err != nil {
-		return fmt.Errorf("failed to write to %s: %w", destPath, err)
+		return fmt.Errorf("failed to fetch smart contract folder from IPFS: %w", err)
 	}
 
 	return nil

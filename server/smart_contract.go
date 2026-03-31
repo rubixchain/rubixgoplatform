@@ -93,18 +93,35 @@ func (s *Server) APIDeploySmartContract(req *ensweb.Request) *ensweb.Result {
 func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	var deploySC core.GenerateSmartContractRequest
 	var err error
+
+	// Step 1: Parse DID from request
 	_, did, err := s.ParseMultiPartForm(req, "did")
 	if err != nil {
 		s.log.Error("Generate smart contract failed, failed to retrieve DID", "err", err)
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to retrieve DID", nil)
 	}
-
 	deploySC.DID = did["did"][0]
+
+	// Step 2: Validate DID format
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(deploySC.DID)
+	if !strings.HasPrefix(deploySC.DID, "bafybmi") || len(deploySC.DID) != 59 || !is_alphanumeric {
+		s.log.Error("Generate smart contract failed, Invalid DID format")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
+
+	// Step 3: Validate DID exists
 	if !s.c.IsDIDExist(deploySC.DID) {
-		s.log.Error("Generate Smart Contract failed, DID does not exist")
+		s.log.Error("Generate smart contract failed, DID does not exist")
 		return s.BasicResponse(req, false, "DID does not exist", nil)
 	}
 
+	// Step 4: Validate DID access
+	if !s.validateDIDAccess(req, deploySC.DID) {
+		s.log.Error("Generate smart contract failed, DID does not have access")
+		return s.BasicResponse(req, false, "DID does not have access", nil)
+	}
+
+	// Step 5: Create temporary folder (only after all validations pass)
 	deploySC.SCPath, err = s.c.CreateSCTempFolder()
 	if err != nil {
 		s.log.Error("Generate smart contract failed, failed to create SC folder", "err", err)
@@ -176,25 +193,10 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Generate smart contract failed, failed to move raw code file", nil)
 	}
 
-	// Close all files
-	binaryCodeDestFile.Close()
-	rawCodeDestFile.Close()
-	binaryCodeFile.Close()
-	rawCodeFile.Close()
-
 	deploySC.BinaryCode = binaryCodeDest
 	deploySC.RawCode = rawCodeDest
 
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(deploySC.DID)
-	if !strings.HasPrefix(deploySC.DID, "bafybmi") || len(deploySC.DID) != 59 || !is_alphanumeric {
-		s.log.Error("Invalid DID")
-		return s.BasicResponse(req, false, "Invalid DID", nil)
-	}
-
-	if !s.validateDIDAccess(req, deploySC.DID) {
-		return s.BasicResponse(req, false, "Ensure you enter the correct DID", nil)
-	}
-
+	// Step 6: Launch async smart contract generation
 	s.c.AddWebReq(req)
 	go s.c.GenerateSmartContractToken(req.ID, &deploySC)
 

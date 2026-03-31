@@ -26,13 +26,6 @@ type NFTReq struct {
 	NFTPath  string
 }
 
-// NFTIpfsInfo holds IPFS-related info for an NFT.
-type NFTIpfsInfo struct {
-	DID          string
-	ArtifactHash string
-	PeerID       string
-}
-
 // FetchNFTRequest is the request payload for fetching an NFT.
 type FetchNFTRequest struct {
 	NFT     string
@@ -58,7 +51,9 @@ func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.Basic
 		c.log.Error("Failed to add nft file to IPFS", "err", err)
 		return basicResponse
 	}
-	nft := NFTIpfsInfo{
+	// This was previously NFTIpfsInfo which we have updated to IPFSContractInfo
+	// The idea was we keep this struct same for NFTs and contracts
+	nft := models.IPFSContractInfo{
 		DID:          createNFTRequest.DID,
 		ArtifactHash: nftFolderHash,
 		PeerID:       c.peerID,
