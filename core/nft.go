@@ -12,9 +12,7 @@ import (
 	"path"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/types/models"
-	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 // NFTReq holds the inputs for creating a new NFT.
@@ -91,101 +89,6 @@ func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.Basic
 	return basicResponse
 }
 
-func (c *Core) DeployNFT(reqID string, deployReq model.DeployNFTRequest) {
-	br := c.deployNFT(reqID, deployReq)
-	dc := c.GetWebReq(reqID)
-	if dc == nil {
-		c.log.Error("Failed to get did channels")
-		return
-	}
-	dc.OutChan <- br
-}
-
-func (c *Core) deployNFT(reqID string, deployReq model.DeployNFTRequest) *model.BasicResponse {
-	// st := time.Now()
-	// txEpoch := int(st.Unix())
-
-	resp := &model.BasicResponse{
-		Status: false,
-	}
-	_, did, ok := util.ParseAddress(deployReq.DID)
-	if !ok {
-		resp.Message = "Invalid Deployer DID"
-		return resp
-	}
-
-	// isNFT, err := c.w.IsNFT(deployReq.NFT)
-	// if err != nil {
-	// 	resp.Message = "deployNFT : The TokenID given is not an NFT"
-	// 	return resp
-	// }
-	// if !isNFT {
-	// 	resp.Message = "deployNFT : The TokenID given is not an NFT"
-	// 	return resp
-	// }
-
-	// This part need to be verified.
-	//Here we are querying the db and checkign whether the NFT has already been deployed or not.
-	// Need to ensure whether this itself is the proper approach : This was the approach we were doing previously
-	_, err := c.w.GetTokenByTokenID(deployReq.NFT)
-	if err == nil {
-		c.log.Error(fmt.Sprintf("NFT %v has been already been deployed", deployReq.NFT))
-		resp.Message = fmt.Sprintf("NFT %v has already been deployed", deployReq.NFT)
-		return resp
-	}
-
-	_, err = c.SetupDID(reqID, did)
-	if err != nil {
-		resp.Message = "Failed to setup Deployer DID of the NFT deployer, " + err.Error()
-		return resp
-	}
-
-	// Building of the TransactionInfo and
-
-	nftTokenDetails := wallet.NFT{
-		TokenID:     deployReq.NFT,
-		DID:         deployReq.DID,
-		TokenStatus: wallet.TokenIsFree,
-		TokenValue:  floatPrecision(deployReq.NFTValue, MaxDecimalPlaces),
-		Metadata:    deployReq.NFTMetadata,
-		Filename:    deployReq.NFTFileName,
-	}
-
-	if err := c.w.CreateNFT(&nftTokenDetails, false); err != nil {
-		c.log.Error("Failed to write nft to storage in NFTTokenStorage", err)
-		return resp
-	}
-
-	newEvent := model.NFTEvent{
-		NFT:         nftTokenDetails.TokenID,
-		ExecutorDid: nftTokenDetails.DID,
-		NFTMetadata: nftTokenDetails.Metadata,
-		NFTFileName: nftTokenDetails.Filename,
-		NFTValue:    nftTokenDetails.TokenValue,
-	}
-
-	err = c.publishNewNftEvent(&newEvent)
-	if err != nil {
-		c.log.Error("Failed to publish NFT info")
-	}
-
-	c.log.Info("NFT Deployed successfully")
-	resp.Status = true
-	msg := fmt.Sprintf("NFT Deployed successfully")
-	resp.Message = msg
-	return resp
-}
-
-// GetAllNFT returns an empty NFT list stub.
-func (c *Core) GetAllNFT() model.NFTList {
-	return model.NFTList{}
-}
-
-// GetNFTsByDid returns an empty NFT list stub for a given DID.
-func (c *Core) GetNFTsByDid(did string) model.NFTList {
-	return model.NFTList{}
-}
-
 func (c *Core) SubscribeNFTSetup(requestID string, topic string) error {
 	reqID = requestID
 
@@ -221,14 +124,14 @@ func (c *Core) SubscribeNFTSetup(requestID string, topic string) error {
 }
 
 func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
-	var newEvent model.NFTEvent
+	var newEvent models.EventNFTPublishInfo
 	err := json.Unmarshal(data, &newEvent)
 	if err != nil {
 		c.log.Error("NFTCallBack: Failed to unmarshal NFT event", "err", err)
 		return
 	}
 
-	nft := newEvent.NFT
+	nft := newEvent.NFTid
 	c.log.Info("NFTCallBack: Received update on NFT", "nft_token", nft)
 
 	// Check if NFT folder exists (log warning if missing)
@@ -238,8 +141,8 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 	}
 
 	// Construct publisher peer address
-	executorDid := newEvent.ExecutorDid
-	publisherAddress := peerID + "." + executorDid
+	initiatorDid := newEvent.Initiator
+	publisherAddress := peerID + "." + initiatorDid
 	publisherPeer, err := c.getPeer(publisherAddress)
 	if err != nil {
 		c.log.Error("NFTCallBack: Failed to get peer", "address", publisherAddress, "err", err)

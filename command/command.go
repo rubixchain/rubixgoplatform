@@ -66,10 +66,7 @@ const (
 	UpdateConfig                   string = "updateconfig"
 	GenerateSmartContractToken     string = "generatesct"
 	FetchSmartContract             string = "fetchsct"
-	PublishContractCmd             string = "publishsct"
 	SubscribeContractCmd           string = "subscribesct"
-	DeploySmartContractCmd         string = "deploysmartcontract"
-	ExecuteSmartcontractCmd        string = "executesmartcontract"
 	DumpSmartContractTokenChainCmd string = "dumpsmartcontracttokenchain"
 	GetTokenBlock                  string = "gettokenblock"
 	GetSmartContractData           string = "getsmartcontractdata"
@@ -96,8 +93,6 @@ const (
 	GetFTInfoCmd                   string = "get-ft-info-by-did"
 	ValidateTokenCmd               string = "validatetoken"
 	DumpNFTTokenChainCmd           string = "dump-nft-tokenchain"
-	DeployNFTCmd                   string = "deploy-nft"
-	ExecuteNFTCmd                  string = "execute-nft"
 	SubscribeNFTCmd                string = "subscribe-nft"
 	FetchNftCmd                    string = "fetch-nft"
 	GetNftsByDidCmd                string = "get-nfts-by-did"
@@ -140,16 +135,12 @@ var commands = []string{VersionCmd,
 	LockTokensCmd,
 	SetupDBCmd,
 	GetTxnDetailsCmd,
-	PublishContractCmd,
 	SubscribeContractCmd,
 	CreateNFTCmd,
 	GetAllNFTCmd,
-	DeploySmartContractCmd,
-	ExecuteSmartcontractCmd,
 	ShutDownCmd,
 	GenerateSmartContractToken,
 	FetchSmartContract,
-	PublishContractCmd,
 	SubscribeContractCmd,
 	DumpSmartContractTokenChainCmd,
 	GetTokenBlock,
@@ -168,8 +159,6 @@ var commands = []string{VersionCmd,
 	GetFTInfoCmd,
 	ValidateTokenCmd,
 	DumpNFTTokenChainCmd,
-	DeployNFTCmd,
-	ExecuteNFTCmd,
 	SubscribeNFTCmd,
 	FetchNftCmd,
 	GetNftsByDidCmd,
@@ -865,16 +854,10 @@ func Run(args []string) {
 		cmd.ShutDownCmd()
 	case GetTxnDetailsCmd:
 		cmd.getTxnDetails()
-	case PublishContractCmd:
-		cmd.PublishContract()
 	case SubscribeContractCmd:
 		cmd.SubscribeContract()
 	case CreateNFTCmd:
 		cmd.createNFT()
-	case GetAllNFTCmd:
-		cmd.getAllNFTs()
-	case DeploySmartContractCmd:
-		cmd.deploySmartcontract()
 	case GenerateSmartContractToken:
 		cmd.generateSmartContractToken()
 	case FetchSmartContract:
@@ -885,8 +868,6 @@ func Run(args []string) {
 		cmd.getTokenBlock()
 	case GetSmartContractData:
 		cmd.getSmartContractData()
-	case ExecuteSmartcontractCmd:
-		cmd.executeSmartcontract()
 	case GetPeerID:
 		cmd.peerIDCmd()
 	case ReleaseAllLockedTokensCmd:
@@ -923,16 +904,12 @@ func Run(args []string) {
 		cmd.getFTinfo()
 	case ValidateTokenCmd:
 		cmd.ValidateToken()
-	case DeployNFTCmd:
-		cmd.deployNFT()
 	case DumpNFTTokenChainCmd:
 		cmd.dumpNFTTokenChain()
 	case SubscribeNFTCmd:
 		cmd.SubscribeNFT()
 	case FetchNftCmd:
 		cmd.fetchNFT()
-	case GetNftsByDidCmd:
-		cmd.getNFTsByDid()
 	case AddUserAPIKeyCmd:
 		cmd.addUserAPIKey()
 	case AddPeerDetailsFromExplorer:

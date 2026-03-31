@@ -9,75 +9,8 @@ import (
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core"
-	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
-
-type FetchSmartContractSwaggoInput struct {
-	SmartContractToken string `json:"smartContractToken"`
-}
-
-type NewSubscriptionSwaggoInput struct {
-	SmartContractToken string `json:"smartContractToken"`
-}
-
-type DeploySmartContractSwaggoInput struct {
-	SmartContractToken string  `json:"smartContractToken"`
-	DeployerAddress    string  `json:"deployerAddr"`
-	RBTAmount          float64 `json:"rbtAmount"`
-	QuorumType         int     `json:"quorumType"`
-	Comment            string  `json:"comment"`
-}
-
-// SmartContract godoc
-// @Summary      Deploy Smart Contract
-// @Description  This API will deploy smart contract Token
-// @Tags         Smart Contract
-// @ID 			 deploy-smart-contract
-// @Accept       json
-// @Produce      json
-// @Param		 input body DeploySmartContractSwaggoInput true "Deploy smart contract"
-// @Success      200  {object}  model.BasicResponse
-// @Router       /api/deploy-smart-contract [post]
-func (s *Server) APIDeploySmartContract(req *ensweb.Request) *ensweb.Result {
-	var deployReq model.DeploySmartContractRequest
-	err := s.ParseJSON(req, &deployReq)
-	if err != nil {
-		return s.BasicResponse(req, false, "Invalid input", nil)
-	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(deployReq.SmartContractToken)
-	if len(deployReq.SmartContractToken) != 46 || !strings.HasPrefix(deployReq.SmartContractToken, "Qm") || !is_alphanumeric {
-		s.log.Error("Invalid smart contract token")
-		return s.BasicResponse(req, false, "Invalid smart contract token", nil)
-	}
-	_, did, ok := util.ParseAddress(deployReq.DeployerAddress)
-	if !ok {
-		return s.BasicResponse(req, false, "Invalid Deployer address", nil)
-	}
-
-	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
-	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
-		s.log.Error("Invalid deployer DID")
-		return s.BasicResponse(req, false, "Invalid input", nil)
-	}
-
-	if deployReq.RBTAmount < 0.001 {
-		s.log.Error("Invalid RBT amount. Minimum RBT amount should be 0.001")
-		return s.BasicResponse(req, false, "Invalid RBT amount. Minimum RBT amount should be 0.001", nil)
-	}
-	if deployReq.QuorumType < 1 || deployReq.QuorumType > 2 {
-		s.log.Error("Invalid quorum type")
-		return s.BasicResponse(req, false, "Invalid quorum type", nil)
-	}
-
-	if !s.validateDIDAccess(req, did) {
-		return s.BasicResponse(req, false, "DID does not have an access", nil)
-	}
-	s.c.AddWebReq(req)
-	go s.c.DeploySmartContractToken(req.ID, &deployReq)
-	return s.didResponse(req, req.ID)
-}
 
 // SmartContract godoc
 // @Summary      Generate Smart Contract
@@ -278,55 +211,30 @@ func (s *Server) APIFetchSmartContract(req *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(req, true, "Smart Contract fetched successfully", nil)
 }
 
-func (s *Server) APIPublishContract(request *ensweb.Request) *ensweb.Result {
-	var newEvent model.NewContractEvent
-	err := s.ParseJSON(request, &newEvent)
-	if err != nil {
-		return s.BasicResponse(request, false, "Failed to parse input", nil)
-	}
-
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(newEvent.SmartContractToken)
-
-	if len(newEvent.SmartContractToken) != 46 || !strings.HasPrefix(newEvent.SmartContractToken, "Qm") || !is_alphanumeric {
-		s.log.Error("Invalid smart contract token")
-		return s.BasicResponse(request, false, "Invalid smart contract token", nil)
-	}
-
-	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(newEvent.Did)
-	if !strings.HasPrefix(newEvent.Did, "bafybmi") || len(newEvent.Did) != 59 || !is_alphanumeric {
-		s.log.Error("Invalid DID")
-		return s.BasicResponse(request, false, "Invalid DID", nil)
-	}
-	if newEvent.Type < 1 || newEvent.Type > 2 {
-		s.log.Error("Invalid publish type")
-		return s.BasicResponse(request, false, "Invalid publish type", nil)
-	}
-
-	go s.c.PublishNewEvent(&newEvent)
-	return s.BasicResponse(request, true, "Smart contract published successfully", nil)
-}
-
 // SmartContract godoc
 // @Summary      Subscribe to Smart Contract
 // @Description  This API endpoint allows subscribing to a smart contract.
 // @Tags         Smart Contract
 // @Accept       json
 // @Produce      json
-// @Param        input body NewSubscriptionSwaggoInput true "Subscribe to input contract"
+// @Param        smartContractToken query string true "Smart contract token to subscribe to"
 // @Success      200  {object}  model.BasicResponse
-// @Router       /api/subscribe-smart-contract [post]
+// @Router       /rubix/v1/smart_contracts/subscribe [get]
 func (s *Server) APISubscribecontract(request *ensweb.Request) *ensweb.Result {
-	var newSubscription model.NewSubscription
-	err := s.ParseJSON(request, &newSubscription)
-	if err != nil {
-		return s.BasicResponse(request, false, "Failed to parse input", nil)
+	// Get smart contract token from query parameter
+	smartContractToken := s.GetQuery(request, "smartContractToken")
+	if smartContractToken == "" {
+		return s.BasicResponse(request, false, "smartContractToken query parameter is required", nil)
 	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(newSubscription.SmartContractToken)
-	if len(newSubscription.SmartContractToken) != 46 || !strings.HasPrefix(newSubscription.SmartContractToken, "Qm") || !is_alphanumeric {
+
+	// Validate smart contract token format
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(smartContractToken)
+	if len(smartContractToken) != 46 || !strings.HasPrefix(smartContractToken, "Qm") || !is_alphanumeric {
 		s.log.Error("Invalid smart contract token")
 		return s.BasicResponse(request, false, "Invalid smart contract token", nil)
 	}
-	topic := newSubscription.SmartContractToken
+
+	topic := smartContractToken
 	s.c.AddWebReq(request)
 	go s.c.SubsribeContractSetup(request.ID, topic)
 	return s.BasicResponse(request, true, "Smart contract subscribed successfully", nil)
@@ -338,48 +246,6 @@ type ExecuteSmartContractSwaggoInput struct {
 	QuorumType         int    `json:"quorumType"`
 	Comment            string `json:"comment"`
 	SmartContractData  string `json:"smartContractData"`
-}
-
-// SmartContract godoc
-// @Summary      Execute Smart Contract
-// @Description  This API will Execute smart contract Token
-// @Tags         Smart Contract
-// @Accept       json
-// @Produce      json
-// @Param		 input body ExecuteSmartContractSwaggoInput true "Execute smart contrct and add details to chain"
-// @Success      200  {object}  model.BasicResponse
-// @Router       /api/execute-smart-contract [post]
-func (s *Server) APIExecuteSmartContract(req *ensweb.Request) *ensweb.Result {
-	var executeReq model.ExecuteSmartContractRequest
-	err := s.ParseJSON(req, &executeReq)
-	if err != nil {
-		return s.BasicResponse(req, false, "Invalid input", nil)
-	}
-	_, did, ok := util.ParseAddress(executeReq.ExecutorAddress)
-	if !ok {
-		return s.BasicResponse(req, false, "Invalid Executer address", nil)
-	}
-
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(executeReq.SmartContractToken)
-	if len(executeReq.SmartContractToken) != 46 || !strings.HasPrefix(executeReq.SmartContractToken, "Qm") || !is_alphanumeric {
-		s.log.Error("Invalid smart contract token")
-		return s.BasicResponse(req, false, "Invalid smart contract token", nil)
-	}
-	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
-	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
-		s.log.Error("Invalid executer DID")
-		return s.BasicResponse(req, false, "Invalid executer DID", nil)
-	}
-	if executeReq.QuorumType < 1 || executeReq.QuorumType > 2 {
-		s.log.Error("Invalid quorum type")
-		return s.BasicResponse(req, false, "Invalid quorum type", nil)
-	}
-	if !s.validateDIDAccess(req, did) {
-		return s.BasicResponse(req, false, "DID does not have an access", nil)
-	}
-	s.c.AddWebReq(req)
-	go s.c.ExecuteSmartContractToken(req.ID, &executeReq)
-	return s.didResponse(req, req.ID)
 }
 
 // SmartContract godoc
