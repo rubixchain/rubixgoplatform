@@ -524,19 +524,20 @@ func TokenChainIntigrityCheck(txnInfo *models.TransactionInfo, peer *ipfsport.Pe
 		return nil, false
 	}
 
-	tokenLists := [][]*models.TokenInfo{
-		txnInfo.Tokens.RBT,
-		txnInfo.Tokens.FT,
-		txnInfo.Tokens.NFT,
-		txnInfo.Tokens.SmartContract,
+	tokenLists := map[string][]*models.TokenInfo{
+		constants.TokenType_RBT: txnInfo.Tokens.RBT,
+		constants.TokenType_FT:  txnInfo.Tokens.FT,
+		constants.TokenType_NFT: txnInfo.Tokens.NFT,
+		constants.TokenType_SmartContract: txnInfo.Tokens.SmartContract,
 	}
 
-	for _, tokens := range tokenLists {
+	for tokenType, tokens := range tokenLists {
+		tokenTypeInt := models.GetTokenTypeID(tokenType)
 		for _, t := range tokens {
 			tokenDetails, err := w.GetTokenByTokenID(t.TokenID)
 			if err != nil {
 				log.Debug("token not found locally, syncing full chain", "tokenID", t.TokenID)
-				if syncErr, _ := rubixsync.SyncTransactionChainFrom(peer, t.TokenID, w, log); syncErr != nil {
+				if syncErr, _ := rubixsync.SyncTransactionChainFrom(peer, t.TokenID, tokenTypeInt, w, log); syncErr != nil {
 					return fmt.Errorf("failed to sync token chain for %s: %w", t.TokenID, syncErr), false
 				}
 				continue
@@ -580,7 +581,7 @@ func TokenChainIntigrityCheck(txnInfo *models.TransactionInfo, peer *ipfsport.Pe
 					if err != nil {
 						log.Debug("token not found locally, syncing full chain", "tokenID", t.TokenID)
 
-						if syncErr, _ := rubixsync.SyncTransactionChainFrom(peer, t.TokenID, w, log); syncErr != nil {
+						if syncErr, _ := rubixsync.SyncTransactionChainFrom(peer, t.TokenID, tokenTypeInt, w, log); syncErr != nil {
 							return fmt.Errorf("failed to sync token chain for %s: %w", t.TokenID, syncErr), false
 						}
 

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	rubixsync "github.com/rubixchain/rubixgoplatform/core/sync"
@@ -264,23 +265,24 @@ func (c *Core) syncTransactionTokens(
 	NFTOwnershipTransfer bool,
 ) error {
 
-	tokenGroups := [][]*models.TokenInfo{
-		tokens.RBT,
-		tokens.FT,
+	tokenGroups := map[string][]*models.TokenInfo{
+		constants.TokenType_RBT: tokens.RBT,
+		constants.TokenType_FT:  tokens.FT,
 	}
 
 	// Add NFT only if flag is true
 	if NFTOwnershipTransfer {
-		tokenGroups = append(tokenGroups, tokens.NFT)
+		tokenGroups[constants.TokenType_NFT] = tokens.NFT
 	}
 
-	for _, group := range tokenGroups {
+	for tokenTypeStr, group := range tokenGroups {
+		tokenType := models.GetTokenTypeID(tokenTypeStr)
 		for _, token := range group {
 			if token == nil {
 				continue
 			}
 			//Handling the response in the future.
-			err, _ := rubixsync.SyncTransactionChainFrom(peer, token.TokenID, c.w, c.log)
+			err, _ := rubixsync.SyncTransactionChainFrom(peer, token.TokenID, tokenType, c.w, c.log)
 			if err != nil {
 				return err
 			}
