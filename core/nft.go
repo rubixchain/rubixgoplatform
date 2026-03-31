@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path"
 
@@ -264,28 +263,11 @@ func (c *Core) FetchNFT(fetchNFTRequest *FetchNFTRequest) *model.BasicResponse {
 		Status: false,
 	}
 
-	// Step 1: Fetch NFT metadata from IPFS
-	nftJSON, err := c.ipfsOps.Cat(fetchNFTRequest.NFT)
+	// Step 1: Fetch NFT metadata from IPFS using unified function
+	nft, err := c.fetchContractInfo(fetchNFTRequest.NFT)
 	if err != nil {
-		c.log.Error("FetchNFT: Failed to get NFT from network", "nft_token", fetchNFTRequest.NFT, "err", err)
-		basicResponse.Message = "Failed to get NFT details from network"
-		return basicResponse
-	}
-
-	nftJSONBytes, err := io.ReadAll(nftJSON)
-	if err != nil {
-		c.log.Error("FetchNFT: Failed to read NFT from network", "nft_token", fetchNFTRequest.NFT, "err", err)
-		basicResponse.Message = "Failed to read NFT from network"
-		return basicResponse
-	}
-	nftJSON.Close()
-
-	// Step 2: Parse NFT metadata
-	var nft NFTIpfsInfo
-	err = json.Unmarshal(nftJSONBytes, &nft)
-	if err != nil {
-		c.log.Error("FetchNFT: Failed to parse NFT metadata", "nft_token", fetchNFTRequest.NFT, "err", err)
-		basicResponse.Message = "Failed to parse NFT metadata"
+		c.log.Error("FetchNFT: Failed to fetch NFT metadata", "nft_token", fetchNFTRequest.NFT, "err", err)
+		basicResponse.Message = fmt.Sprintf("Failed to fetch NFT metadata: %v", err)
 		return basicResponse
 	}
 	c.log.Info("FetchNFT: Successfully parsed NFT metadata", "nft_token", fetchNFTRequest.NFT, "did", nft.DID, "peer_id", nft.PeerID)
@@ -301,7 +283,7 @@ func (c *Core) FetchNFT(fetchNFTRequest *FetchNFTRequest) *model.BasicResponse {
 
 	// Step 4: Sync transaction chain if PeerID is available
 	if nft.PeerID != "" {
-		err = c.syncNFTTransaction(fetchNFTRequest.NFT, &nft)
+		err = c.syncNFTTransaction(fetchNFTRequest.NFT, nft)
 		if err != nil {
 			c.log.Error("FetchNFT: Failed to sync NFT transaction chain", "nft_token", fetchNFTRequest.NFT, "err", err)
 			basicResponse.Message = "Failed to sync NFT transaction chain"
@@ -322,7 +304,7 @@ func (c *Core) FetchNFT(fetchNFTRequest *FetchNFTRequest) *model.BasicResponse {
 }
 
 // syncNFTTransaction syncs the transaction chain for an NFT from the deployer peer
-func (c *Core) syncNFTTransaction(nftToken string, nft *NFTIpfsInfo) error {
+func (c *Core) syncNFTTransaction(nftToken string, nft *models.IPFSContractInfo) error {
 	c.log.Info("syncNFTTransaction: Starting transaction chain sync", "nft_token", nftToken, "peer_id", nft.PeerID, "did", nft.DID)
 
 	// Construct the peer address

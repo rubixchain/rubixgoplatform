@@ -126,7 +126,7 @@ func (c *Core) FetchSmartContract(requestID string, smartContractToken string) *
 		return &model.BasicResponse{Status: false, Message: err.Error()}
 	}
 
-	metadata, err := c.fetchSmartContractMetadata(smartContractToken)
+	metadata, err := c.fetchContractInfo(smartContractToken)
 	if err != nil {
 		c.log.Error("FetchSmartContract: Failed to fetch smart contract metadata", "token", smartContractToken, "err", err)
 		return &model.BasicResponse{Status: false, Message: err.Error()}
@@ -171,32 +171,8 @@ func (c *Core) prepareSmartContractFolder(smartContractToken string) (string, er
 	return scFolderPath, nil
 }
 
-// fetchSmartContractMetadata retrieves and parses the smart contract metadata from IPFS.
-func (c *Core) fetchSmartContractMetadata(smartContractToken string) (*SmartContractToken, error) {
-	// Fetch metadata JSON from IPFS
-	reader, err := c.ipfsOps.Cat(smartContractToken)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch from IPFS: %w", err)
-	}
-	defer reader.Close()
-
-	// Read JSON bytes
-	metadataBytes, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read metadata: %w", err)
-	}
-
-	// Parse into struct
-	var metadata SmartContractToken
-	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
-		return nil, fmt.Errorf("failed to parse metadata JSON: %w", err)
-	}
-
-	return &metadata, nil
-}
-
 // storeSmartContractFiles downloads the entire smart contract folder from IPFS using the folder hash.
-func (c *Core) storeSmartContractFiles(scFolderPath string, metadata *SmartContractToken) error {
+func (c *Core) storeSmartContractFiles(scFolderPath string, metadata *models.IPFSContractInfo) error {
 	// Get the entire folder from IPFS using the artifact hash
 	err := c.ipfsOps.Get(metadata.ArtifactHash, scFolderPath)
 	if err != nil {
@@ -207,7 +183,7 @@ func (c *Core) storeSmartContractFiles(scFolderPath string, metadata *SmartContr
 }
 
 // syncSmartContractTokenChain syncs the token chain from the deployer's peer if available.
-func (c *Core) syncSmartContractTransaction(smartContractToken string, metadata *SmartContractToken) error {
+func (c *Core) syncSmartContractTransaction(smartContractToken string, metadata *models.IPFSContractInfo) error {
 	if metadata.PeerID == "" {
 		c.log.Debug("syncSmartContractTransaction: No peer ID available, skipping token chain sync", "token", smartContractToken)
 		return nil
@@ -445,4 +421,30 @@ func (c *Core) GetSmartContractChain(smartContractID string) ([]models.TokenChai
 		return nil, err
 	}
 	return smartContractTokenChain, nil
+}
+
+// fetchContractInfo is a unified function to fetch metadata for both NFTs and Smart Contracts.
+// It retrieves the IPFS metadata JSON and parses it into models.IPFSContractInfo.
+// This function works for both NFTs and Smart Contracts since they now share the same metadata structure.
+func (c *Core) fetchContractInfo(tokenHash string) (*models.IPFSContractInfo, error) {
+	// Fetch metadata JSON from IPFS
+	reader, err := c.ipfsOps.Cat(tokenHash)
+	if err != nil {
+		return nil, fmt.Errorf("fetchContractInfo: failed to fetch contract metadata from IPFS: %w", err)
+	}
+	defer reader.Close()
+
+	// Read JSON bytes
+	metadataBytes, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("fetchContractInfo: failed to read contract metadata: %w", err)
+	}
+
+	// Parse into unified struct
+	var contractInfo models.IPFSContractInfo
+	if err := json.Unmarshal(metadataBytes, &contractInfo); err != nil {
+		return nil, fmt.Errorf("fetchContractInfo: failed to parse contract metadata JSON: %w", err)
+	}
+
+	return &contractInfo, nil
 }
