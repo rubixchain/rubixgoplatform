@@ -123,6 +123,17 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 	if err := pc.upsertTokenStates(ctx, tx, req.TokenStates); err != nil {
 		return err
 	}
+
+	// Update committed tokens status from Locked to Committed
+	// here we are adding all the tokens which are given in the ComittedTokens field.
+	// So one condition which we should think is whther there is a possibility of
+	// tokens which are being burned coming in CommitedTokens field
+	if req.TransactionInfo != nil && len(req.TransactionInfo.CommittedTokens) > 0 {
+		if err := pc.updateCommittedTokensStatus(ctx, tx, req.TransactionInfo.CommittedTokens); err != nil {
+			return err
+		}
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("post-consensus persistence: commit: %w", err)
 	}
@@ -197,7 +208,6 @@ func buildTransactionRecordFromPayload(txInfo *models.TransactionInfo, signature
 		Signature: signatureBytes,
 	}, nil
 }
-
 
 func validatePostConsensusRequest(req *PostConsensusPersistenceRequest, transactionID string) error {
 	if req == nil {
@@ -592,6 +602,52 @@ func (pc *PostConsensusPersistenceCoordinator) upsertTokenStates(ctx context.Con
 			return fmt.Errorf("post-consensus persistence: upsert token states: %w", err)
 		}
 	}
+
+	return nil
+}
+
+// updateCommittedTokensStatus updates the status of committed tokens from Locked to Committed.
+// Committed tokens are RBT tokens that back a Smart Contract's value during deployment.
+// These tokens were initially marked as Locked in BuildTransactionInfoFromRequest,
+// and now need to be updated to Committed status after consensus completes successfully.
+func (pc *PostConsensusPersistenceCoordinator) updateCommittedTokensStatus(ctx context.Context, tx pgx.Tx, committedTokens []*models.TokenInfo) error {
+	if len(committedTokens) == 0 {
+		return nil
+	}
+
+	// Extract all committed token IDs
+	tokenIDs := make([]string, 0, len(committedTokens))
+	for _, token := range committedTokens {
+		if token != nil && token.TokenID != "" {
+			tokenIDs = append(tokenIDs, token.TokenID)
+		}
+	}
+
+	if len(tokenIDs) == 0 {
+		return nil
+	}
+
+	// Update all committed tokens to Committed status in a single batch operation
+	query := `
+		UPDATE tokens
+		SET token_status = $1, updated_at = NOW()
+		WHERE token_id = ANY($2::text[])
+	`
+	cmdTag, err := tx.Exec(ctx, query, constants.TokenStatus_Committed, tokenIDs)
+	if err != nil {
+		return fmt.Errorf("post-consensus persistence: update committed tokens status: %w", err)
+	}
+
+	rowsAffected := cmdTag.RowsAffected()
+	if rowsAffected != int64(len(tokenIDs)) {
+		pc.wallet.log.Warn("committed tokens status update mismatch",
+			"expected", len(tokenIDs),
+			"affected", rowsAffected)
+	}
+
+	pc.wallet.log.Info("updated committed tokens status",
+		"count", rowsAffected,
+		"status", "Committed")
 
 	return nil
 }

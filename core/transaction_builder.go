@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
@@ -37,6 +36,7 @@ func BuildTransactionInfoFromRequest(
 
 	txTokens := &models.TransactionTokens{}
 	var totalAmount float64
+	var allCommittedTokens []*models.TokenInfo
 
 	// --- RBT path (separate — CollectRBTTokens manages its own locking) ---
 	if req.HasRBT() {
@@ -90,55 +90,105 @@ func BuildTransactionInfoFromRequest(
 			}
 		}
 
-		// NFT path
+		// NFT path - handle both deployment and execution
 		if req.HasNFT() {
 			allNFTs := req.GetAllNFTs()
-			nftIDs := make([]string, len(allNFTs))
-			nftDataMap := make(map[string]string, len(allNFTs))
-			for i, nftInfo := range allNFTs {
-				nftIDs[i] = nftInfo.NFTId
-				nftDataMap[nftInfo.NFTId] = nftInfo.Data
-			}
-			sort.Strings(nftIDs)
 
-			locked, err := w.QueryAndLockByIDs(ctx, tx, req.Initiator, nftIDs, constants.TokenType_NFT)
-			if err != nil {
-				return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: NFT lock failed: %w", err)
-			}
-			for _, tok := range locked {
-				txTokens.NFT = append(txTokens.NFT, &models.TokenInfo{
-					TokenID:               tok.TokenID,
-					PreviousTransactionID: tok.TransactionID,
-					Data:                  nftDataMap[tok.TokenID],
-				})
-				allLockedIDs = append(allLockedIDs, tok.TokenID)
-				totalAmount += tok.TokenValue
+			for _, nftInfo := range allNFTs {
+				// Check if NFT token exists in database
+				exists, err := w.TokenExists(ctx, tx, nftInfo.NFTId)
+				if err != nil {
+					return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: failed to check NFT existence: %w", err)
+				}
+
+				if exists {
+					// EXECUTION MODE: Token exists, lock it for execution
+					locked, err := w.QueryAndLockByIDs(ctx, tx, req.Initiator, []string{nftInfo.NFTId}, constants.TokenType_NFT)
+					if err != nil {
+						return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: NFT lock failed for %s: %w", nftInfo.NFTId, err)
+					}
+					if len(locked) == 0 {
+						return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: NFT %s exists but could not be locked", nftInfo.NFTId)
+					}
+					tok := locked[0]
+					txTokens.NFT = append(txTokens.NFT, &models.TokenInfo{
+						TokenID:               tok.TokenID,
+						PreviousTransactionID: tok.TransactionID,
+						Data:                  nftInfo.Data,
+					})
+					allLockedIDs = append(allLockedIDs, tok.TokenID)
+					totalAmount += tok.TokenValue
+				} else {
+					// DEPLOYMENT MODE: Token doesn't exist, prepare for deployment
+					// Add NFT to transaction tokens (will be deployed during consensus)
+					txTokens.NFT = append(txTokens.NFT, &models.TokenInfo{
+						TokenID:               nftInfo.NFTId,
+						PreviousTransactionID: "", // Genesis - no previous transaction
+						Data:                  nftInfo.Data,
+					})
+					totalAmount += nftInfo.Value
+				}
 			}
 		}
 
-		// SmartContract path
+		// SmartContract path - handle both deployment and execution
 		if req.HasSmartContract() {
 			allSCs := req.GetAllSmartContracts()
-			scIDs := make([]string, len(allSCs))
-			scDataMap := make(map[string]string, len(allSCs))
-			for i, scInfo := range allSCs {
-				scIDs[i] = scInfo.SmartContractId
-				scDataMap[scInfo.SmartContractId] = scInfo.Data
-			}
-			sort.Strings(scIDs)
 
-			locked, err := w.QueryAndLockByIDs(ctx, tx, req.Initiator, scIDs, constants.TokenType_SmartContract)
-			if err != nil {
-				return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: SC lock failed: %w", err)
-			}
-			for _, tok := range locked {
-				txTokens.SmartContract = append(txTokens.SmartContract, &models.TokenInfo{
-					TokenID:               tok.TokenID,
-					PreviousTransactionID: tok.TransactionID,
-					Data:                  scDataMap[tok.TokenID],
-				})
-				allLockedIDs = append(allLockedIDs, tok.TokenID)
-				totalAmount += tok.TokenValue
+			for _, scInfo := range allSCs {
+				// Check if SC token exists in database
+				exists, err := w.TokenExists(ctx, tx, scInfo.SmartContractId)
+				if err != nil {
+					return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: failed to check SC existence: %w", err)
+				}
+
+				if exists {
+					// EXECUTION MODE: Token exists, lock it for execution
+					locked, err := w.QueryAndLockByIDs(ctx, tx, req.Initiator, []string{scInfo.SmartContractId}, constants.TokenType_SmartContract)
+					if err != nil {
+						return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: SC lock failed for %s: %w", scInfo.SmartContractId, err)
+					}
+					if len(locked) == 0 {
+						return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: SC %s exists but could not be locked", scInfo.SmartContractId)
+					}
+					tok := locked[0]
+					txTokens.SmartContract = append(txTokens.SmartContract, &models.TokenInfo{
+						TokenID:               tok.TokenID,
+						PreviousTransactionID: tok.TransactionID,
+						Data:                  scInfo.Data,
+					})
+					allLockedIDs = append(allLockedIDs, tok.TokenID)
+					totalAmount += tok.TokenValue
+				} else {
+					// DEPLOYMENT MODE: Token doesn't exist, prepare for deployment
+					// Collect committed tokens if SC has value > 0
+					if scInfo.Value > 0 {
+						// Lock RBT tokens for the smart contract value
+						ownedRBTTokens, err := w.LockTokensForSplit(ctx, req.Initiator, scInfo.Value)
+						if err != nil {
+							return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: failed to lock RBT for SC committed tokens: %w", err)
+						}
+
+						// Convert to TokenInfo format for CommittedTokens and add to locked list
+						for _, token := range ownedRBTTokens {
+							committedToken := &models.TokenInfo{
+								TokenID:               token.TokenID,
+								PreviousTransactionID: token.TransactionID,
+							}
+							allCommittedTokens = append(allCommittedTokens, committedToken)
+							// Add to locked list so they get marked as Locked (not Committed yet - that happens during consensus)
+							allLockedIDs = append(allLockedIDs, token.TokenID)
+						}
+					}
+
+					// Add SC to transaction tokens (will be deployed during consensus)
+					txTokens.SmartContract = append(txTokens.SmartContract, &models.TokenInfo{
+						TokenID:               scInfo.SmartContractId,
+						PreviousTransactionID: "", // Genesis - no previous transaction
+						Data:                  scInfo.Data,
+					})
+					totalAmount += scInfo.Value
+				}
 			}
 		}
 
@@ -158,12 +208,18 @@ func BuildTransactionInfoFromRequest(
 		}
 	}
 
+	// Set CommittedTokens from SC deployments (will be nil if no SC deployments occurred)
+	var committedTokens []*models.TokenInfo
+	if len(allCommittedTokens) > 0 {
+		committedTokens = allCommittedTokens
+	}
+
 	txInfo := &models.TransactionInfo{
 		Initiator:       req.Initiator,
 		Owner:           req.Owner,
 		Epoch:           int(time.Now().Unix()),
 		Tokens:          txTokens,
-		CommittedTokens: nil,
+		CommittedTokens: committedTokens,
 		Quorums:         nil,
 		Memo:            req.Memo,
 	}

@@ -49,6 +49,8 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	}
 	// Build transaction info
 	//Here the c.publishTxn must be verified because the input type is *model.PubSubTxnInfo which need to be updated
+	// here the tokens which are being fetched as committed tokens in case of smartContract deployment: There we need to add the commitment block?
+
 	transactionInfo, transactionValue, err := BuildTransactionInfoFromRequest(ctx, c.w, request, dc, networkMode, c.log, c.ps)
 	if err != nil {
 		c.log.Error("InitiateTransaction: Failed to build transaction info", "err", err)
