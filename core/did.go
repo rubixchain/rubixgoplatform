@@ -277,6 +277,7 @@ func (c *Core) registerDID(reqID string, did string) error {
 		DID:       did,
 		Signature: util.BytesToBase64(sig),
 		Time:      t,
+		DIDAlgo: int64(models.GetDidAlgoType(constants.DidAlgo_SECP256K1)),
 	}
 	err = c.publishPeerMap(pm)
 	if err != nil {
@@ -472,26 +473,24 @@ func (c *Core) removeStaleDIDFromNetwork(reqID, staleDID string) (model.BasicRes
 	}
 
 	// check if DID still holds tokens, prevent deletion if it does
-	accInfo, err := c.GetAccountInfo(staleDID)
+	accInfo, err := c.GetRbtByDid(staleDID)
 	if err != nil {
 		c.log.Error("Failed to get account info for DID %v", staleDID)
 		return response, err
 	}
-	if accInfo.RBTAmount == 0 &&
+	if accInfo.RBTBalance == 0 &&
 		accInfo.LockedRBT == 0 &&
-		accInfo.PledgedRBT == 0 &&
-		accInfo.PinnedRBT == 0 {
+		accInfo.PledgedRBT == 0 {
 
 		// DID has no tokens, safe to delete
 		c.log.Debug("*******did has no balance, safe to delete")
 	} else {
 		errMsg := fmt.Sprintf(
-			"cannot remove DID: %v, holds RBT [%f free, %f locked, %f pledged, %f pinned]",
+			"cannot remove DID: %v, holds RBT [%f free, %f locked, %f pledged]",
 			staleDID,
-			accInfo.RBTAmount,
+			accInfo.RBTBalance,
 			accInfo.LockedRBT,
 			accInfo.PledgedRBT,
-			accInfo.PinnedRBT,
 		)
 		c.log.Error(errMsg)
 		return response, fmt.Errorf(errMsg)

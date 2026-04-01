@@ -7,9 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rubixchain/rubixgoplatform/core"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 func (cmd *Command) CreateDID() {
@@ -199,7 +200,7 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 	}
 }
 
-func (cmd *Command) GetAccountInfo() {
+func (cmd *Command) GetRBTBalance() {
 	if cmd.did == "" {
 		cmd.log.Info("DID cannot be empty")
 		fmt.Print("Enter DID : ")
@@ -214,17 +215,73 @@ func (cmd *Command) GetAccountInfo() {
 		cmd.log.Error("Invalid DID")
 		return
 	}
-	info, err := cmd.c.GetAccountInfo(cmd.did)
+	response, err := cmd.c.GetRBTBalance(cmd.did)
 	if err != nil {
 		cmd.log.Error("Invalid response from the node", "err", err)
 		return
 	}
-	fmt.Printf("Response : %v\n", info)
-	if !info.Status {
-		cmd.log.Error("Failed to get account info", "message", info.Message)
+	fmt.Printf("Response : %v\n", response)
+	if !response.Status {
+		cmd.log.Error("Failed to get account info", "message", response.Message)
 	} else {
-		cmd.log.Info("Successfully got the account information")
-		fmt.Printf("RBT : %10.*f, Locked RBT : %10.*f, Pledged RBT : %10.*f, Pinned RBT : %10.*f\n", core.MaxDecimalPlaces, info.AccountInfo[0].RBTAmount, core.MaxDecimalPlaces, info.AccountInfo[0].LockedRBT, core.MaxDecimalPlaces, info.AccountInfo[0].PledgedRBT, core.MaxDecimalPlaces, info.AccountInfo[0].PinnedRBT)
+		rbtBalance, err := util.ExtractResult[types.RBTBalance](response.Result)
+		if err != nil {
+			cmd.log.Error("failed to parse rbt balance")
+			return
+		}
+		cmd.log.Info("Successfully got rbt balance", "DID ", cmd.did)
+		fmt.Printf("RBT : %10.*f, Locked RBT : %10.*f, Pledged RBT : %10.*f\n", constants.MaxSupportedDecimalPlaces, rbtBalance.RBTBalance, constants.MaxSupportedDecimalPlaces, rbtBalance.LockedRBT, constants.MaxSupportedDecimalPlaces, rbtBalance.PledgedRBT)
+	}
+}
+
+func (cmd *Command) GetDIDBalance() {
+	if cmd.did == "" {
+		cmd.log.Info("DID cannot be empty")
+		fmt.Print("Enter DID : ")
+		_, err := fmt.Scan(&cmd.did)
+		if err != nil {
+			cmd.log.Error("Failed to get DID")
+			return
+		}
+	}
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !isAlphanumeric {
+		cmd.log.Error("Invalid DID")
+		return
+	}
+	response, err := cmd.c.GetDIDBalance(cmd.did)
+	if err != nil {
+		cmd.log.Error("Invalid response from the node", "err", err)
+		return
+	}
+	fmt.Printf("Response : %v\n", response)
+	if !response.Status {
+		cmd.log.Error("Failed to get balance for DID ", cmd.did, "message", response.Message)
+	} else {
+		cmd.log.Info("Successfully got rbt balance, DID ", cmd.did)
+		didBalances, err := util.ExtractResult[types.DIDBalances](response.Result)
+		if err != nil {
+			cmd.log.Error("failed to parse did assets balances")
+			return
+		}
+		cmd.log.Info("RBT :")
+		fmt.Printf("RBT balance : %10.*f, Locked RBT : %10.*f, Pledged RBT : %10.*f\n", constants.MaxSupportedDecimalPlaces, didBalances.RBTBalance.RBTBalance, constants.MaxSupportedDecimalPlaces, didBalances.RBTBalance.LockedRBT, constants.MaxSupportedDecimalPlaces, didBalances.RBTBalance.PledgedRBT)
+		if len(didBalances.FTBalance) == 0 {
+			cmd.log.Info("FT : no FTs found")
+		} else {
+			cmd.log.Info("FT :")
+			for _, ft := range didBalances.FTBalance {
+				fmt.Printf("FT name: %s, Creator DID: %s, FT Value: %10.*f, FT Count: %d\n", ft.FTName, ft.CreatorDID, constants.MaxSupportedDecimalPlaces, ft.FTValue, ft.FTCount)
+			}
+		}
+		if len(didBalances.NFTBalance) == 0 {
+			cmd.log.Info("NFT : no NFTs found")
+		} else {
+			cmd.log.Info("NFT :")
+			for _, nft := range didBalances.NFTBalance {
+				fmt.Printf("NFT id : %s, Value :  %10.*f\n", nft.NFTId, constants.MaxSupportedDecimalPlaces, nft.NFTValue)
+			}
+		}
 	}
 }
 

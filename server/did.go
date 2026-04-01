@@ -236,3 +236,46 @@ func (s *Server) APIRemoveStaleDID(req *ensweb.Request) *ensweb.Result {
 	go s.c.RemoveStaleDIDFromNetwork(req.ID, didStr)
 	return s.didResponse(req, req.ID)
 }
+
+func (s *Server) APIGetDIDBalance(req *ensweb.Request) *ensweb.Result {
+	did := s.GetRouteVar(req, "did")
+	if !s.validateDIDAccess(req, did) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
+
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID:", did)
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
+	assetsBalance := types.DIDBalances{
+		DID: did,
+	}
+	ac := model.BasicResponse{
+		Status:  true,
+	}
+	rbtInfo, err := s.c.GetRbtByDid(did)
+	if err != nil {
+		ac.Message = "failed to get RBT balance, err :" + err.Error() + ";"
+	} else {
+		assetsBalance.RBTBalance = rbtInfo
+	}
+	ftInfo, err := s.c.GetFTInfoByDID(did)
+	if err != nil {
+		ac.Message += "failed to get FT balance, err :" + err.Error() + ";"
+	} else {
+		assetsBalance.FTBalance = ftInfo
+	}
+	nftInfo, err := s.c.GetNFTsByDid(did)
+	if err != nil {
+		ac.Message += "failed to get NFT balance, err :" + err.Error() + ";"
+	} else {
+		assetsBalance.NFTBalance = nftInfo
+	}
+
+	if ac.Message == "" {
+		ac.Message = "Got account info successfully"
+	}
+	ac.Result = assetsBalance
+	return s.RenderJSON(req, ac, http.StatusOK)
+}

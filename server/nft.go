@@ -184,8 +184,16 @@ type GetNFTSwaggoInput struct {
 // @Router       /api/get-nfts-by-did [get]
 func (s *Server) APIGetNFTsByDid(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuery(req, "did")
-	resp := s.c.GetNFTsByDid(did)
-	return s.RenderJSON(req, resp, http.StatusOK)
+	resp, err := s.c.GetNFTsByDid(did)
+	if err != nil {
+		return s.BasicResponse(req, false, "failed to get nfts, err: " + err.Error(), nil)
+	}
+	nftResp := model.BasicResponse{
+		Status: true,
+		Message: "got NFTs balance successfully",
+		Result: resp,
+	}
+	return s.RenderJSON(req, nftResp, http.StatusOK)
 }
 
 // ShowAccount godoc

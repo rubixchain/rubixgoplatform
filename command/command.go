@@ -51,7 +51,6 @@ const (
 	SetupQuorumCmd                 string = "setupquorum"
 	GenerateLocalRBTCmd            string = "generatelocalrbt"
 	TransferRBTCmd                 string = "transferrbt"
-	GetAccountInfoCmd              string = "getaccountinfo"
 	DumpTokenChainCmd              string = "dumptokenchain"
 	DecodeTokenChainCmd            string = "decodetokenchain"
 	RegsiterDIDCmd                 string = "registerdid"
@@ -93,14 +92,12 @@ const (
 	CreateFTCmd                    string = "create-ft"
 	DumpFTTokenChainCmd            string = "dump-ft"
 	TransferFTCmd                  string = "transfer-ft"
-	GetFTInfoCmd                   string = "get-ft-info-by-did"
 	ValidateTokenCmd               string = "validatetoken"
 	DumpNFTTokenChainCmd           string = "dump-nft-tokenchain"
 	DeployNFTCmd                   string = "deploy-nft"
 	ExecuteNFTCmd                  string = "execute-nft"
 	SubscribeNFTCmd                string = "subscribe-nft"
 	FetchNftCmd                    string = "fetch-nft"
-	GetNftsByDidCmd                string = "get-nfts-by-did"
 	AddUserAPIKeyCmd               string = "adduserapikey"
 	AddPeerDetailsFromExplorer     string = "exppeerdetails"
 	GetFTTxnDetailsCmd             string = "get-ft-txn-details"
@@ -112,6 +109,12 @@ const (
 	GetFTCreatorStatsCmd           string = "get-ft-creator-stats"
 	RemoveStaleDIDCmd              string = "removedid"
 	InitCmd                        string = "init"
+
+	// balance commands
+	GetDIDBalanceCmd string = "getdidbalance"
+	GetNftsByDidCmd  string = "getnftbalance"
+	GetFTBalanceCmd  string = "getftbalance"
+	GetRBTBalanceCmd string = "getrbtbalance"
 )
 
 var commands = []string{VersionCmd,
@@ -130,7 +133,7 @@ var commands = []string{VersionCmd,
 	SetupQuorumCmd,
 	GenerateLocalRBTCmd,
 	TransferRBTCmd,
-	GetAccountInfoCmd,
+	GetRBTBalanceCmd,
 	DumpTokenChainCmd,
 	DecodeTokenChainCmd,
 	RegsiterDIDCmd,
@@ -165,7 +168,7 @@ var commands = []string{VersionCmd,
 	CreateFTCmd,
 	DumpFTTokenChainCmd,
 	TransferFTCmd,
-	GetFTInfoCmd,
+	GetFTBalanceCmd,
 	ValidateTokenCmd,
 	DumpNFTTokenChainCmd,
 	DeployNFTCmd,
@@ -183,6 +186,7 @@ var commands = []string{VersionCmd,
 	FixFTCreatorCmd,
 	GetFTCreatorStatsCmd,
 	RemoveStaleDIDCmd,
+	GetDIDBalanceCmd,
 }
 
 var commandsHelp = []string{"To get tool version",
@@ -851,8 +855,8 @@ func Run(args []string) {
 		cmd.GenerateLocalRBT()
 	case TransferRBTCmd:
 		cmd.TransferRBT()
-	case GetAccountInfoCmd:
-		cmd.GetAccountInfo()
+	case GetRBTBalanceCmd:
+		cmd.GetRBTBalance()
 	case DumpTokenChainCmd:
 		cmd.dumpTokenChain()
 	case DecodeTokenChainCmd:
@@ -919,7 +923,7 @@ func Run(args []string) {
 		cmd.dumpFTTokenchain()
 	case TransferFTCmd:
 		cmd.transferFT()
-	case GetFTInfoCmd:
+	case GetFTBalanceCmd:
 		cmd.getFTinfo()
 	case ValidateTokenCmd:
 		cmd.ValidateToken()
@@ -964,8 +968,11 @@ func Run(args []string) {
 		cmd.getFTCreatorStats()
 	case RemoveStaleDIDCmd:
 		cmd.RemoveStaleDID()
+	case GetDIDBalanceCmd:
+		cmd.GetDIDBalance()
 	case InitCmd:
 		cmd.init()
+
 	default:
 		cmd.log.Error("Invalid command")
 	}

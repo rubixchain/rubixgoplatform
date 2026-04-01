@@ -23,7 +23,7 @@ const (
 type PeerMap struct {
 	PeerID    string `json:"peer_id"`
 	DID       string `json:"did"`
-	DIDAlgo   int    `json:"did_algo"`
+	DIDAlgo   int64    `json:"did_algo"`
 	Signature string `json:"signature"`
 	Time      string `json:"time"`
 }

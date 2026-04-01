@@ -6,8 +6,11 @@ import (
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/client"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 func (cmd *Command) createNFT() {
@@ -207,10 +210,20 @@ func (cmd *Command) getNFTsByDid() {
 		cmd.log.Error("Failed to get NFTs, " + err.Error())
 		return
 	}
-	for _, tkn := range tkns.Tokens {
-		fmt.Printf("NFT : %s, Status : %d\n", tkn.Token, tkn.TokenStatus)
+	nftBalance, err := util.ExtractResult[[]types.NFTBalance](tkns.Result)
+	if err != nil {
+		cmd.log.Error("failed to parse nft balance")
+		return
 	}
-	cmd.log.Info("Got all NFTs successfully")
+	if len(nftBalance) == 0 {
+		cmd.log.Info("No NFTs found")
+		return
+	}
+	cmd.log.Info("Got NFTs balance successfully")
+	cmd.log.Info("DID", cmd.did)
+	for _, nft := range nftBalance {
+		fmt.Printf("NFT id : %s, Value :  %10.*f\n", nft.NFTId, constants.MaxSupportedDecimalPlaces, nft.NFTValue)
+	}
 }
 
 func (cmd *Command) fetchNFT() {
