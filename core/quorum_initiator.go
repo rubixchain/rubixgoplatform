@@ -68,7 +68,7 @@ const (
 // **********************
 
 // PingSetup will setup the ping route
-func (c *Core) QuroumSetup() {
+func (c *Core) QuorumSetup() {
 	c.l.AddRoute(APICreditStatus, "GET", c.creditStatus)
 	c.l.AddRoute(APIQuorumConsensus, "POST", c.quorumConensus)
 	c.l.AddRoute(APIQuorumCredit, "POST", c.quorumCredit)
