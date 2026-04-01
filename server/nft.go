@@ -1,12 +1,14 @@
 package server
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -219,4 +221,27 @@ func (s *Server) APIGetNFTChain(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Failed to retrieve nft chain data", nil)
 	}
 	return s.BasicResponse(req, true, "Nft chain data retrieved successfully", TokenChainResponse)
+}
+
+// ShowAccount godoc
+// @Summary      Get NFTs owned by the particular did
+// @Description  This API will get all NFTs owned by the particular did
+// @Tags         NFT
+// @Accept       json
+// @Produce      json
+// @Param        input query GetNFTSwaggoInput true "Get nfts by did"
+// @Success      200  {object}  model.NFTList
+// @Router       /api/get-nfts-by-did [get]
+func (s *Server) APIGetNFTsByDid(req *ensweb.Request) *ensweb.Result {
+	did := s.GetQuery(req, "did")
+	resp, err := s.c.GetNFTsByDid(did)
+	if err != nil {
+		return s.BasicResponse(req, false, "failed to get nfts, err: "+err.Error(), nil)
+	}
+	nftResp := model.BasicResponse{
+		Status:  true,
+		Message: "got NFTs balance successfully",
+		Result:  resp,
+	}
+	return s.RenderJSON(req, nftResp, http.StatusOK)
 }
