@@ -38,7 +38,7 @@ func (s *Server) APIGetDIDChallenge(req *ensweb.Request) *ensweb.Result {
 // CreateDID godoc
 // @Summary      Create DID
 // @Description  Creates a new DID with the provided public key, password, and mnemonic.
-// @Tags         dids
+// @Tags         DID
 // @Accept       json
 // @Produce      json
 // @Param        request  body      types.DIDCreate  true  "Create DID Request"
@@ -76,7 +76,7 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 // GetAllDIDs godoc
 // @Summary      Get All DIDs
 // @Description  Retrieves a list of all DIDs.
-// @Tags         dids
+// @Tags         DID
 // @Accept       json
 // @Produce      json
 // @Success      200  {object}  model.BasicResponse
@@ -126,7 +126,7 @@ func (s *Server) didResponse(req *ensweb.Request, reqID string) *ensweb.Result {
 // RegisterDID godoc
 // @Summary      Register DID
 // @Description  Registers a DID on the network.
-// @Tags         dids
+// @Tags         DID
 // @Accept       json
 // @Produce      json
 // @Param        did  path      string  true  "DID to register (e.g. did:bafybmih2cqn6okxy2sepgp75jq5dkopuohnbd3pfrrylmqnrz43ttihkky)"
@@ -267,7 +267,7 @@ func (s *Server) APIRemoveStaleDID(req *ensweb.Request) *ensweb.Result {
 // GetDIDBalance godoc
 // @Summary      Get DID Balance
 // @Description  Retrieves the overall balance (RBT, FT, NFT) for a given DID.
-// @Tags         dids
+// @Tags         DID
 // @Accept       json
 // @Produce      json
 // @Param        did  path      string  true  "DID (e.g. did:bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)"

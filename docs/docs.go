@@ -49,38 +49,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/check-pinned-state": {
-            "delete": {
-                "description": "This API is used to check if the token state for which the token is pledged is exhausted or not.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Account"
-                ],
-                "summary": "Check for exhausted token state hash",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Token State Hash",
-                        "name": "tokenstatehash",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/deploy-nft": {
             "post": {
                 "description": "This API will deploy the NFT",
@@ -382,26 +350,6 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/get-pledgedtoken-details": {
-            "get": {
-                "description": "This API allows the user to get details about the tokens the quorums have pledged i.e. which token is pledged for which token state",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Account"
-                ],
-                "summary": "Get details about the pledged tokens",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.TokenStateResponse"
                         }
                     }
                 }
@@ -810,7 +758,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "dids"
+                    "DID"
                 ],
                 "summary": "Get All DIDs",
                 "responses": {
@@ -839,7 +787,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "dids"
+                    "DID"
                 ],
                 "summary": "Create DID",
                 "parameters": [
@@ -879,7 +827,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "dids"
+                    "DID"
                 ],
                 "summary": "Get DID Balance",
                 "parameters": [
@@ -917,7 +865,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "dids"
+                    "DID"
                 ],
                 "summary": "Get FT Balance",
                 "parameters": [
@@ -955,7 +903,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "dids"
+                    "DID"
                 ],
                 "summary": "Get NFT Balance",
                 "parameters": [
@@ -993,7 +941,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "dids"
+                    "DID"
                 ],
                 "summary": "Get RBT Balance",
                 "parameters": [
@@ -1031,7 +979,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "dids"
+                    "DID"
                 ],
                 "summary": "Register DID",
                 "parameters": [
@@ -1069,7 +1017,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "fts"
+                    "FT"
                 ],
                 "summary": "List FTs",
                 "responses": {
@@ -1172,7 +1120,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Account"
+                    "Signature"
                 ],
                 "summary": "Signature Response",
                 "operationId": "signature-response",
@@ -1509,38 +1457,6 @@ const docTemplate = `{
                 "result": {},
                 "status": {
                     "type": "boolean"
-                }
-            }
-        },
-        "model.PledgedTokenStateDetails": {
-            "type": "object",
-            "properties": {
-                "did": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string"
-                },
-                "token_state": {
-                    "type": "string"
-                }
-            }
-        },
-        "model.TokenStateResponse": {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string"
-                },
-                "result": {},
-                "status": {
-                    "type": "boolean"
-                },
-                "token_state_details": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.PledgedTokenStateDetails"
-                    }
                 }
             }
         },

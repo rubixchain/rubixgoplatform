@@ -50,27 +50,6 @@ definitions:
       status:
         type: boolean
     type: object
-  model.PledgedTokenStateDetails:
-    properties:
-      did:
-        type: string
-      token:
-        type: string
-      token_state:
-        type: string
-    type: object
-  model.TokenStateResponse:
-    properties:
-      message:
-        type: string
-      result: {}
-      status:
-        type: boolean
-      token_state_details:
-        items:
-          $ref: '#/definitions/model.PledgedTokenStateDetails'
-        type: array
-    type: object
   models.FTInfo:
     properties:
       creatorDID:
@@ -318,28 +297,6 @@ paths:
       summary: Add Peer
       tags:
       - Account
-  /api/check-pinned-state:
-    delete:
-      consumes:
-      - application/json
-      description: This API is used to check if the token state for which the token
-        is pledged is exhausted or not.
-      parameters:
-      - description: Token State Hash
-        in: query
-        name: tokenstatehash
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Check for exhausted token state hash
-      tags:
-      - Account
   /api/deploy-nft:
     post:
       consumes:
@@ -542,20 +499,6 @@ paths:
       summary: Get NFT Token Chain Data
       tags:
       - NFT
-  /api/get-pledgedtoken-details:
-    get:
-      description: This API allows the user to get details about the tokens the quorums
-        have pledged i.e. which token is pledged for which token state
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.TokenStateResponse'
-      summary: Get details about the pledged tokens
-      tags:
-      - Account
   /api/get-smart-contract-token-chain-data:
     post:
       consumes:
@@ -833,7 +776,7 @@ paths:
             $ref: '#/definitions/model.BasicResponse'
       summary: Get All DIDs
       tags:
-      - dids
+      - DID
   /rubix/v1/dids/{did}/balances:
     get:
       consumes:
@@ -858,7 +801,7 @@ paths:
             $ref: '#/definitions/model.BasicResponse'
       summary: Get DID Balance
       tags:
-      - dids
+      - DID
   /rubix/v1/dids/{did}/balances/ft:
     get:
       consumes:
@@ -883,7 +826,7 @@ paths:
             $ref: '#/definitions/model.BasicResponse'
       summary: Get FT Balance
       tags:
-      - dids
+      - DID
   /rubix/v1/dids/{did}/balances/nft:
     get:
       consumes:
@@ -908,7 +851,7 @@ paths:
             $ref: '#/definitions/model.BasicResponse'
       summary: Get NFT Balance
       tags:
-      - dids
+      - DID
   /rubix/v1/dids/{did}/balances/rbt:
     get:
       consumes:
@@ -933,7 +876,7 @@ paths:
             $ref: '#/definitions/model.BasicResponse'
       summary: Get RBT Balance
       tags:
-      - dids
+      - DID
   /rubix/v1/dids/{did}/register:
     get:
       consumes:
@@ -958,7 +901,7 @@ paths:
             $ref: '#/definitions/model.BasicResponse'
       summary: Register DID
       tags:
-      - dids
+      - DID
   /rubix/v1/dids/create:
     post:
       consumes:
@@ -984,7 +927,7 @@ paths:
             $ref: '#/definitions/model.BasicResponse'
       summary: Create DID
       tags:
-      - dids
+      - DID
   /rubix/v1/fts:
     get:
       consumes:
@@ -999,7 +942,7 @@ paths:
             $ref: '#/definitions/model.BasicResponse'
       summary: List FTs
       tags:
-      - fts
+      - FT
   /rubix/v1/fts/mint:
     post:
       consumes:
@@ -1080,7 +1023,7 @@ paths:
             $ref: '#/definitions/model.BasicResponse'
       summary: Signature Response
       tags:
-      - Account
+      - Signature
   /rubix/v1/signature/arbitrary:
     post:
       consumes:

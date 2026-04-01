@@ -176,7 +176,7 @@ type GetNFTSwaggoInput struct {
 // GetNFTBalance godoc
 // @Summary      Get NFT Balance
 // @Description  Retrieves the Non-Fungible Token (NFT) balance for a given DID.
-// @Tags         dids
+// @Tags         DID
 // @Accept       json
 // @Produce      json
 // @Param        did  path      string  true  "DID (e.g. did:bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)"
