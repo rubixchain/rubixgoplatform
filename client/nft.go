@@ -3,6 +3,7 @@ package client
 import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 type CreateNFTReq struct {
@@ -52,6 +53,21 @@ func (c *Client) SubscribeNFT(nft string) (*model.BasicResponse, error) {
 		return nil, err
 	}
 	return &response, nil
+}
+
+func (c *Client) GetNFTsByDid(did string) (*model.BasicResponse, error) {
+	pathParams := make(map[string]string)
+	pathParams["did"] = did
+	endpoint, err := ensweb.SubstitutePathParams(setup.APIGetNftByDid, pathParams)
+	if err != nil {
+		return nil, err
+	}
+	var nftResp model.BasicResponse
+	err = c.sendJSONRequest("GET", endpoint, nil, nil, &nftResp)
+	if err != nil {
+		return nil, err
+	}
+	return &nftResp, nil
 }
 
 func (c *Client) FetchNFT(fetchNft *FetchNFTRequest) (*model.BasicResponse, error) {

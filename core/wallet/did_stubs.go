@@ -1,6 +1,10 @@
 package wallet
 
-import "github.com/rubixchain/rubixgoplatform/types/models"
+import (
+	"fmt"
+
+	"github.com/rubixchain/rubixgoplatform/types/models"
+)
 
 // DID is a legacy wallet type for DID storage via block-based paths.
 // TODO(phase07): replace usages with models.DID from types/models.
@@ -36,6 +40,18 @@ func (w *Wallet) IsRootDIDExist() bool {
 
 // RemoveDID deletes a DID record from the DB.
 func (w *Wallet) RemoveDID(did string) error {
-	// TODO(phase07): delete from did_table where did=$1
+	result, err := w.db.Pool().Exec(w.Ctx,
+		`DELETE FROM dids WHERE did = $1`,
+		did,
+	)
+	if err != nil {
+		return fmt.Errorf("RemoveDID: %w", err)
+	}
+
+	rowsAffected := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("RemoveDID: no row found with did %v", did)
+	}
+
 	return nil
 }

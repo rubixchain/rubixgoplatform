@@ -591,8 +591,8 @@ func (c *Core) SetupForienDIDQuorum(didStr string, selfDID string) (types.DIDCry
 }
 
 func (c *Core) FetchDID(did string) error {
-	didDir := c.didDir + did
-	pubKeyPath := didDir + "/pubKey.pem"
+	didDir := path.Join(c.didDir, did)
+	pubKeyPath := path.Join(didDir, constants.PubKeyFileName)
 	_, dirErr := os.Stat(didDir)
 	_, pubKeyErr := os.Stat(pubKeyPath)
 

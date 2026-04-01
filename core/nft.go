@@ -14,6 +14,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	rubixsync "github.com/rubixchain/rubixgoplatform/core/sync"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -279,6 +280,30 @@ func (c *Core) publishNFTEvents(
 			)
 		}
 	}
+}
+
+// GetNFTsByDid returns an empty NFT list stub for a given DID.
+func (c *Core) GetNFTsByDid(did string) ([]types.NFTBalance, error) {
+	nftTokenType := int16(models.GetTokenTypeID(constants.TokenType_NFT))
+	// get list of NFTs
+	nftInfoList, err := c.w.GetTokenByDIDAndTokenType(did, nftTokenType)
+	if err != nil && err.Error() != "no records found" {
+		c.log.Error("Failed to get nfts", "err", err)
+		return []types.NFTBalance{}, fmt.Errorf("failed to get nfts, error: %w", err)
+	}
+	// List out all nft ids and their values, and return the list
+	var nftInfo []types.NFTBalance
+	for _, nft := range nftInfoList {
+		// consider free NFTs only
+		if nft.TokenStatus != constants.TokenStatus_Free {
+			continue
+		}
+		nftInfo = append(nftInfo, types.NFTBalance{
+			NFTId:    nft.TokenID,
+			NFTValue: nft.TokenValue,
+		})
+	}
+	return nftInfo, nil
 }
 
 // CheckNFTFolderExists stubs NFT folder existence check.
