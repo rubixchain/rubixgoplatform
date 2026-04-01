@@ -101,7 +101,12 @@ func (s *Server) APIAddQuorum(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, "invlid input request", nil)
 	}
-	ql, _ := reqMap["quorumDID"].(string)
+	// CLI client sends "did" (see client/quorum.go); keep "quorumDID" for older callers.
+	ql, _ := reqMap["did"].(string)
+	ql = strings.TrimSpace(ql)
+	if ql == "" {
+		return s.BasicResponse(req, false, "did (or quorumDID) is required", nil)
+	}
 	err = s.c.AddQuorum(ql)
 	if err != nil {
 		return s.BasicResponse(req, false, "Failed to add quorums, "+err.Error(), nil)

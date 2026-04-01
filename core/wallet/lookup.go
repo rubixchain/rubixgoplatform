@@ -3,6 +3,7 @@ package wallet
 import (
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -43,4 +44,20 @@ func (w *Wallet) addProtocolValuesToLookupTables() error {
 	}
 
 	return nil
+}
+
+// GetDidAlgoIDByName returns the DB id for a DID algorithm name.
+func (w *Wallet) GetDidAlgoIDByName(name string) (int64, error) {
+	var id int64
+	if err := w.db.Pool().QueryRow(w.Ctx,
+		`SELECT id FROM did_algo WHERE name = $1 AND is_active = true`,
+		name,
+	).Scan(&id); err != nil {
+		if err == pgx.ErrNoRows {
+			return 0, fmt.Errorf("GetDidAlgoIDByName: did algo %q not found in did_algo table", name)
+		}
+		return 0, fmt.Errorf("GetDidAlgoIDByName: failed to fetch did algo id for %q: %w", name, err)
+	}
+
+	return id, nil
 }
