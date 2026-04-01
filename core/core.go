@@ -305,9 +305,10 @@ func (c *Core) SetupCore() error {
 	c.peerSetup()
 	c.removePeerSetup()
 	c.SetupToken()
-	c.QuroumSetup()
+	c.QuorumSetup()
 	c.PinService()
 	api.SetupAPI(c.l, c.w, c.log)
+	c.TransactionSetup()
 
 	// c.RestartIncompleteTokenChainSyncs()
 	//c.UnlockFTs()
