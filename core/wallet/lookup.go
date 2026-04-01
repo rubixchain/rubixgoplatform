@@ -54,9 +54,9 @@ func (w *Wallet) GetDidAlgoIDByName(name string) (int64, error) {
 		name,
 	).Scan(&id); err != nil {
 		if err == pgx.ErrNoRows {
-			return 0, fmt.Errorf("did algo %q not found in did_algo table", name)
+			return 0, fmt.Errorf("GetDidAlgoIDByName: did algo %q not found in did_algo table", name)
 		}
-		return 0, fmt.Errorf("failed to fetch did algo id for %q: %w", name, err)
+		return 0, fmt.Errorf("GetDidAlgoIDByName: failed to fetch did algo id for %q: %w", name, err)
 	}
 
 	return id, nil
