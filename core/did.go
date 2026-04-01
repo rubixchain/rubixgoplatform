@@ -203,7 +203,7 @@ func (c *Core) CreateDID(didCreate *types.DIDCreate, localDID bool) (did string,
 }
 
 func (c *Core) GetDIDs() []string {
-	dt, err := c.w.GetAllDID()
+	dt, err := c.w.GetAllDID(c.peerID)
 	if err != nil {
 		return nil
 	}

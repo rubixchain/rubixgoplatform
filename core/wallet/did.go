@@ -43,7 +43,7 @@ func (w *Wallet) GetPeerID(did string) (string, error) {
 	row := w.db.Pool().QueryRow(w.Ctx,
 		`SELECT peer_id FROM dids WHERE did=$1`, did,
 	)
-	
+
 	var peerID string
 	if err := row.Scan(&peerID); err != nil {
 		if err == pgx.ErrNoRows {
@@ -56,9 +56,9 @@ func (w *Wallet) GetPeerID(did string) (string, error) {
 	return peerID, nil
 }
 
-func (w *Wallet) GetAllDID() ([]string, error) {
+func (w *Wallet) GetAllDID(peerId string) ([]string, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
-		`SELECT did FROM dids`,
+		`SELECT did FROM dids WHERE peer_id = $1`, peerId,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("GetAllDID: failed to query dids table, err: %v", err)
