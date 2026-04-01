@@ -289,7 +289,7 @@ func (d *DID) getDirHash(dir string) (string, error) {
 func (d *DID) CreateDIDFromPubKey(didCreate *types.DIDCreate) (string, error) {
 	t1 := time.Now()
 	temp := uuid.New()
-	dirName := d.dir + temp.String()
+	dirName := path.Join(d.dir, temp.String())
 
 	//create a temporary directory
 	err := os.MkdirAll(path.Join(dirName, "public"), os.ModeDir|os.ModePerm)

@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -277,7 +278,7 @@ func (c *Core) registerDID(reqID string, did string) error {
 		DID:       did,
 		Signature: util.BytesToBase64(sig),
 		Time:      t,
-		DIDAlgo: int64(models.GetDidAlgoType(constants.DidAlgo_SECP256K1)),
+		DIDAlgo:   int64(models.GetDidAlgoType(constants.DidAlgo_SECP256K1)),
 	}
 	err = c.publishPeerMap(pm)
 	if err != nil {
@@ -528,6 +529,22 @@ func (c *Core) removeStaleDIDFromNetwork(reqID, staleDID string) (model.BasicRes
 		Time:      t,
 	}
 
+	// TESTING
+	signatureBytes, err := util.Base64ToBytes(pm.Signature)
+	if err != nil {
+		c.log.Error("peerCallback: failed to parse signature, err", err)
+		return response, fmt.Errorf("remove stale did, failed sign test")
+	}
+	st, err := dc.SignVerify(h, signatureBytes)
+	if err != nil || !st {
+		if err != nil && (strings.Contains(err.Error(), "NLSS DID detected") || strings.Contains(err.Error(), "incompatible key format")) {
+			c.log.Error("NLSS DID detected during stale peer removal. NLSS DIDs are DEPRECATED.", "did", pm.DID, "error", err)
+		} else {
+			c.log.Error("failed to remove stale peer, signature verification failed, err ", err)
+		}
+		return response, fmt.Errorf("remove stale did, failed sign test")
+	}
+
 	err = c.publishStalePeer(pm)
 	if err != nil {
 		c.log.Error("Remove DID from network, failed to publish peer did map", "err", err)
@@ -542,7 +559,7 @@ func (c *Core) removeStaleDIDFromNetwork(reqID, staleDID string) (model.BasicRes
 	}
 
 	// remove old-did folder
-	os.RemoveAll(c.didDir + staleDID)
+	os.RemoveAll(path.Join(c.didDir, staleDID))
 
 	response.Status = true
 	response.Message = "successfully erased staled did"

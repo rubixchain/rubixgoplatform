@@ -145,15 +145,15 @@ func (d *DIDLite) SignVerify(hash []byte, sign []byte) (bool, error) {
 
 	pubkeyback, err := secp256k1.ParsePubKey(pubKeyByte)
 	if err != nil {
-		return false, fmt.Errorf("NLSS DID detected (incompatible key format). NLSS DIDs are DEPRECATED. Please use BIP DID instead. DID: %s, Error: %w", d.did, err)
+		return false, fmt.Errorf("SignVerify: NLSS DID detected (incompatible key format). NLSS DIDs are DEPRECATED. Please use BIP DID instead. DID: %s, Error: %w", d.did, err)
 	}
 	if pubkeyback == nil {
-		return false, fmt.Errorf("NLSS DID detected (public key parsing returned nil). NLSS DIDs are DEPRECATED. Please use BIP DID instead. DID: %s", d.did)
+		return false, fmt.Errorf("SignVerify: NLSS DID detected (public key parsing returned nil). NLSS DIDs are DEPRECATED. Please use BIP DID instead. DID: %s", d.did)
 	}
 
 	pubKeySer := pubkeyback.ToECDSA()
 	if !crypto.BIPVerify(pubKeySer, hash, sign) {
-		return false, fmt.Errorf("failed to verify private key signature")
+		return false, fmt.Errorf("SignVerify: failed to verify private key signature")
 	}
 	return true, nil
 }
