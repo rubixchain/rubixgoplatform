@@ -87,7 +87,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 
 	err = p.SendJSONRequest(
 		"POST",
-		APIReqPledgeToken,
+		APIRequestPledgeToken,
 		nil,
 		&pledgeTokenRequest,
 		&pledgeTokenResponse,

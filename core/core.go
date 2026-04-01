@@ -31,7 +31,6 @@ const (
 	APICreditStatus                    string = "/api/creditstatus"
 	APIQuorumConsensus                 string = "/api/quorum-conensus"
 	APIQuorumCredit                    string = "/api/quorum-credit"
-	APIReqPledgeToken                  string = "/api/req-pledge-token"
 	APIUpdatePledgeToken               string = "/api/update-pledge-token"
 	APISignatureRequest                string = "/api/signature-request"
 	APISendReceiverToken               string = "/api/send-receiver-token"
