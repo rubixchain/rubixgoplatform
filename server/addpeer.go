@@ -41,7 +41,11 @@ func (s *Server) APIAddPeerDetails(req *ensweb.Request) *ensweb.Result {
 	peerDetails.DID = pd.DID
 	peerDetails.PeerID = pd.PeerID
 	peerDetails.Local = false
-	peerDetails.AlgoID = int64(models.GetDidAlgoType(constants.DidAlgo_SECP256K1))
+	algoID, err := s.c.GetWallet().GetDidAlgoIDByName(constants.DidAlgo_SECP256K1)
+	if err != nil {
+		return s.BasicResponse(req, false, "Failed to resolve did algo id, "+err.Error(), nil)
+	}
+	peerDetails.AlgoID = algoID
 
 	err = s.c.AddPeerDetails(peerDetails)
 	if err != nil {

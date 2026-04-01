@@ -189,8 +189,13 @@ func (c *Core) CreateDID(didCreate *types.DIDCreate, localDID bool) (did string,
 		DID:    did,
 		PeerID: c.peerID,
 		Local:  localDID,
-		AlgoID: int64(models.GetDidAlgoType(constants.DidAlgo_SECP256K1)),
 	}
+	algoID, err := c.w.GetDidAlgoIDByName(constants.DidAlgo_SECP256K1)
+	if err != nil {
+		c.log.Error("Core: CreateDID: Failed to resolve did algo id", "algo", constants.DidAlgo_SECP256K1, "err", err)
+		return "", err
+	}
+	dt.AlgoID = algoID
 
 	err = c.w.CreateOrUpdateDID(dt)
 	if err != nil {
@@ -278,6 +283,12 @@ func (c *Core) registerDID(reqID string, did string) error {
 		Signature: util.BytesToBase64(sig),
 		Time:      t,
 	}
+	algoID, err := c.w.GetDidAlgoIDByName(constants.DidAlgo_SECP256K1)
+	if err != nil {
+		c.log.Error("registerDID: failed to resolve did algo id", "algo", constants.DidAlgo_SECP256K1, "err", err)
+		return fmt.Errorf("registerDID: failed to resolve did algo id, err: %w", err)
+	}
+	pm.DIDAlgo = int(algoID)
 	err = c.publishPeerMap(pm)
 	if err != nil {
 		c.log.Error("Register DID, failed to publish peer did map", "err", err)
