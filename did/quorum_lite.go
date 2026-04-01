@@ -3,6 +3,7 @@ package did
 import (
 	"fmt"
 	"io/ioutil"
+	"path"
 
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/rubixchain/rubixgoplatform/constants"
@@ -23,7 +24,7 @@ type DIDQuorumLite struct {
 func InitDIDQuorumLite(did string, baseDir string, pwd string) *DIDQuorumLite {
 	d := &DIDQuorumLite{did: did, dir: util.SanitizeDirPath(baseDir) + did + "/", pwd: pwd}
 	if d.pwd != "" {
-		privKey, err := ioutil.ReadFile(d.dir + constants.PvtKeyFileName)
+		privKey, err := ioutil.ReadFile(path.Join(d.dir, constants.PvtKeyFileName))
 		if err != nil {
 			fmt.Println("private key must be in wallet")
 		} else {
@@ -34,7 +35,7 @@ func InitDIDQuorumLite(did string, baseDir string, pwd string) *DIDQuorumLite {
 		}
 	}
 
-	pubKey, err := ioutil.ReadFile(d.dir + constants.PubKeyFileName)
+	pubKey, err := ioutil.ReadFile(path.Join(d.dir, constants.PubKeyFileName))
 	if err != nil {
 		return nil
 	}
@@ -50,7 +51,7 @@ func (d *DIDQuorumLite) GetDID() string {
 }
 
 func (d *DIDQuorumLite) Sign(hash []byte) ([]byte, error) {
-	privKey, err := ioutil.ReadFile(d.dir + constants.PvtKeyFileName)
+	privKey, err := ioutil.ReadFile(path.Join(d.dir, constants.PvtKeyFileName))
 	if err != nil {
 		fmt.Println("requesting signature from BIP wallet")
 		// _, walletSignature, err := d.signRequest(hash)
@@ -82,7 +83,7 @@ func (d *DIDQuorumLite) Sign(hash []byte) ([]byte, error) {
 }
 func (d *DIDQuorumLite) SignVerify(hash []byte, sign []byte) (bool, error) {
 
-	pubKeyPath := d.dir + constants.PubKeyFileName
+	pubKeyPath := path.Join(d.dir, constants.PubKeyFileName)
 	pubKey, err := ioutil.ReadFile(pubKeyPath)
 	if err != nil {
 		return false, err

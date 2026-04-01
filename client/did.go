@@ -40,8 +40,8 @@ func (c *Client) GetDIDAccess(req *model.GetDIDAccess) (string, error) {
 	return resp.Token, nil
 }
 
-func (c *Client) GetAllDIDs() (*model.GetAccountInfo, error) {
-	var ac model.GetAccountInfo
+func (c *Client) GetAllDIDs() (*model.BasicResponse, error) {
+	var ac model.BasicResponse
 	err := c.sendJSONRequest("GET", setup.APIGetAllDID, nil, nil, &ac)
 	if err != nil {
 		return nil, err
@@ -129,11 +129,30 @@ func (c *Client) RegisterDID(didStr string) (*model.BasicResponse, error) {
 	return &rm, nil
 }
 
-func (c *Client) GetAccountInfo(didStr string) (*model.GetAccountInfo, error) {
-	m := make(map[string]string)
-	m["did"] = didStr
-	var info model.GetAccountInfo
-	err := c.sendJSONRequest("GET", setup.APIGetAccountInfo, m, nil, &info)
+func (c *Client) GetRBTBalance(didStr string) (*model.BasicResponse, error) {
+	pathParams := make(map[string]string)
+	pathParams["did"] = didStr
+	var info model.BasicResponse
+	endpoint, err := ensweb.SubstitutePathParams(setup.APIGetRbtByDid, pathParams)
+	if err != nil {
+		return nil, err
+	}
+	err = c.sendJSONRequest("GET", endpoint, nil, nil, &info)
+	if err != nil {
+		return nil, err
+	}
+	return &info, nil
+}
+
+func (c *Client) GetDIDBalance(didStr string) (*model.BasicResponse, error) {
+	pathParams := make(map[string]string)
+	pathParams["did"] = didStr
+	var info model.BasicResponse
+	endpoint, err := ensweb.SubstitutePathParams(setup.APIGetDIDBalance, pathParams)
+	if err != nil {
+		return nil, err
+	}
+	err = c.sendJSONRequest("GET", endpoint, nil, nil, &info)
 	if err != nil {
 		return nil, err
 	}

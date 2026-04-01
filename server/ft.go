@@ -91,7 +91,7 @@ func (s *Server) APIInitiateFTTransfer(req *ensweb.Request) *ensweb.Result {
 // @Success      200  {object}  model.GetFTInfo
 // @Router       /api/get-ft-info-by-did [get]
 func (s *Server) APIGetFTInfo(req *ensweb.Request) *ensweb.Result {
-	did := s.GetQuery(req, "did")
+	did := s.GetRouteVar(req, "did")
 	if !s.validateDIDAccess(req, did) {
 		return s.BasicResponse(req, false, "DID does not have access", nil)
 	}
@@ -100,18 +100,16 @@ func (s *Server) APIGetFTInfo(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("Invalid DID")
 		return s.BasicResponse(req, false, "Invalid DID", nil)
 	}
-	info, err := s.c.GetFTInfoByDID(did)
+	ftInfo, err := s.c.GetFTInfoByDID(did)
 	if err != nil {
 		return s.BasicResponse(req, false, err.Error(), nil)
 	}
-	ac := model.GetFTInfo{
-		BasicResponse: model.BasicResponse{
-			Status:  true,
-			Message: "Got FT info successfully",
-		},
-		FTInfo: info,
+	ac := model.BasicResponse{
+		Status:  true,
+		Message: "Got FT info successfully",
+		Result: ftInfo,
 	}
-	if len(info) == 0 {
+	if len(ftInfo) == 0 {
 		ac.Message = "No FTs found"
 	}
 	return s.RenderJSON(req, ac, http.StatusOK)

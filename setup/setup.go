@@ -30,7 +30,6 @@ const (
 	APISetupService                     string = "/api/setup-service"
 	APIGenerateLocalRBT                 string = "/api/generate-local-rbt"
 	APIInitiateRBTTransfer              string = "/api/initiate-rbt-transfer"
-	APIGetAccountInfo                   string = "/api/get-account-info"
 	APIDumpTokenChainBlock              string = "/api/dump-token-chain"
 	APISetupDID                         string = "/api/setup-did"
 	APIMigrateNode                      string = "/api/migrate-node"
@@ -71,7 +70,6 @@ const (
 	APICreateFT                         string = "/rubix/v1/fts/mint"
 	APIDumpFTTokenChainBlock            string = "/api/dump-ft-token-chain"
 	APIInitiateFTTransfer               string = "/api/initiate-ft-transfer"
-	APIGetFTInfo                        string = "/api/get-ft-info-by-did"
 	APIFixFTCreator                     string = "/api/fix-ft-creator"
 	APIGetFTCreatorStats                string = "/api/get-ft-creator-stats"
 	APIValidateToken                    string = "/api/validate-token"
@@ -82,7 +80,6 @@ const (
 	APISubscribeNFT                     string = "/api/subscribe-nft"
 	APIGetNFTTokenChainData             string = "/api/get-nft-token-chain-data"
 	APIFetchNft                         string = "/api/fetch-nft"
-	APIGetNftsByDid                     string = "/api/get-nfts-by-did"
 	APIGetFTTokenchain                  string = "/api/get-ft-token-chain"
 	APISendJWTFromWallet                string = "/api/send-jwt-from-wallet"
 	APIAddPeerDetailsFromExplorer       string = "/api/add-peer-details-from-explorer"
@@ -105,6 +102,12 @@ const (
 	APICreateDID   string = "/rubix/v1/dids/create"
 	APIGetAllDID   string = "/rubix/v1/dids"
 	APIRegisterDID string = "/rubix/v1/dids/{did}/register"
+
+	// DID balances
+	APIGetDIDBalance string = "/rubix/v1/dids/{did}/balances"
+	APIGetRbtByDid   string = "/rubix/v1/dids/{did}/balances/rbt"
+	APIGetFtByDid    string = "/rubix/v1/dids/{did}/balances/ft"
+	APIGetNftByDid   string = "/rubix/v1/dids/{did}/balances/nft"
 
 	//Below are Explorer-service API endpoints
 

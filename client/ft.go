@@ -5,6 +5,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 func (c *Client) CreateFT(did string, ftName string, ftCount int, wholeToken int, ftNumStartIndex int) (*model.BasicResponse, error) {
@@ -33,11 +34,15 @@ func (c *Client) TransferFT(rt *model.TransferFTReq) (*model.BasicResponse, erro
 	return &br, nil
 }
 
-func (c *Client) GetFTInfo(didStr string) (*model.GetFTInfo, error) {
-	m := make(map[string]string)
-	m["did"] = didStr
-	var info model.GetFTInfo
-	err := c.sendJSONRequest("GET", setup.APIGetFTInfo, m, nil, &info)
+func (c *Client) GetFTInfo(didStr string) (*model.BasicResponse, error) {
+	pathParams := make(map[string]string)
+	pathParams["did"] = didStr
+	endpoint, err := ensweb.SubstitutePathParams(setup.APIGetFtByDid, pathParams)
+	if err != nil {
+		return nil, err
+	}
+	var info model.BasicResponse
+	err = c.sendJSONRequest("GET", endpoint, nil, nil, &info)
 	if err != nil {
 		return nil, err
 	}

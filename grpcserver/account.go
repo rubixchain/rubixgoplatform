@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/rubixchain/rubixgoplatform/protos"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -14,7 +15,7 @@ func (rn *RubixNative) GetBalance(ctx context.Context, in *emptypb.Empty) (*prot
 	if err != nil {
 		return nil, err
 	}
-	info, err := c.GetAccountInfo(rn.c.GetTokenDID(tkn))
+	info, err := c.GetRBTBalance(rn.c.GetTokenDID(tkn))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
@@ -24,5 +25,6 @@ func (rn *RubixNative) GetBalance(ctx context.Context, in *emptypb.Empty) (*prot
 	if !info.Status {
 		return nil, status.Errorf(codes.Internal, info.Message)
 	}
-	return &protos.GetBalanceRes{Balance: info.AccountInfo[0].RBTAmount}, nil
+	rbtBalance := info.Result.(types.RBTBalance)
+	return &protos.GetBalanceRes{Balance: rbtBalance.RBTBalance}, nil
 }

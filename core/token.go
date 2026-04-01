@@ -22,6 +22,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/token"
 	tokenmap "github.com/rubixchain/rubixgoplatform/token"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -139,29 +140,25 @@ func (c *Core) GetAllTokens(did string, tt string) (*model.TokenResponse, error)
 	return tr, nil
 }
 
-func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
-	wt, err := c.w.GetAllTokens(did)
+func (c *Core) GetRbtByDid(did string) (types.RBTBalance, error) {
+	rbtTokenType := int64(models.GetTokenTypeID(constants.TokenType_RBT))
+	wt, err := c.w.GetTokenByDIDAndTokenType(did, int16(rbtTokenType))
 	if err != nil && err.Error() != "no records found" {
 		c.log.Error("Failed to get tokens", "err", err)
-		return model.DIDAccountInfo{}, fmt.Errorf("failed to get tokens")
+		return types.RBTBalance{}, fmt.Errorf("failed to get tokens")
 	}
-	info := model.DIDAccountInfo{
-		DID: did,
-	}
+	info := types.RBTBalance{}
 	for _, t := range wt {
 		switch t.TokenStatus {
 		case constants.TokenStatus_Free:
-			info.RBTAmount = info.RBTAmount + t.TokenValue
-			info.RBTAmount = floatPrecision(info.RBTAmount, MaxDecimalPlaces)
+			info.RBTBalance = info.RBTBalance + t.TokenValue
+			info.RBTBalance = floatPrecision(info.RBTBalance, MaxDecimalPlaces)
 		case constants.TokenStatus_Locked:
 			info.LockedRBT = info.LockedRBT + t.TokenValue
 			info.LockedRBT = floatPrecision(info.LockedRBT, MaxDecimalPlaces)
 		case constants.TokenStatus_Pledged:
 			info.PledgedRBT = info.PledgedRBT + t.TokenValue
 			info.PledgedRBT = floatPrecision(info.PledgedRBT, MaxDecimalPlaces)
-		case constants.TokenStatus_PinnedAsService:
-			info.PinnedRBT = info.PinnedRBT + t.TokenValue
-			info.PinnedRBT = floatPrecision(info.PinnedRBT, MaxDecimalPlaces)
 		}
 	}
 	return info, nil
