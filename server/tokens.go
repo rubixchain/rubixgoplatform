@@ -68,8 +68,8 @@ type RBTTransferRequestSwaggoInput struct {
 // @Param        did      	   query      string  true  "User DID"
 // @Success 200 {object} model.BasicResponse
 // @Router /api/get-account-info [get]
-func (s *Server) APIGetAccountInfo(req *ensweb.Request) *ensweb.Result {
-	did := s.GetQuery(req, "did")
+func (s *Server) APIGetRbtByDid(req *ensweb.Request) *ensweb.Result {
+	did := s.GetRouteVar(req, "did")
 	if !s.validateDIDAccess(req, did) {
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
@@ -79,19 +79,15 @@ func (s *Server) APIGetAccountInfo(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("Invalid DID:", did)
 		return s.BasicResponse(req, false, "Invalid DID", nil)
 	}
-	info, err := s.c.GetAccountInfo(did)
+	info, err := s.c.GetRbtByDid(did)
 	if err != nil {
 		return s.BasicResponse(req, false, err.Error(), nil)
 	}
-	ac := model.GetAccountInfo{
-		BasicResponse: model.BasicResponse{
+	ac := model.BasicResponse{
 			Status:  true,
 			Message: "Got account info successfully",
-		},
-		AccountInfo: make([]model.DIDAccountInfo, 0),
-	}
-	ac.AccountInfo = append(ac.AccountInfo, info)
-
+			Result: info,
+		}
 	return s.RenderJSON(req, ac, http.StatusOK)
 }
 

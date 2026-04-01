@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
@@ -23,7 +24,7 @@ const (
 type PeerMap struct {
 	PeerID    string `json:"peer_id"`
 	DID       string `json:"did"`
-	DIDAlgo   int    `json:"did_algo"`
+	DIDAlgo   int64  `json:"did_algo"`
 	Signature string `json:"signature"`
 	Time      string `json:"time"`
 }
@@ -62,7 +63,7 @@ func (c *Core) peerCallback(peerID string, topic string, data []byte) {
 	if m.PeerID == c.peerID {
 		return
 	}
-	
+
 	h := util.CalculateHash([]byte(m.PeerID+m.DID+m.Time), constants.HashAlgorithm_SHA3_256)
 	dc, err := c.InitialiseDID(m.DID)
 	if err != nil {
@@ -263,12 +264,16 @@ func (c *Core) removeStalePeerCallback(peerID string, topic string, data []byte)
 	err := json.Unmarshal(data, &stalePeer)
 	c.log.Debug("Peer DID Removal")
 	if err != nil {
-		c.log.Error("failed to parse explorer data", "err", err)
+		c.log.Error("failed to parse stale did", "err", err)
+		return
+	}
+
+	if stalePeer.PeerID == c.peerID {
 		return
 	}
 
 	// verify the signature
-	h := util.HexToStr(util.CalculateHash([]byte(stalePeer.PeerID+stalePeer.DID+stalePeer.Time), "SHA3-256"))
+	h := util.CalculateHash([]byte(stalePeer.PeerID+stalePeer.DID+stalePeer.Time), "SHA3-256")
 	dc, err := c.InitialiseDID(stalePeer.DID)
 	if err != nil {
 		c.log.Error("failed to initialise stale peer")
@@ -279,7 +284,7 @@ func (c *Core) removeStalePeerCallback(peerID string, topic string, data []byte)
 		c.log.Error("peerCallback: failed to parse signature, err", err)
 		return
 	}
-	st, err := dc.SignVerify([]byte(h), signatureBytes)
+	st, err := dc.SignVerify(h, signatureBytes)
 	if err != nil || !st {
 		if err != nil && (strings.Contains(err.Error(), "NLSS DID detected") || strings.Contains(err.Error(), "incompatible key format")) {
 			c.log.Error("NLSS DID detected during stale peer removal. NLSS DIDs are DEPRECATED.", "did", stalePeer.DID, "error", err)
@@ -292,12 +297,8 @@ func (c *Core) removeStalePeerCallback(peerID string, topic string, data []byte)
 	c.log.Debug("removing peer ", stalePeer.DID, stalePeer.PeerID)
 
 	// remove provided peer did and peer-id from PeerDIDTable
-	err = c.w.RemoveStalePeerDID(stalePeer.DID, stalePeer.PeerID)
-	if err != nil {
-		c.log.Debug("failed to remove peer", stalePeer.DID, "err", err)
-		return
-	}
+	_ = c.w.RemoveDID(stalePeer.DID)
 
 	// remove peer-did folder
-	os.RemoveAll(c.didDir + stalePeer.DID)
+	os.RemoveAll(path.Join(c.didDir, stalePeer.DID))
 }

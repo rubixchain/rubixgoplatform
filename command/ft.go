@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 func (cmd *Command) createFT() {
@@ -141,26 +143,20 @@ func (cmd *Command) getFTinfo() {
 	}
 	if !info.Status {
 		cmd.log.Error("Failed to get FT info", "message", info.Message)
-	} else if len(info.FTInfo) == 0 {
-		cmd.log.Info("No FTs found")
 	} else {
-		cmd.log.Info("Successfully got FT information")
-		var ftNames []string
-		var ftCounts []string
-		var creatorDIDs []string
-		for _, result := range info.FTInfo {
-			ftNames = append(ftNames, result.FTName)
-			ftCounts = append(ftCounts, fmt.Sprintf("%d", result.FTCount))
-			creatorDIDs = append(creatorDIDs, result.CreatorDID)
+		ftInfo, err := util.ExtractResult[[]types.FTBalance](info.Result)
+		if err != nil {
+			cmd.log.Error("failed to parse ft balance")
+			return
 		}
-		maxNameLength := 0
-		for _, name := range ftNames {
-			if len(name) > maxNameLength {
-				maxNameLength = len(name)
-			}
+		if len(ftInfo) == 0 {
+			cmd.log.Info("No FTs found, DID ", cmd.did)
+			return
 		}
-		for i, name := range ftNames {
-			fmt.Printf("%-*s: %s (CreatorDID: %s)\n", maxNameLength, name, ftCounts[i], creatorDIDs[i])
+		cmd.log.Info("Successfully got FT information", "DID ", cmd.did)
+
+		for _, ft := range ftInfo {
+			fmt.Printf("FT name: %s, Creator DID: %s, FT Value: %f, FT Count: %d\n", ft.FTName, ft.CreatorDID, ft.FTValue, ft.FTCount)
 		}
 	}
 }

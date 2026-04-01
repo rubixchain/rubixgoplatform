@@ -5,6 +5,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 type CreateNFTReq struct {
@@ -87,15 +88,19 @@ func (c *Client) GetAllNFTs(did string) (*model.NFTTokens, error) {
 	return &tkns, nil
 }
 
-func (c *Client) GetNFTsByDid(did string) (*model.NFTTokens, error) {
-	q := make(map[string]string)
-	q["did"] = did
-	var tkns model.NFTTokens
-	err := c.sendJSONRequest("GET", setup.APIGetNftsByDid, q, nil, &tkns)
+func (c *Client) GetNFTsByDid(did string) (*model.BasicResponse, error) {
+	pathParams := make(map[string]string)
+	pathParams["did"] = did
+	endpoint, err := ensweb.SubstitutePathParams(setup.APIGetNftByDid, pathParams)
 	if err != nil {
 		return nil, err
 	}
-	return &tkns, nil
+	var nftResp model.BasicResponse
+	err = c.sendJSONRequest("GET", endpoint, nil, nil, &nftResp)
+	if err != nil {
+		return nil, err
+	}
+	return &nftResp, nil
 }
 
 func (c *Client) FetchNFT(fetchNft *FetchNFTRequest) (*model.BasicResponse, error) {
