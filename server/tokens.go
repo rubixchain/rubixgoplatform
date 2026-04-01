@@ -59,15 +59,16 @@ type RBTTransferRequestSwaggoInput struct {
 	Type       int     `json:"type"`
 }
 
-// ShowAccount godoc
-// @Summary      Check account balance
-// @Description  For a mentioned DID, check the account balance
-// @Tags         Account
+// GetRBTBalance godoc
+// @Summary      Get RBT Balance
+// @Description  Retrieves the RBT token balance for a given DID.
+// @Tags         dids
 // @Accept       json
 // @Produce      json
-// @Param        did      	   query      string  true  "User DID"
-// @Success 200 {object} model.BasicResponse
-// @Router /api/get-account-info [get]
+// @Param        did  path      string  true  "DID (e.g. did:bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)"
+// @Success      200  {object}  model.BasicResponse
+// @Failure      400  {object}  model.BasicResponse
+// @Router       /rubix/v1/dids/{did}/balances/rbt [get]
 func (s *Server) APIGetRbtByDid(req *ensweb.Request) *ensweb.Result {
 	did := s.GetRouteVar(req, "did")
 	if !s.validateDIDAccess(req, did) {
@@ -105,8 +106,9 @@ type SignatureResponseSwaggoInput struct {
 // @Accept      json
 // @Produce     json
 // @Param 		input body SignatureResponseSwaggoInput true "Send input for requested signature"
-// @Success 	200		{object}	model.BasicResponse
-// @Router /api/signature-response [post]
+// @Success      200      {object}  model.BasicResponse
+// @Failure      400      {object}  model.BasicResponse
+// @Router /rubix/v1/signature [post]
 func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
 	var resp types.SignRespData
 	err := s.ParseJSON(req, &resp)

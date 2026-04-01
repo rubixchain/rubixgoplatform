@@ -81,15 +81,16 @@ func (s *Server) APIInitiateFTTransfer(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
-// ShowAccount godoc
-// @Summary      Get FT balance information for a given DID
-// @Description  This API endpoint retrieves the names and count of FTs of a given DID.
-// @Tags         FT
+// GetFTBalance godoc
+// @Summary      Get FT Balance
+// @Description  Retrieves the Fungible Token (FT) balance for a given DID.
+// @Tags         dids
 // @Accept       json
 // @Produce      json
-// @Param        did      	   query      string  true  "User DID"
-// @Success      200  {object}  model.GetFTInfo
-// @Router       /api/get-ft-info-by-did [get]
+// @Param        did  path      string  true  "DID (e.g. did:bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)"
+// @Success      200  {object}  model.BasicResponse
+// @Failure      400  {object}  model.BasicResponse
+// @Router       /rubix/v1/dids/{did}/balances/ft [get]
 func (s *Server) APIGetFTInfo(req *ensweb.Request) *ensweb.Result {
 	did := s.GetRouteVar(req, "did")
 	if !s.validateDIDAccess(req, did) {
