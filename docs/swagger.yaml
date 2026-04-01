@@ -209,13 +209,6 @@ definitions:
       smartContractToken:
         type: string
     type: object
-  server.RBTSelfTransferRequestSwaggoInput:
-    properties:
-      sender:
-        type: string
-      type:
-        type: integer
-    type: object
   server.RegisterCallBackURLSwaggoInput:
     properties:
       CallBackURL:
@@ -235,25 +228,6 @@ definitions:
       mode:
         type: integer
       password:
-        type: string
-    type: object
-  server.TransferFTReqSwaggoInput:
-    properties:
-      comment:
-        type: string
-      creatorDID:
-        type: string
-      ft_count:
-        type: integer
-      ft_name:
-        type: string
-      password:
-        type: string
-      quorum_type:
-        type: integer
-      receiver:
-        type: string
-      sender:
         type: string
     type: object
   types.DIDCreate:
@@ -522,51 +496,6 @@ paths:
       summary: Get Smart Contract Token Chain Data
       tags:
       - Smart Contract
-  /api/initiate-ft-transfer:
-    post:
-      consumes:
-      - application/json
-      description: This API endpoint will initiate transfer of FTs.
-      parameters:
-      - description: Transfer FT
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.TransferFTReqSwaggoInput'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Initiate an FT transfer
-      tags:
-      - FT
-  /api/initiate-self-transfer:
-    post:
-      consumes:
-      - application/json
-      description: This API will initiate self RBT transfer for a specific DID
-      operationId: initiate-self-transfer
-      parameters:
-      - description: Intitate Self RBT transfer
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.RBTSelfTransferRequestSwaggoInput'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Initiate Self Transfer
-      tags:
-      - Account
   /api/list-nfts:
     get:
       consumes:

@@ -382,75 +382,6 @@
                 }
             }
         },
-        "/api/initiate-ft-transfer": {
-            "post": {
-                "description": "This API endpoint will initiate transfer of FTs.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "FT"
-                ],
-                "summary": "Initiate an FT transfer",
-                "parameters": [
-                    {
-                        "description": "Transfer FT",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.TransferFTReqSwaggoInput"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/initiate-self-transfer": {
-            "post": {
-                "description": "This API will initiate self RBT transfer for a specific DID",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Account"
-                ],
-                "summary": "Initiate Self Transfer",
-                "operationId": "initiate-self-transfer",
-                "parameters": [
-                    {
-                        "description": "Intitate Self RBT transfer",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.RBTSelfTransferRequestSwaggoInput"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/list-nfts": {
             "get": {
                 "description": "This API will get all NFTs deployed on the node",
@@ -1698,17 +1629,6 @@
                 }
             }
         },
-        "server.RBTSelfTransferRequestSwaggoInput": {
-            "type": "object",
-            "properties": {
-                "sender": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "integer"
-                }
-            }
-        },
         "server.RegisterCallBackURLSwaggoInput": {
             "type": "object",
             "properties": {
@@ -1738,35 +1658,6 @@
                     "type": "integer"
                 },
                 "password": {
-                    "type": "string"
-                }
-            }
-        },
-        "server.TransferFTReqSwaggoInput": {
-            "type": "object",
-            "properties": {
-                "comment": {
-                    "type": "string"
-                },
-                "creatorDID": {
-                    "type": "string"
-                },
-                "ft_count": {
-                    "type": "integer"
-                },
-                "ft_name": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string"
-                },
-                "quorum_type": {
-                    "type": "integer"
-                },
-                "receiver": {
-                    "type": "string"
-                },
-                "sender": {
                     "type": "string"
                 }
             }
