@@ -16,11 +16,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
-const (
-	PeerService string = "peer_service"
-	RemovePeer  string = "remove_peer"
-)
-
 type PeerMap struct {
 	PeerID    string `json:"peer_id"`
 	DID       string `json:"did"`
@@ -32,17 +27,17 @@ type PeerMap struct {
 // PingSetup will setup the ping route
 func (c *Core) peerSetup() error {
 	c.l.AddRoute(APIPeerStatus, "GET", c.peerStatus)
-	return c.ps.SubscribeTopic(PeerService, c.peerCallback)
+	return c.ps.SubscribeTopic(constants.Event_RubixDID, c.peerCallback)
 }
 
 // removePeerSetup will setup the ping route
 func (c *Core) removePeerSetup() error {
-	return c.ps.SubscribeTopic(RemovePeer, c.removeStalePeerCallback)
+	return c.ps.SubscribeTopic(constants.Event_RemoveRubixDID, c.removeStalePeerCallback)
 }
 
 func (c *Core) publishPeerMap(pm *PeerMap) error {
 	if c.ps != nil {
-		err := c.ps.Publish(PeerService, pm)
+		err := c.ps.Publish(constants.Event_RubixDID, pm)
 		if err != nil {
 			c.log.Error("Failed to publish peer map message", "err", err)
 			return err
@@ -250,7 +245,7 @@ func (c *Core) isDIDInArbitaryAddr(peerDID string) (bool, *models.DID, error) {
 
 func (c *Core) publishStalePeer(pm *PeerMap) error {
 	if c.ps != nil {
-		err := c.ps.Publish(RemovePeer, pm)
+		err := c.ps.Publish(constants.Event_RemoveRubixDID, pm)
 		if err != nil {
 			c.log.Error("Failed to publish peer map message", "err", err)
 			return err
