@@ -221,15 +221,6 @@ definitions:
       did:
         type: string
     type: object
-  server.SignatureResponseSwaggoInput:
-    properties:
-      id:
-        type: string
-      mode:
-        type: integer
-      password:
-        type: string
-    type: object
   types.DIDCreate:
     properties:
       childPath:
@@ -241,6 +232,16 @@ definitions:
       private_key:
         type: string
       public_key:
+        type: string
+    type: object
+  types.SignRespData:
+    properties:
+      id:
+        type: string
+      password:
+        type: string
+      signature:
+        description: signature string should be base64
         type: string
     type: object
 info:
@@ -628,21 +629,6 @@ paths:
       summary: Retry Failed FT Downloads
       tags:
       - FT
-  /api/start:
-    get:
-      consumes:
-      - application/json
-      description: It will setup the core if not done before
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Start Core
-      tags:
-      - Basic
   /api/subscribe-nft:
     post:
       consumes:
@@ -807,7 +793,7 @@ paths:
       tags:
       - DID
   /rubix/v1/dids/{did}/register:
-    get:
+    post:
       consumes:
       - application/json
       description: Registers a DID on the network.
@@ -938,7 +924,7 @@ paths:
         name: input
         required: true
         schema:
-          $ref: '#/definitions/server.SignatureResponseSwaggoInput'
+          $ref: '#/definitions/types.SignRespData'
       produces:
       - application/json
       responses:

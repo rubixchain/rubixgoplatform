@@ -85,10 +85,10 @@ func (s *Server) APIGetRbtByDid(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, err.Error(), nil)
 	}
 	ac := model.BasicResponse{
-			Status:  true,
-			Message: "Got account info successfully",
-			Result: info,
-		}
+		Status:  true,
+		Message: "Got account info successfully",
+		Result:  info,
+	}
 	return s.RenderJSON(req, ac, http.StatusOK)
 }
 
@@ -105,7 +105,7 @@ type SignatureResponseSwaggoInput struct {
 // @ID 			signature-response
 // @Accept      json
 // @Produce     json
-// @Param 		input body SignatureResponseSwaggoInput true "Send input for requested signature"
+// @Param 		input body types.SignRespData true "Send input for requested signature"
 // @Success      200      {object}  model.BasicResponse
 // @Failure      400      {object}  model.BasicResponse
 // @Router /rubix/v1/signature [post]

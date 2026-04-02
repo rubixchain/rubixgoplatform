@@ -132,7 +132,7 @@ func (s *Server) didResponse(req *ensweb.Request, reqID string) *ensweb.Result {
 // @Param        did  path      string  true  "DID to register (e.g. did:bafybmih2cqn6okxy2sepgp75jq5dkopuohnbd3pfrrylmqnrz43ttihkky)"
 // @Success      200  {object}  model.BasicResponse
 // @Failure      400  {object}  model.BasicResponse
-// @Router       /rubix/v1/dids/{did}/register [get]
+// @Router       /rubix/v1/dids/{did}/register [post]
 func (s *Server) APIRegisterDID(req *ensweb.Request) *ensweb.Result {
 	didStr := s.GetRouteVar(req, "did")
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(didStr)
@@ -289,7 +289,7 @@ func (s *Server) APIGetDIDBalance(req *ensweb.Request) *ensweb.Result {
 		DID: did,
 	}
 	ac := model.BasicResponse{
-		Status:  true,
+		Status: true,
 	}
 	rbtInfo, err := s.c.GetRbtByDid(did)
 	if err != nil {

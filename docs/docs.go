@@ -588,29 +588,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/start": {
-            "get": {
-                "description": "It will setup the core if not done before",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Basic"
-                ],
-                "summary": "Start Core",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/subscribe-nft": {
             "post": {
                 "description": "This API endpoint allows subscribing to a NFT.",
@@ -901,7 +878,7 @@ const docTemplate = `{
             }
         },
         "/rubix/v1/dids/{did}/register": {
-            "get": {
+            "post": {
                 "description": "Registers a DID on the network.",
                 "consumes": [
                     "application/json"
@@ -1062,7 +1039,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/server.SignatureResponseSwaggoInput"
+                            "$ref": "#/definitions/types.SignRespData"
                         }
                     }
                 ],
@@ -1656,20 +1633,6 @@ const docTemplate = `{
                 }
             }
         },
-        "server.SignatureResponseSwaggoInput": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "mode": {
-                    "type": "integer"
-                },
-                "password": {
-                    "type": "string"
-                }
-            }
-        },
         "types.DIDCreate": {
             "type": "object",
             "properties": {
@@ -1686,6 +1649,21 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "public_key": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.SignRespData": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "signature": {
+                    "description": "signature string should be base64",
                     "type": "string"
                 }
             }
