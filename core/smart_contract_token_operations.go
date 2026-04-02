@@ -16,7 +16,7 @@ func (c *Core) DeploySmartContractToken(reqID string, deployReq *model.DeploySma
 	br := c.deploySmartContractToken(reqID, deployReq)
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
-		c.log.Error("Failed to get did channels")
+		c.log.Error("DeploySmartContractToken: Failed to get did channels")
 		return
 	}
 	dc.OutChan <- br
@@ -212,7 +212,7 @@ func (c *Core) ExecuteSmartContractToken(reqID string, executeReq *model.Execute
 	br := c.executeSmartContractToken(reqID, executeReq)
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
-		c.log.Error("Failed to get did channels")
+		c.log.Error("ExecuteSmartContractToken: Failed to get did channels")
 		return
 	}
 	dc.OutChan <- br

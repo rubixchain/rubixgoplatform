@@ -260,7 +260,7 @@ func (c *Core) RegisterDID(reqID string, did string) {
 
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
-		c.log.Error("Failed to get did channels")
+		c.log.Error("RegisterDID: Failed to get did channels")
 		return
 	}
 	dc.OutChan <- &br
@@ -471,7 +471,7 @@ func (c *Core) RemoveStaleDIDFromNetwork(reqID string, staleDID string) {
 
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
-		c.log.Error("Failed to get did channels")
+		c.log.Error("RemoveStaleDIDFromNetwork: Failed to get did channels")
 		return
 	}
 	dc.OutChan <- &br

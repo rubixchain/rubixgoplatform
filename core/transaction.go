@@ -20,7 +20,7 @@ func (c *Core) InitiateTransaction(reqID string, req *models.TransactionRequest)
 	br := c.initiateTransaction(reqID, req)
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
-		c.log.Error("Failed to get did channels")
+		c.log.Error("InitiateTransaction: Failed to get did channels")
 		return
 	}
 	dc.OutChan <- br

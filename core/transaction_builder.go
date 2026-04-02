@@ -53,6 +53,9 @@ func BuildTransactionInfoFromRequest(
 		if err != nil {
 			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: RBT collection failed: %w", err)
 		}
+		for _, rbtToken := range rbtTokens {
+			totalAmount += rbtToken.TokenValue
+		}
 		txTokens.RBT = rbtTokens
 	}
 

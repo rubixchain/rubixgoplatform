@@ -531,7 +531,7 @@ func (c *Core) RemoveWebReq(reqID string) *ensweb.Request {
 func (c *Core) SetupDID(reqID string, didStr string) (types.DIDCrypto, error) {
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
-		c.log.Error("Failed to get did channels")
+		c.log.Error("SetupDID:Failed to get did channels")
 		return nil, fmt.Errorf("faield to get did channel")
 	}
 	return did.InitDIDLite(didStr, c.didDir, dc), nil
