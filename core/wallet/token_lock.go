@@ -267,3 +267,17 @@ func (w *Wallet) LockSmartContractToken(ctx context.Context, ownerDID string, to
 	}
 	return tokens[0], nil
 }
+
+// UnlockLockedTokens releases specific locked tokens for a DID back to Free status.
+// Called during transaction abort to return locked tokens to their Free state.
+func (w *Wallet) UnlockLockedTokens(did string, tokens []string) error {
+	if len(tokens) == 0 {
+		return nil
+	}
+	_, err := w.db.Pool().Exec(w.Ctx,
+		`UPDATE tokens SET token_status=$1, updated_at=$2
+		 WHERE did=$3 AND token_id = ANY($4::text[]) AND token_status=$5`,
+		constants.TokenStatus_Free, time.Now(), did, tokens, constants.TokenStatus_Locked,
+	)
+	return err
+}
