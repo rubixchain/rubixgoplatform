@@ -1,5 +1,11 @@
 package wallet
 
+import (
+	"time"
+
+	"github.com/rubixchain/rubixgoplatform/constants"
+)
+
 // AddUnpledgeSequenceInfo persists an unpledge sequence record.
 func (w *Wallet) AddUnpledgeSequenceInfo(info *UnpledgeSequenceInfo) error {
 	// TODO(phase07): insert into unpledge_sequence table
@@ -56,10 +62,18 @@ func (w *Wallet) AddTokenStateHash(did string, hashes []string, pledgedTokens []
 	return nil
 }
 
-// UnlockLockedTokens releases locked tokens for a DID.
+// UnlockLockedTokens releases specific locked tokens for a DID back to Free status.
+// Called by the /api/unlock-tokens quorum-side endpoint when a transaction is aborted.
 func (w *Wallet) UnlockLockedTokens(did string, tokens []string) error {
-	// TODO(phase07): update token_status to free for given token IDs
-	return nil
+	if len(tokens) == 0 {
+		return nil
+	}
+	_, err := w.db.Pool().Exec(w.Ctx,
+		`UPDATE tokens SET token_status=$1, updated_at=$2
+		 WHERE did=$3 AND token_id = ANY($4::text[]) AND token_status=$5`,
+		constants.TokenStatus_Free, time.Now(), did, tokens, constants.TokenStatus_Locked,
+	)
+	return err
 }
 
 // RemoveTokenStateHash removes a single token state hash record.

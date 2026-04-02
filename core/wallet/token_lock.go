@@ -186,6 +186,7 @@ func (w *Wallet) LockFTTokens(ctx context.Context, ownerDID string, ftName strin
 //
 // Returns the locked token rows; callers must eventually release or consume them.
 func (w *Wallet) LockTokensForSplit(ctx context.Context, ownerDID string, amount float64) ([]models.Token, error) {
+	w.log.Info("LockTokensForSplit: locking tokens for split", "ownerDID", ownerDID, "amount", amount)
 	tx, err := w.db.BeginTx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("LockTokensForSplit: begin tx: %w", err)
