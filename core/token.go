@@ -580,7 +580,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			}
 			err := c.AddPeerDetails(*publisherDetails)
 			if err != nil {
-				c.log.Error("failed to add publisher info to DB")
+				c.log.Error("failed to add publisher info to DB", "err", err)
 			}
 		}
 

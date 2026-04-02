@@ -20,6 +20,12 @@ func (c *Core) SubscribeTxnSetup() {
 	topic := constants.Event_RubixTxns
 	err := c.ps.SubscribeTopic(topic, c.TxnCallBack)
 	if err != nil {
+		// If already subscribed, this is expected when SetupQuorum is called
+		// for multiple quorum DIDs on the same node. Not an error.
+		if err.Error() == "topic already subscribed" {
+			c.log.Debug("SubscribeTxnSetup: already subscribed to topic, skipping", "topic", topic)
+			return
+		}
 		c.log.Error("Unable to subscribe to topic", "topic", topic, "error", err)
 		return
 	}
@@ -69,7 +75,7 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	}
 	err = c.AddPeerDetails(publisherDetails)
 	if err != nil {
-		c.log.Error("failed to add publisher info to DB")
+		c.log.Error("failed to add publisher info to DB", "err", err)
 	}
 
 	// Check for duplicate transactions

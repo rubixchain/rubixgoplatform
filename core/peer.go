@@ -203,6 +203,17 @@ func (c *Core) connectPeer(peerID string) (*ipfsport.Peer, error) {
 }
 
 func (c *Core) AddPeerDetails(peerDetail models.DID) error {
+	// Defensive: resolve AlgoID if caller did not set it (zero value).
+	// The did_algo table uses 1-based GENERATED ALWAYS AS IDENTITY,
+	// so AlgoID=0 will violate the algo_id_fk constraint.
+	if peerDetail.AlgoID == 0 {
+		algoID, err := c.w.GetDidAlgoIDByName(constants.DidAlgo_SECP256K1)
+		if err != nil {
+			c.log.Error("AddPeerDetails: failed to resolve default algo ID, skipping DID insert", "did", peerDetail.DID, "err", err)
+			return fmt.Errorf("AddPeerDetails: failed to resolve algo ID: %w", err)
+		}
+		peerDetail.AlgoID = algoID
+	}
 	err := c.w.CreateOrUpdateDID(&peerDetail)
 	if err != nil {
 		c.log.Error("Failed to add PeerDetails to DIDPeerTable", "err", err)
