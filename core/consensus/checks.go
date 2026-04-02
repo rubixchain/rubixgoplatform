@@ -165,7 +165,7 @@ func ValidateTokenOwnershipByPrevTxn(txnInfo *models.TransactionInfo, isFullnode
 				} //TODO: Handle the case where there is no RBT token in the fullnode rbt tokens table
 				previousTransactionOwner := tokenDetails.DID
 				if previousTransactionOwner != quorum.Did {
-					return fmt.Errorf("ownership mismatch: quorum %s does not match owner %s of previous transaction %s (affected tokens: %v)", quorum.Did, tokenDetails.DID, t.TokenID)
+					return fmt.Errorf("ownership mismatch: quorum %s does not match owner %s of token %s", quorum.Did, tokenDetails.DID, t.TokenID)
 				}
 			}
 		}
