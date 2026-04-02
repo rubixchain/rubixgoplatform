@@ -49,6 +49,24 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	}
 	// Build transaction info
 	//Here the c.publishTxn must be verified because the input type is *model.PubSubTxnInfo which need to be updated
+	// here the tokens which are being fetched as committed tokens in case of smartContract deployment: There we need to add the commitment block?
+
+	// Ensure locked RBT tokens are released if the transaction fails at any step.
+	// This defer must be registered BEFORE BuildTransactionInfoFromRequest because
+	// LockTokensForSplit (called inside BuildTransactionInfoFromRequest) commits the
+	// lock to DB immediately. If BuildTransactionInfoFromRequest itself fails (e.g.
+	// insufficient balance), the lock must still be released.
+	txSucceeded := false
+	defer func() {
+		if !txSucceeded {
+			if releaseErr := c.w.ReleaseAllLockedRBTTokensForDID(ctx, initiatorDID); releaseErr != nil {
+				c.log.Error("InitiateTransaction: failed to release locked tokens after failure", "err", releaseErr)
+			} else {
+				c.log.Info("InitiateTransaction: released locked tokens after failed transaction", "did", initiatorDID)
+			}
+		}
+	}()
+
 	transactionInfo, transactionValue, err := BuildTransactionInfoFromRequest(ctx, c.w, request, dc, networkMode, c.log, c.ps)
 	if err != nil {
 		c.log.Error("InitiateTransaction: Failed to build transaction info", "err", err)
@@ -57,7 +75,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	}
 
 	// Fetch the list of dids from quorum_manager table
-	//	We then loop over that list and queried from did table and pfetch the peerid
+	//  We then loop over that list and queried from did table and pfetch the peerid
 	quorumAddresses, err := c.GetAllQuorum()
 	if err != nil {
 		c.log.Error("InitiateTransaction: Failed to get quorum address", "err", err)
@@ -153,15 +171,32 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		resp.Message = consensusResponse.Message
 		return resp
 	}
+
+	c.log.Info("InitiateTransaction: Consensus response received", "quorumDID", quorumAddresses[0], "quorumSignatureLength", len(consensusResponse.QuorumSignature))
+
 	// When multiple transaction situation comes into picture this quorum signature part will change.
 	// We have kept this as an array to accomodate multiple quorums in future.
 	// Right now we are only accomodating a single quorum.
-	err = util.VerifySignature(dc, transactionInfo, consensusResponse.QuorumSignature)
+
+	// Set up quorum DIDCrypto for signature verification
+	// We need the quorum's public key to verify its signature, not the initiator's
+	// Note: selfDID parameter is not used by SetupForienDID, so we pass empty string
+	c.log.Debug("InitiateTransaction: Setting up quorum DID for verification", "quorumDID", quorumAddresses[0])
+	quorumDC, err := c.SetupForienDID(quorumAddresses[0], "")
 	if err != nil {
-		c.log.Error("InitiateTransaction: Failed to verify quorum signature", "err", err)
-		resp.Message = "InitiateTransaction: Failed to verify quorum signature"
+		c.log.Error("InitiateTransaction: Failed to setup quorum DID for verification", "quorumDID", quorumAddresses[0], "err", err)
+		resp.Message = "InitiateTransaction: Failed to setup quorum DID: " + err.Error()
 		return resp
 	}
+
+	c.log.Debug("InitiateTransaction: Verifying quorum signature", "quorumDID", quorumAddresses[0])
+	err = util.VerifySignature(quorumDC, transactionInfo, consensusResponse.QuorumSignature)
+	if err != nil {
+		c.log.Error("InitiateTransaction: Failed to verify quorum signature", "quorumDID", quorumAddresses[0], "err", err)
+		resp.Message = "InitiateTransaction: Failed to verify quorum signature: " + err.Error()
+		return resp
+	}
+	c.log.Info("InitiateTransaction: Quorum signature verified successfully", "quorumDID", quorumAddresses[0])
 	quorumSignature := []models.QuorumSignature{{
 		Did:       quorumAddresses[0],
 		Signature: consensusResponse.QuorumSignature,
@@ -170,20 +205,43 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		InitiatorSignature: initiatorSignature,
 		Quorums:            quorumSignature,
 	}
-	// Persist post-consensus state to PostgreSQL (soft-fail: log error, do not block transaction)
-	if err := c.w.PersistPostConsensus(ctx, &wallet.PostConsensusPersistenceRequest{
+	// Persist post-consensus state to PostgreSQL.
+	// On success the selected tokens are marked Transferred; remaining locked tokens
+	// (candidates not chosen by CollectRBTTokens) are then released back to Free.
+	// On failure we log and continue — the deferred ReleaseAllLockedRBTTokensForDID
+	// will fire because txSucceeded is still false at this point.
+	persistErr := c.w.PersistPostConsensus(ctx, &wallet.PostConsensusPersistenceRequest{
 		TransactionInfo: transactionInfo,
 		Signature:       signatureTobePublished,
 		DID:             initiatorDID,
 		ExecutionRole:   wallet.ExecutionRoleInitiator,
-	}); err != nil {
-		c.log.Error("InitiateTransaction: failed to persist post-consensus state", "err", err)
+	})
+	if persistErr != nil {
+		c.log.Error("InitiateTransaction: failed to persist post-consensus state", "err", persistErr)
+		// txSucceeded stays false → deferred cleanup will release all locked tokens
+	} else {
+		// Mark success to prevent the deferred full-release from firing,
+		// then release only the non-selected locked tokens (candidates not used in the transfer).
+		// The selected tokens are now status=Transferred so they won't be touched.
+		txSucceeded = true
+		if err := c.w.ReleaseAllLockedRBTTokensForDID(ctx, initiatorDID); err != nil {
+			c.log.Error("InitiateTransaction: failed to release non-selected locked tokens", "err", err)
+		}
 	}
+	/*
+		if request.HasSmartContract() {
+			c.publishSmartContractEvents(request, transactionId, initiatorDID, initiatorSignature, transactionInfo.Epoch)
+		}
+
+		if request.HasNFT() {
+			c.publishNFTEvents(request, transactionId, initiatorDID, initiatorSignature, transactionInfo.Epoch)
+		}
+	*/
 	//Publish transaction to the network
 	util.PublishTransaction(c.ps, transactionInfo, signatureTobePublished)
 
 	// Send tokens to receiver asynchronously in background
-	go c.sendTokensToReceiver(nextOwnerDID, transactionId, transactionInfo, request)
+	go c.sendTokensToReceiver(nextOwnerDID, transactionId, transactionInfo, signatureTobePublished, request)
 
 	// Return immediately - receiver sync happens in background
 	resp.Status = true
@@ -198,6 +256,7 @@ func (c *Core) sendTokensToReceiver(
 	receiverDID string,
 	transactionID string,
 	txInfo *models.TransactionInfo,
+	signature *models.Signature,
 	request *models.TransactionRequest,
 ) {
 	c.log.Debug("sendTokensToReceiver: Starting async receiver sync",
@@ -222,6 +281,8 @@ func (c *Core) sendTokensToReceiver(
 	var sendTokensRequest models.SendTokensRequest
 	var sendTokensResponse model.BasicResponse
 	sendTokensRequest.Tokens = txInfo.Tokens
+	sendTokensRequest.TransactionInfo = txInfo
+	sendTokensRequest.Signature = signature
 	if request.HasNFT() {
 		sendTokensRequest.NFTOwnershipTransfer = request.Tokens.TransferNFTOwnership
 	}
@@ -293,7 +354,6 @@ func (c *Core) syncTransactionTokens(
 }
 
 func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
-	did := c.l.GetQuery(request, "did")
 	crep := model.BasicResponse{Status: false}
 
 	var sendTokensRequest models.SendTokensRequest
@@ -303,18 +363,31 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 		crep.Message = "SendTokens: Failed to parse json request"
 		return c.l.RenderJSON(request, &crep, http.StatusBadRequest)
 	}
-	peer, err := c.getPeer(did)
-	if err != nil {
-		c.log.Error("SendTokens: Failed to get peer for receiver", "err", err)
-		crep.Message = "SendTokens: Failed to get peer for receiver"
+
+	if sendTokensRequest.TransactionInfo == nil || sendTokensRequest.Signature == nil {
+		c.log.Error("SendTokens: Missing transaction info or signature in request")
+		crep.Message = "SendTokens: Missing transaction info or signature"
 		return c.l.RenderJSON(request, &crep, http.StatusBadRequest)
 	}
-	defer peer.Close()
-	err = c.syncTransactionTokens(peer, sendTokensRequest.Tokens, sendTokensRequest.NFTOwnershipTransfer)
-	if err != nil {
-		c.log.Error("SendTokens: Failed to sync transaction tokens", "err", err)
-		crep.Message = "SendTokens: Failed to sync transaction tokens"
+
+	receiverDID := sendTokensRequest.TransactionInfo.Owner
+	if receiverDID == "" {
+		c.log.Error("SendTokens: Missing owner DID in transaction info")
+		crep.Message = "SendTokens: Missing owner DID in transaction info"
 		return c.l.RenderJSON(request, &crep, http.StatusBadRequest)
+	}
+
+	persistErr := c.w.PersistPostConsensus(c.Ctx, &wallet.PostConsensusPersistenceRequest{
+		TransactionInfo:           sendTokensRequest.TransactionInfo,
+		Signature:                 sendTokensRequest.Signature,
+		DID:                       receiverDID,
+		ExecutionRole:             wallet.ExecutionRoleReceiver,
+		SkipSignatureVerification: true,
+	})
+	if persistErr != nil {
+		c.log.Error("SendTokens: Failed to persist receiver token state", "err", persistErr)
+		crep.Message = "SendTokens: Failed to persist receiver token state: " + persistErr.Error()
+		return c.l.RenderJSON(request, &crep, http.StatusInternalServerError)
 	}
 
 	crep.Status = true
