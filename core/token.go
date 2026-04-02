@@ -629,7 +629,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 					c.log.Error("failed to add token's ipfs content to psql db, err: %v", err)
 				}
 			}
-			latestBlockHash, err := latestBlock.GetHash()
+			_, err = latestBlock.GetHash()
 			if err != nil {
 				c.log.Error("failed to get latest block hash for the token", detail.Token)
 			}
@@ -1132,7 +1132,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 	}
 
 	var ownerDid string
-	var blockHash, transactionID string
+	var transactionID string
 	var latestBlockHeight uint64
 
 	// syncStatus := constants.SyncStatus_Completed
@@ -1140,7 +1140,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 	if latestBlockAfterSync != nil {
 		ownerDid, _ = latestBlockAfterSync.GetOwner()
 		transactionID, _ = latestBlockAfterSync.GetTid()
-		blockHash, err = latestBlockAfterSync.GetHash()
+		_, err = latestBlockAfterSync.GetHash()
 		// latestBlockID, err = latestBlockAfterSync.GetBlockID(tokenSyncInfo.TokenID)
 		if err != nil {
 			c.log.Error("failed to get latest block hash", "token: ", tokenSyncInfo.TokenID)
