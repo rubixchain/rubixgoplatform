@@ -256,15 +256,22 @@ type TransactionChainSyncRequest struct {
 	TokenID       string `json:"token_id"`
 	TransactionID string `json:"transaction_id"`
 }
-type TransactionChainSyncReply struct {
-	Status            bool     `json:"status"`
-	Message           string   `json:"message"`
-	NextTransactionID string   `json:"next_transaction_id"`
-	Transactions      [][]byte `json:"transactions"`
+type TransactionChainSyncResponse struct {
+	Status                   bool     `json:"status"`
+	Message                  string   `json:"message"`
+	NextTransactionID        string   `json:"next_transaction_id"`
+	SyncTransactionInfoBytes [][]byte `json:"transactions"`
 }
 type GenesisAndLatestTransactionSyncReply struct {
 	Status             bool   `json:"status"`
 	Message            string `json:"message"`
 	GenesisTransaction []byte `json:"genesis_transaction"`
 	LatestTransaction  []byte `json:"latest_transaction"`
+}
+
+type SyncTransactionInfo struct {
+	Transaction           *Transactions `json:"transaction"`
+	Role                  int16         `json:"role"`
+	Position              int64         `json:"position"`
+	PreviousTransactionID *string       `json:"previous_transaction_id,omitempty"`
 }

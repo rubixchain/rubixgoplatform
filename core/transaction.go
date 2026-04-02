@@ -179,15 +179,18 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	}); err != nil {
 		c.log.Error("InitiateTransaction: failed to persist post-consensus state", "err", err)
 	}
+
 	//Publish transaction to the network
-	util.PublishTransaction(c.ps, transactionInfo, signatureTobePublished)
+	if _, err := util.PublishTransaction(c.ps, transactionInfo, signatureTobePublished); err != nil {
+		c.log.Error("InitiateTransaction: failed to publish transaction", "err", err)
+	}
 
 	// Send tokens to receiver asynchronously in background
 	go c.sendTokensToReceiver(nextOwnerDID, transactionId, transactionInfo, request)
 
 	// Return immediately - receiver sync happens in background
 	resp.Status = true
-	resp.Message = "Transfer initiated successfully"
+	resp.Message = "Transfer completed successfully"
 	return resp
 }
 
@@ -222,10 +225,11 @@ func (c *Core) sendTokensToReceiver(
 	var sendTokensRequest models.SendTokensRequest
 	var sendTokensResponse model.BasicResponse
 	sendTokensRequest.Tokens = txInfo.Tokens
+	sendTokensRequest.IncomingTransactionID = transactionID
 	if request.HasNFT() {
 		sendTokensRequest.NFTOwnershipTransfer = request.Tokens.TransferNFTOwnership
 	}
-
+	
 	// Send tokens to receiver with 2-minute timeout
 	// SendJSONRequest has built-in retry logic (3 attempts with exponential backoff)
 	err = receiverPeer.SendJSONRequest(
@@ -282,8 +286,12 @@ func (c *Core) syncTransactionTokens(
 				continue
 			}
 			//Handling the response in the future.
-			err, _ := rubixsync.SyncTransactionChainFrom(peer, token.TokenID, tokenType, c.w, c.log)
+			postSyncInfo, err := rubixsync.SyncTransactionChainFrom(peer, token.TokenID, tokenType, c.w, c.log)
 			if err != nil {
+				return err
+			}
+			
+			if err := rubixsync.SyncTokenRecords(peer, c.w, token.TokenID, tokenType, token.TokenValue, postSyncInfo.Owner, postSyncInfo.TransactionID, int(postSyncInfo.Role), int(postSyncInfo.Position), c.log); err != nil {
 				return err
 			}
 		}
@@ -297,12 +305,14 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 	crep := model.BasicResponse{Status: false}
 
 	var sendTokensRequest models.SendTokensRequest
+
 	err := c.l.ParseJSON(request, &sendTokensRequest)
 	if err != nil {
 		c.log.Error("SendTokens: Failed to parse json request", "err", err)
 		crep.Message = "SendTokens: Failed to parse json request"
 		return c.l.RenderJSON(request, &crep, http.StatusBadRequest)
 	}
+
 	peer, err := c.getPeer(did)
 	if err != nil {
 		c.log.Error("SendTokens: Failed to get peer for receiver", "err", err)
@@ -310,7 +320,12 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(request, &crep, http.StatusBadRequest)
 	}
 	defer peer.Close()
-	err = c.syncTransactionTokens(peer, sendTokensRequest.Tokens, sendTokensRequest.NFTOwnershipTransfer)
+	
+	err = c.syncTransactionTokens(
+		peer,
+		sendTokensRequest.Tokens, 
+		sendTokensRequest.NFTOwnershipTransfer,
+	)
 	if err != nil {
 		c.log.Error("SendTokens: Failed to sync transaction tokens", "err", err)
 		crep.Message = "SendTokens: Failed to sync transaction tokens"

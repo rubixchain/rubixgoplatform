@@ -151,11 +151,11 @@ func (w *Wallet) PledgeTokens(tokenInfos []*models.TokenInfo, transaction *model
 	}
 	defer rows.Close()
 
-	var tokenchainRowIDMap map[string]int = make(map[string]int)
+	var tokenchainRowIDMap map[string]int32 = make(map[string]int32)
 	var tokenDenomMap map[types.DenomValue]types.DenomCount = make(map[types.DenomValue]types.DenomCount)
 
 	for rows.Next() {
-		var id int
+		var id int32
 		var tokenId string
 
 		if err := rows.Scan(&id, &tokenId); err != nil {

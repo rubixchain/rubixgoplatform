@@ -641,8 +641,9 @@ func (w *Wallet) GetTransactionsByTokenID(tokenID string) ([]models.Transactions
 // GetAllTransactionInfoByTokenId fetches entire token chain, fetches each transaction by transactionId and
 // converts into bytes, and returns the chain of ordered transactions with a limit of 100 transactions,
 // and the last transaction id of the array in order
-func (w *Wallet) GetAllTransactionInfoByTokenId(tokenID string, txnId string) ([]models.Transactions, string, error) {
-	txnChain := make([]models.Transactions, 0)
+func (w *Wallet) GetTransactionsForChainSync(tokenID string, txnId string) ([]models.SyncTransactionInfo, string, error) {
+	syncTransactionInfoList := make([]models.SyncTransactionInfo, 0)
+	
 	// get token chain of the token with height limit of 100
 	tokenChain, err := w.GetTokenChainByTokenIDAndPrevTxnId(tokenID, txnId)
 	if err != nil {
@@ -656,9 +657,15 @@ func (w *Wallet) GetAllTransactionInfoByTokenId(tokenID string, txnId string) ([
 		if err != nil {
 			return nil, "", fmt.Errorf("GetAllTransactionsInBytesByTokenId: failed to get transaction by id; error: %v ", err)
 		}
-		txnChain = append(txnChain, *txn)
+
+		syncTransactionInfoList = append(syncTransactionInfoList, models.SyncTransactionInfo{
+			Transaction: txn,
+			Role: txnInfo.Role,
+			Position: txnInfo.Position,
+			PreviousTransactionID: txnInfo.PreviousTransactionID,
+		})
 	}
-	return txnChain, tokenChain[len(tokenChain)-1].TransactionID, nil
+	return syncTransactionInfoList, tokenChain[len(tokenChain)-1].TransactionID, nil
 }
 
 // GetSmartContractChainByTokenID retrieves all transactions for a smart contract token

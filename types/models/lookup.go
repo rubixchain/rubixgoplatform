@@ -68,3 +68,19 @@ func GetTokenTypeID(tokenType string) int {
 
 	return -1
 }
+
+func IsRBTToken(tokenType int) bool {
+	return tokenType == GetTokenTypeID(constants.TokenType_RBT)
+}
+
+func IsNFTToken(tokenType int) bool {
+	return tokenType == GetTokenTypeID(constants.TokenType_NFT)
+}
+
+func IsFTToken(tokenType int) bool {
+	return tokenType == GetTokenTypeID(constants.TokenType_FT)
+}
+
+func IsSmartContractToken(tokenType int) bool {
+	return tokenType == GetTokenTypeID(constants.TokenType_SmartContract)
+}

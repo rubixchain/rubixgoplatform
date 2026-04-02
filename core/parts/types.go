@@ -9,6 +9,10 @@ import (
 
 type TokenID string
 
+func NewTokenIDFromString(s string) TokenID {
+	return TokenID(s)
+}
+
 func ParseTokenID(id TokenID) (path []int, err error) {
 	tokenElems, err := util.GetRbtIDElements(id.String())
 	if err != nil {

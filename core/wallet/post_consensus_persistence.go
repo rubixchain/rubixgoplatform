@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -123,6 +124,7 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 	if err := pc.upsertTokenStates(ctx, tx, req.TokenStates); err != nil {
 		return err
 	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("post-consensus persistence: commit: %w", err)
 	}
@@ -593,5 +595,84 @@ func (pc *PostConsensusPersistenceCoordinator) upsertTokenStates(ctx context.Con
 		}
 	}
 
+	return nil
+}
+
+func (pc *PostConsensusPersistenceCoordinator) decreaseTokenDenomCount(ctx context.Context, tx pgx.Tx, did string, tokens []models.Token) error {
+	denomCountMap := make(map[types.DenomValue]types.DenomCount)
+
+	for _, t := range tokens {
+		denomCountMap[t.TokenValue]++
+	}
+
+	var denoms []float64
+	var counts []int64
+
+	for d, c := range denomCountMap {
+		denoms = append(denoms, d)
+		counts = append(counts, c)
+	}
+	
+	tag, err := tx.Exec(ctx, `
+		WITH input AS (
+			SELECT * 
+			FROM UNNEST($2::NUMERIC[], $3::BIGINT[]) AS d(denom, count)
+		)
+		UPDATE token_denom t
+		SET 
+			count = t.count - i.count,
+			updated_at = NOW()
+		FROM input i
+		WHERE 
+			t.did = $1
+			AND t.denom = i.denom
+			AND t.count >= i.count;
+	`, did, denoms, counts)
+	if err != nil {
+		return fmt.Errorf("post-consensus persistence: update token denoms: %w", err)
+	}
+	if int(tag.RowsAffected()) != len(denoms) {
+		return fmt.Errorf("decrement failed: missing denom or insufficient balance")
+	}
+		
+	return nil
+}
+
+func (pc *PostConsensusPersistenceCoordinator) increaseTokenDenomCount(ctx context.Context, tx pgx.Tx, did string, tokens []models.Token) error {
+	denomCountMap := make(map[types.DenomValue]types.DenomCount)
+
+	for _, t := range tokens {
+		denomCountMap[t.TokenValue]++
+	}
+
+	var denoms []float64
+	var counts []int64
+
+	for d, c := range denomCountMap {
+		denoms = append(denoms, d)
+		counts = append(counts, c)
+	}
+	
+	tag, err := tx.Exec(ctx, `
+		INSERT INTO token_denom (did, denom, count)
+		SELECT 
+			$1,
+			d.denom,
+			d.count
+		FROM 
+			UNNEST($2::NUMERIC[], $3::BIGINT[]) AS d(denom, count)
+		ON CONFLICT (did, denom)
+		DO UPDATE
+		SET 
+			count = token_denom.count + EXCLUDED.count,
+			updated_at = NOW();
+	`, did, denoms, counts)
+	if err != nil {
+		return fmt.Errorf("post-consensus persistence: update token denoms: %w", err)
+	}
+	if int(tag.RowsAffected()) != len(denoms) {
+		return fmt.Errorf("increment failed: missing denom or insufficient balance")
+	}
+		
 	return nil
 }
