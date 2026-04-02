@@ -7,12 +7,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
-// APIInitiateRBTTransfer is a legacy alias for the RBT transfer endpoint.
-// TODO(phase11-upstream): redirect to APIInitiateTransaction or remove.
-func (s *Server) APIInitiateRBTTransfer(req *ensweb.Request) *ensweb.Result {
-	return s.BasicResponse(req, false, "deprecated: use APIInitiateTransaction", nil)
-}
-
 // APISetupDB handles the legacy setup-db endpoint.
 // TODO(phase11-upstream): wire to PostgreSQL config or retire.
 func (s *Server) APISetupDB(req *ensweb.Request) *ensweb.Result {

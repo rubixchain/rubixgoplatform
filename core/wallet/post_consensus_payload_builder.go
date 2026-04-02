@@ -70,14 +70,29 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 	tokenStates := make([]models.Token, 0, len(inputs))
 
 	for _, input := range inputs {
-		currentToken, exists := currentTokens[input.TokenID]
-		if !exists {
-			return nil, nil, nil, fmt.Errorf("post-consensus persistence: token state for token %q is required to derive payload", input.TokenID)
-		}
-
 		roleID := models.GetTokenRoleID(input.RoleName)
 		if roleID <= 0 {
 			return nil, nil, nil, fmt.Errorf("post-consensus persistence: unsupported token role %q for token %q", input.RoleName, input.TokenID)
+		}
+
+		// For genesis transactions (Deploy, Mint), token doesn't exist yet in the database
+		// Skip token state lookup and initialize empty token state
+		isGenesis := input.RoleName == constants.TokenRole_Deploy || input.RoleName == constants.TokenRole_Mint
+		var currentToken models.Token
+		var exists bool
+
+		if !isGenesis {
+			// Non-genesis: Token must exist in database (Transfer, Execute, Commit, etc.)
+			currentToken, exists = currentTokens[input.TokenID]
+			if !exists {
+				return nil, nil, nil, fmt.Errorf("post-consensus persistence: token state for token %q is required to derive payload", input.TokenID)
+			}
+		} else {
+			// Genesis (Deploy/Mint): Token is being created, initialize empty state
+			currentToken = models.Token{
+				TokenID: input.TokenID,
+				// Other fields will be populated below
+			}
 		}
 
 		row, position, err := buildDerivedTokenChainRow(transactionID, currentToken, latestRows[input.TokenID], input, int16(roleID))
@@ -138,20 +153,78 @@ func collectPersistenceTokenInputs(txInfo *models.TransactionInfo) ([]persistenc
 		return nil
 	}
 
+	// Process each token type with appropriate role assignment
 	if txInfo.Tokens != nil {
+		// RBT tokens: Transfer role (becomes Mint for genesis via PreviousTransactionID check)
 		if err := appendInputs(txInfo.Tokens.RBT, constants.TokenRole_Transfer); err != nil {
 			return nil, nil, err
 		}
-		if err := appendInputs(txInfo.Tokens.NFT, constants.TokenRole_Transfer); err != nil {
-			return nil, nil, err
+
+		// NFT tokens: Check if genesis (deployment) or execution/transfer
+		// - If PreviousTransactionID is empty → Deploy (genesis)
+		// - Otherwise → Transfer or Execute (existing NFT)
+		for _, nft := range txInfo.Tokens.NFT {
+			if nft == nil {
+				return nil, nil, fmt.Errorf("post-consensus persistence: transaction token is nil")
+			}
+			if nft.TokenID == "" {
+				return nil, nil, fmt.Errorf("post-consensus persistence: transaction token id is empty")
+			}
+			if _, exists := seen[nft.TokenID]; exists {
+				return nil, nil, fmt.Errorf("post-consensus persistence: duplicate token %q in transaction payload", nft.TokenID)
+			}
+			seen[nft.TokenID] = struct{}{}
+			affected = append(affected, nft.TokenID)
+
+			// Determine role based on PreviousTransactionID
+			roleName := constants.TokenRole_Transfer // Can be Execute or Transfer for existing NFT
+			if nft.PreviousTransactionID == "" {
+				roleName = constants.TokenRole_Deploy // Genesis - NFT deployment
+			}
+
+			inputs = append(inputs, persistenceTokenInput{
+				TokenID:               nft.TokenID,
+				PreviousTransactionID: nft.PreviousTransactionID,
+				RoleName:              roleName,
+			})
 		}
+
+		// FT tokens: Transfer role
 		if err := appendInputs(txInfo.Tokens.FT, constants.TokenRole_Transfer); err != nil {
 			return nil, nil, err
 		}
-		if err := appendInputs(txInfo.Tokens.SmartContract, constants.TokenRole_Transfer); err != nil {
-			return nil, nil, err
+
+		// SmartContract tokens: Check if genesis (deployment) or execution
+		// - If PreviousTransactionID is empty → Deploy (genesis)
+		// - Otherwise → Execute (existing SC)
+		for _, sc := range txInfo.Tokens.SmartContract {
+			if sc == nil {
+				return nil, nil, fmt.Errorf("post-consensus persistence: transaction token is nil")
+			}
+			if sc.TokenID == "" {
+				return nil, nil, fmt.Errorf("post-consensus persistence: transaction token id is empty")
+			}
+			if _, exists := seen[sc.TokenID]; exists {
+				return nil, nil, fmt.Errorf("post-consensus persistence: duplicate token %q in transaction payload", sc.TokenID)
+			}
+			seen[sc.TokenID] = struct{}{}
+			affected = append(affected, sc.TokenID)
+
+			// Determine role based on PreviousTransactionID
+			roleName := constants.TokenRole_Execute // Execute for existing SC
+			if sc.PreviousTransactionID == "" {
+				roleName = constants.TokenRole_Deploy // Genesis - SC deployment
+			}
+
+			inputs = append(inputs, persistenceTokenInput{
+				TokenID:               sc.TokenID,
+				PreviousTransactionID: sc.PreviousTransactionID,
+				RoleName:              roleName,
+			})
 		}
 	}
+
+	// Committed tokens: Commit role
 	if err := appendInputs(txInfo.CommittedTokens, constants.TokenRole_Commit); err != nil {
 		return nil, nil, err
 	}

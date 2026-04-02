@@ -122,14 +122,29 @@ func (c *Core) requestPledgeTokenHandler(request *ensweb.Request) *ensweb.Result
 func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result {
 	quorumDid := c.l.GetQuery(request, "did")
 	response := &models.ConsensusResponse{Status: false}
-	quorumDc, err := c.SetupDID(request.ID, quorumDid)
-	if err != nil {
-		response.Message = "initiateConsensusHandler : Failed to setup DID: " + err.Error()
-		return c.l.RenderJSON(request, response, http.StatusInternalServerError)
+
+	c.log.Info("initiateConsensusHandler: Request received", "quorumDID", quorumDid)
+
+	// Check if quorum is setup
+	_, ok := c.qc[quorumDid]
+	if !ok {
+		c.log.Error("initiateConsensusHandler: Quorum is not setup", "did", quorumDid)
+		response.Message = "initiateConsensusHandler: Quorum is not setup"
+		return c.l.RenderJSON(request, response, http.StatusNotFound)
 	}
-	c.log.Info("Initiate consensus called")
+
+	// Get DID crypto from pre-loaded quorum crypto map (c.pqc).
+	// We cannot use c.SetupDID(request.ID, quorumDid) here because that function
+	// expects a web request channel (from c.webReq map), but P2P requests don't
+	// have web request channels. Since the quorum DID crypto is already loaded
+	// during quorum setup, we access it directly from c.pqc, same approach as
+	// requestPledgeTokenHandler.
+	quorumDc := c.pqc[quorumDid]
+
+	c.log.Info("initiateConsensusHandler: Quorum DID crypto loaded", "quorumDID", quorumDid)
+
 	var consensusRequest models.ConsensusRequest
-	err = c.l.ParseJSON(request, &consensusRequest)
+	err := c.l.ParseJSON(request, &consensusRequest)
 	if err != nil {
 		c.log.Error("initiateConsensusHandler : Failed to parse json request", "err", err)
 		response.Message = "initiateConsensusHandler : Invalid request body"

@@ -155,15 +155,32 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		resp.Message = consensusResponse.Message
 		return resp
 	}
+
+	c.log.Info("InitiateTransaction: Consensus response received", "quorumDID", quorumAddresses[0], "quorumSignatureLength", len(consensusResponse.QuorumSignature))
+
 	// When multiple transaction situation comes into picture this quorum signature part will change.
 	// We have kept this as an array to accomodate multiple quorums in future.
 	// Right now we are only accomodating a single quorum.
-	err = util.VerifySignature(dc, transactionInfo, consensusResponse.QuorumSignature)
+
+	// Set up quorum DIDCrypto for signature verification
+	// We need the quorum's public key to verify its signature, not the initiator's
+	// Note: selfDID parameter is not used by SetupForienDID, so we pass empty string
+	c.log.Debug("InitiateTransaction: Setting up quorum DID for verification", "quorumDID", quorumAddresses[0])
+	quorumDC, err := c.SetupForienDID(quorumAddresses[0], "")
 	if err != nil {
-		c.log.Error("InitiateTransaction: Failed to verify quorum signature", "err", err)
-		resp.Message = "InitiateTransaction: Failed to verify quorum signature"
+		c.log.Error("InitiateTransaction: Failed to setup quorum DID for verification", "quorumDID", quorumAddresses[0], "err", err)
+		resp.Message = "InitiateTransaction: Failed to setup quorum DID: " + err.Error()
 		return resp
 	}
+
+	c.log.Debug("InitiateTransaction: Verifying quorum signature", "quorumDID", quorumAddresses[0])
+	err = util.VerifySignature(quorumDC, transactionInfo, consensusResponse.QuorumSignature)
+	if err != nil {
+		c.log.Error("InitiateTransaction: Failed to verify quorum signature", "quorumDID", quorumAddresses[0], "err", err)
+		resp.Message = "InitiateTransaction: Failed to verify quorum signature: " + err.Error()
+		return resp
+	}
+	c.log.Info("InitiateTransaction: Quorum signature verified successfully", "quorumDID", quorumAddresses[0])
 	quorumSignature := []models.QuorumSignature{{
 		Did:       quorumAddresses[0],
 		Signature: consensusResponse.QuorumSignature,

@@ -186,6 +186,8 @@ func (w *Wallet) LockFTTokens(ctx context.Context, ownerDID string, ftName strin
 //
 // Returns the locked token rows; callers must eventually release or consume them.
 func (w *Wallet) LockTokensForSplit(ctx context.Context, ownerDID string, amount float64) ([]models.Token, error) {
+	w.log.Debug("LockTokensForSplit: Starting", "did", ownerDID, "amount", amount)
+
 	tx, err := w.db.BeginTx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("LockTokensForSplit: begin tx: %w", err)
@@ -195,6 +197,8 @@ func (w *Wallet) LockTokensForSplit(ctx context.Context, ownerDID string, amount
 	if _, err := tx.Exec(ctx, "SET LOCAL lock_timeout = '5s'"); err != nil {
 		return nil, fmt.Errorf("LockTokensForSplit: set lock_timeout: %w", err)
 	}
+
+	w.log.Debug("LockTokensForSplit: Querying for FREE tokens", "did", ownerDID, "status", constants.TokenStatus_Free)
 
 	rows, err := tx.Query(ctx, `
 		SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
@@ -207,15 +211,20 @@ func (w *Wallet) LockTokensForSplit(ctx context.Context, ownerDID string, amount
 		FOR UPDATE SKIP LOCKED
 	`, ownerDID, constants.TokenType_RBT, constants.TokenStatus_Free)
 	if err != nil {
+		w.log.Error("LockTokensForSplit: Query failed", "err", err)
 		return nil, fmt.Errorf("LockTokensForSplit: query: %w", err)
 	}
 
 	locked, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.Token])
 	if err != nil {
+		w.log.Error("LockTokensForSplit: Failed to collect rows", "err", err)
 		return nil, fmt.Errorf("LockTokensForSplit: collect: %w", err)
 	}
 
+	w.log.Info("LockTokensForSplit: Tokens found and locked", "count", len(locked))
+
 	if len(locked) == 0 {
+		w.log.Warn("LockTokensForSplit: No FREE tokens found", "did", ownerDID)
 		return locked, nil
 	}
 

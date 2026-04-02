@@ -10,8 +10,11 @@ import (
 )
 
 func (w *Wallet) PledgeTokens(tokenInfos []*models.TokenInfo, transaction *models.Transactions, did string, epoch int64) error {
+	w.log.Info("PledgeTokens: Starting", "transactionID", transaction.ID, "did", did, "tokenCount", len(tokenInfos), "epoch", epoch)
+
 	// Sanity check
 	if len(tokenInfos) == 0 {
+		w.log.Error("PledgeTokens: No tokens provided", "transactionID", transaction.ID)
 		return fmt.Errorf("PledgeTokens(tx=%v): unexpected error: no tokens are being passed to pledge", transaction.ID)
 	}
 	tokenIDs := func() []string {
@@ -24,11 +27,14 @@ func (w *Wallet) PledgeTokens(tokenInfos []*models.TokenInfo, transaction *model
 		return tokens
 	}()
 
+	w.log.Debug("PledgeTokens: Token IDs extracted", "transactionID", transaction.ID, "tokenIDs", tokenIDs)
+
 	// Checking if the input tokenInfos carries duplicate tokens
 	// which is an unexpected behaviour
 	seen := make(map[string]struct{})
 	for _, tokenInfo := range tokenInfos {
 		if _, exists := seen[tokenInfo.TokenID]; exists {
+			w.log.Error("PledgeTokens: Duplicate token detected", "transactionID", transaction.ID, "tokenID", tokenInfo.TokenID)
 			return fmt.Errorf("PledgeTokens(tx=%v): unexpected error: duplicate token_id detected: %s", transaction.ID, tokenInfo.TokenID)
 		}
 		seen[tokenInfo.TokenID] = struct{}{}
@@ -36,10 +42,12 @@ func (w *Wallet) PledgeTokens(tokenInfos []*models.TokenInfo, transaction *model
 
 	tx, err := w.BeginTx(w.Ctx)
 	if err != nil {
+		w.log.Error("PledgeTokens: Failed to begin transaction", "transactionID", transaction.ID, "err", err)
 		return fmt.Errorf("PledgeTokens(tx=%v): failed to get the tx Object, err: %v", transaction.ID, err)
 	}
 	defer tx.Rollback(w.Ctx)
 
+	w.log.Debug("PledgeTokens: Phase 1 - Checking token lock status", "transactionID", transaction.ID)
 	// Phase 1: Check if the Pledge Tokens are in locked state.
 	var lockedTokensCount int
 	err = tx.QueryRow(w.Ctx, `
@@ -49,21 +57,32 @@ func (w *Wallet) PledgeTokens(tokenInfos []*models.TokenInfo, transaction *model
 		AND token_status=$2
 	`, tokenIDs, constants.TokenStatus_Locked).Scan(&lockedTokensCount)
 	if err != nil {
+		w.log.Error("PledgeTokens: Failed to query locked tokens", "transactionID", transaction.ID, "err", err)
 		return err
 	}
 
+	w.log.Info("PledgeTokens: Lock status check", "transactionID", transaction.ID, "expectedCount", len(tokenIDs), "lockedCount", lockedTokensCount)
+
 	if len(tokenIDs) != lockedTokensCount {
+		w.log.Error("PledgeTokens: Not all tokens are in LOCKED state",
+			"transactionID", transaction.ID,
+			"expectedCount", len(tokenIDs),
+			"lockedCount", lockedTokensCount,
+			"tokenIDs", tokenIDs)
 		return fmt.Errorf("PledgeTokens(tx=%v): some of the tokens were not found to be in locked state. List of tokens: %v", transaction.ID, tokenIDs)
 	}
 
+	w.log.Debug("PledgeTokens: Phase 2 - Updating token status to PLEDGED", "transactionID", transaction.ID)
 	// Phase 2: Set the token status to Pledged
 	if _, err := tx.Exec(w.Ctx, `
 		UPDATE tokens
 		SET token_status=$1
 		WHERE token_id=ANY($2)
 	`, constants.TokenStatus_Pledged, tokenIDs); err != nil {
-		return fmt.Errorf("PledgeTokens(tx=%v): failed to add transaction details in `transactions` table, err: %v", transaction.ID, err)	
+		w.log.Error("PledgeTokens: Failed to update token status to PLEDGED", "transactionID", transaction.ID, "err", err)
+		return fmt.Errorf("PledgeTokens(tx=%v): failed to update token status to PLEDGED, err: %v", transaction.ID, err)
 	}
+	w.log.Info("PledgeTokens: Tokens updated to PLEDGED status", "transactionID", transaction.ID, "tokenCount", len(tokenIDs))
 
 	// Phase 3: Add the incoming transaction to the `transactions` table
 	if _, err := tx.Exec(w.Ctx, `
@@ -216,17 +235,23 @@ func (w *Wallet) PledgeTokens(tokenInfos []*models.TokenInfo, transaction *model
 	}
 
 	// Phase 6: Update the unpledge_sequence_info table
+	w.log.Debug("PledgeTokens: Phase 6 - Inserting unpledge sequence info", "transactionID", transaction.ID)
 	if _, err := tx.Exec(w.Ctx, `
 		INSERT INTO unpledge_sequence_info(tx_id, pledge_tokens, epoch, quorum_did)
 		VALUES ($1, $2, $3, $4)
 	`, transaction.ID, tokenIDs, epoch, did); err != nil {
+		w.log.Error("PledgeTokens: Failed to insert unpledge sequence info", "transactionID", transaction.ID, "err", err)
 		return err
 	}
+	w.log.Info("PledgeTokens: Unpledge sequence info inserted", "transactionID", transaction.ID, "quorumDID", did, "tokenIDs", tokenIDs)
 
+	w.log.Debug("PledgeTokens: Committing transaction", "transactionID", transaction.ID)
 	if err := tx.Commit(w.Ctx); err != nil {
+		w.log.Error("PledgeTokens: Commit failed", "transactionID", transaction.ID, "err", err)
 		return fmt.Errorf("PledgeTokens(tx=%v): commit failed, err: %v", transaction.ID, err)
 	}
 
+	w.log.Info("PledgeTokens: Successfully completed", "transactionID", transaction.ID, "tokenCount", len(tokenIDs))
 	return nil
 }
 

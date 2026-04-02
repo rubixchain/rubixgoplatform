@@ -536,6 +536,11 @@ func TokenChainIntigrityCheck(txnInfo *models.TransactionInfo, peer *ipfsport.Pe
 		for _, t := range tokens {
 			tokenDetails, err := w.GetTokenByTokenID(t.TokenID)
 			if err != nil {
+				// Skip sync for genesis transactions (deployment)
+				if t.PreviousTransactionID == "" {
+					log.Debug("genesis transaction detected, skipping tokenchain sync", "tokenID", t.TokenID)
+					continue
+				}
 				log.Debug("token not found locally, syncing full chain", "tokenID", t.TokenID)
 				if syncErr, _ := rubixsync.SyncTransactionChainFrom(peer, t.TokenID, tokenTypeInt, w, log); syncErr != nil {
 					return fmt.Errorf("failed to sync token chain for %s: %w", t.TokenID, syncErr), false
