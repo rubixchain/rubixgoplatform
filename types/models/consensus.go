@@ -1,9 +1,8 @@
 package models
 
 type ConsensusRequest struct {
-	ReferenceId        string           `json:"referenceId"`
-	TransactionInfo    *TransactionInfo `json:"transactioInfo"`
-	InitiatorSignature string           `json:"initiatorSignature"`
+	ReferenceId string        `json:"referenceId"`
+	Transaction *Transactions `json:"transaction"`
 }
 
 type ConsensusResponse struct {
