@@ -212,6 +212,7 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 		c.log.Error("Failed to setup wallet", "err", err)
 		return nil, err
 	}
+	c.w.SetDidDir(c.didDir)
 
 	c.ipfsProviderStore = NewIPFSProviderStore(rubixDB.Pool(), c.log, func() string {
 		return c.peerID
@@ -583,7 +584,7 @@ func (c *Core) FetchDID(did string) error {
 		}
 		err = c.ipfsOps.Get(did, didDir+"/")
 		if err == nil {
-			c.log.Error("failed to perform ipfs get on input did", "err", err)
+			c.log.Error("failed to perform ipfs get on input did", "did", did, "err", err)
 			return err
 		}
 		return err

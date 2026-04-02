@@ -32,7 +32,7 @@ const (
 )
 
 const (
-	version string = "0.1_keys"
+	version string = "0.2"
 )
 const (
 	VersionCmd                     string = "-v"
