@@ -40,13 +40,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		resp.Message = "InitiateTransaction:Failed to setup DID: " + err.Error()
 		return resp
 	}
-	// This needs to be passed to the BuildTransactionInfoFromRequest to be given as an input to the function CollectRBTTokens
-	// Can't call this inside BuildTransactionInfoFromRequest since it is a standalone function not a methiod of Core.
-	networkMode, err := util.GetNetworkMode(c.testnet, c.mainnet, c.localnet)
-	if err != nil {
-		resp.Message = "InitiateTransaction:Failed to determine network mode: " + err.Error()
-		return resp
-	}
+	networkMode := c.networkMode
 	// Build transaction info
 	//Here the c.publishTxn must be verified because the input type is *model.PubSubTxnInfo which need to be updated
 	// here the tokens which are being fetched as committed tokens in case of smartContract deployment: There we need to add the commitment block?

@@ -104,13 +104,7 @@ func (c *Core) requestPledgeTokenHandler(request *ensweb.Request) *ensweb.Result
 		return c.l.RenderJSON(request, &response, http.StatusNotFound)
 	}
 	dc := c.pqc[did]
-	networkMode, err := util.GetNetworkMode(c.testnet, c.mainnet, c.localnet)
-	if err != nil {
-		c.log.Error("requestPledgeTokenHandler : Failed to determine network mode", "err", err)
-		response.Message = "requestPledgeTokenHandler : Failed to determine network mode"
-		return c.l.RenderJSON(request, &response, http.StatusInternalServerError)
-	}
-	pledgeTokenResponse, err := consensus.ReqPledgeToken(dc, c.w, pledgeTokenRequest.TransactionValue, networkMode, c.log, c.ps, pledgeTokenRequest.ReferenceId)
+	pledgeTokenResponse, err := consensus.ReqPledgeToken(dc, c.w, pledgeTokenRequest.TransactionValue, c.networkMode, c.log, c.ps, pledgeTokenRequest.ReferenceId)
 	if err != nil {
 		c.log.Error("requestPledgeTokenHandler : Failed to process pledge token request", "err", err)
 		// Release ALL locked tokens since pledge selection failed — LockTokensForSplit locked them

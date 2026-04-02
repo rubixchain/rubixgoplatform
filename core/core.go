@@ -112,6 +112,7 @@ type Core struct {
 	started              bool
 	ipfsApp              string
 	testnet              bool
+	networkMode          string
 	version              string
 	quorumRequest        map[string]*ConsensusStatus
 	pd                   map[string]*PledgeDetails
@@ -181,6 +182,7 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 		errMsg := fmt.Sprintf("Invalid network mode: %s", networkMode)
 		return nil, fmt.Errorf(errMsg)
 	}
+	c.networkMode = networkMode
 
 	c.log = log.Named("Core")
 	c.didDir = c.cfg.DidDir
