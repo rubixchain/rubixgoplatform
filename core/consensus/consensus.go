@@ -65,20 +65,24 @@ func ReqPledgeToken(
 
 func InitiateConsensus(consensusRequest models.ConsensusRequest, quorumDc types.DIDCrypto, w *wallet.Wallet, log logger.Logger) (*models.ConsensusResponse, error) {
 	quorumDid := quorumDc.GetDID()
-	// isTransactionInfoValidated, err := ValidateTransaction()
-	// if err != nil {
-	// 	log.Error("InitiateConsensus : Failed to validate transaction info", "err", err)
 
-	// 	return &models.ConsensusResponse{}, err
-	// }
+	// Unmarshal Transaction.Info to get TransactionInfo
+	var txnInfo models.TransactionInfo
+	if err := json.Unmarshal(consensusRequest.Transaction.Info, &txnInfo); err != nil {
+		log.Error("InitiateConsensus: failed to unmarshal transaction info", "err", err)
+		return &models.ConsensusResponse{}, fmt.Errorf("InitiateConsensus: failed to unmarshal transaction info: %w", err)
+	}
 
-	// if !isTransactionInfoValidated {
-	// 	log.Error("InitiateConsensus : Transaction info validation failed")
-	// 	return &models.ConsensusResponse{}, fmt.Errorf("transaction info validation failed")
-	// }
+	// Unmarshal Transaction.Signature to get the initiator signature
+	var incomingSig models.Signature
+	if err := json.Unmarshal(consensusRequest.Transaction.Signature, &incomingSig); err != nil {
+		log.Error("InitiateConsensus: failed to unmarshal signature", "err", err)
+		return &models.ConsensusResponse{}, fmt.Errorf("InitiateConsensus: failed to unmarshal signature: %w", err)
+	}
+
 	// This is the pledgeTokenInformation we need to pass to the PledgeTokens function.
 	// This needs to be convered to []Tstring basically the list of token ids which are pledged for this transaction.
-	pledgeDetails := consensusRequest.TransactionInfo.Quorums
+	pledgeDetails := txnInfo.Quorums
 	// Here we are assuming there is only one quorum
 	// This will change when multple quorums are involved
 	if len(pledgeDetails) == 0 {
@@ -86,30 +90,26 @@ func InitiateConsensus(consensusRequest models.ConsensusRequest, quorumDc types.
 		return &models.ConsensusResponse{}, fmt.Errorf("no pledge details found")
 	}
 	pledgeTokenDetails := pledgeDetails[0].Tokens
-	// pledgeTokenList := util.ExtractTokenIDs(pledgeTokenDetails) // Need to ensure this function logic is not existing at th emoment
 
-	quorumSignature, err := util.SignTransaction(quorumDc, consensusRequest.TransactionInfo)
+	quorumSignature, err := util.SignTransaction(quorumDc, &txnInfo)
 	if err != nil {
 		log.Error("InitiateConsensus : Failed to sign transaction info", "err", err)
 		return &models.ConsensusResponse{}, err
 	}
-	transactionId, err := util.GetTransactionID(consensusRequest.TransactionInfo)
-	if err != nil {
-		log.Error("InitiateConsensus : Failed to get transaction ID", "err", err)
-		return &models.ConsensusResponse{}, err
-	}
-	transactionInfoBytes, err := models.SerializeTransactionInfo(consensusRequest.TransactionInfo)
-	if err != nil {
-		log.Error("InitiateConsensus : Failed to serialize transaction info", "err", err)
-		return &models.ConsensusResponse{}, err
-	}
+
+	// Use Transaction.ID directly — no recomputation needed
+	transactionId := consensusRequest.Transaction.ID
+
+	// Use Transaction.Info bytes directly — no re-serialization needed
+	transactionInfoBytes := consensusRequest.Transaction.Info
+
 	quorumSignatureInfo := models.QuorumSignature{
 		Did:       quorumDid,
 		Signature: quorumSignature,
 	}
 
 	signature := models.Signature{
-		InitiatorSignature: consensusRequest.InitiatorSignature,
+		InitiatorSignature: incomingSig.InitiatorSignature,
 		Quorums:            []models.QuorumSignature{quorumSignatureInfo},
 	}
 
@@ -133,7 +133,7 @@ func InitiateConsensus(consensusRequest models.ConsensusRequest, quorumDc types.
 	}
 	//List of Pledge token ids
 	// The incoming TransactionInfo with the signature of both initiator and quorumSignature
-	err = w.PledgeTokens(pledgeTokenDetails, transactions, quorumDid, int64(consensusRequest.TransactionInfo.Epoch))
+	err = w.PledgeTokens(pledgeTokenDetails, transactions, quorumDid, int64(txnInfo.Epoch))
 	if err != nil {
 		log.Error("InitiateConsensus : Failed to pledge tokens", "err", err)
 		return &models.ConsensusResponse{}, err
