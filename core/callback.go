@@ -55,12 +55,18 @@ func (c *Core) CallBackQuorumUnpledge(tx *models.Transactions, did string) error
 
 	transactionToUnpledge, err := c.w.CheckTxnsPresentInUnpledgeSequenceInfo(prevTransactionList)
 	if err != nil {
-		return fmt.Errorf("CallBackQuorumUnpledge: failed to get transactions from `unpledge_sequence_info` table, err: %v")
+		return fmt.Errorf("CallBackQuorumUnpledge: failed to get transactions from `unpledge_sequence_info` table, err: %v", err)
 	}
 
 	if len(transactionToUnpledge) != 0 {
 		for _, txToUnpledge := range transactionToUnpledge {
-			c.w.UnpledgeTokens(txToUnpledge, tx, did)
+			if err := c.w.UnpledgeTokens(txToUnpledge, tx, did); err != nil {
+				c.log.Error("CallBackQuorumUnpledge: UnpledgeTokens failed",
+					"prevTxID", txToUnpledge,
+					"did", did,
+					"err", err,
+				)
+			}
 		}
 	}
 
