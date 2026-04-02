@@ -21,15 +21,23 @@ func planTokenSplit(tokenID TokenID, needed float64, log logger.Logger) ([]Split
 	currentTokenID := tokenID
 	currentNeeded := needed
 	zeroFloat := rubixmath.FloatPrecision(0)
-	currentTokenElems, err := util.GetRbtIDElements(string(currentTokenID))
-	if err != nil {
+
+	// Validate that the initial token ID is parseable before entering the loop.
+	if _, err := util.GetRbtIDElements(string(currentTokenID)); err != nil {
 		return nil, fmt.Errorf("planSplit: invalid token id: %v, err: %v", string(tokenID), err)
 	}
 
 	var currentLevel int
 
 	for currentNeeded > zeroFloat {
-		currentLevel = currentTokenElems.Level
+		// Use shared ParseTokenLevel helper -- single source of truth for denom-tree level.
+		// Do NOT use RbtIDElements.Level -- that is the token-mapping level (10001+),
+		// not the denom-tree level (0-6) used by LevelToDenom and MaxTokensAtLevel.
+		var err error
+		currentLevel, err = util.ParseTokenLevel(string(currentTokenID))
+		if err != nil {
+			return nil, fmt.Errorf("planSplit: %v", err)
+		}
 
 		if currentLevel >= GetMaxDenomTreeLevel()-1 {
 			return nil, fmt.Errorf("planSplit: invalid level for token: %v, got level: %v", string(tokenID), currentLevel)
@@ -85,9 +93,9 @@ func planTokenSplit(tokenID TokenID, needed float64, log logger.Logger) ([]Split
 
 		if needToSplitChild {
 			currentTokenID = currentTokenID.Child(childToSplit)
-			currentTokenElems, err = util.GetRbtIDElements(string(currentTokenID))
-			if err != nil {
-				return nil, fmt.Errorf("planSplit: invalid child token id: %v, err: %v", string(currentTokenID), err)
+			// Validate child token ID format before next iteration.
+			if _, validateErr := util.GetRbtIDElements(string(currentTokenID)); validateErr != nil {
+				return nil, fmt.Errorf("planSplit: invalid child token id: %v, err: %v", string(currentTokenID), validateErr)
 			}
 			currentNeeded = rubixmath.FloatPrecision(float64(remainder) * getLowestPossibleDenom())
 		} else {
