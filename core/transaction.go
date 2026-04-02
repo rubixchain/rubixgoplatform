@@ -138,33 +138,11 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		return resp
 	}
 
-	// Serialize transactionInfo to bytes for the Transaction struct
-	txInfoBytes, err := models.SerializeTransactionInfo(transactionInfo)
-	if err != nil {
-		c.log.Error("InitiateTransaction: Failed to serialize transaction info", "err", err)
-		resp.Message = "InitiateTransaction: Failed to serialize transaction info: " + err.Error()
-		return resp
-	}
-
-	// Marshal initiator signature into a Signature struct
-	sigBytes, err := json.Marshal(&models.Signature{InitiatorSignature: initiatorSignature})
-	if err != nil {
-		c.log.Error("InitiateTransaction: Failed to marshal initiator signature", "err", err)
-		resp.Message = "InitiateTransaction: Failed to marshal initiator signature: " + err.Error()
-		return resp
-	}
-
-	// Build Transaction struct
-	transaction := &models.Transactions{
-		ID:        transactionId,
-		Info:      txInfoBytes,
-		Signature: sigBytes,
-	}
-
 	// Consensus request
 	consensusRequest := models.ConsensusRequest{
-		ReferenceId: reqID,
-		Transaction: transaction,
+		ReferenceId:        reqID,
+		TransactionInfo:    transactionInfo,
+		InitiatorSignature: initiatorSignature,
 	}
 
 	var consensusResponse models.ConsensusResponse

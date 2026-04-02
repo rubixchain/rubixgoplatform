@@ -66,19 +66,7 @@ func ReqPledgeToken(
 func InitiateConsensus(consensusRequest models.ConsensusRequest, quorumDc types.DIDCrypto, w *wallet.Wallet, log logger.Logger) (*models.ConsensusResponse, error) {
 	quorumDid := quorumDc.GetDID()
 
-	// Unmarshal Transaction.Info to get TransactionInfo
-	var txnInfo models.TransactionInfo
-	if err := json.Unmarshal(consensusRequest.Transaction.Info, &txnInfo); err != nil {
-		log.Error("InitiateConsensus: failed to unmarshal transaction info", "err", err)
-		return &models.ConsensusResponse{}, fmt.Errorf("InitiateConsensus: failed to unmarshal transaction info: %w", err)
-	}
-
-	// Unmarshal Transaction.Signature to get the initiator signature
-	var incomingSig models.Signature
-	if err := json.Unmarshal(consensusRequest.Transaction.Signature, &incomingSig); err != nil {
-		log.Error("InitiateConsensus: failed to unmarshal signature", "err", err)
-		return &models.ConsensusResponse{}, fmt.Errorf("InitiateConsensus: failed to unmarshal signature: %w", err)
-	}
+	txnInfo := consensusRequest.TransactionInfo
 
 	// This is the pledgeTokenInformation we need to pass to the PledgeTokens function.
 	// This needs to be convered to []Tstring basically the list of token ids which are pledged for this transaction.
@@ -91,17 +79,23 @@ func InitiateConsensus(consensusRequest models.ConsensusRequest, quorumDc types.
 	}
 	pledgeTokenDetails := pledgeDetails[0].Tokens
 
-	quorumSignature, err := util.SignTransaction(quorumDc, &txnInfo)
+	quorumSignature, err := util.SignTransaction(quorumDc, txnInfo)
 	if err != nil {
 		log.Error("InitiateConsensus : Failed to sign transaction info", "err", err)
 		return &models.ConsensusResponse{}, err
 	}
 
-	// Use Transaction.ID directly — no recomputation needed
-	transactionId := consensusRequest.Transaction.ID
+	transactionId, err := util.GetTransactionID(txnInfo)
+	if err != nil {
+		log.Error("InitiateConsensus: failed to compute transaction ID", "err", err)
+		return &models.ConsensusResponse{}, fmt.Errorf("InitiateConsensus: failed to compute transaction ID: %w", err)
+	}
 
-	// Use Transaction.Info bytes directly — no re-serialization needed
-	transactionInfoBytes := consensusRequest.Transaction.Info
+	transactionInfoBytes, err := models.SerializeTransactionInfo(txnInfo)
+	if err != nil {
+		log.Error("InitiateConsensus: failed to serialize transaction info", "err", err)
+		return &models.ConsensusResponse{}, fmt.Errorf("InitiateConsensus: failed to serialize transaction info: %w", err)
+	}
 
 	quorumSignatureInfo := models.QuorumSignature{
 		Did:       quorumDid,
@@ -109,7 +103,7 @@ func InitiateConsensus(consensusRequest models.ConsensusRequest, quorumDc types.
 	}
 
 	signature := models.Signature{
-		InitiatorSignature: incomingSig.InitiatorSignature,
+		InitiatorSignature: consensusRequest.InitiatorSignature,
 		Quorums:            []models.QuorumSignature{quorumSignatureInfo},
 	}
 
