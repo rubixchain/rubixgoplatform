@@ -183,8 +183,7 @@ func ValidateNewTokenContent(tokenID string, isQuorum bool, testnet bool, mainne
 	}
 
 	// level is the token-mapping level (e.g. 10000 + mapLevel for localnet tokens).
-	// This is NOT the denom-tree level (0-6). Use util.ParseTokenLevel() if denom-tree
-	// level is needed. Here we subtract the network offset to get the TokenMap lookup key.
+	// This is NOT the denom-tree level (0-6). Here we subtract the network offset to get the TokenMap lookup key.
 	level, err := strconv.Atoi(strings.TrimLeft(devidedParts[0], "0"))
 	if err != nil {
 		return fmt.Errorf("invalid token level in token content: %s", tokenID)
@@ -350,7 +349,6 @@ func ValidateGenuineTokenCreator(tokenID string, isFullNode bool, w *wallet.Wall
 	devidedParts := strings.Split(tokenID, "_")
 
 	// level is the token-mapping level (e.g. 10001 for localnet), NOT the denom-tree level (0-6).
-	// Use util.ParseTokenLevel() if denom-tree level is needed.
 	// NOTE: The check below (level == 1) appears to be a legacy guard for an older token format
 	// that predates the 10000-offset scheme. It is dead code for tokens with level >= 10001.
 	level, err := strconv.Atoi(strings.TrimLeft(devidedParts[0], "0"))

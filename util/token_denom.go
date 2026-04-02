@@ -161,37 +161,21 @@ func GetRbtIDElements(tokenID string) (types.RbtIDElements, error) {
 	return rbtElems, nil
 }
 
-// ParseTokenLevel returns the denom-tree level (0-6) for a given RBT token ID.
-// This is the SINGLE SOURCE OF TRUTH for deriving denom-tree level from a token ID.
-//
-// The denom-tree level is derived from the token's PartIndex via GetTreeLevelFromPartIndex:
-//   - Whole tokens (e.g., "10001_5") have PartIndex=0 -> denom-tree level 0
-//   - Part tokens (e.g., "10001_5_1") have PartIndex=1+ -> denom-tree level 1-6
-//
-// IMPORTANT: Do NOT confuse the denom-tree level (0-6) with the token-mapping level
-// (RbtIDElements.Level, e.g. 10001). The token-mapping level encodes the genesis tier,
-// not the subdivision depth.
-func ParseTokenLevel(tokenID string) (int, error) {
-	elements, err := GetRbtIDElements(tokenID)
-	if err != nil {
-		return 0, fmt.Errorf("ParseTokenLevel: %w", err)
-	}
-
-	level, err := GetTreeLevelFromPartIndex(elements.PartIndex)
-	if err != nil {
-		return 0, fmt.Errorf("ParseTokenLevel: failed to get denom tree level for token %s (partIndex=%d): %w",
-			tokenID, elements.PartIndex, err)
-	}
-
-	return level, nil
-}
-
 // GetTokenValueFromTokenID fetches the token value by
 // looking at the IPFS content
 func GetTokenValueFromTokenID(tokenID string) (float64, error) {
-	tokenTreeLevel, err := ParseTokenLevel(tokenID)
+	// split RBT id elements
+	tokenElems, err := GetRbtIDElements(tokenID)
 	if err != nil {
-		return rubixmath.ZeroFloat(), fmt.Errorf("GetTokenValueFromTokenID: %w", err)
+		return rubixmath.ZeroFloat(), fmt.Errorf("GetTokenValueFromTokenID: failed to split elements of token ID %s, err: %v", tokenID, err)
 	}
+
+	// get token level
+	tokenTreeLevel, err := GetTreeLevelFromPartIndex(tokenElems.PartIndex)
+	if err != nil {
+		return rubixmath.ZeroFloat(), fmt.Errorf("GetTokenValueFromTokenID: failed to get denom tree level of token %s, err: %v", tokenID, err)
+	}
+
+	// get token value from tree level
 	return LevelToDenom(tokenTreeLevel)
 }
