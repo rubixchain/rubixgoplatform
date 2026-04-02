@@ -160,6 +160,7 @@ func BuildTransactionInfoFromRequest(
 	}
 
 	txInfo := &models.TransactionInfo{
+		Network:         networkMode,
 		Initiator:       req.Initiator,
 		Owner:           req.Owner,
 		Epoch:           int(time.Now().Unix()),
