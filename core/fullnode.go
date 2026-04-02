@@ -79,15 +79,15 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	}
 
 	// Check for duplicate transactions
-	if _, exists := c.txnProcessor.processedTxns.LoadOrStore(newEvent.BlockHash, time.Now()); exists {
-		c.log.Info("Duplicate transaction ignored", "blockHash", newEvent.BlockHash)
+	if _, exists := c.txnProcessor.processedTxns.LoadOrStore(newEvent.TransactionID, time.Now()); exists {
+		c.log.Info("Duplicate transaction ignored", "txnID", newEvent.TransactionID)
 		return
 	}
 
 	// INCREMENT COUNTER when new transaction is processed
 	atomic.AddInt64(&c.txnProcessor.processedTxnCount, 1)
 
-	c.log.Info("Received transaction", "blockHash", newEvent.BlockHash, "mode", newEvent.AssetType)
+	c.log.Info("Received transaction", "txnID", newEvent.TransactionID, "mode", newEvent.AssetType)
 
 	// Update queue length metric for dynamic scaling
 	currentQueueLen := int64(len(c.txnProcessor.txnQueue))
@@ -97,12 +97,12 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	select {
 	case c.txnProcessor.txnQueue <- &newEvent:
 		c.log.Debug("Transaction queued successfully",
-			"blockHash", newEvent.BlockHash,
+			"txnID", newEvent.TransactionID,
 			"queueLength", currentQueueLen)
 
 	case <-time.After(5 * time.Second):
 		c.log.Error("Failed to queue transaction - queue full",
-			"blockHash", newEvent.BlockHash,
+			"txnID", newEvent.TransactionID,
 			"queueLength", len(c.txnProcessor.txnQueue))
 
 		if currentQueueLen > int64(c.txnProcessor.queueThreshold) {
@@ -125,7 +125,7 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 	for attempt := 0; attempt < c.txnProcessor.maxRetries; attempt++ {
 		if attempt > 0 {
 			c.log.Info("Retrying transaction processing",
-				"blockHash", txnEvent.BlockHash,
+				"txnID", txnEvent.TransactionID,
 				"attempt", attempt+1,
 				"workerID", workerID)
 			time.Sleep(c.txnProcessor.retryDelay * time.Duration(attempt))
@@ -134,14 +134,14 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 		err := c.processSingleTransaction(txnEvent)
 		if err == nil {
 			c.log.Info("Transaction processed successfully",
-				"blockHash", txnEvent.BlockHash,
+				"txnID", txnEvent.TransactionID,
 				"workerID", workerID)
 			return
 		}
 
 		lastErr = err
 		c.log.Error("Transaction processing failed",
-			"blockHash", txnEvent.BlockHash,
+			"txnID", txnEvent.TransactionID,
 			"attempt", attempt+1,
 			"error", err,
 			"workerID", workerID)
@@ -159,7 +159,7 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 	// full node token chain. Needs reimplementation using PostgreSQL-backed
 	// transaction/token chain model.
 	c.log.Info("processSingleTransaction: block-based processing removed, skipping",
-		"blockHash", newEvent.BlockHash,
+		"txnID", newEvent.TransactionID,
 		"assetType", newEvent.AssetType)
 	return nil
 }
@@ -167,18 +167,18 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 // Handle failed transactions after all retries
 func (c *Core) handleFailedTransaction(txnEvent *models.EventTransaction, lastErr error) {
 	c.log.Error("Transaction processing failed permanently",
-		"blockHash", txnEvent.BlockHash,
+		"txnID", txnEvent.TransactionID,
 		"error", lastErr)
 
 	failedTxn := &model.FailedTransaction{
-		BlockHash: txnEvent.BlockHash,
-		Error:     lastErr.Error(),
-		FailedAt:  time.Now(),
+		TxnID:      txnEvent.TransactionID,
+		Error:      lastErr.Error(),
+		FailedAt:   time.Now(),
 		RetryCount: c.txnProcessor.maxRetries,
 	}
 
 	if err := c.w.StoreFailedTransaction(failedTxn); err != nil {
-		c.log.Error("Failed to store failed transaction", "blockHash", txnEvent.BlockHash, "error", err)
+		c.log.Error("Failed to store failed transaction", "txnID", txnEvent.TransactionID, "error", err)
 	}
 }
 

@@ -318,7 +318,6 @@ type Command struct {
 	binaryCodePath               string
 	rawCodePath                  string
 	smartContractToken           string
-	newContractBlock             string
 	publishType                  int
 	smartContractData            string
 	executorAddr                 string
@@ -717,7 +716,6 @@ func Run(args []string) {
 	flag.StringVar(&cmd.binaryCodePath, "binCode", "", "Binary code path")
 	flag.StringVar(&cmd.rawCodePath, "rawCode", "", "Raw code path")
 	flag.StringVar(&cmd.smartContractToken, "sct", "", "Smart contract token")
-	flag.StringVar(&cmd.newContractBlock, "sctBlockHash", "", "Contract block hash")
 	flag.IntVar(&cmd.publishType, "pubType", 0, "Smart contract event publishing type(Deploy & Execute)")
 	flag.StringVar(&cmd.smartContractData, "sctData", "data", "Smart contract execution info")
 	flag.StringVar(&cmd.executorAddr, "executorAddr", "", "Smart contract Executor Address")
