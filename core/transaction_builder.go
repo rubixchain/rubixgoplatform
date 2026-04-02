@@ -54,6 +54,7 @@ func BuildTransactionInfoFromRequest(
 			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: RBT collection failed: %w", err)
 		}
 		txTokens.RBT = rbtTokens
+		totalAmount += req.GetRBTAmount()
 	}
 
 	// --- FT/NFT/SC: single DB transaction for all non-RBT assets ---

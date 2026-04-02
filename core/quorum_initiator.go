@@ -112,9 +112,30 @@ func (c *Core) requestPledgeTokenHandler(request *ensweb.Request) *ensweb.Result
 	pledgeTokenResponse, err := consensus.ReqPledgeToken(dc, c.w, pledgeTokenRequest.TransactionValue, networkMode, c.log, c.ps, pledgeTokenRequest.ReferenceId)
 	if err != nil {
 		c.log.Error("requestPledgeTokenHandler : Failed to process pledge token request", "err", err)
+		// Release ALL locked tokens since pledge selection failed — LockTokensForSplit locked them
+		// but no subset was successfully selected, so all must be returned to Free.
+		if releaseErr := c.w.ReleaseAllLockedRBTTokensForDID(c.w.Ctx, did); releaseErr != nil {
+			c.log.Error("requestPledgeTokenHandler: failed to release locked tokens after pledge failure", "err", releaseErr)
+		}
 		response.Message = "requestPledgeTokenHandler : " + err.Error()
 		return c.l.RenderJSON(request, &response, http.StatusInternalServerError)
 	}
+
+	// Pledge succeeded. Release only the non-selected locked tokens (candidates not chosen).
+	// The selected pledge tokens MUST remain Locked — PledgeTokens (called during consensus)
+	// checks that they are in Locked state before transitioning them to Pledged.
+	selectedTokenIDs := make([]string, 0, len(pledgeTokenResponse.PledgeTokens))
+	for _, t := range pledgeTokenResponse.PledgeTokens {
+		if t != nil {
+			selectedTokenIDs = append(selectedTokenIDs, t.TokenID)
+		}
+	}
+	if releaseErr := c.w.ReleaseNonSelectedLockedRBTTokensForDID(c.w.Ctx, did, selectedTokenIDs); releaseErr != nil {
+		c.log.Error("requestPledgeTokenHandler: failed to release non-selected locked tokens", "err", releaseErr)
+	} else {
+		c.log.Info("requestPledgeTokenHandler: released non-selected locked tokens", "did", did, "selectedCount", len(selectedTokenIDs))
+	}
+
 	return c.l.RenderJSON(request, &pledgeTokenResponse, http.StatusOK)
 
 }
@@ -122,14 +143,29 @@ func (c *Core) requestPledgeTokenHandler(request *ensweb.Request) *ensweb.Result
 func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result {
 	quorumDid := c.l.GetQuery(request, "did")
 	response := &models.ConsensusResponse{Status: false}
-	quorumDc, err := c.SetupDID(request.ID, quorumDid)
-	if err != nil {
-		response.Message = "initiateConsensusHandler : Failed to setup DID: " + err.Error()
-		return c.l.RenderJSON(request, response, http.StatusInternalServerError)
+
+	c.log.Info("initiateConsensusHandler: Request received", "quorumDID", quorumDid)
+
+	// Check if quorum is setup
+	_, ok := c.qc[quorumDid]
+	if !ok {
+		c.log.Error("initiateConsensusHandler: Quorum is not setup", "did", quorumDid)
+		response.Message = "initiateConsensusHandler: Quorum is not setup"
+		return c.l.RenderJSON(request, response, http.StatusNotFound)
 	}
-	c.log.Info("Initiate consensus called")
+
+	// Get DID crypto from pre-loaded quorum crypto map (c.pqc).
+	// We cannot use c.SetupDID(request.ID, quorumDid) here because that function
+	// expects a web request channel (from c.webReq map), but P2P requests don't
+	// have web request channels. Since the quorum DID crypto is already loaded
+	// during quorum setup, we access it directly from c.pqc, same approach as
+	// requestPledgeTokenHandler.
+	quorumDc := c.pqc[quorumDid]
+
+	c.log.Info("initiateConsensusHandler: Quorum DID crypto loaded", "quorumDID", quorumDid)
+
 	var consensusRequest models.ConsensusRequest
-	err = c.l.ParseJSON(request, &consensusRequest)
+	err := c.l.ParseJSON(request, &consensusRequest)
 	if err != nil {
 		c.log.Error("initiateConsensusHandler : Failed to parse json request", "err", err)
 		response.Message = "initiateConsensusHandler : Invalid request body"
