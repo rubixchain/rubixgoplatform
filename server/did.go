@@ -71,23 +71,13 @@ func (s *Server) APIGetAllDID(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Unathuriozed access", nil)
 	}
 
-	dt := s.c.GetDIDs()
-	ai := model.GetAccountInfo{
-		BasicResponse: model.BasicResponse{
-			Status:  true,
-			Message: "Got all DIDs",
-		},
-		AccountInfo: make([]model.DIDAccountInfo, 0),
+	didList := s.c.GetDIDs()
+	didResponse := model.BasicResponse{
+		Status:  true,
+		Message: "Got all DIDs",
+		Result:  didList,
 	}
-	for _, d := range dt {
-		a, err := s.c.GetAccountInfo(d.DID)
-		if err == nil {
-			ai.AccountInfo = append(ai.AccountInfo, a)
-		} else {
-			ai.AccountInfo = append(ai.AccountInfo, model.DIDAccountInfo{DID: d.DID})
-		}
-	}
-	return s.RenderJSON(req, &ai, http.StatusOK)
+	return s.RenderJSON(req, &didResponse, http.StatusOK)
 }
 
 func (s *Server) validateDIDAccess(req *ensweb.Request, did string) bool {
@@ -245,4 +235,47 @@ func (s *Server) APIRemoveStaleDID(req *ensweb.Request) *ensweb.Result {
 
 	go s.c.RemoveStaleDIDFromNetwork(req.ID, didStr)
 	return s.didResponse(req, req.ID)
+}
+
+func (s *Server) APIGetDIDBalance(req *ensweb.Request) *ensweb.Result {
+	did := s.GetRouteVar(req, "did")
+	if !s.validateDIDAccess(req, did) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
+
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
+	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID:", did)
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
+	assetsBalance := types.DIDBalances{
+		DID: did,
+	}
+	ac := model.BasicResponse{
+		Status:  true,
+	}
+	rbtInfo, err := s.c.GetRbtByDid(did)
+	if err != nil {
+		ac.Message = "failed to get RBT balance, err :" + err.Error() + ";"
+	} else {
+		assetsBalance.RBTBalance = rbtInfo
+	}
+	ftInfo, err := s.c.GetFTInfoByDID(did)
+	if err != nil {
+		ac.Message += "failed to get FT balance, err :" + err.Error() + ";"
+	} else {
+		assetsBalance.FTBalance = ftInfo
+	}
+	nftInfo, err := s.c.GetNFTsByDid(did)
+	if err != nil {
+		ac.Message += "failed to get NFT balance, err :" + err.Error() + ";"
+	} else {
+		assetsBalance.NFTBalance = nftInfo
+	}
+
+	if ac.Message == "" {
+		ac.Message = "Got account info successfully"
+	}
+	ac.Result = assetsBalance
+	return s.RenderJSON(req, ac, http.StatusOK)
 }

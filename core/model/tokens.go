@@ -109,7 +109,6 @@ type FailedToSyncTokenDetailsInfo struct {
 type FullNodeTxnHistoryInfo struct {
 	TransactionID    string  `gorm:"column:transaction_id;primaryKey"`
 	TransactionValue float64 `gorm:"column:transaction_value"`
-	BlockHash        string  `gorm:"column:block_hash"`
 }
 
 type DoubleSpentTokenInfo struct {

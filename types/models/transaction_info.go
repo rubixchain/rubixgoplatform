@@ -91,9 +91,10 @@ type PledgeTokenResponse struct {
 }
 
 type SendTokensRequest struct {
-	Tokens                *TransactionTokens `json:"tokens"`
-	NFTOwnershipTransfer  bool               `json:"nftOwnershipTransfer"`
-	IncomingTransactionID string             `json:"incomingTransactionId"`
+	Tokens               *TransactionTokens `json:"tokens"`
+	NFTOwnershipTransfer bool               `json:"nftOwnershipTransfer"`
+	TransactionInfo      *TransactionInfo   `json:"transactionInfo"`
+	Signature            *Signature         `json:"signature"`
 }
 
 // TokenChainResponse represents a single transaction in the smart contract token chain

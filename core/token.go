@@ -22,6 +22,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/token"
 	tokenmap "github.com/rubixchain/rubixgoplatform/token"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -139,29 +140,25 @@ func (c *Core) GetAllTokens(did string, tt string) (*model.TokenResponse, error)
 	return tr, nil
 }
 
-func (c *Core) GetAccountInfo(did string) (model.DIDAccountInfo, error) {
-	wt, err := c.w.GetAllTokens(did)
+func (c *Core) GetRbtByDid(did string) (types.RBTBalance, error) {
+	rbtTokenType := int64(models.GetTokenTypeID(constants.TokenType_RBT))
+	wt, err := c.w.GetTokenByDIDAndTokenType(did, int16(rbtTokenType))
 	if err != nil && err.Error() != "no records found" {
 		c.log.Error("Failed to get tokens", "err", err)
-		return model.DIDAccountInfo{}, fmt.Errorf("failed to get tokens")
+		return types.RBTBalance{}, fmt.Errorf("failed to get tokens")
 	}
-	info := model.DIDAccountInfo{
-		DID: did,
-	}
+	info := types.RBTBalance{}
 	for _, t := range wt {
 		switch t.TokenStatus {
 		case constants.TokenStatus_Free:
-			info.RBTAmount = info.RBTAmount + t.TokenValue
-			info.RBTAmount = floatPrecision(info.RBTAmount, MaxDecimalPlaces)
+			info.RBTBalance = info.RBTBalance + t.TokenValue
+			info.RBTBalance = floatPrecision(info.RBTBalance, MaxDecimalPlaces)
 		case constants.TokenStatus_Locked:
 			info.LockedRBT = info.LockedRBT + t.TokenValue
 			info.LockedRBT = floatPrecision(info.LockedRBT, MaxDecimalPlaces)
 		case constants.TokenStatus_Pledged:
 			info.PledgedRBT = info.PledgedRBT + t.TokenValue
 			info.PledgedRBT = floatPrecision(info.PledgedRBT, MaxDecimalPlaces)
-		case constants.TokenStatus_PinnedAsService:
-			info.PinnedRBT = info.PinnedRBT + t.TokenValue
-			info.PinnedRBT = floatPrecision(info.PinnedRBT, MaxDecimalPlaces)
 		}
 	}
 	return info, nil
@@ -583,7 +580,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			}
 			err := c.AddPeerDetails(*publisherDetails)
 			if err != nil {
-				c.log.Error("failed to add publisher info to DB")
+				c.log.Error("failed to add publisher info to DB", "err", err)
 			}
 		}
 
@@ -632,7 +629,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 					c.log.Error("failed to add token's ipfs content to psql db, err: %v", err)
 				}
 			}
-			latestBlockHash, err := latestBlock.GetHash()
+			_, err = latestBlock.GetHash()
 			if err != nil {
 				c.log.Error("failed to get latest block hash for the token", detail.Token)
 			}
@@ -644,12 +641,11 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 				LatestBlock:  latestBlock,
 			}
 			// first read existing token info from the table
-			existingBlockHeight, existingBlockHash, existingOwnerDID, err := c.ReadTokenFromFullnodeTokensTable(detail.AssetType, detail.Token)
+			existingBlockHeight, existingTxnID, existingOwnerDID, err := c.ReadTokenFromFullnodeTokensTable(detail.AssetType, detail.Token)
 			if err != nil {
 				if strings.Contains(err.Error(), "no records found") {
 					// add token info to sqlite if not there
 					eventData := model.PubSubTxnInfo{
-						BlockHash:         latestBlockHash,
 						TransactionID:     txnID,
 						PublisherDID:      detail.Did,
 						LatestBlockHeight: latestBlockHeight,
@@ -670,7 +666,7 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 				continue
 			}
 			if latestBlockHeight == existingBlockHeight {
-				if latestBlockHash != existingBlockHash || currentOwner != existingOwnerDID {
+				if txnID != existingTxnID || currentOwner != existingOwnerDID {
 					// TODO : Challenger node should verify the correct owner and correct block and add the correct info
 					errMsg := fmt.Sprintf("double spending the token %v, eixting owner : %v, and incoming owner : %v", detail.Token, existingOwnerDID, currentOwner)
 					c.log.Error(errMsg)
@@ -697,7 +693,6 @@ func (c *Core) processReceivedTokenDetails(event model.TokenChainDetailsEvent) {
 			}
 
 			eventData := model.PubSubTxnInfo{
-				BlockHash:         latestBlockHash,
 				TransactionID:     txnID,
 				PublisherDID:      detail.Did,
 				LatestBlockHeight: latestBlockHeight,
@@ -1137,7 +1132,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 	}
 
 	var ownerDid string
-	var blockHash, transactionID string
+	var transactionID string
 	var latestBlockHeight uint64
 
 	// syncStatus := constants.SyncStatus_Completed
@@ -1145,7 +1140,7 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 	if latestBlockAfterSync != nil {
 		ownerDid, _ = latestBlockAfterSync.GetOwner()
 		transactionID, _ = latestBlockAfterSync.GetTid()
-		blockHash, err = latestBlockAfterSync.GetHash()
+		_, err = latestBlockAfterSync.GetHash()
 		// latestBlockID, err = latestBlockAfterSync.GetBlockID(tokenSyncInfo.TokenID)
 		if err != nil {
 			c.log.Error("failed to get latest block hash", "token: ", tokenSyncInfo.TokenID)
@@ -1164,7 +1159,6 @@ func (c *Core) SyncFullTokenChainForFullNode(p *ipfsport.Peer, tokenSyncInfo Tok
 
 		} else { // meaning sync completed properly
 			event := &model.PubSubTxnInfo{
-				BlockHash:         blockHash,
 				TransactionID:     transactionID,
 				AssetType:         tokenSyncInfo.AssetType,
 				LatestBlockHeight: latestBlockHeight,
@@ -2013,7 +2007,6 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 					TokenID: tokenId,
 					// TokenValue:    receivedBlock.GenesisBlock.GetTokenValue(),
 					OwnerDID:      tokenOwner,
-					BlockHash:     event.BlockHash,
 					TransactionID: event.TransactionID,
 					PublisherDID:  event.PublisherDID,
 					BlockHeight:   event.LatestBlockHeight,
@@ -2045,7 +2038,6 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		// if there is no error, meaning if token exists in table, then update token info
 		syncedRBT.OwnerDID = tokenOwner
 		syncedRBT.TransactionID = event.TransactionID
-		syncedRBT.BlockHash = event.BlockHash
 		syncedRBT.SyncStatus = syncStatus
 		syncedRBT.BlockHeight = event.LatestBlockHeight
 		syncedRBT.PublisherDID = event.PublisherDID
@@ -2079,7 +2071,6 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 					CreatorDID:    event.CreatorDID,
 					OwnerDID:      tokenOwner,
 					PublisherDID:  event.PublisherDID,
-					BlockHash:     event.BlockHash,
 					BlockHeight:   event.LatestBlockHeight,
 					TransactionID: event.TransactionID,
 					SyncStatus:    syncStatus,
@@ -2117,7 +2108,6 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		// if there is no error, meaning if token exists in table, then update token info
 		syncedFT.OwnerDID = tokenOwner
 		syncedFT.PublisherDID = event.PublisherDID
-		syncedFT.BlockHash = event.BlockHash
 		syncedFT.BlockHeight = event.LatestBlockHeight
 		syncedFT.SyncStatus = syncStatus
 		syncedFT.TransactionID = event.TransactionID
@@ -2143,7 +2133,6 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 					SmartContractHash: tokenId,
 					Deployer:          scDeployer,
 					PublisherDID:      event.PublisherDID,
-					BlockHash:         event.BlockHash,
 					BlockHeight:       event.LatestBlockHeight,
 					TransactionID:     event.TransactionID,
 					SyncStatus:        syncStatus,
@@ -2163,7 +2152,6 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		}
 
 		// if there is no error, meaning if token exists in table, then update token info
-		syncedSC.BlockHash = event.BlockHash
 		syncedSC.BlockHeight = event.LatestBlockHeight
 		syncedSC.SyncStatus = syncStatus
 		syncedSC.TransactionID = event.TransactionID
@@ -2191,7 +2179,6 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 					TokenID:       tokenId,
 					OwnerDID:      nftOwner,
 					PublisherDID:  event.PublisherDID,
-					BlockHash:     event.BlockHash,
 					BlockHeight:   event.LatestBlockHeight,
 					TransactionID: event.TransactionID,
 					SyncStatus:    syncStatus,
@@ -2216,7 +2203,6 @@ func (c *Core) AddTokenToRespectiveTable(tokenId string, tokenOwner string, rece
 		}
 		c.log.Debug("nft exists, updating info")
 		// if there is no error, meaning if token exists in table, then update token info
-		syncedNFT.BlockHash = event.BlockHash
 		syncedNFT.BlockHeight = event.LatestBlockHeight
 		syncedNFT.OwnerDID = tokenOwner
 		syncedNFT.PublisherDID = event.PublisherDID
@@ -2456,25 +2442,25 @@ func (c *Core) ReadTokenFromFullnodeTokensTable(assetType int, tokenId string) (
 		if err != nil {
 			return 0, "", "", err
 		}
-		return rbt.BlockHeight, rbt.BlockHash, rbt.OwnerDID, nil
+		return rbt.BlockHeight, rbt.TransactionID, rbt.OwnerDID, nil
 	case FTTokenType:
 		ft, err := c.w.ReadSyncedFTFromTable(tokenId)
 		if err != nil {
 			return 0, "", "", err
 		}
-		return ft.BlockHeight, ft.BlockHash, ft.OwnerDID, nil
+		return ft.BlockHeight, ft.TransactionID, ft.OwnerDID, nil
 	case NFTTokenType:
 		nft, err := c.w.ReadSyncedNFTFromTable(tokenId)
 		if err != nil {
 			return 0, "", "", err
 		}
-		return nft.BlockHeight, nft.BlockHash, nft.OwnerDID, nil
+		return nft.BlockHeight, nft.TransactionID, nft.OwnerDID, nil
 	case SmartContractTokenType:
 		sc, err := c.w.ReadSyncedSmartContractFromTable(tokenId)
 		if err != nil {
 			return 0, "", "", err
 		}
-		return sc.BlockHeight, sc.BlockHash, sc.Deployer, nil
+		return sc.BlockHeight, sc.TransactionID, sc.Deployer, nil
 	default:
 		c.log.Error("invalid asset type")
 		return 0, "", "", fmt.Errorf("invalid asset type")

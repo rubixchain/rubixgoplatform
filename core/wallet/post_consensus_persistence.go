@@ -10,7 +10,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -25,14 +24,15 @@ const (
 )
 
 type PostConsensusPersistenceRequest struct {
-	Transaction     *models.Transactions
-	TransactionInfo *models.TransactionInfo
-	Signature       *models.Signature
-	DID             string
-	ExecutionRole   string
-	AffectedTokens  []string
-	TokenChainRows  []models.TokenChain
-	TokenStates     []models.Token
+	Transaction               *models.Transactions
+	TransactionInfo           *models.TransactionInfo
+	Signature                 *models.Signature
+	DID                       string
+	ExecutionRole             string
+	AffectedTokens            []string
+	TokenChainRows            []models.TokenChain
+	TokenStates               []models.Token
+	SkipSignatureVerification bool
 }
 
 type PostConsensusPersistenceCoordinator struct {
@@ -85,7 +85,7 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 	}
 	// Signature verification — must run BEFORE BeginTx so an invalid request
 	// never enters a transaction. Requires w.didDir set via SetDidDir().
-	if pc.wallet.didDir != "" {
+	if pc.wallet.didDir != "" && !req.SkipSignatureVerification {
 		var sig models.Signature
 		if err := json.Unmarshal(txRecord.Signature, &sig); err != nil {
 			return fmt.Errorf("transfer: invalid signature format")
@@ -124,7 +124,9 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 	if err := pc.upsertTokenStates(ctx, tx, req.TokenStates); err != nil {
 		return err
 	}
-
+	if err := pc.upsertTokenDenomDeltas(ctx, tx, req.DID, req.TokenStates, req.ExecutionRole); err != nil {
+		return err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("post-consensus persistence: commit: %w", err)
 	}
@@ -199,7 +201,6 @@ func buildTransactionRecordFromPayload(txInfo *models.TransactionInfo, signature
 		Signature: signatureBytes,
 	}, nil
 }
-
 
 func validatePostConsensusRequest(req *PostConsensusPersistenceRequest, transactionID string) error {
 	if req == nil {
@@ -381,8 +382,23 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 			return fmt.Errorf("transfer: token %q not owned by %s", row.TokenID, req.DID)
 		}
 
-		if dbStatus != int16(constants.TokenStatus_Free) {
-			return fmt.Errorf("transfer: token %q is not FREE, status=%d", row.TokenID, dbStatus)
+		// Initiator/Quorum: token must be Free or Locked (Locked by LockTokensForSplit before consensus).
+		// Receiver: token must be Free, Locked, or Transferred. Transferred covers the case where
+		// this token was previously sent out by this node and is now returning. Terminal and error
+		// states (Burnt, Orphaned, ChainSyncIssue, BeingDoubleSpent) are explicitly rejected.
+		if req.ExecutionRole != ExecutionRoleReceiver {
+			// Initiator/Quorum: token must be Free or Locked (Locked by LockTokensForSplit before consensus).
+			if dbStatus != int16(constants.TokenStatus_Free) && dbStatus != int16(constants.TokenStatus_Locked) {
+				return fmt.Errorf("transfer: token %q is not FREE or LOCKED (status=%d), cannot persist", row.TokenID, dbStatus)
+			}
+		} else {
+			// Receiver: also permit Transferred — token was sent out and is now returning to this node.
+			// Terminal and error states (Burnt, Orphaned, ChainSyncIssue, BeingDoubleSpent) are rejected.
+			if dbStatus != int16(constants.TokenStatus_Free) &&
+				dbStatus != int16(constants.TokenStatus_Locked) &&
+				dbStatus != int16(constants.TokenStatus_Transferred) {
+				return fmt.Errorf("transfer: token %q has unexpected status %d for receiver (want Free, Locked, or Transferred)", row.TokenID, dbStatus)
+			}
 		}
 
 		if row.PreviousTransactionID != nil && *row.PreviousTransactionID != dbTransactionID {
@@ -598,81 +614,40 @@ func (pc *PostConsensusPersistenceCoordinator) upsertTokenStates(ctx context.Con
 	return nil
 }
 
-func (pc *PostConsensusPersistenceCoordinator) decreaseTokenDenomCount(ctx context.Context, tx pgx.Tx, did string, tokens []models.Token) error {
-	denomCountMap := make(map[types.DenomValue]types.DenomCount)
-
-	for _, t := range tokens {
-		denomCountMap[t.TokenValue]++
+// upsertTokenDenomDeltas updates the token_denom table within the same DB transaction.
+// For ExecutionRoleReceiver: increment denom count for each received token.
+// For ExecutionRoleInitiator: decrement denom count for each sent token.
+// For ExecutionRoleQuorum (pledge): no change — pledged tokens are tracked via token_status, not denom.
+func (pc *PostConsensusPersistenceCoordinator) upsertTokenDenomDeltas(ctx context.Context, tx pgx.Tx, did string, tokenStates []models.Token, executionRole string) error {
+	denomDelta := make(map[float64]int64)
+	for _, state := range tokenStates {
+		if state.TokenValue == 0 {
+			continue
+		}
+		switch executionRole {
+		case ExecutionRoleReceiver:
+			denomDelta[state.TokenValue]++
+		case ExecutionRoleInitiator:
+			denomDelta[state.TokenValue]--
+		}
 	}
-
-	var denoms []float64
-	var counts []int64
-
-	for d, c := range denomCountMap {
-		denoms = append(denoms, d)
-		counts = append(counts, c)
+	if len(denomDelta) == 0 {
+		return nil
 	}
-	
-	tag, err := tx.Exec(ctx, `
-		WITH input AS (
-			SELECT * 
-			FROM UNNEST($2::NUMERIC[], $3::BIGINT[]) AS d(denom, count)
-		)
-		UPDATE token_denom t
-		SET 
-			count = t.count - i.count,
-			updated_at = NOW()
-		FROM input i
-		WHERE 
-			t.did = $1
-			AND t.denom = i.denom
-			AND t.count >= i.count;
-	`, did, denoms, counts)
-	if err != nil {
-		return fmt.Errorf("post-consensus persistence: update token denoms: %w", err)
+	for denom, delta := range denomDelta {
+		if delta == 0 {
+			continue
+		}
+		_, err := tx.Exec(ctx, `
+			INSERT INTO token_denom (did, denom, count, created_at, updated_at)
+			VALUES ($1, $2, $3, NOW(), NOW())
+			ON CONFLICT (did, denom) DO UPDATE SET
+				count = token_denom.count + $3,
+				updated_at = NOW()
+		`, did, denom, delta)
+		if err != nil {
+			return fmt.Errorf("post-consensus persistence: upsert token_denom (did=%s denom=%v delta=%d): %w", did, denom, delta, err)
+		}
 	}
-	if int(tag.RowsAffected()) != len(denoms) {
-		return fmt.Errorf("decrement failed: missing denom or insufficient balance")
-	}
-		
-	return nil
-}
-
-func (pc *PostConsensusPersistenceCoordinator) increaseTokenDenomCount(ctx context.Context, tx pgx.Tx, did string, tokens []models.Token) error {
-	denomCountMap := make(map[types.DenomValue]types.DenomCount)
-
-	for _, t := range tokens {
-		denomCountMap[t.TokenValue]++
-	}
-
-	var denoms []float64
-	var counts []int64
-
-	for d, c := range denomCountMap {
-		denoms = append(denoms, d)
-		counts = append(counts, c)
-	}
-	
-	tag, err := tx.Exec(ctx, `
-		INSERT INTO token_denom (did, denom, count)
-		SELECT 
-			$1,
-			d.denom,
-			d.count
-		FROM 
-			UNNEST($2::NUMERIC[], $3::BIGINT[]) AS d(denom, count)
-		ON CONFLICT (did, denom)
-		DO UPDATE
-		SET 
-			count = token_denom.count + EXCLUDED.count,
-			updated_at = NOW();
-	`, did, denoms, counts)
-	if err != nil {
-		return fmt.Errorf("post-consensus persistence: update token denoms: %w", err)
-	}
-	if int(tag.RowsAffected()) != len(denoms) {
-		return fmt.Errorf("increment failed: missing denom or insufficient balance")
-	}
-		
 	return nil
 }

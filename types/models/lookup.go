@@ -12,16 +12,6 @@ var DidAlgoTypes []DIDAlgo = []DIDAlgo{
 	{Name: constants.DidAlgo_SECP256K1, IsActive: true},
 }
 
-func GetDidAlgoType(didAlgo string) int {
-	for idx, entry := range DidAlgoTypes {
-		if entry.Name == didAlgo {
-			return idx + 1
-		}
-	}
-
-	return -1
-}
-
 // CAUTION: DO NOT CHANGE THE ORDER SINCE THE
 // DATABASE ID IS GENERATED BASED ON THE POSITION IN THE ARRAY.
 //

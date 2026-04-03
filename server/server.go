@@ -106,8 +106,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIRemoveAllQuorum, "GET", s.AuthHandle(s.APIRemoveAllQuorum, true, s.AuthError, true))
 	s.AddRoute(setup.APISetupQuorum, "POST", s.AuthHandle(s.APISetupQuorum, true, s.AuthError, true))
 	s.AddRoute(setup.APIGenerateLocalRBT, "POST", s.AuthHandle(s.APIGenerateLocalRBT, true, s.AuthError, false))
-	s.AddRoute(setup.APITransaction, "POST", s.AuthHandle(s.APIInitiateRBTTransfer, true, s.AuthError, false))
-	s.AddRoute(setup.APIGetAccountInfo, "GET", s.AuthHandle(s.APIGetAccountInfo, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetRbtByDid, "GET", s.AuthHandle(s.APIGetRbtByDid, true, s.AuthError, false))
 	s.AddRoute(setup.APISignatureResponse, "POST", s.AuthHandle(s.APISignatureResponse, true, s.AuthError, false))
 	s.AddRoute(setup.APIDumpTokenChainBlock, "POST", s.AuthHandle(s.APIDumpTokenChainBlock, true, s.AuthError, false))
 	s.AddRoute(setup.APIRegisterDID, "POST", s.AuthHandle(s.APIRegisterDID, true, s.AuthError, false))
@@ -147,7 +146,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APICreateFT, "POST", s.AuthHandle(s.APICreateFT, true, s.AuthError, false))
 	s.AddRoute(setup.APIDumpFTTokenChainBlock, "POST", s.AuthHandle(s.APIDumpFTTokenChainBlock, true, s.AuthError, false))
 	s.AddRoute(setup.APIInitiateFTTransfer, "POST", s.AuthHandle(s.APIInitiateFTTransfer, true, s.AuthError, true))
-	s.AddRoute(setup.APIGetFTInfo, "GET", s.AuthHandle(s.APIGetFTInfo, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetFtByDid, "GET", s.AuthHandle(s.APIGetFTInfo, true, s.AuthError, false))
 	s.AddRoute(setup.APIFixFTCreator, "POST", s.AuthHandle(s.APIFixFTCreator, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetFTCreatorStats, "GET", s.AuthHandle(s.APIGetFTCreatorStats, true, s.AuthError, false))
 	s.AddRoute(setup.APIValidateToken, "GET", s.AuthHandle(s.APIValidateToken, false, s.AuthError, false))
@@ -155,7 +154,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APISubscribeNFT, "POST", s.AuthHandle(s.APISubscribeNFT, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetNFTTokenChainData, "GET", s.AuthHandle(s.APIGetNFTTokenChainData, true, s.AuthError, false))
 	s.AddRoute(setup.APIFetchNft, "GET", s.AuthHandle(s.APIFetchNft, true, s.AuthError, false))
-	s.AddRoute(setup.APIGetNftsByDid, "GET", s.AuthHandle(s.APIGetNFTsByDid, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetNftByDid, "GET", s.AuthHandle(s.APIGetNFTsByDid, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetFTTokenchain, "GET", s.AuthHandle(s.APIGetFTTokenchain, true, s.AuthError, false))
 
 	s.AddRoute(setup.APISendJWTFromWallet, "POST", s.APIAuthenticateWalletJWT)
@@ -184,6 +183,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APITransaction, "GET", s.APIGetTransactions)
 	s.AddRoute(setup.APIGetTransactionByID, "GET", s.APIGetTransactionByID)
 	s.AddRoute(setup.APIListFT, "POST", s.APIListFTs)
+	s.AddRoute(setup.APIGetDIDBalance, "GET", s.AuthHandle(s.APIGetDIDBalance, true, s.AuthError, false))
 }
 
 func (s *Server) ExitFunc() error {

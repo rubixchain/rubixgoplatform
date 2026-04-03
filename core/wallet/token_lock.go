@@ -186,6 +186,7 @@ func (w *Wallet) LockFTTokens(ctx context.Context, ownerDID string, ftName strin
 //
 // Returns the locked token rows; callers must eventually release or consume them.
 func (w *Wallet) LockTokensForSplit(ctx context.Context, ownerDID string, amount float64) ([]models.Token, error) {
+	w.log.Info("LockTokensForSplit: locking tokens for split", "ownerDID", ownerDID, "amount", amount)
 	tx, err := w.db.BeginTx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("LockTokensForSplit: begin tx: %w", err)
@@ -265,4 +266,18 @@ func (w *Wallet) LockSmartContractToken(ctx context.Context, ownerDID string, to
 		return models.Token{}, err
 	}
 	return tokens[0], nil
+}
+
+// UnlockLockedTokens releases specific locked tokens for a DID back to Free status.
+// Called during transaction abort to return locked tokens to their Free state.
+func (w *Wallet) UnlockLockedTokens(did string, tokens []string) error {
+	if len(tokens) == 0 {
+		return nil
+	}
+	_, err := w.db.Pool().Exec(w.Ctx,
+		`UPDATE tokens SET token_status=$1, updated_at=$2
+		 WHERE did=$3 AND token_id = ANY($4::text[]) AND token_status=$5`,
+		constants.TokenStatus_Free, time.Now(), did, tokens, constants.TokenStatus_Locked,
+	)
+	return err
 }

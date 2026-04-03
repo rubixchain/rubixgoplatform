@@ -1,7 +1,9 @@
 package wallet
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/constants"
@@ -211,7 +213,7 @@ func (w *Wallet) GetTokensFromDenomMap(denomMap map[types.DenomValue]types.Denom
 		rows, _ := w.db.Pool().Query(w.Ctx,
 			`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
 			 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
-			 FROM tokens WHERE token_value=$1 AND did=$2 AND token_status=$3 LIMIT=$4 `,
+			 FROM tokens WHERE token_value=$1 AND did=$2 AND token_status=$3 LIMIT $4`,
 			denomValue,
 			did,
 			constants.TokenStatus_Free,
@@ -356,6 +358,36 @@ func (w *Wallet) GetAllPinnedTokens(did string) ([]models.Token, error) {
 	return tokens, rows.Err()
 }
 
+// ReleaseAllLockedRBTTokensForDID resets all Locked RBT tokens for a DID back to Free.
+// Called on transaction failure after LockTokensForSplit to prevent tokens from staying
+// permanently locked when the transaction does not complete.
+func (w *Wallet) ReleaseAllLockedRBTTokensForDID(ctx context.Context, ownerDID string) error {
+	_, err := w.db.Pool().Exec(ctx,
+		`UPDATE tokens SET token_status=$1, updated_at=$2
+		 WHERE did=$3
+		   AND token_status=$4
+		   AND token_type=(SELECT id FROM token_type WHERE name=$5)`,
+		constants.TokenStatus_Free, time.Now(), ownerDID, constants.TokenStatus_Locked, constants.TokenType_RBT,
+	)
+	return err
+}
+
+// ReleaseNonSelectedLockedRBTTokensForDID resets all Locked RBT tokens for a DID back to Free,
+// EXCLUDING the specified selectedTokenIDs. Used by the quorum pledge handler to release
+// candidate tokens that were locked by LockTokensForSplit but not chosen for the pledge,
+// while keeping the selected pledge tokens Locked so PledgeTokens can transition them to Pledged.
+func (w *Wallet) ReleaseNonSelectedLockedRBTTokensForDID(ctx context.Context, ownerDID string, selectedTokenIDs []string) error {
+	_, err := w.db.Pool().Exec(ctx,
+		`UPDATE tokens SET token_status=$1, updated_at=$2
+		 WHERE did=$3
+		   AND token_status=$4
+		   AND token_type=(SELECT id FROM token_type WHERE name=$5)
+		   AND token_id != ALL($6::text[])`,
+		constants.TokenStatus_Free, time.Now(), ownerDID, constants.TokenStatus_Locked, constants.TokenType_RBT, selectedTokenIDs,
+	)
+	return err
+}
+
 // ReleaseTokens sets the status of a slice of tokens back to Free (unlocked).
 // It accepts the same []*models.TokenInfo slice returned by CollectRBTTokens.
 // This is a best-effort operation: errors are logged but do not abort the loop.
@@ -497,4 +529,29 @@ func (w *Wallet) IsNFT(tokenID string) (bool, error) {
 	}
 
 	return exists, nil
+}
+
+func (w *Wallet) GetTokenByDIDAndTokenType(didStr string, tokenType int16) ([]models.Token, error) {
+	rows, err := w.db.Pool().Query(w.Ctx,
+		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
+		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+		 FROM tokens WHERE did=$1 AND token_type=$2`, didStr, tokenType,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetAllTokens: %w", err)
+	}
+	defer rows.Close()
+	var tokens []models.Token
+	for rows.Next() {
+		var t models.Token
+		if err := rows.Scan(
+			&t.TokenID, &t.ParentTokenID, &t.TokenValue, &t.TokenStatus,
+			&t.DID, &t.TransactionID, &t.TokenStateHash, &t.TokenType,
+			&t.LatestPosition, &t.LatestRole, &t.CreatedAt, &t.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("GetAllTokens scan: %w", err)
+		}
+		tokens = append(tokens, t)
+	}
+	return tokens, rows.Err()
 }

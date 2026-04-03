@@ -1,5 +1,6 @@
 package wallet
 
+
 // AddUnpledgeSequenceInfo persists an unpledge sequence record.
 func (w *Wallet) AddUnpledgeSequenceInfo(info *UnpledgeSequenceInfo) error {
 	// TODO(phase07): insert into unpledge_sequence table
@@ -53,12 +54,6 @@ func (w *Wallet) PledgeWholeToken(did string, token string, blk interface{}) err
 // AddTokenStateHash records a token state hash mapping.
 func (w *Wallet) AddTokenStateHash(did string, hashes []string, pledgedTokens []string, txID string) error {
 	// TODO(phase07): insert into token_state_hashes table
-	return nil
-}
-
-// UnlockLockedTokens releases locked tokens for a DID.
-func (w *Wallet) UnlockLockedTokens(did string, tokens []string) error {
-	// TODO(phase07): update token_status to free for given token IDs
 	return nil
 }
 

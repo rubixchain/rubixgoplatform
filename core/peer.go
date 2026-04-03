@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
@@ -15,15 +16,10 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
-const (
-	PeerService string = "peer_service"
-	RemovePeer  string = "remove_peer"
-)
-
 type PeerMap struct {
 	PeerID    string `json:"peer_id"`
 	DID       string `json:"did"`
-	DIDAlgo   int    `json:"did_algo"`
+	DIDAlgo   int64  `json:"did_algo"`
 	Signature string `json:"signature"`
 	Time      string `json:"time"`
 }
@@ -31,17 +27,17 @@ type PeerMap struct {
 // PingSetup will setup the ping route
 func (c *Core) peerSetup() error {
 	c.l.AddRoute(APIPeerStatus, "GET", c.peerStatus)
-	return c.ps.SubscribeTopic(PeerService, c.peerCallback)
+	return c.ps.SubscribeTopic(constants.Event_RubixDID, c.peerCallback)
 }
 
 // removePeerSetup will setup the ping route
 func (c *Core) removePeerSetup() error {
-	return c.ps.SubscribeTopic(RemovePeer, c.removeStalePeerCallback)
+	return c.ps.SubscribeTopic(constants.Event_RemoveRubixDID, c.removeStalePeerCallback)
 }
 
 func (c *Core) publishPeerMap(pm *PeerMap) error {
 	if c.ps != nil {
-		err := c.ps.Publish(PeerService, pm)
+		err := c.ps.Publish(constants.Event_RubixDID, pm)
 		if err != nil {
 			c.log.Error("Failed to publish peer map message", "err", err)
 			return err
@@ -62,7 +58,7 @@ func (c *Core) peerCallback(peerID string, topic string, data []byte) {
 	if m.PeerID == c.peerID {
 		return
 	}
-	
+
 	h := util.CalculateHash([]byte(m.PeerID+m.DID+m.Time), constants.HashAlgorithm_SHA3_256)
 	dc, err := c.InitialiseDID(m.DID)
 	if err != nil {
@@ -207,6 +203,17 @@ func (c *Core) connectPeer(peerID string) (*ipfsport.Peer, error) {
 }
 
 func (c *Core) AddPeerDetails(peerDetail models.DID) error {
+	// Defensive: resolve AlgoID if caller did not set it (zero value).
+	// The did_algo table uses 1-based GENERATED ALWAYS AS IDENTITY,
+	// so AlgoID=0 will violate the algo_id_fk constraint.
+	if peerDetail.AlgoID == 0 {
+		algoID, err := c.w.GetDidAlgoIDByName(constants.DidAlgo_SECP256K1)
+		if err != nil {
+			c.log.Error("AddPeerDetails: failed to resolve default algo ID, skipping DID insert", "did", peerDetail.DID, "err", err)
+			return fmt.Errorf("AddPeerDetails: failed to resolve algo ID: %w", err)
+		}
+		peerDetail.AlgoID = algoID
+	}
 	err := c.w.CreateOrUpdateDID(&peerDetail)
 	if err != nil {
 		c.log.Error("Failed to add PeerDetails to DIDPeerTable", "err", err)
@@ -249,7 +256,7 @@ func (c *Core) isDIDInArbitaryAddr(peerDID string) (bool, *models.DID, error) {
 
 func (c *Core) publishStalePeer(pm *PeerMap) error {
 	if c.ps != nil {
-		err := c.ps.Publish(RemovePeer, pm)
+		err := c.ps.Publish(constants.Event_RemoveRubixDID, pm)
 		if err != nil {
 			c.log.Error("Failed to publish peer map message", "err", err)
 			return err
@@ -263,12 +270,16 @@ func (c *Core) removeStalePeerCallback(peerID string, topic string, data []byte)
 	err := json.Unmarshal(data, &stalePeer)
 	c.log.Debug("Peer DID Removal")
 	if err != nil {
-		c.log.Error("failed to parse explorer data", "err", err)
+		c.log.Error("failed to parse stale did", "err", err)
+		return
+	}
+
+	if stalePeer.PeerID == c.peerID {
 		return
 	}
 
 	// verify the signature
-	h := util.HexToStr(util.CalculateHash([]byte(stalePeer.PeerID+stalePeer.DID+stalePeer.Time), "SHA3-256"))
+	h := util.CalculateHash([]byte(stalePeer.PeerID+stalePeer.DID+stalePeer.Time), "SHA3-256")
 	dc, err := c.InitialiseDID(stalePeer.DID)
 	if err != nil {
 		c.log.Error("failed to initialise stale peer")
@@ -279,7 +290,7 @@ func (c *Core) removeStalePeerCallback(peerID string, topic string, data []byte)
 		c.log.Error("peerCallback: failed to parse signature, err", err)
 		return
 	}
-	st, err := dc.SignVerify([]byte(h), signatureBytes)
+	st, err := dc.SignVerify(h, signatureBytes)
 	if err != nil || !st {
 		if err != nil && (strings.Contains(err.Error(), "NLSS DID detected") || strings.Contains(err.Error(), "incompatible key format")) {
 			c.log.Error("NLSS DID detected during stale peer removal. NLSS DIDs are DEPRECATED.", "did", stalePeer.DID, "error", err)
@@ -292,12 +303,8 @@ func (c *Core) removeStalePeerCallback(peerID string, topic string, data []byte)
 	c.log.Debug("removing peer ", stalePeer.DID, stalePeer.PeerID)
 
 	// remove provided peer did and peer-id from PeerDIDTable
-	err = c.w.RemoveStalePeerDID(stalePeer.DID, stalePeer.PeerID)
-	if err != nil {
-		c.log.Debug("failed to remove peer", stalePeer.DID, "err", err)
-		return
-	}
+	_ = c.w.RemoveDID(stalePeer.DID)
 
 	// remove peer-did folder
-	os.RemoveAll(c.didDir + stalePeer.DID)
+	os.RemoveAll(path.Join(c.didDir, stalePeer.DID))
 }

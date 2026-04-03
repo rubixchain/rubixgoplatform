@@ -21,7 +21,6 @@ type Token struct {
 // AllToken holds per-token details for explorer submission.
 type AllToken struct {
 	TokenHash   string `json:"tokenHash"`
-	BlockHash   string `json:"blockHash"`
 	BlockNumber int    `json:"blockNumber"`
 }
 
