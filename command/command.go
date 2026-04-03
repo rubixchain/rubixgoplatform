@@ -206,6 +206,7 @@ var commandsHelp = []string{"To get tool version",
 	"This command will delete all quorurm list from node",
 	"This command will setup node as quorurm",
 	"This command will generate test RBT token",
+	"This command will generate mainnet RBT tokens",
 	"This command will trasnfer RBT",
 	"This command will help to get account information",
 	"This command enable explorer service on the node",
@@ -261,7 +262,6 @@ var commandsHelp = []string{"To get tool version",
 	"This command will get statistics about FT token creators",
 	"",
 	"",
-	"This command will generate mainnet RBT tokens",
 }
 
 type Command struct {
