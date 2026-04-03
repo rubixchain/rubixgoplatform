@@ -113,6 +113,30 @@ func GetTokenLevelAndNumberForGlobalIndex(globalIndex int) (tokenLevel int, numI
 	}
 }
 
+// GetMainnetTokenLevelAndNumber maps a global token index to the raw
+// TokenMap level (mapLevel) and the token number within that level.
+// Unlike GetTokenLevelAndNumberForGlobalIndex, this function does NOT apply
+// LocalRBT_Level_Offset — it returns mapLevel directly as the token level.
+// This is correct for mainnet premint tokens whose IDs follow the canonical
+// "mapLevel_numInLevel" scheme.
+func GetMainnetTokenLevelAndNumber(globalIndex int) (mapLevel int, numInLevel int, err error) {
+	if globalIndex < 1 {
+		return 0, 0, fmt.Errorf("global index must be >= 1, got %d", globalIndex)
+	}
+	cumulative := 0
+	for mapLevel = 1; ; mapLevel++ {
+		maxCount, ok := TokenMap[mapLevel]
+		if !ok {
+			return 0, 0, fmt.Errorf("global index %d exceeds max token levels", globalIndex)
+		}
+		if globalIndex <= cumulative+maxCount {
+			numInLevel = globalIndex - cumulative
+			return mapLevel, numInLevel, nil
+		}
+		cumulative += maxCount
+	}
+}
+
 type FaucetToken struct {
 	TokenLevel         int    `json:"token_level"`
 	FaucetID           string `json:"faucet_id"`
