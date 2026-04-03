@@ -182,6 +182,64 @@ func (c *Core) GenerateLocalRBT(reqID string, num int, did string, startIndex in
 	dc.OutChan <- &br
 }
 
+func (c *Core) GenerateMainnetRBT(reqID string, num int, did string, startIndex int) {
+	err := c.generateMainnetRBT(reqID, num, did, startIndex)
+	br := model.BasicResponse{
+		Status:  true,
+		Message: "Mainnet RBT tokens generated successfully",
+	}
+	if err != nil {
+		br.Status = false
+		br.Message = err.Error()
+	}
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("Failed to get did channels")
+		return
+	}
+	dc.OutChan <- &br
+}
+
+func (c *Core) generateMainnetRBT(reqID string, num int, did string, startIndex int) error {
+	if !c.mainnet {
+		return fmt.Errorf("generateMainnetRBT is only available in 'mainnet' mode")
+	}
+
+	dc, err := c.SetupDID(reqID, did)
+	if err != nil {
+		return fmt.Errorf("DID is not exist")
+	}
+
+	for i := 0; i < num; i++ {
+		currentTime := int(time.Now().Unix())
+
+		tx, err := c.w.BeginTx(c.w.Ctx)
+		if err != nil {
+			return fmt.Errorf("PersistGenesisTokenRecord: begin tx: %w", err)
+		}
+		defer tx.Rollback(c.w.Ctx) //nolint:errcheck
+
+		globalIndex := startIndex + i
+		mapLevel, numInLevel, err := tokenmap.GetMainnetTokenLevelAndNumber(globalIndex)
+		if err != nil {
+			return fmt.Errorf("PersistGenesisTokenRecord: GetMainnetTokenLevelAndNumber(%d): %w", globalIndex, err)
+		}
+		tokenID := fmt.Sprintf("%d_%d", mapLevel, numInLevel)
+
+		if _, err = c.w.PersistGenesisTokenRecord(tx, dc, c.ps, tokenID, did, constants.NetworkID_RBT_Mainnet, currentTime); err != nil {
+			if strings.Contains(err.Error(), "already exists") {
+				c.log.Warn("Mainnet token already exists, skipping", "tokenID", tokenID)
+				tx.Rollback(c.w.Ctx) //nolint:errcheck
+				continue
+			}
+			c.log.Error("Failed to persist genesis token record", "err", err)
+			return err
+		}
+	}
+
+	return nil
+}
+
 // getTokenIDForLocalTestTokens retrieves the token ID for local test tokens based on the
 // provided token level and token number.
 func (c *Core) getTokenIDForLocalTestTokens(tokenLevel int, tokenNumber int) (string, error) {

@@ -50,6 +50,7 @@ const (
 	RemoveAllQuorumCmd             string = "removeallquorum"
 	SetupQuorumCmd                 string = "setupquorum"
 	GenerateLocalRBTCmd            string = "generatelocalrbt"
+	GenerateMainnetRBTCmd          string = "generatemainnetrbt"
 	TransferRBTCmd                 string = "transferrbt"
 	DumpTokenChainCmd              string = "dumptokenchain"
 	DecodeTokenChainCmd            string = "decodetokenchain"
@@ -132,6 +133,7 @@ var commands = []string{VersionCmd,
 	RemoveAllQuorumCmd,
 	SetupQuorumCmd,
 	GenerateLocalRBTCmd,
+	GenerateMainnetRBTCmd,
 	TransferRBTCmd,
 	GetRBTBalanceCmd,
 	DumpTokenChainCmd,
@@ -257,6 +259,9 @@ var commandsHelp = []string{"To get tool version",
 	"This command will set the async FT response status",
 	"This command will fix FT tokens that have peer ID as CreatorDID",
 	"This command will get statistics about FT token creators",
+	"",
+	"",
+	"This command will generate mainnet RBT tokens",
 }
 
 type Command struct {
@@ -851,6 +856,8 @@ func Run(args []string) {
 		cmd.SetupQuorum()
 	case GenerateLocalRBTCmd:
 		cmd.GenerateLocalRBT()
+	case GenerateMainnetRBTCmd:
+		cmd.GenerateMainnetRBT()
 	case TransferRBTCmd:
 		cmd.TransferRBT()
 	case GetRBTBalanceCmd:
