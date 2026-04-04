@@ -3,13 +3,154 @@ package wallet
 import (
 	"context"
 	"fmt"
+	stdmath "math"
 	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/constants"
+	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
+
+// ── Pure selection helper ──────────────────────────────────────────────
+
+// selectTokensForAmount picks the minimum set of tokens to satisfy `amount`
+// from the given candidate slice. Does NOT modify the slice. Pure function:
+// no DB access, no Wallet receiver, no context — unit-testable in isolation.
+//
+// Selection policy (priority order):
+//  1. Exact match: single token whose value == amount (within FloatPrecision tolerance)
+//  2. Whole-number optimisation: if amount is a whole number, greedily pick 1.0-value tokens first
+//  3. Exact combination: accumulate largest-first keeping sum <= amount; if result == amount, return it
+//  4. Greedy fallback: accumulate smallest-first until sum >= amount
+//     (prefers the smallest token >= remaining amount to minimise overshoot / split size)
+//
+// O(N log N) due to two sort passes — no combinatorial search.
+func selectTokensForAmount(candidates []models.Token, amount float64) ([]models.Token, error) {
+	if len(candidates) == 0 {
+		return nil, fmt.Errorf("selectTokensForAmount: no candidate tokens available")
+	}
+
+	precAmount := rubixmath.FloatPrecision(amount)
+
+	// Calculate total balance upfront.
+	var totalBalance float64
+	for _, tok := range candidates {
+		totalBalance = rubixmath.AddFloat(totalBalance, tok.TokenValue)
+	}
+	if rubixmath.FloatPrecision(totalBalance) < precAmount {
+		return nil, fmt.Errorf("selectTokensForAmount: insufficient balance: have %v, need %v", totalBalance, amount)
+	}
+
+	// Build a sorted-ASC copy (used by Pass 1 and Pass 4).
+	ascSorted := make([]models.Token, len(candidates))
+	copy(ascSorted, candidates)
+	sort.Slice(ascSorted, func(i, j int) bool {
+		return ascSorted[i].TokenValue < ascSorted[j].TokenValue
+	})
+
+	// ── Pass 1: Exact single-token match ──────────────────────────────
+	for _, tok := range ascSorted {
+		if rubixmath.FloatPrecision(tok.TokenValue) == precAmount {
+			return []models.Token{tok}, nil
+		}
+	}
+
+	// ── Pass 2: Whole-number optimisation ─────────────────────────────
+	// If amount is a whole number, prefer collecting 1.0-value tokens first.
+	isWholeNumber := precAmount == rubixmath.FloatPrecision(stdmath.Floor(amount))
+	if isWholeNumber && amount >= 1.0 {
+		var oneTokens []models.Token
+		for _, tok := range ascSorted {
+			if rubixmath.FloatPrecision(tok.TokenValue) == rubixmath.FloatPrecision(1.0) {
+				oneTokens = append(oneTokens, tok)
+			}
+		}
+		needed := int(stdmath.Round(amount)) // e.g. 2.0 → 2
+		if len(oneTokens) >= needed {
+			return oneTokens[:needed], nil
+		}
+		// Have some 1.0 tokens but not enough — use them and recurse for the remainder.
+		if len(oneTokens) > 0 {
+			usedValue := float64(len(oneTokens)) // each is 1.0
+			remaining := rubixmath.FloatPrecision(amount - usedValue)
+
+			// Collect non-1.0 candidates for the remaining amount.
+			oneUsed := make(map[string]bool, len(oneTokens))
+			for _, t := range oneTokens {
+				oneUsed[t.TokenID] = true
+			}
+			var rest []models.Token
+			for _, tok := range ascSorted {
+				if !oneUsed[tok.TokenID] {
+					rest = append(rest, tok)
+				}
+			}
+			extra, err := selectTokensForAmount(rest, remaining)
+			if err == nil {
+				return append(oneTokens, extra...), nil
+			}
+			// Fall through to passes 3/4 using all candidates.
+		}
+	}
+
+	// ── Pass 3: Exact combination (largest-first, sum <= amount) ──────
+	// Walk tokens DESC, only adding a token when it keeps the running sum ≤ amount.
+	// If the final accumulated sum equals amount exactly, we found an exact combination.
+	descSorted := make([]models.Token, len(ascSorted))
+	copy(descSorted, ascSorted)
+	sort.Slice(descSorted, func(i, j int) bool {
+		return descSorted[i].TokenValue > descSorted[j].TokenValue
+	})
+
+	var exactSelected []models.Token
+	var exactSum float64
+	for _, tok := range descSorted {
+		precVal := rubixmath.FloatPrecision(tok.TokenValue)
+		if rubixmath.FloatPrecision(exactSum+precVal) <= precAmount {
+			exactSelected = append(exactSelected, tok)
+			exactSum = rubixmath.AddFloat(exactSum, precVal)
+			if exactSum == precAmount {
+				return exactSelected, nil
+			}
+		}
+	}
+	// exactSum < precAmount here — no exact subset found. Fall through to greedy.
+
+	// ── Pass 4: Greedy smallest-first fallback ────────────────────────
+	// Accumulate tokens ASC until sum >= amount.
+	// Before each addition, if the current token alone covers the remaining
+	// amount, take it and stop (minimises overshoot / split size — ASC order
+	// guarantees this is the smallest such token).
+	var selected []models.Token
+	var accumulated float64
+
+	for _, tok := range ascSorted {
+		precVal := rubixmath.FloatPrecision(tok.TokenValue)
+		remaining := rubixmath.FloatPrecision(precAmount - accumulated)
+
+		// If this token alone covers the remaining amount, take it and stop.
+		if precVal >= remaining {
+			selected = append(selected, tok)
+			accumulated = rubixmath.AddFloat(accumulated, precVal)
+			break
+		}
+
+		selected = append(selected, tok)
+		accumulated = rubixmath.AddFloat(accumulated, precVal)
+
+		if accumulated >= precAmount {
+			break
+		}
+	}
+
+	if rubixmath.FloatPrecision(accumulated) < precAmount {
+		return nil, fmt.Errorf("selectTokensForAmount: insufficient tokens: have %v, need %v", accumulated, amount)
+	}
+
+	return selected, nil
+}
 
 // ── Tx-accepting query helpers ─────────────────────────────────────────
 // These run SELECT ... FOR UPDATE within a caller-managed transaction.
