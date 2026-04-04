@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
@@ -60,12 +61,47 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 			}
 		}
 	}()
+	maxRetries := 3
+	var transactionInfo *models.TransactionInfo
+	var transactionValue float64
 
-	transactionInfo, transactionValue, err := BuildTransactionInfoFromRequest(ctx, c.w, request, dc, networkMode, c.log, c.ps)
-	if err != nil {
-		c.log.Error("InitiateTransaction: Failed to build transaction info", "err", err)
-		resp.Message = err.Error()
-		return resp
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+
+		transactionInfo, transactionValue, err = BuildTransactionInfoFromRequest(
+			ctx,
+			c.w,
+			request,
+			dc,
+			networkMode,
+			c.log,
+			c.ps,
+		)
+
+		if err == nil {
+			// success
+			break
+		}
+
+		// ONLY retry TOCTOU
+		if !isTOCTOUConflict(err) {
+			c.log.Error("InitiateTransaction: Failed to build transaction info (non-retryable)", "err", err)
+			resp.Message = err.Error()
+			return resp
+		}
+
+		c.log.Warn("InitiateTransaction: TOCTOU conflict, retrying",
+			"attempt", attempt,
+			"maxRetries", maxRetries,
+			"err", err,
+		)
+
+		if attempt == maxRetries {
+			c.log.Error("InitiateTransaction: TOCTOU conflict — retries exhausted", "err", err)
+			resp.Message = "Transaction failed due to high contention, please retry"
+			return resp
+		}
+
+		time.Sleep(retryBackoff(attempt))
 	}
 
 	// Fetch the list of dids from quorum_manager table
@@ -405,4 +441,17 @@ func (c *Core) GetTransactionByID(txId string) (*models.TransactionInfo, error) 
 
 func (c *Core) GetAllTransactions() ([]models.Transactions, error) {
 	return c.w.GetAllTransactions()
+}
+
+func isTOCTOUConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "TOCTOU conflict")
+}
+
+func retryBackoff(attempt int) time.Duration {
+	// 50ms → 100ms → 150ms
+	return time.Duration(attempt*50) * time.Millisecond
 }
