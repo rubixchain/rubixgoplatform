@@ -320,12 +320,19 @@ func (w *Wallet) LockFTTokens(ctx context.Context, ownerDID string, ftName strin
 	return selected, nil
 }
 
-// LockTokensForSplit selects and locks ALL free RBT tokens for the given owner DID
-// using SELECT ... FOR UPDATE SKIP LOCKED to avoid deadlocks with concurrent transactions.
-// The caller's denomination-selection logic (CollectRBTTokens) determines which tokens
-// from the returned slice to actually use for the transfer or split.
+// LockTokensForSplit selects and locks the minimum set of free RBT tokens needed
+// for the given amount, using a two-phase approach:
 //
-// Returns the locked token rows; callers must eventually release or consume them.
+//  1. Read-only snapshot SELECT (no FOR UPDATE) to collect all free candidate tokens.
+//  2. selectTokensForAmount chooses the minimum subset in Go (no DB round-trip).
+//  3. Targeted FOR UPDATE SKIP LOCKED on only the selected token IDs.
+//  4. TOCTOU check: if any selected token was concurrently locked, return a clear error.
+//  5. UPDATE token_status to Locked + commit.
+//
+// This allows concurrent transfers from the same DID to each acquire their own
+// disjoint token subsets instead of one transfer monopolising all free tokens.
+//
+// Returns only the selected (now-locked) tokens; callers must eventually release or consume them.
 func (w *Wallet) LockTokensForSplit(ctx context.Context, ownerDID string, amount float64) ([]models.Token, error) {
 	w.log.Info("LockTokensForSplit: locking tokens for split", "ownerDID", ownerDID, "amount", amount)
 	tx, err := w.db.BeginTx(ctx)
@@ -338,37 +345,104 @@ func (w *Wallet) LockTokensForSplit(ctx context.Context, ownerDID string, amount
 		return nil, fmt.Errorf("LockTokensForSplit: set lock_timeout: %w", err)
 	}
 
-	rows, err := tx.Query(ctx, `
+	// ── Phase 1: Read-only candidate fetch (no FOR UPDATE) ────────────
+	candidateRows, err := tx.Query(ctx, `
 		SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
 		       token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
 		FROM tokens
 		WHERE did=$1
 		  AND token_type=(SELECT id FROM token_type WHERE name=$2)
 		  AND token_status=$3
-		ORDER BY token_value DESC
-		FOR UPDATE SKIP LOCKED
+		ORDER BY token_value ASC
 	`, ownerDID, constants.TokenType_RBT, constants.TokenStatus_Free)
 	if err != nil {
-		return nil, fmt.Errorf("LockTokensForSplit: query: %w", err)
+		return nil, fmt.Errorf("LockTokensForSplit: candidate query: %w", err)
+	}
+	defer candidateRows.Close()
+
+	var candidates []models.Token
+	for candidateRows.Next() {
+		var tok models.Token
+		if err := candidateRows.Scan(
+			&tok.TokenID, &tok.ParentTokenID, &tok.TokenValue, &tok.TokenStatus,
+			&tok.DID, &tok.TransactionID, &tok.TokenStateHash, &tok.TokenType,
+			&tok.LatestPosition, &tok.LatestRole, &tok.CreatedAt, &tok.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("LockTokensForSplit: candidate scan: %w", err)
+		}
+		candidates = append(candidates, tok)
+	}
+	if err := candidateRows.Err(); err != nil {
+		return nil, fmt.Errorf("LockTokensForSplit: candidate rows: %w", err)
 	}
 
-	locked, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.Token])
+	// ── Phase 2: Apply selection logic in Go ──────────────────────────
+	selected, err := selectTokensForAmount(candidates, amount)
 	if err != nil {
-		return nil, fmt.Errorf("LockTokensForSplit: collect: %w", err)
+		return nil, fmt.Errorf("LockTokensForSplit: selection: %w", err)
 	}
 
-	if len(locked) == 0 {
-		return locked, nil
+	// ── Phase 3: Lock only selected tokens (targeted FOR UPDATE SKIP LOCKED) ──
+	selectedIDs := make([]string, len(selected))
+	for i, tok := range selected {
+		selectedIDs[i] = tok.TokenID
+	}
+	sort.Strings(selectedIDs) // deadlock prevention: always lock in a deterministic order
+
+	lockRows, err := tx.Query(ctx, `
+		SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
+		       token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+		FROM tokens
+		WHERE token_id = ANY($1::text[])
+		  AND did = $2
+		  AND token_type=(SELECT id FROM token_type WHERE name=$3)
+		  AND token_status = $4
+		ORDER BY token_id
+		FOR UPDATE SKIP LOCKED
+	`, selectedIDs, ownerDID, constants.TokenType_RBT, constants.TokenStatus_Free)
+	if err != nil {
+		return nil, fmt.Errorf("LockTokensForSplit: lock query: %w", err)
+	}
+	defer lockRows.Close()
+
+	var locked []models.Token
+	for lockRows.Next() {
+		var tok models.Token
+		if err := lockRows.Scan(
+			&tok.TokenID, &tok.ParentTokenID, &tok.TokenValue, &tok.TokenStatus,
+			&tok.DID, &tok.TransactionID, &tok.TokenStateHash, &tok.TokenType,
+			&tok.LatestPosition, &tok.LatestRole, &tok.CreatedAt, &tok.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("LockTokensForSplit: lock scan: %w", err)
+		}
+		locked = append(locked, tok)
+	}
+	if err := lockRows.Err(); err != nil {
+		return nil, fmt.Errorf("LockTokensForSplit: lock rows: %w", err)
 	}
 
-	tokenIDs := make([]string, len(locked))
-	for i, tok := range locked {
-		tokenIDs[i] = tok.TokenID
+	// ── Phase 4: TOCTOU check ─────────────────────────────────────────
+	if len(locked) < len(selectedIDs) {
+		lockedSet := make(map[string]bool, len(locked))
+		for _, tok := range locked {
+			lockedSet[tok.TokenID] = true
+		}
+		var missing []string
+		for _, id := range selectedIDs {
+			if !lockedSet[id] {
+				missing = append(missing, id)
+			}
+		}
+		return nil, fmt.Errorf(
+			"LockTokensForSplit: TOCTOU conflict — %d of %d selected tokens were concurrently locked by another transaction, retry recommended: missing=%v",
+			len(selectedIDs)-len(locked), len(selectedIDs), missing,
+		)
 	}
 
+	// ── Phase 5: Update status + commit ──────────────────────────────
 	_, err = tx.Exec(ctx,
 		`UPDATE tokens SET token_status = $1, updated_at = $2 WHERE token_id = ANY($3::text[])`,
-		constants.TokenStatus_Locked, time.Now(), tokenIDs,
+		constants.TokenStatus_Locked, time.Now(), selectedIDs,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("LockTokensForSplit: update status: %w", err)
