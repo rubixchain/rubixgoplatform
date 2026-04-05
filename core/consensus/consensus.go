@@ -2,7 +2,6 @@ package consensus
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/rubixchain/rubixgoplatform/core/parts"
@@ -91,43 +90,13 @@ func InitiateConsensus(consensusRequest models.ConsensusRequest, quorumDc types.
 		return &models.ConsensusResponse{}, fmt.Errorf("InitiateConsensus: failed to compute transaction ID: %w", err)
 	}
 
-	transactionInfoBytes, err := models.SerializeTransactionInfo(txnInfo)
-	if err != nil {
-		log.Error("InitiateConsensus: failed to serialize transaction info", "err", err)
-		return &models.ConsensusResponse{}, fmt.Errorf("InitiateConsensus: failed to serialize transaction info: %w", err)
-	}
-
-	quorumSignatureInfo := models.QuorumSignature{
-		Did:       quorumDid,
-		Signature: quorumSignature,
-	}
-
-	signature := models.Signature{
-		InitiatorSignature: consensusRequest.InitiatorSignature,
-		Quorums:            []models.QuorumSignature{quorumSignatureInfo},
-	}
-
-	signatureBytes, err := json.Marshal(signature)
-	if err != nil {
-		log.Error("InitiateConsensus : Failed to marshal signature", "err", err)
-		return &models.ConsensusResponse{}, err
-	}
-
-	transactions := &models.Transactions{
-		ID:        transactionId,
-		Info:      transactionInfoBytes,
-		Signature: signatureBytes,
-	}
-
 	consensusResponse := models.ConsensusResponse{
 		ReferenceId:     consensusRequest.ReferenceId,
 		QuorumSignature: quorumSignature,
 		Message:         "Transaction Information verified succesfully. Consensus Complete.",
 		Status:          true,
 	}
-	//List of Pledge token ids
-	// The incoming TransactionInfo with the signature of both initiator and quorumSignature
-	err = w.PledgeTokens(pledgeTokenDetails, transactions, quorumDid, int64(txnInfo.Epoch))
+	err = w.PledgeV2(context.Background(), pledgeTokenDetails, transactionId, quorumDid, quorumDc, txnInfo.Epoch, txnInfo.Network)
 	if err != nil {
 		log.Error("InitiateConsensus : Failed to pledge tokens", "err", err)
 		return &models.ConsensusResponse{}, err
