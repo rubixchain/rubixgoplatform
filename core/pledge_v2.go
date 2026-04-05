@@ -1,10 +1,9 @@
-package wallet
+package core
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -14,9 +13,10 @@ import (
 //
 // All tokens are grouped into ONE TransactionInfo → ONE txID computed as
 // SHA3_256(SerializeTransactionInfo(txInfo)). The resulting pledgeTxID is
-// signed with quorumDC. After persistence, token_denom is decremented and
-// unpledge_sequence_info is keyed by mainTxID so that CallBackQuorumUnpledge
-// can locate the record using the broadcast transaction ID.
+// signed with c.pqc[quorumDID]. After persistence, token_denom is decremented
+// and unpledge_sequence_info is keyed by mainTxID so that
+// CallBackQuorumUnpledge can locate the record using the broadcast transaction
+// ID.
 //
 // Preconditions:
 //   - Every token in tokenInfos must already exist in the tokenchain table
@@ -27,12 +27,11 @@ import (
 // Errors are wrapped with context but callers should treat them as fatal for
 // the pledge attempt. The function is safe to retry — PersistPledgeV2 uses
 // ON CONFLICT guards.
-func (w *Wallet) PledgeV2(
+func (c *Core) PledgeV2(
 	ctx context.Context,
 	tokenInfos []*models.TokenInfo,
 	mainTxID string,
 	quorumDID string,
-	quorumDC types.DIDCrypto,
 	epoch int,
 	network string,
 ) error {
@@ -46,8 +45,10 @@ func (w *Wallet) PledgeV2(
 	if quorumDID == "" {
 		return fmt.Errorf("PledgeV2: quorumDID is required")
 	}
-	if quorumDC == nil {
-		return fmt.Errorf("PledgeV2: quorumDC (DIDCrypto) is required")
+
+	dc := c.pqc[quorumDID]
+	if dc == nil {
+		return fmt.Errorf("PledgeV2: no DIDCrypto loaded for quorum DID %q — is quorum setup?", quorumDID)
 	}
 
 	// Reject duplicate token IDs.
@@ -68,7 +69,7 @@ func (w *Wallet) PledgeV2(
 		tokenIDs = append(tokenIDs, ti.TokenID)
 	}
 
-	latestRows, err := w.readLatestTokenChainRows(ctx, tokenIDs)
+	latestRows, err := c.w.ReadLatestTokenChainRows(ctx, tokenIDs)
 	if err != nil {
 		return fmt.Errorf("PledgeV2: read latest tokenchain rows: %w", err)
 	}
@@ -109,28 +110,26 @@ func (w *Wallet) PledgeV2(
 	}
 
 	// --- Sign (over pledgeTxID bytes) ----------------------------------------
-	pledgeSig, err := util.SignTransaction(quorumDC, pledgeTxInfo)
+	pledgeSig, err := util.SignTransaction(dc, pledgeTxInfo)
 	if err != nil {
 		return fmt.Errorf("PledgeV2: sign pledge tx %q: %w", pledgeTxID, err)
 	}
 	signature := &models.Signature{InitiatorSignature: pledgeSig}
 
 	// --- Build payload -------------------------------------------------------
-	tokenChainRows, tokenStates, affectedTokens, err := w.BuildPledgePayload(ctx, pledgeTxID, pledgeTxInfo, quorumDID)
+	tokenChainRows, tokenStates, affectedTokens, err := c.w.BuildPledgePayload(ctx, pledgeTxID, pledgeTxInfo, quorumDID)
 	if err != nil {
 		return fmt.Errorf("PledgeV2: build pledge payload for tx %q: %w", pledgeTxID, err)
 	}
 
 	// --- Persist pledge transaction ------------------------------------------
-	if err := w.PersistPledgeV2(ctx, pledgeTxInfo, signature, pledgeTxID, quorumDID, tokenChainRows, tokenStates, affectedTokens); err != nil {
+	if err := c.w.PersistPledgeV2(ctx, pledgeTxInfo, signature, pledgeTxID, quorumDID, tokenChainRows, tokenStates, affectedTokens); err != nil {
 		return fmt.Errorf("PledgeV2: persist pledge tx %q: %w", pledgeTxID, err)
 	}
 
 	// --- Post-persist: decrement token_denom and insert unpledge_sequence_info
 	// These run in a separate DB transaction AFTER PersistPledgeV2 has committed.
-	// upsertTokenDenomDeltas is a no-op for ExecutionRoleQuorum, so we handle
-	// the denom update here.
-	postTx, err := w.BeginTx(ctx)
+	postTx, err := c.w.BeginTx(ctx)
 	if err != nil {
 		return fmt.Errorf("PledgeV2: begin post-persist tx for pledge %q: %w", pledgeTxID, err)
 	}
@@ -171,7 +170,7 @@ func (w *Wallet) PledgeV2(
 		return fmt.Errorf("PledgeV2: commit post-persist tx for pledge %q: %w", pledgeTxID, err)
 	}
 
-	w.log.Info("PledgeV2 complete",
+	c.log.Info("PledgeV2 complete",
 		"pledgeTxID", pledgeTxID,
 		"mainTxID", mainTxID,
 		"tokens", len(tokenInfos),

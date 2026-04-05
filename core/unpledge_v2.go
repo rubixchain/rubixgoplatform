@@ -1,4 +1,4 @@
-package wallet
+package core
 
 import (
 	"context"
@@ -25,18 +25,15 @@ import (
 // Tokens already in FREE status are skipped in the per-token loop.
 //
 // Parameters:
-//   - mainTxID:   lookup key in unpledge_sequence_info (NOT the pledge txID)
+//   - mainTxID:    lookup key in unpledge_sequence_info (NOT the pledge txID)
 //   - triggerTxID: ID of the broadcast main-transfer that triggered this
 //     unpledge — stored in the Memo field for auditability
-//   - quorumDID:  DID that owns the pledged tokens
-//   - quorumDC:   DIDCrypto for signing each per-token unpledge transaction
-func (w *Wallet) UnpledgeV2(
+//   - quorumDID:   DID that owns the pledged tokens
+func (c *Core) UnpledgeV2(
 	ctx context.Context,
 	mainTxID string,
 	triggerTxID string,
 	quorumDID string,
-	quorumDC types.DIDCrypto,
-	network string,
 ) error {
 	if mainTxID == "" {
 		return fmt.Errorf("UnpledgeV2: mainTxID is required")
@@ -44,33 +41,35 @@ func (w *Wallet) UnpledgeV2(
 	if quorumDID == "" {
 		return fmt.Errorf("UnpledgeV2: quorumDID is required")
 	}
-	if quorumDC == nil {
-		return fmt.Errorf("UnpledgeV2: quorumDC (DIDCrypto) is required")
+
+	dc := c.pqc[quorumDID]
+	if dc == nil {
+		return fmt.Errorf("UnpledgeV2: no DIDCrypto loaded for quorum DID %q — is quorum setup?", quorumDID)
 	}
 
 	// --- Idempotency guard: look up unpledge_sequence_info -------------------
 	var pledgeTokens []string
 	var epoch int
-	err := w.db.Pool().QueryRow(ctx,
+	err := c.w.Pool().QueryRow(ctx,
 		`SELECT pledge_tokens, epoch FROM unpledge_sequence_info WHERE tx_id = $1`,
 		mainTxID,
 	).Scan(&pledgeTokens, &epoch)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			// Already unpledged or never pledged via V2 — idempotent success.
-			w.log.Info("UnpledgeV2: no unpledge_sequence_info row — skip (already unpledged or not pledged via V2)",
+			c.log.Info("UnpledgeV2: no unpledge_sequence_info row — skip (already unpledged or not pledged via V2)",
 				"mainTxID", mainTxID)
 			return nil
 		}
 		return fmt.Errorf("UnpledgeV2: query unpledge_sequence_info for mainTxID %q: %w", mainTxID, err)
 	}
 	if len(pledgeTokens) == 0 {
-		w.log.Info("UnpledgeV2: empty pledge_tokens — skip", "mainTxID", mainTxID)
+		c.log.Info("UnpledgeV2: empty pledge_tokens — skip", "mainTxID", mainTxID)
 		return nil
 	}
 
 	// --- Check all tokens are PLEDGED (or already FREE for partial retry) ----
-	currentTokens, err := w.readTokensByIDs(ctx, pledgeTokens)
+	currentTokens, err := c.w.ReadTokensByIDs(ctx, pledgeTokens)
 	if err != nil {
 		return fmt.Errorf("UnpledgeV2: read current token states for mainTxID %q: %w", mainTxID, err)
 	}
@@ -92,11 +91,11 @@ func (w *Wallet) UnpledgeV2(
 
 	if allFree {
 		// All tokens are already FREE — idempotent success. Clean up the row.
-		w.log.Info("UnpledgeV2: all tokens already FREE — removing sequence row", "mainTxID", mainTxID)
-		if _, err := w.db.Pool().Exec(ctx,
+		c.log.Info("UnpledgeV2: all tokens already FREE — removing sequence row", "mainTxID", mainTxID)
+		if _, err := c.w.Pool().Exec(ctx,
 			`DELETE FROM unpledge_sequence_info WHERE tx_id = $1`, mainTxID,
 		); err != nil {
-			w.log.Error("UnpledgeV2: failed to delete stale unpledge_sequence_info",
+			c.log.Error("UnpledgeV2: failed to delete stale unpledge_sequence_info",
 				"mainTxID", mainTxID, "error", err)
 			// Non-fatal: the tokens are free; return nil.
 		}
@@ -115,8 +114,8 @@ func (w *Wallet) UnpledgeV2(
 			continue
 		}
 
-		if err := w.unpledgeSingleTokenV2(ctx, tokenID, mainTxID, triggerTxID, quorumDID, quorumDC, epoch, network); err != nil {
-			w.log.Error("UnpledgeV2: per-token unpledge failed",
+		if err := c.unpledgeSingleTokenV2(ctx, tokenID, mainTxID, triggerTxID, quorumDID, dc, epoch, c.networkMode); err != nil {
+			c.log.Error("UnpledgeV2: per-token unpledge failed",
 				"tokenID", tokenID, "mainTxID", mainTxID, "error", err)
 			failedTokens = append(failedTokens, tokenID)
 			// Do NOT abort — other tokens may still succeed.
@@ -132,7 +131,7 @@ func (w *Wallet) UnpledgeV2(
 	}
 
 	// All tokens succeeded — increment token_denom and delete the sequence row.
-	cleanupTx, err := w.BeginTx(ctx)
+	cleanupTx, err := c.w.BeginTx(ctx)
 	if err != nil {
 		return fmt.Errorf("UnpledgeV2: begin cleanup tx for mainTxID %q: %w", mainTxID, err)
 	}
@@ -144,7 +143,7 @@ func (w *Wallet) UnpledgeV2(
 		tokenValue, err := util.GetTokenValueFromTokenID(tokenID)
 		if err != nil {
 			// Non-fatal: log and skip so we still delete the sequence row.
-			w.log.Error("UnpledgeV2: get token value for denom update",
+			c.log.Error("UnpledgeV2: get token value for denom update",
 				"tokenID", tokenID, "mainTxID", mainTxID, "error", err)
 			continue
 		}
@@ -177,7 +176,7 @@ func (w *Wallet) UnpledgeV2(
 		return fmt.Errorf("UnpledgeV2: commit cleanup tx for mainTxID %q: %w", mainTxID, err)
 	}
 
-	w.log.Info("UnpledgeV2 complete", "mainTxID", mainTxID, "tokens", len(pledgeTokens))
+	c.log.Info("UnpledgeV2 complete", "mainTxID", mainTxID, "tokens", len(pledgeTokens))
 
 	return nil
 }
@@ -188,19 +187,21 @@ func (w *Wallet) UnpledgeV2(
 // The unpledgeTxID is deterministic: SHA3_256(SerializeTransactionInfo(txInfo)),
 // so retrying with the same inputs produces the same result (idempotent via
 // ON CONFLICT DO NOTHING in PersistUnpledgeV2).
-func (w *Wallet) unpledgeSingleTokenV2(
+//
+// dc is passed in from UnpledgeV2 to avoid repeated c.pqc map lookups.
+func (c *Core) unpledgeSingleTokenV2(
 	ctx context.Context,
 	tokenID string,
 	mainTxID string,
 	triggerTxID string,
 	quorumDID string,
-	quorumDC types.DIDCrypto,
+	dc types.DIDCrypto,
 	epoch int,
 	network string,
 ) error {
 	// Fetch the latest tokenchain row — this should be the pledge row, so
 	// latestRow.TransactionID = pledgeTxID.
-	latestRows, err := w.readLatestTokenChainRows(ctx, []string{tokenID})
+	latestRows, err := c.w.ReadLatestTokenChainRows(ctx, []string{tokenID})
 	if err != nil {
 		return fmt.Errorf("unpledgeSingleTokenV2: read latest tokenchain for %q: %w", tokenID, err)
 	}
@@ -239,20 +240,20 @@ func (w *Wallet) unpledgeSingleTokenV2(
 	}
 
 	// Sign.
-	unpledgeSig, err := util.SignTransaction(quorumDC, unpledgeTxInfo)
+	unpledgeSig, err := util.SignTransaction(dc, unpledgeTxInfo)
 	if err != nil {
 		return fmt.Errorf("unpledgeSingleTokenV2: sign unpledge tx %q for token %q: %w", unpledgeTxID, tokenID, err)
 	}
 	signature := &models.Signature{InitiatorSignature: unpledgeSig}
 
 	// Build payload.
-	tokenChainRows, tokenStates, affectedTokens, err := w.BuildUnpledgePayload(ctx, unpledgeTxID, unpledgeTxInfo, quorumDID)
+	tokenChainRows, tokenStates, affectedTokens, err := c.w.BuildUnpledgePayload(ctx, unpledgeTxID, unpledgeTxInfo, quorumDID)
 	if err != nil {
 		return fmt.Errorf("unpledgeSingleTokenV2: build unpledge payload for token %q (tx %q): %w", tokenID, unpledgeTxID, err)
 	}
 
 	// Persist.
-	if err := w.PersistUnpledgeV2(ctx, unpledgeTxInfo, signature, unpledgeTxID, quorumDID, tokenChainRows, tokenStates, affectedTokens); err != nil {
+	if err := c.w.PersistUnpledgeV2(ctx, unpledgeTxInfo, signature, unpledgeTxID, quorumDID, tokenChainRows, tokenStates, affectedTokens); err != nil {
 		return fmt.Errorf("unpledgeSingleTokenV2: persist unpledge tx %q for token %q: %w", unpledgeTxID, tokenID, err)
 	}
 
