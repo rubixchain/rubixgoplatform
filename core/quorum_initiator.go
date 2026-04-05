@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -230,11 +231,23 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 
 	c.log.Info("initiateConsensusHandler: all stateless validations passed", "txID", txID)
 
-	consensusResponse, err := consensus.InitiateConsensus(consensusRequest, quorumDc, c.w, c.log)
+	consensusResponse, _, err := consensus.InitiateConsensus(consensusRequest, quorumDc, c.log)
 	if err != nil {
 		c.log.Error("initiateConsensusHandler : Consensus failed", "err", err)
 		response.Message = err.Error()
 		return c.l.RenderJSON(request, &response, http.StatusInternalServerError)
+	}
+
+	// Pledge tokens after consensus succeeds. The transactionId is already
+	// computed above (txID); InitiateConsensus returns the same value.
+	pledgeDetails := txnInfo.Quorums
+	if len(pledgeDetails) > 0 {
+		pledgeTokenDetails := pledgeDetails[0].Tokens
+		if err := c.PledgeV2(context.Background(), pledgeTokenDetails, txID, quorumDid, txnInfo.Epoch, txnInfo.Network); err != nil {
+			c.log.Error("initiateConsensusHandler: PledgeV2 failed", "err", err)
+			response.Message = "initiateConsensusHandler: PledgeV2 failed: " + err.Error()
+			return c.l.RenderJSON(request, response, http.StatusInternalServerError)
+		}
 	}
 
 	return c.l.RenderJSON(request, &consensusResponse, http.StatusOK)
