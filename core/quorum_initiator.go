@@ -231,7 +231,7 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 
 	c.log.Info("initiateConsensusHandler: all stateless validations passed", "txID", txID)
 
-	consensusResponse, _, err := consensus.InitiateConsensus(consensusRequest, quorumDc, c.log)
+	consensusResponse, err := consensus.InitiateConsensus(consensusRequest, quorumDc, c.log)
 	if err != nil {
 		c.log.Error("initiateConsensusHandler : Consensus failed", "err", err)
 		response.Message = err.Error()
@@ -246,6 +246,8 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 		if err := c.PledgeV2(context.Background(), pledgeTokenDetails, txID, quorumDid, txnInfo.Epoch, txnInfo.Network); err != nil {
 			c.log.Error("initiateConsensusHandler: PledgeV2 failed", "err", err)
 			response.Message = "initiateConsensusHandler: PledgeV2 failed: " + err.Error()
+			// ### Note: consensus succeeded but pledge failed, which is a critical state.
+			// Alerting is needed to investigate and resolve the underlying issue.
 			return c.l.RenderJSON(request, response, http.StatusInternalServerError)
 		}
 	}

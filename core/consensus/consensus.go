@@ -69,26 +69,20 @@ func ReqPledgeToken(
 // This function is pure: it does NOT call PledgeV2. The caller
 // (initiateConsensusHandler in core/quorum_initiator.go) is responsible for
 // calling c.PledgeV2 after this function returns successfully.
-func InitiateConsensus(consensusRequest models.ConsensusRequest, quorumDc types.DIDCrypto, log logger.Logger) (*models.ConsensusResponse, string, error) {
+func InitiateConsensus(consensusRequest models.ConsensusRequest, quorumDc types.DIDCrypto, log logger.Logger) (*models.ConsensusResponse, error) {
 	txnInfo := consensusRequest.TransactionInfo
 
 	// Validate pledge details exist.
 	pledgeDetails := txnInfo.Quorums
 	if len(pledgeDetails) == 0 {
 		log.Error("InitiateConsensus : No pledge details found")
-		return &models.ConsensusResponse{}, "", fmt.Errorf("no pledge details found")
+		return &models.ConsensusResponse{}, fmt.Errorf("no pledge details found")
 	}
 
 	quorumSignature, err := util.SignTransaction(quorumDc, txnInfo)
 	if err != nil {
 		log.Error("InitiateConsensus : Failed to sign transaction info", "err", err)
-		return &models.ConsensusResponse{}, "", err
-	}
-
-	transactionId, err := util.GetTransactionID(txnInfo)
-	if err != nil {
-		log.Error("InitiateConsensus: failed to compute transaction ID", "err", err)
-		return &models.ConsensusResponse{}, "", fmt.Errorf("InitiateConsensus: failed to compute transaction ID: %w", err)
+		return &models.ConsensusResponse{}, err
 	}
 
 	consensusResponse := models.ConsensusResponse{
@@ -98,5 +92,5 @@ func InitiateConsensus(consensusRequest models.ConsensusRequest, quorumDc types.
 		Status:          true,
 	}
 
-	return &consensusResponse, transactionId, nil
+	return &consensusResponse, nil
 }
