@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -58,15 +59,17 @@ func (c *Core) CallBackQuorumUnpledge(tx *models.Transactions, did string) error
 		return fmt.Errorf("CallBackQuorumUnpledge: failed to get transactions from `unpledge_sequence_info` table, err: %v", err)
 	}
 
-	if len(transactionToUnpledge) != 0 {
-		for _, txToUnpledge := range transactionToUnpledge {
-			if err := c.w.UnpledgeTokens(txToUnpledge, tx, did); err != nil {
-				c.log.Error("CallBackQuorumUnpledge: UnpledgeTokens failed",
-					"prevTxID", txToUnpledge,
-					"did", did,
-					"err", err,
-				)
-			}
+	for _, txToUnpledge := range transactionToUnpledge {
+		quorumDC, ok := c.qc[did]
+		if !ok {
+			return fmt.Errorf("CallBackQuorumUnpledge: quorum DID not setup: %s", did)
+		}
+		if err := c.w.UnpledgeV2(context.Background(), txToUnpledge, tx.ID, did, quorumDC); err != nil {
+			c.log.Error("CallBackQuorumUnpledge: UnpledgeV2 failed",
+				"prevTxID", txToUnpledge,
+				"did", did,
+				"err", err,
+			)
 		}
 	}
 
