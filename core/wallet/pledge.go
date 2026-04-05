@@ -465,7 +465,7 @@ func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Tr
 		Tokens: &models.TransactionTokens{
 			RBT: unpledgeTokenInfos,
 		},
-		Memo: fmt.Sprintf("UNPLEDGE of_tx=%s", prevTransactionId),
+		Memo: fmt.Sprintf("UNPLEDGE pledged_for_tx=%s unpledged_by_tx=%s", prevTransactionId, transaction.ID),
 	}
 
 	unpledgeInfoBytes, err := models.SerializeTransactionInfo(unpledgeTxInfo)
