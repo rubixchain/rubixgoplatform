@@ -36,6 +36,7 @@ func (w *Wallet) UnpledgeV2(
 	triggerTxID string,
 	quorumDID string,
 	quorumDC types.DIDCrypto,
+	network string,
 ) error {
 	if mainTxID == "" {
 		return fmt.Errorf("UnpledgeV2: mainTxID is required")
@@ -114,7 +115,7 @@ func (w *Wallet) UnpledgeV2(
 			continue
 		}
 
-		if err := w.unpledgeSingleTokenV2(ctx, tokenID, mainTxID, triggerTxID, quorumDID, quorumDC, epoch); err != nil {
+		if err := w.unpledgeSingleTokenV2(ctx, tokenID, mainTxID, triggerTxID, quorumDID, quorumDC, epoch, network); err != nil {
 			w.log.Error("UnpledgeV2: per-token unpledge failed",
 				"tokenID", tokenID, "mainTxID", mainTxID, "error", err)
 			failedTokens = append(failedTokens, tokenID)
@@ -195,6 +196,7 @@ func (w *Wallet) unpledgeSingleTokenV2(
 	quorumDID string,
 	quorumDC types.DIDCrypto,
 	epoch int,
+	network string,
 ) error {
 	// Fetch the latest tokenchain row — this should be the pledge row, so
 	// latestRow.TransactionID = pledgeTxID.
@@ -219,13 +221,12 @@ func (w *Wallet) unpledgeSingleTokenV2(
 		Initiator: quorumDID,
 		Owner:     quorumDID,
 		Epoch:     epoch,
-		Network:   "", // unpledge is node-local; no network broadcast
+		Network:   network,
 		Tokens: &models.TransactionTokens{
 			RBT: []*models.TokenInfo{{
 				TokenID:               tokenID,
 				PreviousTransactionID: prevTx,
 				TokenValue:            tokenValue,
-				DID:                   quorumDID,
 			}},
 		},
 		Memo: fmt.Sprintf("UNPLEDGE pledged_for_tx=%s unpledged_by_tx=%s", mainTxID, triggerTxID),

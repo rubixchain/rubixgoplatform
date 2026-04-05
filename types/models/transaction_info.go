@@ -25,7 +25,7 @@ type TokenInfo struct {
 	PreviousTransactionID string  `json:"previousTransactionID"`
 	Data                  string  `json:"data"`
 	TokenValue            float64 `json:"tokenValue"`
-	DID                   string  `json:"did"`
+	//DID                   string  `json:"did"`
 }
 
 type QuorumInfo struct {

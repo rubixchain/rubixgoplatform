@@ -98,7 +98,6 @@ func CollectRBTTokens(
 				TokenID:               nonSplit.TokenID,
 				PreviousTransactionID: nonSplit.TransactionID,
 				TokenValue:            nonSplit.TokenValue,
-				DID:                   nonSplit.DID,
 			})
 		}
 	}
@@ -160,7 +159,6 @@ func CollectRBTTokens(
 					TokenID:               partToken.TokenID,
 					PreviousTransactionID: partToken.TransactionID,
 					TokenValue:            partToken.TokenValue,
-					DID:                   partToken.DID,
 				})
 			}
 		}

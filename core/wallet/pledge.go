@@ -1,7 +1,6 @@
 package wallet
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
@@ -67,51 +66,9 @@ func (w *Wallet) PledgeTokens(tokenInfos []*models.TokenInfo, transaction *model
 	}
 
 	// Phase 3: Add the incoming transaction to the `transactions` table
-	// ###--- commented for new unpledge logic
-	// if _, err := tx.Exec(w.Ctx, `
-	// 	INSERT INTO transactions (id, info, signature)
-	// 	VALUES ($1, $2, $3)
-	// `, transaction.ID, transaction.Info, transaction.Signature); err != nil {
-	// 	return fmt.Errorf("PledgeTokens(tx=%v): failed to add transaction details in `transactions` table, err: %v", transaction.ID, err)
-	// }
-
-	var origTxInfo models.TransactionInfo
-	if err := json.Unmarshal(transaction.Info, &origTxInfo); err != nil {
-		origTxInfo.Network = ""
-	}
-
-	pledgeTokenInfos := make([]*models.TokenInfo, 0, len(tokenInfos))
-	for _, ti := range tokenInfos {
-		tokenValue, _ := util.GetTokenValueFromTokenID(ti.TokenID)
-		pledgeTokenInfos = append(pledgeTokenInfos, &models.TokenInfo{
-			TokenID:               ti.TokenID,
-			PreviousTransactionID: ti.PreviousTransactionID,
-			TokenValue:            tokenValue,
-			DID:                   did,
-		})
-	}
-
-	pledgeTxInfo := &models.TransactionInfo{
-		Initiator: did,
-		Owner:     did,
-		Epoch:     int(epoch),
-		Network:   origTxInfo.Network,
-		Tokens: &models.TransactionTokens{
-			RBT: pledgeTokenInfos,
-		},
-		Memo: fmt.Sprintf("PLEDGE for_tx=%s", transaction.ID),
-	}
-
-	pledgeInfoBytes, err := models.SerializeTransactionInfo(pledgeTxInfo)
-	if err != nil {
-		return fmt.Errorf("PledgeTokens(tx=%v): failed to serialize pledge TransactionInfo: %v", transaction.ID, err)
-	}
-	transaction.Info = pledgeInfoBytes
-
 	if _, err := tx.Exec(w.Ctx, `
 		INSERT INTO transactions (id, info, signature)
 		VALUES ($1, $2, $3)
-		ON CONFLICT (id) DO NOTHING
 	`, transaction.ID, transaction.Info, transaction.Signature); err != nil {
 		return fmt.Errorf("PledgeTokens(tx=%v): failed to add transaction details in `transactions` table, err: %v", transaction.ID, err)
 	}
@@ -150,51 +107,13 @@ func (w *Wallet) PledgeTokens(tokenInfos []*models.TokenInfo, transaction *model
 	prevTxnIDs := make([]*string, 0, len(tokenInfos))
 	roles := make([]int16, 0, len(tokenInfos))
 	positions := make([]int, 0, len(tokenInfos))
-	// ###--- commented for new prev_tx_from_tokenchain logic
-	/*
-		 for _, tokenInfo := range tokenInfos {
-			prevTxnIDs = append(prevTxnIDs, &tokenInfo.PreviousTransactionID)
-			roles = append(roles, int16(pledgeTypeNum))
-			positions = append(positions, int(tokenNextPositionMap[tokenInfo.TokenID]))
-		} */
 
-	/* for _, tokenInfo := range tokenInfos {
-			var prevTx string
-
-			err := tx.QueryRow(w.Ctx, `
-	        SELECT transaction_id
-	        FROM tokenchain
-	        WHERE token_id = $1
-	        ORDER BY position DESC
-	        LIMIT 1
-	    `, tokenInfo.TokenID).Scan(&prevTx)
-			if err != nil {
-				return fmt.Errorf("PledgeTokens: failed to fetch latest tokenchain tx for token %s: %v", tokenInfo.TokenID, err)
-			}
-
-			prevTxnIDs = append(prevTxnIDs, &prevTx)
-			roles = append(roles, int16(pledgeTypeNum))
-			positions = append(positions, int(tokenNextPositionMap[tokenInfo.TokenID]))
-		}
-	*/
 	for _, tokenInfo := range tokenInfos {
-		var prevTx string
-
-		err := tx.QueryRow(w.Ctx, `
-        SELECT transaction_id
-        FROM tokenchain
-        WHERE token_id = $1
-        ORDER BY position DESC
-        LIMIT 1
-    `, tokenInfo.TokenID).Scan(&prevTx)
-		if err != nil {
-			return fmt.Errorf("PledgeTokens: failed to fetch latest tokenchain tx for token %s: %v", tokenInfo.TokenID, err)
-		}
-
-		prevTxnIDs = append(prevTxnIDs, &prevTx)
+		prevTxnIDs = append(prevTxnIDs, &tokenInfo.PreviousTransactionID)
 		roles = append(roles, int16(pledgeTypeNum))
 		positions = append(positions, int(tokenNextPositionMap[tokenInfo.TokenID]))
 	}
+
 	// Phase 4: Add the `id` column values to the respective pledge token's array in `tokenchain_index` column
 	rows, err := tx.Query(
 		w.Ctx,
@@ -311,54 +230,26 @@ func (w *Wallet) PledgeTokens(tokenInfos []*models.TokenInfo, transaction *model
 }
 
 func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Transactions, did string) error {
-
 	tx, err := w.BeginTx(w.Ctx)
 	if err != nil {
 		return fmt.Errorf("UnpledgeTokens(tx=%v): failed to get the tx Object, err: %v", prevTransactionId, err)
 	}
 	defer tx.Rollback(w.Ctx)
 
-	// Idempotency guard: if the unpledge_sequence_info row is already gone,
-	// this unpledge completed in a prior invocation — return success silently.
-	var seqExists bool
-	if err := tx.QueryRow(w.Ctx, `
-		SELECT EXISTS(SELECT 1 FROM unpledge_sequence_info WHERE tx_id=$1)
-	`, prevTransactionId).Scan(&seqExists); err != nil {
-		return fmt.Errorf("UnpledgeTokens(tx=%v): failed to check unpledge_sequence_info, err: %v", prevTransactionId, err)
-	}
-	if !seqExists {
-		w.log.Info("UnpledgeTokens: idempotent skip — unpledge already completed", "prevTxID", prevTransactionId)
-		return nil
-	}
-
 	// Phase 0: Get tokens from unpledge_sequence_table
 	var tokenIDs []string = make([]string, 0)
-	var pledgeEpoch int
 	if err := tx.QueryRow(w.Ctx, `
-		SELECT pledge_tokens, epoch FROM unpledge_sequence_info
+		SELECT pledge_tokens FROM unpledge_sequence_info
 		WHERE tx_id=$1
-	`, prevTransactionId).Scan(&tokenIDs, &pledgeEpoch); err != nil {
+	`, prevTransactionId).Scan(&tokenIDs); err != nil {
 		return err
 	}
 
 	var tokenInfos []models.TokenInfo = make([]models.TokenInfo, 0)
-	// ###--- commented for new prev_tx_from_tokenchain logic
-	/*
-		rowTokenInfo, err := tx.Query(w.Ctx, `
-			SELECT token_id, transaction_id FROM tokens
-			WHERE token_id=ANY($1)
-		`, tokenIDs) */
 	rowTokenInfo, err := tx.Query(w.Ctx, `
-    SELECT tc.token_id, tc.transaction_id
-    FROM tokenchain tc
-    JOIN (
-        SELECT token_id, MAX(position) as max_pos
-        FROM tokenchain
-        WHERE token_id = ANY($1)
-        GROUP BY token_id
-    ) latest
-    ON tc.token_id = latest.token_id AND tc.position = latest.max_pos
-`, tokenIDs)
+		SELECT token_id, transaction_id FROM tokens
+		WHERE token_id=ANY($1)
+	`, tokenIDs)
 	if err != nil {
 		return err
 	}
@@ -378,10 +269,10 @@ func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Tr
 	}
 
 	// Phase 1: Check if the tokens are in pledged state or not
-	/* var areAllTokensPledged bool = false
+	var areAllTokensPledged bool = false
 
 	if err := tx.QueryRow(w.Ctx, `
-		SELECT COUNT(DISTINCT token_id) =$2
+		SELECT COUNT(DISTINCT token_id)
 		FROM tokens
 		WHERE token_id=ANY($1)
 		AND token_status=$2
@@ -390,39 +281,8 @@ func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Tr
 	}
 	if !areAllTokensPledged {
 		return fmt.Errorf("UnpledgeTokens(tx=%v): not all tokens were found to be in pledged state, tokens: %v", prevTransactionId, tokenIDs)
-	} */
-	var count int64
-
-	if err := tx.QueryRow(w.Ctx, `
-    SELECT COUNT(DISTINCT token_id)
-    FROM tokens
-    WHERE token_id=ANY($1)
-    AND token_status=$2
-	`, tokenIDs, constants.TokenStatus_Pledged).Scan(&count); err != nil {
-		return fmt.Errorf("UnpledgeTokens(tx=%v): failed to count pledged tokens, err: %v", prevTransactionId, err)
 	}
 
-	// ###--- commented for new unpledge logic
-	// if count != int64(len(tokenIDs)) {
-	// 	return fmt.Errorf("UnpledgeTokens(tx=%v): not all tokens are pledged, tokens: %v", prevTransactionId, tokenIDs)
-	// }
-	if count != int64(len(tokenIDs)) {
-		// Check if tokens are already FREE — idempotent retry after a completed unpledge
-		var freeCount int64
-		if err := tx.QueryRow(w.Ctx, `
-			SELECT COUNT(DISTINCT token_id)
-			FROM tokens
-			WHERE token_id=ANY($1)
-			AND token_status=$2
-		`, tokenIDs, constants.TokenStatus_Free).Scan(&freeCount); err != nil {
-			return fmt.Errorf("UnpledgeTokens(tx=%v): failed to count free tokens, err: %v", prevTransactionId, err)
-		}
-		if freeCount == int64(len(tokenIDs)) {
-			w.log.Info("UnpledgeTokens: idempotent skip — tokens already FREE", "prevTxID", prevTransactionId, "tokens", tokenIDs)
-			return nil
-		}
-		return fmt.Errorf("UnpledgeTokens(tx=%v): not all tokens are pledged, tokens: %v", prevTransactionId, tokenIDs)
-	}
 	// Phase 2: Update Token status to 0
 	if _, err := tx.Exec(w.Ctx, `
 		UPDATE tokens
@@ -433,51 +293,9 @@ func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Tr
 	}
 
 	// Phase 3: Store the incoming transaction in `transactions` table
-	// ###--- commented for new unpledge logic
-	// if _, err := tx.Exec(w.Ctx, `
-	// 	INSERT INTO transactions (id, info, signature)
-	// 	VALUES ($1, $2, $3)
-	// `, transaction.ID, transaction.Info, transaction.Signature); err != nil {
-	// 	return fmt.Errorf("UnpledgeTokens(tx=%v): failed to add transaction details in `transactions` table, err: %v", prevTransactionId, err)
-	// }
-
-	var origTxInfoUnpledge models.TransactionInfo
-	if err := json.Unmarshal(transaction.Info, &origTxInfoUnpledge); err != nil {
-		origTxInfoUnpledge.Network = ""
-	}
-
-	unpledgeTokenInfos := make([]*models.TokenInfo, 0, len(tokenInfos))
-	for _, ti := range tokenInfos {
-		tokenValue, _ := util.GetTokenValueFromTokenID(ti.TokenID)
-		unpledgeTokenInfos = append(unpledgeTokenInfos, &models.TokenInfo{
-			TokenID:               ti.TokenID,
-			PreviousTransactionID: ti.PreviousTransactionID,
-			TokenValue:            tokenValue,
-			DID:                   did,
-		})
-	}
-
-	unpledgeTxInfo := &models.TransactionInfo{
-		Initiator: did,
-		Owner:     did,
-		Epoch:     pledgeEpoch,
-		Network:   origTxInfoUnpledge.Network,
-		Tokens: &models.TransactionTokens{
-			RBT: unpledgeTokenInfos,
-		},
-		Memo: fmt.Sprintf("UNPLEDGE pledged_for_tx=%s unpledged_by_tx=%s", prevTransactionId, transaction.ID),
-	}
-
-	unpledgeInfoBytes, err := models.SerializeTransactionInfo(unpledgeTxInfo)
-	if err != nil {
-		return fmt.Errorf("UnpledgeTokens(tx=%v): failed to serialize unpledge TransactionInfo: %v", prevTransactionId, err)
-	}
-	transaction.Info = unpledgeInfoBytes
-
 	if _, err := tx.Exec(w.Ctx, `
 		INSERT INTO transactions (id, info, signature)
 		VALUES ($1, $2, $3)
-		ON CONFLICT (id) DO NOTHING
 	`, transaction.ID, transaction.Info, transaction.Signature); err != nil {
 		return fmt.Errorf("UnpledgeTokens(tx=%v): failed to add transaction details in `transactions` table, err: %v", prevTransactionId, err)
 	}
@@ -515,68 +333,31 @@ func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Tr
 	prevTxnIDs := make([]*string, 0, len(tokenInfos))
 	roles := make([]int16, 0, len(tokenInfos))
 	positions := make([]int, 0, len(tokenInfos))
-	// ###--- commented for new prev_tx_from_tokenchain logic
-	/*
-		for _, tokenInfo := range tokenInfos {
-			prevTxnIDs = append(prevTxnIDs, &tokenInfo.PreviousTransactionID)
-			roles = append(roles, int16(unpledgeTypeNum))
-			positions = append(positions, int(tokenNextPositionMap[tokenInfo.TokenID]))
-		} */
 
-	/* for _, tokenInfo := range tokenInfos {
-			var prevTx string
-
-			err := tx.QueryRow(w.Ctx, `
-	        SELECT transaction_id
-	        FROM tokenchain
-	        WHERE token_id = $1
-	        ORDER BY position DESC
-	        LIMIT 1
-	    `, tokenInfo.TokenID).Scan(&prevTx)
-			if err != nil {
-				return fmt.Errorf("PledgeTokens: failed to fetch latest tokenchain tx for token %s: %v", tokenInfo.TokenID, err)
-			}
-
-			prevTxnIDs = append(prevTxnIDs, &prevTx)
-			roles = append(roles, int16(unpledgeTypeNum))
-			positions = append(positions, int(tokenNextPositionMap[tokenInfo.TokenID]))
-		} */
 	for _, tokenInfo := range tokenInfos {
-		var prevTx string
-
-		err := tx.QueryRow(w.Ctx, `
-        SELECT transaction_id
-        FROM tokenchain
-        WHERE token_id = $1
-        ORDER BY position DESC
-        LIMIT 1
-    `, tokenInfo.TokenID).Scan(&prevTx)
-		if err != nil {
-			return fmt.Errorf("UnpledgeTokens: failed to fetch latest tokenchain tx for token %s: %v", tokenInfo.TokenID, err)
-		}
-
-		prevTxnIDs = append(prevTxnIDs, &prevTx)
+		prevTxnIDs = append(prevTxnIDs, &tokenInfo.PreviousTransactionID)
 		roles = append(roles, int16(unpledgeTypeNum))
 		positions = append(positions, int(tokenNextPositionMap[tokenInfo.TokenID]))
 	}
+
 	// Phase 4: Add the `id` column values to the respective pledge token's array in `tokenchain_index` column
 	rows, err := tx.Query(
 		w.Ctx,
 		`
 		INSERT INTO tokenchain (
-			token_id,
-			transaction_id,
-			previous_transaction_id,
-			role,
+			token_id, 
+			transaction_id, 
+			previous_transaction_id, 
+			role, 
 			position
 		)
-		SELECT
+		SELECT 
 			t.token_id,
 			$1,
 			t.prev_txn_id,
 			t.role,
 			t.position
-		FROM
+		FROM 
 			UNNEST(
 				$2::TEXT[],
 				$3::TEXT[],
@@ -629,14 +410,14 @@ func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Tr
 	tokenIDList, tokenIDRow := util.UnzipMap(tokenchainRowIDMap)
 	_, err = tx.Exec(w.Ctx, `
 		INSERT INTO tokenchain_index (token_id, index)
-		SELECT
+		SELECT 
 			t.token_id,
 			ARRAY[t.idx]
 		FROM
 			UNNEST($1::TEXT[], $2::INTEGER[]) AS t(token_id, idx)
 		ON CONFLICT (token_id)
 		DO UPDATE
-		SET
+		SET 
 			index = tokenchain_index.index || EXCLUDED.index,
 			updated_at = NOW();
 	`, tokenIDList, tokenIDRow)
@@ -644,16 +425,7 @@ func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Tr
 		return err
 	}
 
-	w.log.Info("UNPLEDGE_TRIGGER",
-		"prev_tx", prevTransactionId,
-		"tokens", tokenIDs,
-	)
-	w.log.Info("DENOM_UPDATE",
-		"did", did,
-		"denoms", tokenDenomMap,
-	)
-	// uncommenting now
-	// // Phase 6: Update token_denom table
+	// Phase 6: Update token_denom table
 	denomValueList, denomCountList := util.UnzipMap(tokenDenomMap)
 	_, err = tx.Exec(w.Ctx, `
 		INSERT INTO token_denom (did, denom, count)
@@ -661,11 +433,11 @@ func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Tr
 			$1,
 			d.denom,
 			d.count
-		FROM
+		FROM 
 			UNNEST($2::NUMERIC[], $3::BIGINT[]) AS d(denom, count)
 		ON CONFLICT (did, denom)
-		DO UPDATE
-		SET
+		DO UPDATE 
+		SET 
 			count = token_denom.count + EXCLUDED.count,
 			updated_at = NOW();
 	`, did, denomValueList, denomCountList)
@@ -687,30 +459,6 @@ func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Tr
 
 	return nil
 }
-
-/* func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Transactions, did string) error {
-
-	tx, err := w.BeginTx(w.Ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(w.Ctx)
-
-	// Optional: log trigger (for debugging)
-	w.log.Info("UNPLEDGE_TRIGGER",
-		"prev_tx", prevTransactionId,
-	)
-
-	// Only cleanup
-	if _, err := tx.Exec(w.Ctx, `
-		DELETE FROM unpledge_sequence_info
-		WHERE tx_id = $1
-	`, prevTransactionId); err != nil {
-		return err
-	}
-
-	return tx.Commit(w.Ctx)
-} */
 
 // CheckTxnsPresentInUnpledgeSequenceInfo checks if the provided transactions are
 // present in the `unpledge_sequence_info` table or not. If they are, they are returned back

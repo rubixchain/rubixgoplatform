@@ -90,7 +90,6 @@ func (w *Wallet) PledgeV2(
 			TokenID:               ti.TokenID,
 			PreviousTransactionID: latestRow.TransactionID,
 			TokenValue:            tokenValue,
-			DID:                   quorumDID,
 		})
 	}
 

@@ -125,8 +125,8 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 			Token:      rbtTokensToCommitDetails[i].TokenID,
 			TokenType:  tokenType,
 			TokenValue: rbtTokensToCommitDetails[i].TokenValue,
-			OwnerDID:   rbtTokensToCommitDetails[i].DID,
-			BlockID:    blockId,
+			//	OwnerDID:   rbtTokensToCommitDetails[i].DID,
+			BlockID: blockId,
 		}
 		rbtTokenInfoArray = append(rbtTokenInfoArray, tokenInfo)
 		tokenListForExplorer = append(tokenListForExplorer, Token{TokenHash: tokenInfo.Token, TokenValue: tokenInfo.TokenValue})

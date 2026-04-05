@@ -579,7 +579,7 @@ func (cmd *Command) runApp() {
 
 	serverConfig := &server.Config{
 		Config: srvcfg.Config{
-			HostAddress: "localhost",
+			HostAddress: "0.0.0.0",
 			HostPort:    fmt.Sprintf("%d", cmd.cfg.PortConfig.RubixServerPort),
 			Production:  "false",
 
@@ -788,7 +788,7 @@ func Run(args []string) {
 	}
 
 	if cmd.logFile == "" {
-		cmd.logFile = cmd.nodeConfigPath + "log.txt"
+		cmd.logFile = filepath.Join(cmd.nodeConfigPath, "log.txt")
 	}
 
 	level := logger.Debug
