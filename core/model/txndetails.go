@@ -44,8 +44,7 @@ type TxnCountForDID struct {
 }
 
 type PubSubTxnInfo struct {
-	BlockHash         string  `gorm:"column:block_hash;primaryKey"`
-	TransactionID     string  `gorm:"column:transaction_id"`
+	TransactionID     string  `gorm:"column:transaction_id;primaryKey"`
 	BlockType         string  `gorm:"column:block_type"`
 	AssetType         int     `gorm:"column:asset_type"`
 	FTName            string  `gorm:"column:ft_name"`
@@ -59,7 +58,7 @@ type PubSubTxnInfo struct {
 }
 
 type FailedTransaction struct {
-	BlockHash    string    `gorm:"column:txn_id"`
+	TxnID        string    `gorm:"column:txn_id"`
 	PublisherDID string    `gorm:"column:publisher_did"`
 	Error        string    `gorm:"column:error"`
 	FailedAt     time.Time `gorm:"column:failed_at"`

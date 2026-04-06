@@ -25,9 +25,8 @@ const (
 )
 
 type NewState struct {
-	ConOwnerDID  string `json:"contract_ownwer_did"`
-	ConHash      string `json:"contract_hash"`
-	ConBlockHash string `json:"contract_block_hash"`
+	ConOwnerDID string `json:"contract_ownwer_did"`
+	ConHash     string `json:"contract_hash"`
 }
 
 var reqID string

@@ -29,6 +29,7 @@ const (
 	APISetupQuorum                      string = "/api/setup-quorum"
 	APISetupService                     string = "/api/setup-service"
 	APIGenerateLocalRBT                 string = "/api/generate-local-rbt"
+	APIGenerateMainnetRBT               string = "/api/generate-mainnet-rbt"
 	APIInitiateRBTTransfer              string = "/api/initiate-rbt-transfer"
 	APIDumpTokenChainBlock              string = "/api/dump-token-chain"
 	APISetupDID                         string = "/api/setup-did"

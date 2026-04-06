@@ -32,7 +32,7 @@ const (
 )
 
 const (
-	version string = "0.1_keys"
+	version string = "0.2"
 )
 const (
 	VersionCmd                     string = "-v"
@@ -50,6 +50,7 @@ const (
 	RemoveAllQuorumCmd             string = "removeallquorum"
 	SetupQuorumCmd                 string = "setupquorum"
 	GenerateLocalRBTCmd            string = "generatelocalrbt"
+	GenerateMainnetRBTCmd          string = "generatemainnetrbt"
 	TransferRBTCmd                 string = "transferrbt"
 	DumpTokenChainCmd              string = "dumptokenchain"
 	DecodeTokenChainCmd            string = "decodetokenchain"
@@ -127,6 +128,7 @@ var commands = []string{VersionCmd,
 	RemoveAllQuorumCmd,
 	SetupQuorumCmd,
 	GenerateLocalRBTCmd,
+	GenerateMainnetRBTCmd,
 	TransferRBTCmd,
 	GetRBTBalanceCmd,
 	DumpTokenChainCmd,
@@ -193,6 +195,7 @@ var commandsHelp = []string{"To get tool version",
 	"This command will delete all quorurm list from node",
 	"This command will setup node as quorurm",
 	"This command will generate test RBT token",
+	"This command will generate mainnet RBT tokens",
 	"This command will trasnfer RBT",
 	"This command will help to get account information",
 	"This command enable explorer service on the node",
@@ -246,6 +249,8 @@ var commandsHelp = []string{"To get tool version",
 	"This command will set the async FT response status",
 	"This command will fix FT tokens that have peer ID as CreatorDID",
 	"This command will get statistics about FT token creators",
+	"",
+	"",
 }
 
 type Command struct {
@@ -307,7 +312,6 @@ type Command struct {
 	binaryCodePath               string
 	rawCodePath                  string
 	smartContractToken           string
-	newContractBlock             string
 	publishType                  int
 	smartContractData            string
 	executorAddr                 string
@@ -564,7 +568,7 @@ func (cmd *Command) runApp() {
 
 	serverConfig := &server.Config{
 		Config: srvcfg.Config{
-			HostAddress: "localhost",
+			HostAddress: "0.0.0.0",
 			HostPort:    fmt.Sprintf("%d", cmd.cfg.PortConfig.RubixServerPort),
 			Production:  "false",
 
@@ -706,7 +710,6 @@ func Run(args []string) {
 	flag.StringVar(&cmd.binaryCodePath, "binCode", "", "Binary code path")
 	flag.StringVar(&cmd.rawCodePath, "rawCode", "", "Raw code path")
 	flag.StringVar(&cmd.smartContractToken, "sct", "", "Smart contract token")
-	flag.StringVar(&cmd.newContractBlock, "sctBlockHash", "", "Contract block hash")
 	flag.IntVar(&cmd.publishType, "pubType", 0, "Smart contract event publishing type(Deploy & Execute)")
 	flag.StringVar(&cmd.smartContractData, "sctData", "data", "Smart contract execution info")
 	flag.StringVar(&cmd.executorAddr, "executorAddr", "", "Smart contract Executor Address")
@@ -774,7 +777,7 @@ func Run(args []string) {
 	}
 
 	if cmd.logFile == "" {
-		cmd.logFile = cmd.nodeConfigPath + "log.txt"
+		cmd.logFile = filepath.Join(cmd.nodeConfigPath, "log.txt")
 	}
 
 	level := logger.Debug
@@ -842,6 +845,8 @@ func Run(args []string) {
 		cmd.SetupQuorum()
 	case GenerateLocalRBTCmd:
 		cmd.GenerateLocalRBT()
+	case GenerateMainnetRBTCmd:
+		cmd.GenerateMainnetRBT()
 	case TransferRBTCmd:
 		cmd.TransferRBT()
 	case GetRBTBalanceCmd:

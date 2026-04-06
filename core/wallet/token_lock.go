@@ -3,13 +3,154 @@ package wallet
 import (
 	"context"
 	"fmt"
+	stdmath "math"
 	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/constants"
+	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
+
+// ── Pure selection helper ──────────────────────────────────────────────
+
+// selectTokensForAmount picks the minimum set of tokens to satisfy `amount`
+// from the given candidate slice. Does NOT modify the slice. Pure function:
+// no DB access, no Wallet receiver, no context — unit-testable in isolation.
+//
+// Selection policy (priority order):
+//  1. Exact match: single token whose value == amount (within FloatPrecision tolerance)
+//  2. Whole-number optimisation: if amount is a whole number, greedily pick 1.0-value tokens first
+//  3. Exact combination: accumulate largest-first keeping sum <= amount; if result == amount, return it
+//  4. Greedy fallback: accumulate smallest-first until sum >= amount
+//     (prefers the smallest token >= remaining amount to minimise overshoot / split size)
+//
+// O(N log N) due to two sort passes — no combinatorial search.
+func selectTokensForAmount(candidates []models.Token, amount float64) ([]models.Token, error) {
+	if len(candidates) == 0 {
+		return nil, fmt.Errorf("selectTokensForAmount: no candidate tokens available")
+	}
+
+	precAmount := rubixmath.FloatPrecision(amount)
+
+	// Calculate total balance upfront.
+	var totalBalance float64
+	for _, tok := range candidates {
+		totalBalance = rubixmath.AddFloat(totalBalance, tok.TokenValue)
+	}
+	if rubixmath.FloatPrecision(totalBalance) < precAmount {
+		return nil, fmt.Errorf("selectTokensForAmount: insufficient balance: have %v, need %v", totalBalance, amount)
+	}
+
+	// Build a sorted-ASC copy (used by Pass 1 and Pass 4).
+	ascSorted := make([]models.Token, len(candidates))
+	copy(ascSorted, candidates)
+	sort.Slice(ascSorted, func(i, j int) bool {
+		return ascSorted[i].TokenValue < ascSorted[j].TokenValue
+	})
+
+	// ── Pass 1: Exact single-token match ──────────────────────────────
+	for _, tok := range ascSorted {
+		if rubixmath.FloatPrecision(tok.TokenValue) == precAmount {
+			return []models.Token{tok}, nil
+		}
+	}
+
+	// ── Pass 2: Whole-number optimisation ─────────────────────────────
+	// If amount is a whole number, prefer collecting 1.0-value tokens first.
+	isWholeNumber := precAmount == rubixmath.FloatPrecision(stdmath.Floor(amount))
+	if isWholeNumber && amount >= 1.0 {
+		var oneTokens []models.Token
+		for _, tok := range ascSorted {
+			if rubixmath.FloatPrecision(tok.TokenValue) == rubixmath.FloatPrecision(1.0) {
+				oneTokens = append(oneTokens, tok)
+			}
+		}
+		needed := int(stdmath.Round(amount)) // e.g. 2.0 → 2
+		if len(oneTokens) >= needed {
+			return oneTokens[:needed], nil
+		}
+		// Have some 1.0 tokens but not enough — use them and recurse for the remainder.
+		if len(oneTokens) > 0 {
+			usedValue := float64(len(oneTokens)) // each is 1.0
+			remaining := rubixmath.FloatPrecision(amount - usedValue)
+
+			// Collect non-1.0 candidates for the remaining amount.
+			oneUsed := make(map[string]bool, len(oneTokens))
+			for _, t := range oneTokens {
+				oneUsed[t.TokenID] = true
+			}
+			var rest []models.Token
+			for _, tok := range ascSorted {
+				if !oneUsed[tok.TokenID] {
+					rest = append(rest, tok)
+				}
+			}
+			extra, err := selectTokensForAmount(rest, remaining)
+			if err == nil {
+				return append(oneTokens, extra...), nil
+			}
+			// Fall through to passes 3/4 using all candidates.
+		}
+	}
+
+	// ── Pass 3: Exact combination (largest-first, sum <= amount) ──────
+	// Walk tokens DESC, only adding a token when it keeps the running sum ≤ amount.
+	// If the final accumulated sum equals amount exactly, we found an exact combination.
+	descSorted := make([]models.Token, len(ascSorted))
+	copy(descSorted, ascSorted)
+	sort.Slice(descSorted, func(i, j int) bool {
+		return descSorted[i].TokenValue > descSorted[j].TokenValue
+	})
+
+	var exactSelected []models.Token
+	var exactSum float64
+	for _, tok := range descSorted {
+		precVal := rubixmath.FloatPrecision(tok.TokenValue)
+		if rubixmath.FloatPrecision(exactSum+precVal) <= precAmount {
+			exactSelected = append(exactSelected, tok)
+			exactSum = rubixmath.AddFloat(exactSum, precVal)
+			if exactSum == precAmount {
+				return exactSelected, nil
+			}
+		}
+	}
+	// exactSum < precAmount here — no exact subset found. Fall through to greedy.
+
+	// ── Pass 4: Greedy smallest-first fallback ────────────────────────
+	// Accumulate tokens ASC until sum >= amount.
+	// Before each addition, if the current token alone covers the remaining
+	// amount, take it and stop (minimises overshoot / split size — ASC order
+	// guarantees this is the smallest such token).
+	var selected []models.Token
+	var accumulated float64
+
+	for _, tok := range ascSorted {
+		precVal := rubixmath.FloatPrecision(tok.TokenValue)
+		remaining := rubixmath.FloatPrecision(precAmount - accumulated)
+
+		// If this token alone covers the remaining amount, take it and stop.
+		if precVal >= remaining {
+			selected = append(selected, tok)
+			accumulated = rubixmath.AddFloat(accumulated, precVal)
+			break
+		}
+
+		selected = append(selected, tok)
+		accumulated = rubixmath.AddFloat(accumulated, precVal)
+
+		if accumulated >= precAmount {
+			break
+		}
+	}
+
+	if rubixmath.FloatPrecision(accumulated) < precAmount {
+		return nil, fmt.Errorf("selectTokensForAmount: insufficient tokens: have %v, need %v", accumulated, amount)
+	}
+
+	return selected, nil
+}
 
 // ── Tx-accepting query helpers ─────────────────────────────────────────
 // These run SELECT ... FOR UPDATE within a caller-managed transaction.
@@ -179,15 +320,21 @@ func (w *Wallet) LockFTTokens(ctx context.Context, ownerDID string, ftName strin
 	return selected, nil
 }
 
-// LockTokensForSplit selects and locks ALL free RBT tokens for the given owner DID
-// using SELECT ... FOR UPDATE SKIP LOCKED to avoid deadlocks with concurrent transactions.
-// The caller's denomination-selection logic (CollectRBTTokens) determines which tokens
-// from the returned slice to actually use for the transfer or split.
+// LockTokensForSplit selects and locks the minimum set of free RBT tokens needed
+// for the given amount, using a two-phase approach:
 //
-// Returns the locked token rows; callers must eventually release or consume them.
+//  1. Read-only snapshot SELECT (no FOR UPDATE) to collect all free candidate tokens.
+//  2. selectTokensForAmount chooses the minimum subset in Go (no DB round-trip).
+//  3. Targeted FOR UPDATE SKIP LOCKED on only the selected token IDs.
+//  4. TOCTOU check: if any selected token was concurrently locked, return a clear error.
+//  5. UPDATE token_status to Locked + commit.
+//
+// This allows concurrent transfers from the same DID to each acquire their own
+// disjoint token subsets instead of one transfer monopolising all free tokens.
+//
+// Returns only the selected (now-locked) tokens; callers must eventually release or consume them.
 func (w *Wallet) LockTokensForSplit(ctx context.Context, ownerDID string, amount float64) ([]models.Token, error) {
-	w.log.Debug("LockTokensForSplit: Starting", "did", ownerDID, "amount", amount)
-
+	w.log.Info("LockTokensForSplit: locking tokens for split", "ownerDID", ownerDID, "amount", amount)
 	tx, err := w.db.BeginTx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("LockTokensForSplit: begin tx: %w", err)
@@ -198,44 +345,104 @@ func (w *Wallet) LockTokensForSplit(ctx context.Context, ownerDID string, amount
 		return nil, fmt.Errorf("LockTokensForSplit: set lock_timeout: %w", err)
 	}
 
-	w.log.Debug("LockTokensForSplit: Querying for FREE tokens", "did", ownerDID, "status", constants.TokenStatus_Free)
-
-	rows, err := tx.Query(ctx, `
+	// ── Phase 1: Read-only candidate fetch (no FOR UPDATE) ────────────
+	candidateRows, err := tx.Query(ctx, `
 		SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
 		       token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
 		FROM tokens
 		WHERE did=$1
 		  AND token_type=(SELECT id FROM token_type WHERE name=$2)
 		  AND token_status=$3
-		ORDER BY token_value DESC
-		FOR UPDATE SKIP LOCKED
+		ORDER BY token_value ASC
 	`, ownerDID, constants.TokenType_RBT, constants.TokenStatus_Free)
 	if err != nil {
-		w.log.Error("LockTokensForSplit: Query failed", "err", err)
-		return nil, fmt.Errorf("LockTokensForSplit: query: %w", err)
+		return nil, fmt.Errorf("LockTokensForSplit: candidate query: %w", err)
+	}
+	defer candidateRows.Close()
+
+	var candidates []models.Token
+	for candidateRows.Next() {
+		var tok models.Token
+		if err := candidateRows.Scan(
+			&tok.TokenID, &tok.ParentTokenID, &tok.TokenValue, &tok.TokenStatus,
+			&tok.DID, &tok.TransactionID, &tok.TokenStateHash, &tok.TokenType,
+			&tok.LatestPosition, &tok.LatestRole, &tok.CreatedAt, &tok.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("LockTokensForSplit: candidate scan: %w", err)
+		}
+		candidates = append(candidates, tok)
+	}
+	if err := candidateRows.Err(); err != nil {
+		return nil, fmt.Errorf("LockTokensForSplit: candidate rows: %w", err)
 	}
 
-	locked, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.Token])
+	// ── Phase 2: Apply selection logic in Go ──────────────────────────
+	selected, err := selectTokensForAmount(candidates, amount)
 	if err != nil {
-		w.log.Error("LockTokensForSplit: Failed to collect rows", "err", err)
-		return nil, fmt.Errorf("LockTokensForSplit: collect: %w", err)
+		return nil, fmt.Errorf("LockTokensForSplit: selection: %w", err)
 	}
 
-	w.log.Info("LockTokensForSplit: Tokens found and locked", "count", len(locked))
+	// ── Phase 3: Lock only selected tokens (targeted FOR UPDATE SKIP LOCKED) ──
+	selectedIDs := make([]string, len(selected))
+	for i, tok := range selected {
+		selectedIDs[i] = tok.TokenID
+	}
+	sort.Strings(selectedIDs) // deadlock prevention: always lock in a deterministic order
 
-	if len(locked) == 0 {
-		w.log.Warn("LockTokensForSplit: No FREE tokens found", "did", ownerDID)
-		return locked, nil
+	lockRows, err := tx.Query(ctx, `
+		SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
+		       token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+		FROM tokens
+		WHERE token_id = ANY($1::text[])
+		  AND did = $2
+		  AND token_type=(SELECT id FROM token_type WHERE name=$3)
+		  AND token_status = $4
+		ORDER BY token_id
+		FOR UPDATE SKIP LOCKED
+	`, selectedIDs, ownerDID, constants.TokenType_RBT, constants.TokenStatus_Free)
+	if err != nil {
+		return nil, fmt.Errorf("LockTokensForSplit: lock query: %w", err)
+	}
+	defer lockRows.Close()
+
+	var locked []models.Token
+	for lockRows.Next() {
+		var tok models.Token
+		if err := lockRows.Scan(
+			&tok.TokenID, &tok.ParentTokenID, &tok.TokenValue, &tok.TokenStatus,
+			&tok.DID, &tok.TransactionID, &tok.TokenStateHash, &tok.TokenType,
+			&tok.LatestPosition, &tok.LatestRole, &tok.CreatedAt, &tok.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("LockTokensForSplit: lock scan: %w", err)
+		}
+		locked = append(locked, tok)
+	}
+	if err := lockRows.Err(); err != nil {
+		return nil, fmt.Errorf("LockTokensForSplit: lock rows: %w", err)
 	}
 
-	tokenIDs := make([]string, len(locked))
-	for i, tok := range locked {
-		tokenIDs[i] = tok.TokenID
+	// ── Phase 4: TOCTOU check ─────────────────────────────────────────
+	if len(locked) < len(selectedIDs) {
+		lockedSet := make(map[string]bool, len(locked))
+		for _, tok := range locked {
+			lockedSet[tok.TokenID] = true
+		}
+		var missing []string
+		for _, id := range selectedIDs {
+			if !lockedSet[id] {
+				missing = append(missing, id)
+			}
+		}
+		return nil, fmt.Errorf(
+			"LockTokensForSplit: TOCTOU conflict — %d of %d selected tokens were concurrently locked by another transaction, retry recommended: missing=%v",
+			len(selectedIDs)-len(locked), len(selectedIDs), missing,
+		)
 	}
 
+	// ── Phase 5: Update status + commit ──────────────────────────────
 	_, err = tx.Exec(ctx,
 		`UPDATE tokens SET token_status = $1, updated_at = $2 WHERE token_id = ANY($3::text[])`,
-		constants.TokenStatus_Locked, time.Now(), tokenIDs,
+		constants.TokenStatus_Locked, time.Now(), selectedIDs,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("LockTokensForSplit: update status: %w", err)
@@ -274,4 +481,18 @@ func (w *Wallet) LockSmartContractToken(ctx context.Context, ownerDID string, to
 		return models.Token{}, err
 	}
 	return tokens[0], nil
+}
+
+// UnlockLockedTokens releases specific locked tokens for a DID back to Free status.
+// Called during transaction abort to return locked tokens to their Free state.
+func (w *Wallet) UnlockLockedTokens(did string, tokens []string) error {
+	if len(tokens) == 0 {
+		return nil
+	}
+	_, err := w.db.Pool().Exec(w.Ctx,
+		`UPDATE tokens SET token_status=$1, updated_at=$2
+		 WHERE did=$3 AND token_id = ANY($4::text[]) AND token_status=$5`,
+		constants.TokenStatus_Free, time.Now(), did, tokens, constants.TokenStatus_Locked,
+	)
+	return err
 }

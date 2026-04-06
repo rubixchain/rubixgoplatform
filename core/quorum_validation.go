@@ -37,7 +37,7 @@ type BatchSyncTokenInfo struct {
 // BlockValidationResult represents the result of validating a specific block.
 // The Block field has been removed (block package dependency eliminated).
 type BlockValidationResult struct {
-	BlockHash string
+	BlockID   string
 	Tokens    []string // List of tokens that share this block
 	IsValid   bool
 	Error     error

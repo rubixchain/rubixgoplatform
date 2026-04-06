@@ -106,6 +106,7 @@ func CollectRBTTokens(
 			tokensForTransfer = append(tokensForTransfer, &models.TokenInfo{
 				TokenID:               nonSplit.TokenID,
 				PreviousTransactionID: nonSplit.TransactionID,
+				TokenValue:            nonSplit.TokenValue,
 			})
 		}
 		log.Info("CollectRBTTokens: Tokens added to transfer list (non-split)", "tokensForTransferCount", len(tokensForTransfer))
@@ -175,6 +176,7 @@ func CollectRBTTokens(
 				tokensForTransfer = append(tokensForTransfer, &models.TokenInfo{
 					TokenID:               partToken.TokenID,
 					PreviousTransactionID: partToken.TransactionID,
+					TokenValue:            partToken.TokenValue,
 				})
 			}
 		}

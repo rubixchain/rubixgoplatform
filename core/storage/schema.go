@@ -118,9 +118,16 @@ CREATE TABLE IF NOT EXISTS tokenchain (
             CONSTRAINT fk_tc_token 
                 FOREIGN KEY (token_id) 
                 REFERENCES tokens(token_id) 
-                DEFERRABLE INITIALLY DEFERRED
+                DEFERRABLE INITIALLY DEFERRED,
+            CONSTRAINT chk_prev_tx_rules
+                CHECK (
+                (position = 0 AND previous_transaction_id IS NULL)
+                OR
+                (position > 0 AND previous_transaction_id IS NOT NULL) 
+                      )     
+            );
 
-	        );
+
 	        CREATE TABLE IF NOT EXISTS tokenchain_index (
             token_id   TEXT PRIMARY KEY,
             index      INTEGER[] NOT NULL,

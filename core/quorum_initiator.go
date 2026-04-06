@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -103,18 +104,33 @@ func (c *Core) requestPledgeTokenHandler(request *ensweb.Request) *ensweb.Result
 		return c.l.RenderJSON(request, &response, http.StatusNotFound)
 	}
 	dc := c.pqc[did]
-	networkMode, err := util.GetNetworkMode(c.testnet, c.mainnet, c.localnet)
-	if err != nil {
-		c.log.Error("requestPledgeTokenHandler : Failed to determine network mode", "err", err)
-		response.Message = "requestPledgeTokenHandler : Failed to determine network mode"
-		return c.l.RenderJSON(request, &response, http.StatusInternalServerError)
-	}
-	pledgeTokenResponse, err := consensus.ReqPledgeToken(dc, c.w, pledgeTokenRequest.TransactionValue, networkMode, c.log, c.ps, pledgeTokenRequest.ReferenceId)
+	pledgeTokenResponse, err := consensus.ReqPledgeToken(dc, c.w, pledgeTokenRequest.TransactionValue, c.networkMode, c.log, c.ps, pledgeTokenRequest.ReferenceId)
 	if err != nil {
 		c.log.Error("requestPledgeTokenHandler : Failed to process pledge token request", "err", err)
+		// Release ALL locked tokens since pledge selection failed — LockTokensForSplit locked them
+		// but no subset was successfully selected, so all must be returned to Free.
+		if releaseErr := c.w.ReleaseAllLockedRBTTokensForDID(c.w.Ctx, did); releaseErr != nil {
+			c.log.Error("requestPledgeTokenHandler: failed to release locked tokens after pledge failure", "err", releaseErr)
+		}
 		response.Message = "requestPledgeTokenHandler : " + err.Error()
 		return c.l.RenderJSON(request, &response, http.StatusInternalServerError)
 	}
+
+	// Pledge succeeded. Release only the non-selected locked tokens (candidates not chosen).
+	// The selected pledge tokens MUST remain Locked — PledgeTokens (called during consensus)
+	// checks that they are in Locked state before transitioning them to Pledged.
+	selectedTokenIDs := make([]string, 0, len(pledgeTokenResponse.PledgeTokens))
+	for _, t := range pledgeTokenResponse.PledgeTokens {
+		if t != nil {
+			selectedTokenIDs = append(selectedTokenIDs, t.TokenID)
+		}
+	}
+	if releaseErr := c.w.ReleaseNonSelectedLockedRBTTokensForDID(c.w.Ctx, did, selectedTokenIDs); releaseErr != nil {
+		c.log.Error("requestPledgeTokenHandler: failed to release non-selected locked tokens", "err", releaseErr)
+	} else {
+		c.log.Info("requestPledgeTokenHandler: released non-selected locked tokens", "did", did, "selectedCount", len(selectedTokenIDs))
+	}
+
 	return c.l.RenderJSON(request, &pledgeTokenResponse, http.StatusOK)
 
 }
@@ -152,11 +168,88 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 	}
 	c.log.Info("Consensus request parsed successfully", "request", consensusRequest)
 
-	consensusResponse, err := consensus.InitiateConsensus(consensusRequest, quorumDc, c.w, c.log)
+	// Validation pipeline: run stateless checks BEFORE calling InitiateConsensus
+
+	// Check 0: Nil-check TransactionInfo
+	if consensusRequest.TransactionInfo == nil {
+		c.log.Error("initiateConsensusHandler: missing TransactionInfo in consensus request")
+		response.Message = "initiateConsensusHandler: missing TransactionInfo in consensus request"
+		return c.l.RenderJSON(request, response, http.StatusBadRequest)
+	}
+
+	txnInfo := consensusRequest.TransactionInfo
+
+	// Check 1: Validate transaction info fields
+	if err := consensus.ValidateTransactionInfoFields(txnInfo); err != nil {
+		c.log.Error("initiateConsensusHandler: transaction info fields validation failed", "err", err)
+		response.Message = "initiateConsensusHandler: " + err.Error()
+		return c.l.RenderJSON(request, response, http.StatusBadRequest)
+	}
+
+	// Compute txID once for logging and downstream use
+	txID, err := util.GetTransactionID(txnInfo)
+	if err != nil {
+		c.log.Error("initiateConsensusHandler: failed to compute transaction ID", "err", err)
+		response.Message = "initiateConsensusHandler: failed to compute transaction ID: " + err.Error()
+		return c.l.RenderJSON(request, response, http.StatusBadRequest)
+	}
+
+	// Check 2: Validate new token content for each RBT token
+	if txnInfo.Tokens != nil {
+		for _, rbtToken := range txnInfo.Tokens.RBT {
+			if rbtToken == nil {
+				continue
+			}
+			if err := consensus.ValidateNewTokenContent(rbtToken.TokenID, true, c.testnet, c.mainnet, c.localnet, c.log); err != nil {
+				c.log.Error("initiateConsensusHandler: token content validation failed", "tokenID", rbtToken.TokenID, "err", err)
+				response.Message = "initiateConsensusHandler: " + err.Error()
+				return c.l.RenderJSON(request, response, http.StatusBadRequest)
+			}
+		}
+	}
+
+	// Check 3: Validate transaction value matches pledge
+	if err := consensus.ValidateTransactionValueAndPledge(txnInfo); err != nil {
+		c.log.Error("initiateConsensusHandler: transaction value/pledge validation failed", "err", err)
+		response.Message = "initiateConsensusHandler: " + err.Error()
+		return c.l.RenderJSON(request, response, http.StatusBadRequest)
+	}
+
+	// Check 4: Verify initiator signature
+	initiatorDC, err := c.SetupForienDID(txnInfo.Initiator, quorumDid)
+	if err != nil {
+		c.log.Error("initiateConsensusHandler: failed to setup initiator DID", "initiator", txnInfo.Initiator, "err", err)
+		response.Message = "initiateConsensusHandler: failed to setup initiator DID: " + err.Error()
+		return c.l.RenderJSON(request, response, http.StatusBadRequest)
+	}
+
+	if err := util.VerifySignature(initiatorDC, txnInfo, consensusRequest.InitiatorSignature); err != nil {
+		c.log.Error("initiateConsensusHandler: initiator signature verification failed", "err", err)
+		response.Message = "initiateConsensusHandler: initiator signature verification failed"
+		return c.l.RenderJSON(request, response, http.StatusBadRequest)
+	}
+
+	c.log.Info("initiateConsensusHandler: all stateless validations passed", "txID", txID)
+
+	consensusResponse, err := consensus.InitiateConsensus(consensusRequest, quorumDc, c.log)
 	if err != nil {
 		c.log.Error("initiateConsensusHandler : Consensus failed", "err", err)
 		response.Message = err.Error()
 		return c.l.RenderJSON(request, &response, http.StatusInternalServerError)
+	}
+
+	// Pledge tokens after consensus succeeds. The transactionId is already
+	// computed above (txID); InitiateConsensus returns the same value.
+	pledgeDetails := txnInfo.Quorums
+	if len(pledgeDetails) > 0 {
+		pledgeTokenDetails := pledgeDetails[0].Tokens
+		if err := c.PledgeV2(context.Background(), pledgeTokenDetails, txID, quorumDid, txnInfo.Epoch, txnInfo.Network); err != nil {
+			c.log.Error("initiateConsensusHandler: PledgeV2 failed", "err", err)
+			response.Message = "initiateConsensusHandler: PledgeV2 failed: " + err.Error()
+			// ### Note: consensus succeeded but pledge failed, which is a critical state.
+			// Alerting is needed to investigate and resolve the underlying issue.
+			return c.l.RenderJSON(request, response, http.StatusInternalServerError)
+		}
 	}
 
 	return c.l.RenderJSON(request, &consensusResponse, http.StatusOK)

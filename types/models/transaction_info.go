@@ -25,7 +25,7 @@ type TokenInfo struct {
 	PreviousTransactionID string  `json:"previousTransactionID"`
 	Data                  string  `json:"data"`
 	TokenValue            float64 `json:"tokenValue"`
-	DID                   string  `json:"did"`
+	//DID                   string  `json:"did"`
 }
 
 type QuorumInfo struct {
@@ -93,6 +93,8 @@ type PledgeTokenResponse struct {
 type SendTokensRequest struct {
 	Tokens               *TransactionTokens `json:"tokens"`
 	NFTOwnershipTransfer bool               `json:"nftOwnershipTransfer"`
+	TransactionInfo      *TransactionInfo   `json:"transactionInfo"`
+	Signature            *Signature         `json:"signature"`
 }
 
 // TokenChainResponse represents a single transaction in the smart contract token chain

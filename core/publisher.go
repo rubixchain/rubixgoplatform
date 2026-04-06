@@ -85,7 +85,6 @@ func (c *Core) PublishTransactionHistory() {
 			records = append(records, model.FullNodeTxnHistoryInfo{
 				TransactionID:    t.TransactionID,
 				TransactionValue: t.Amount,
-				BlockHash:        t.BlockID,
 			})
 		}
 
@@ -118,7 +117,6 @@ func (c *Core) PublishTransactionHistory() {
 			records = append(records, model.FullNodeTxnHistoryInfo{
 				TransactionID:    t.TransactionID,
 				TransactionValue: t.Amount,
-				BlockHash:        t.BlockID,
 			})
 		}
 
