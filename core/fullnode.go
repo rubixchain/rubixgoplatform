@@ -87,7 +87,8 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	// INCREMENT COUNTER when new transaction is processed
 	atomic.AddInt64(&c.txnProcessor.processedTxnCount, 1)
 
-	c.log.Info("Received transaction", "txnID", newEvent.TransactionID, "mode", newEvent.AssetType)
+	// ### commented: high-volume pub-sub noise (fires per transaction per node)
+	// c.log.Info("Received transaction", "txnID", newEvent.TransactionID, "mode", newEvent.AssetType)
 
 	// Update queue length metric for dynamic scaling
 	currentQueueLen := int64(len(c.txnProcessor.txnQueue))
@@ -133,9 +134,10 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 
 		err := c.processSingleTransaction(txnEvent)
 		if err == nil {
-			c.log.Info("Transaction processed successfully",
-				"txnID", txnEvent.TransactionID,
-				"workerID", workerID)
+			// ### commented: high-volume pub-sub noise (fires per transaction per node)
+			// c.log.Info("Transaction processed successfully",
+			// 	"txnID", txnEvent.TransactionID,
+			// 	"workerID", workerID)
 			return
 		}
 
@@ -158,9 +160,10 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 	// validated block sequences, checked ownership, and stored blocks in the
 	// full node token chain. Needs reimplementation using PostgreSQL-backed
 	// transaction/token chain model.
-	c.log.Info("processSingleTransaction: block-based processing removed, skipping",
-		"txnID", newEvent.TransactionID,
-		"assetType", newEvent.AssetType)
+	// ### commented: high-volume pub-sub noise (fires per transaction per node; stub until block processing is reimplemented)
+	// c.log.Info("processSingleTransaction: block-based processing removed, skipping",
+	// 	"txnID", newEvent.TransactionID,
+	// 	"assetType", newEvent.AssetType)
 	return nil
 }
 
