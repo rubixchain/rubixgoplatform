@@ -303,5 +303,17 @@ CREATE TABLE IF NOT EXISTS tokenchain (
         CREATE INDEX IF NOT EXISTS idx_ipfs_providers_cid ON ipfs_providers(cid);
         CREATE INDEX IF NOT EXISTS idx_ipfs_providers_did ON ipfs_providers(did);
     `)
+	if err != nil {
+		return err
+	}
+
+	// --- Idempotent schema corrections (run every startup, safe on existing DBs) ---
+	//
+	// Drop fk_tc_tx: tokenchain.transaction_id REFERENCES transactions(id).
+	// Pledge rows carry mainTxID as a forward reference — the main transaction is
+	// only inserted into transactions by PersistPostConsensus, which runs after
+	// full consensus completes on the initiator side. The FK fires at commit time
+	// (DEFERRABLE INITIALLY DEFERRED) and blocks PledgeV2 with SQLSTATE 23503.
+	_, err = r.pool.Exec(ctx, `ALTER TABLE tokenchain DROP CONSTRAINT IF EXISTS fk_tc_tx`)
 	return err
 }
