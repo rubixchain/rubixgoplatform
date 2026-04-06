@@ -17,7 +17,9 @@ import (
 //
 // Steps performed atomically inside pledgeTx:
 //  1. INSERT tokenchain rows (one per token, transaction_id = mainTxID, role = 8)
-//  2. UPDATE tokens (status = PLEDGED, transaction_id = mainTxID, role = 8)
+//  2. UPDATE tokens (status = PLEDGED, latest_position, latest_role = 8)
+//     Note: transaction_id is NOT updated — mainTxID is not yet in transactions
+//     at pledge time. PersistPostConsensus sets it after the transfer completes.
 //  3. Rebuild tokenchain_index for affected tokens
 //
 // Post-commit (separate postTx):
@@ -100,14 +102,18 @@ func (c *Core) PledgeV2(
 		}
 	}
 
-	// Step 2: UPDATE tokens (PLEDGED status, mainTxID, new position/role)
+	// Step 2: UPDATE tokens (PLEDGED status, new position/role).
+	// transaction_id is NOT updated here — mainTxID is not yet in the transactions
+	// table at pledge time (it lands there via PersistPostConsensus after full
+	// consensus). The transaction_id_fk constraint would block it. PersistPostConsensus
+	// will set transaction_id = mainTxID when the transfer completes.
 	for _, ti := range tokenInfos {
 		latestRow := latestRows[ti.TokenID]
 		if _, err := pledgeTx.Exec(ctx, `
 			UPDATE tokens
-			SET token_status = $2, transaction_id = $3, latest_position = $4, latest_role = $5, updated_at = NOW()
+			SET token_status = $2, latest_position = $3, latest_role = $4, updated_at = NOW()
 			WHERE token_id = $1
-		`, ti.TokenID, int16(constants.TokenStatus_Pledged), mainTxID, latestRow.Position+1, pledgeRoleID); err != nil {
+		`, ti.TokenID, int16(constants.TokenStatus_Pledged), latestRow.Position+1, pledgeRoleID); err != nil {
 			return fmt.Errorf("PledgeV2: update tokens for token %q: %w", ti.TokenID, err)
 		}
 	}
