@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -11,16 +12,16 @@ import (
 )
 
 // PledgeV2 records tokenchain entries for a set of pledged tokens, keyed by
-// mainTxID. Pledge is a pure DB bookkeeping operation — no TransactionInfo, no
-// txID, no signature is created. Only the main transfer (consensus) produces a
-// signed transaction record.
+// mainTxID. Pledge is a pure DB bookkeeping operation.
 //
 // Steps performed atomically inside pledgeTx:
-//  1. INSERT tokenchain rows (one per token, transaction_id = mainTxID, role = 8)
-//  2. UPDATE tokens (status = PLEDGED, latest_position, latest_role = 8)
-//     Note: transaction_id is NOT updated — mainTxID is not yet in transactions
-//     at pledge time. PersistPostConsensus sets it after the transfer completes.
-//  3. Rebuild tokenchain_index for affected tokens
+//
+//	0. INSERT transactions row (id = mainTxID, info = serialized txnInfo,
+//	   signature = combined initiator+quorum) so that tokenchain rows
+//	   (transaction_id = mainTxID) have a backing transactions.id.
+//	1. INSERT tokenchain rows (one per token, transaction_id = mainTxID, role = 8)
+//	2. UPDATE tokens (status = PLEDGED, latest_position, latest_role = 8)
+//	3. Rebuild tokenchain_index for affected tokens
 //
 // Post-commit (separate postTx):
 //   - Decrement token_denom for quorumDID
@@ -40,6 +41,9 @@ func (c *Core) PledgeV2(
 	quorumDID string,
 	epoch int,
 	network string,
+	txnInfo *models.TransactionInfo,
+	initiatorSignature string,
+	quorumSignature string,
 ) error {
 	// --- Validation ----------------------------------------------------------
 	if len(tokenInfos) == 0 {
@@ -89,6 +93,30 @@ func (c *Core) PledgeV2(
 	}
 	defer pledgeTx.Rollback(ctx) //nolint:errcheck
 
+	// Step 0: INSERT transactions row for mainTxID so that tokenchain rows
+	// (transaction_id = mainTxID) have a backing transactions.id. Both info
+	// and signature are NOT NULL columns. The full combined signature is used
+	// to match what PersistPostConsensus stores on initiator/receiver (byte-equality).
+	infoBytes, err := models.SerializeTransactionInfo(txnInfo)
+	if err != nil {
+		return fmt.Errorf("PledgeV2: serialize txnInfo for transactions insert: %w", err)
+	}
+	sig := models.Signature{
+		InitiatorSignature: initiatorSignature,
+		Quorums:            []models.QuorumSignature{{Did: quorumDID, Signature: quorumSignature}},
+	}
+	sigBytes, err := json.Marshal(&sig)
+	if err != nil {
+		return fmt.Errorf("PledgeV2: marshal signature for transactions insert: %w", err)
+	}
+	if _, err := pledgeTx.Exec(ctx, `
+		INSERT INTO transactions (id, info, signature, created_at, updated_at)
+		VALUES ($1, $2, $3, NOW(), NOW())
+		ON CONFLICT (id) DO NOTHING
+	`, mainTxID, infoBytes, sigBytes); err != nil {
+		return fmt.Errorf("PledgeV2: insert transactions row for mainTxID %q: %w", mainTxID, err)
+	}
+
 	// Step 1: INSERT tokenchain rows (one per token, keyed by mainTxID)
 	for _, ti := range tokenInfos {
 		latestRow := latestRows[ti.TokenID]
@@ -103,10 +131,9 @@ func (c *Core) PledgeV2(
 	}
 
 	// Step 2: UPDATE tokens (PLEDGED status, new position/role).
-	// transaction_id is NOT updated here — mainTxID is not yet in the transactions
-	// table at pledge time (it lands there via PersistPostConsensus after full
-	// consensus). The transaction_id_fk constraint would block it. PersistPostConsensus
-	// will set transaction_id = mainTxID when the transfer completes.
+	// transaction_id is NOT updated here — the tokens.transaction_id_fk constraint
+	// references transactions.id and updating it here is unnecessary; it is set
+	// by PersistPostConsensus once the full transfer completes.
 	for _, ti := range tokenInfos {
 		latestRow := latestRows[ti.TokenID]
 		if _, err := pledgeTx.Exec(ctx, `

@@ -243,7 +243,17 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 	pledgeDetails := txnInfo.Quorums
 	if len(pledgeDetails) > 0 {
 		pledgeTokenDetails := pledgeDetails[0].Tokens
-		if err := c.PledgeV2(context.Background(), pledgeTokenDetails, txID, quorumDid, txnInfo.Epoch, txnInfo.Network); err != nil {
+		if err := c.PledgeV2(
+			context.Background(),
+			pledgeTokenDetails,
+			txID,
+			quorumDid,
+			txnInfo.Epoch,
+			txnInfo.Network,
+			txnInfo,
+			consensusRequest.InitiatorSignature,
+			consensusResponse.QuorumSignature,
+		); err != nil {
 			c.log.Error("initiateConsensusHandler: PledgeV2 failed", "err", err)
 			response.Message = "initiateConsensusHandler: PledgeV2 failed: " + err.Error()
 			// ### Note: consensus succeeded but pledge failed, which is a critical state.
