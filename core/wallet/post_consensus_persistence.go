@@ -1,7 +1,6 @@
 package wallet
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -415,30 +414,21 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 }
 
 func (pc *PostConsensusPersistenceCoordinator) insertTransaction(ctx context.Context, tx pgx.Tx, record *models.Transactions) error {
-	cmdTag, err := tx.Exec(ctx, `
+	// PersistPostConsensus carries the full canonical signature (all quorum
+	// entries assembled by the initiator). PledgeV2 may have already inserted
+	// a transactions row with a partial signature (single quorum entry) on the
+	// same node. Using DO UPDATE SET ensures this function always writes the
+	// authoritative payload, silently upgrading any partial row from PledgeV2.
+	if _, err := tx.Exec(ctx, `
 		INSERT INTO transactions (id, info, signature, created_at, updated_at)
 		VALUES ($1, $2, $3, NOW(), NOW())
-		ON CONFLICT (id) DO NOTHING
-	`, record.ID, record.Info, record.Signature)
-	if err != nil {
+		ON CONFLICT (id) DO UPDATE SET
+			info = EXCLUDED.info,
+			signature = EXCLUDED.signature,
+			updated_at = NOW()
+	`, record.ID, record.Info, record.Signature); err != nil {
 		return fmt.Errorf("post-consensus persistence: insert transaction: %w", err)
 	}
-	if cmdTag.RowsAffected() > 0 {
-		return nil
-	}
-
-	var existingInfo []byte
-	var existingSignature []byte
-	if err := tx.QueryRow(ctx,
-		`SELECT info, signature FROM transactions WHERE id = $1`,
-		record.ID,
-	).Scan(&existingInfo, &existingSignature); err != nil {
-		return fmt.Errorf("post-consensus persistence: read existing transaction: %w", err)
-	}
-	if !bytes.Equal(existingInfo, record.Info) || !bytes.Equal(existingSignature, record.Signature) {
-		return fmt.Errorf("post-consensus persistence: transaction payload mismatch for id %q", record.ID)
-	}
-
 	return nil
 }
 
