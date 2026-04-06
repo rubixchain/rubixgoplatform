@@ -89,7 +89,10 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
         CREATE INDEX IF NOT EXISTS idx_tokens_did_status ON tokens(did, token_status);
 
 
-        -- moving tokenchain below so that all referenced tables are defined before it. tokenchain has FKs to transactions, token_role, and tokens.
+        -- moving tokenchain below so that all referenced tables are defined before it. tokenchain has FKs to token_role and tokens.
+        -- Note: transaction_id has NO FK to transactions(id). Pledge rows carry mainTxID as a forward reference
+        -- (the main transaction is only persisted after consensus via PersistPostConsensus). Enforcing this FK
+        -- would block PledgeV2 from inserting pledge rows before the transaction is committed.
 CREATE TABLE IF NOT EXISTS tokenchain (
 	            id             INT        GENERATED ALWAYS AS IDENTITY,
 	            token_id       TEXT       NOT NULL,
@@ -101,11 +104,6 @@ CREATE TABLE IF NOT EXISTS tokenchain (
 	            updated_at     TIMESTAMPTZ DEFAULT NOW(),
             PRIMARY KEY (token_id, position),
             UNIQUE (id),
-            -- No constraint prevents orphaned tokenchain entries pointing to non-existent transactions
-	            CONSTRAINT fk_tc_tx 
-	                FOREIGN KEY (transaction_id) 
-	                REFERENCES transactions(id) 
-	                DEFERRABLE INITIALLY DEFERRED,
 	            CONSTRAINT fk_tc_prev_tx
 	                FOREIGN KEY (previous_transaction_id)
 	                REFERENCES transactions(id)
