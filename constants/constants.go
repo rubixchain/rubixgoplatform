@@ -140,3 +140,7 @@ const (
 	DidPrefix = "bafybmi"
 	DidLength = 59
 )
+
+// MinTransactionEpochUnix is the Unix time in seconds for 2026-04-01 00:00:00 UTC.
+// Valid transaction Epoch values must be greater than or equal to this (and not in the future).
+const MinTransactionEpochUnix int = 1775001600
