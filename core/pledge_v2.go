@@ -3,30 +3,34 @@ package core
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-// PledgeV2 creates a deterministic pledge transaction for a set of tokens and
-// persists it using the standalone PersistPledgeV2 path.
+// PledgeV2 records tokenchain entries for a set of pledged tokens, keyed by
+// mainTxID. Pledge is a pure DB bookkeeping operation — no TransactionInfo, no
+// txID, no signature is created. Only the main transfer (consensus) produces a
+// signed transaction record.
 //
-// All tokens are grouped into ONE TransactionInfo → ONE txID computed as
-// SHA3_256(SerializeTransactionInfo(txInfo)). The resulting pledgeTxID is
-// signed with c.pqc[quorumDID]. After persistence, token_denom is decremented
-// and unpledge_sequence_info is keyed by mainTxID so that
-// CallBackQuorumUnpledge can locate the record using the broadcast transaction
-// ID.
+// Steps performed atomically inside pledgeTx:
+//  1. INSERT tokenchain rows (one per token, transaction_id = mainTxID, role = 8)
+//  2. UPDATE tokens (status = PLEDGED, transaction_id = mainTxID, role = 8)
+//  3. Rebuild tokenchain_index for affected tokens
+//
+// Post-commit (separate postTx):
+//   - Decrement token_denom for quorumDID
+//   - INSERT unpledge_sequence_info keyed by mainTxID
 //
 // Preconditions:
 //   - Every token in tokenInfos must already exist in the tokenchain table
 //     (i.e. the token has been issued/transferred to this quorum node before)
-//   - Tokens must be in LOCKED status (set by LockTokensForSplit before
-//     consensus)
 //
 // Errors are wrapped with context but callers should treat them as fatal for
-// the pledge attempt. The function is safe to retry — PersistPledgeV2 uses
-// ON CONFLICT guards.
+// the pledge attempt. ON CONFLICT (token_id, position) DO NOTHING makes the
+// operation idempotent.
 func (c *Core) PledgeV2(
 	ctx context.Context,
 	tokenInfos []*models.TokenInfo,
@@ -44,11 +48,6 @@ func (c *Core) PledgeV2(
 	}
 	if quorumDID == "" {
 		return fmt.Errorf("PledgeV2: quorumDID is required")
-	}
-
-	dc := c.pqc[quorumDID]
-	if dc == nil {
-		return fmt.Errorf("PledgeV2: no DIDCrypto loaded for quorum DID %q — is quorum setup?", quorumDID)
 	}
 
 	// Reject duplicate token IDs.
@@ -79,59 +78,98 @@ func (c *Core) PledgeV2(
 		}
 	}
 
-	// --- Build pledgeTxInfo (ALL tokens in ONE txInfo) -----------------------
-	rbtTokens := make([]*models.TokenInfo, 0, len(tokenInfos))
+	// --- Inline pledge persistence (no txID, no signature, no transaction record) ---
+	pledgeRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Pledge))
+
+	pledgeTx, err := c.w.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("PledgeV2: begin pledge tx: %w", err)
+	}
+	defer pledgeTx.Rollback(ctx) //nolint:errcheck
+
+	// Step 1: INSERT tokenchain rows (one per token, keyed by mainTxID)
 	for _, ti := range tokenInfos {
 		latestRow := latestRows[ti.TokenID]
-		tokenValue, err := util.GetTokenValueFromTokenID(ti.TokenID)
-		if err != nil {
-			return fmt.Errorf("PledgeV2: get token value for %q: %w", ti.TokenID, err)
+		prevTxID := latestRow.TransactionID
+		if _, err := pledgeTx.Exec(ctx, `
+			INSERT INTO tokenchain (token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+			ON CONFLICT (token_id, position) DO NOTHING
+		`, ti.TokenID, mainTxID, &prevTxID, pledgeRoleID, latestRow.Position+1); err != nil {
+			return fmt.Errorf("PledgeV2: insert tokenchain for token %q: %w", ti.TokenID, err)
 		}
-		rbtTokens = append(rbtTokens, &models.TokenInfo{
-			TokenID:               ti.TokenID,
-			PreviousTransactionID: latestRow.TransactionID,
-			TokenValue:            tokenValue,
-		})
 	}
 
-	pledgeTxInfo := &models.TransactionInfo{
-		Initiator: quorumDID,
-		Owner:     quorumDID,
-		Epoch:     epoch,
-		Network:   network,
-		Tokens:    &models.TransactionTokens{RBT: rbtTokens},
-		Memo:      fmt.Sprintf("PLEDGE for_tx=%s", mainTxID),
+	// Step 2: UPDATE tokens (PLEDGED status, mainTxID, new position/role)
+	for _, ti := range tokenInfos {
+		latestRow := latestRows[ti.TokenID]
+		if _, err := pledgeTx.Exec(ctx, `
+			UPDATE tokens
+			SET token_status = $2, transaction_id = $3, latest_position = $4, latest_role = $5, updated_at = NOW()
+			WHERE token_id = $1
+		`, ti.TokenID, int16(constants.TokenStatus_Pledged), mainTxID, latestRow.Position+1, pledgeRoleID); err != nil {
+			return fmt.Errorf("PledgeV2: update tokens for token %q: %w", ti.TokenID, err)
+		}
 	}
 
-	// --- Deterministic transaction identity ----------------------------------
-	pledgeTxID, err := util.GetTransactionID(pledgeTxInfo)
+	// Step 3: Rebuild tokenchain_index within the same pledge tx (atomicity)
+	indexRows, err := pledgeTx.Query(ctx, `
+		SELECT token_id, array_agg(id ORDER BY position)
+		FROM tokenchain
+		WHERE token_id = ANY($1::text[])
+		GROUP BY token_id
+	`, tokenIDs)
 	if err != nil {
-		return fmt.Errorf("PledgeV2: compute pledgeTxID: %w", err)
+		return fmt.Errorf("PledgeV2: read tokenchain for index rebuild: %w", err)
+	}
+	defer indexRows.Close()
+
+	type tokenIndexRow struct {
+		tokenID string
+		index   []int32
+	}
+	idxEntries := make([]tokenIndexRow, 0, len(tokenIDs))
+	for indexRows.Next() {
+		var entry tokenIndexRow
+		if err := indexRows.Scan(&entry.tokenID, &entry.index); err != nil {
+			return fmt.Errorf("PledgeV2: scan tokenchain index: %w", err)
+		}
+		idxEntries = append(idxEntries, entry)
+	}
+	if err := indexRows.Err(); err != nil {
+		return fmt.Errorf("PledgeV2: stream tokenchain index: %w", err)
+	}
+	indexRows.Close()
+
+	if len(idxEntries) > 0 {
+		placeholders := make([]string, 0, len(idxEntries))
+		args := make([]any, 0, len(idxEntries)*2)
+		for i, entry := range idxEntries {
+			offset := i*2 + 1
+			placeholders = append(placeholders, fmt.Sprintf("($%d, $%d, NOW(), NOW())", offset, offset+1))
+			args = append(args, entry.tokenID, entry.index)
+		}
+		indexQuery := `
+			INSERT INTO tokenchain_index (token_id, index, created_at, updated_at)
+			VALUES ` + strings.Join(placeholders, ",") + `
+			ON CONFLICT (token_id) DO UPDATE SET
+				index = EXCLUDED.index,
+				updated_at = NOW()
+		`
+		if _, err := pledgeTx.Exec(ctx, indexQuery, args...); err != nil {
+			return fmt.Errorf("PledgeV2: upsert tokenchain_index: %w", err)
+		}
 	}
 
-	// --- Sign (over pledgeTxID bytes) ----------------------------------------
-	pledgeSig, err := util.SignTransaction(dc, pledgeTxInfo)
-	if err != nil {
-		return fmt.Errorf("PledgeV2: sign pledge tx %q: %w", pledgeTxID, err)
-	}
-	signature := &models.Signature{InitiatorSignature: pledgeSig}
-
-	// --- Build payload -------------------------------------------------------
-	tokenChainRows, tokenStates, affectedTokens, err := c.w.BuildPledgePayload(ctx, pledgeTxID, pledgeTxInfo, quorumDID)
-	if err != nil {
-		return fmt.Errorf("PledgeV2: build pledge payload for tx %q: %w", pledgeTxID, err)
+	if err := pledgeTx.Commit(ctx); err != nil {
+		return fmt.Errorf("PledgeV2: commit pledge tx: %w", err)
 	}
 
-	// --- Persist pledge transaction ------------------------------------------
-	if err := c.w.PersistPledgeV2(ctx, pledgeTxInfo, signature, pledgeTxID, quorumDID, tokenChainRows, tokenStates, affectedTokens); err != nil {
-		return fmt.Errorf("PledgeV2: persist pledge tx %q: %w", pledgeTxID, err)
-	}
-
-	// --- Post-persist: decrement token_denom and insert unpledge_sequence_info
-	// These run in a separate DB transaction AFTER PersistPledgeV2 has committed.
+	// --- Post-commit: decrement token_denom and insert unpledge_sequence_info
+	// These run in a separate DB transaction AFTER pledgeTx has committed.
 	postTx, err := c.w.BeginTx(ctx)
 	if err != nil {
-		return fmt.Errorf("PledgeV2: begin post-persist tx for pledge %q: %w", pledgeTxID, err)
+		return fmt.Errorf("PledgeV2: begin post-persist tx for mainTxID %q: %w", mainTxID, err)
 	}
 	defer postTx.Rollback(ctx) //nolint:errcheck
 
@@ -154,10 +192,10 @@ func (c *Core) PledgeV2(
 		FROM UNNEST($2::NUMERIC[], $3::BIGINT[]) AS d(denom, count)
 		WHERE t.did = $1 AND t.denom = d.denom
 	`, quorumDID, denomValueList, denomCountList); err != nil {
-		return fmt.Errorf("PledgeV2: decrement token_denom for pledge %q: %w", pledgeTxID, err)
+		return fmt.Errorf("PledgeV2: decrement token_denom for mainTxID %q: %w", mainTxID, err)
 	}
 
-	// Insert unpledge_sequence_info keyed by mainTxID (not pledgeTxID) so that
+	// Insert unpledge_sequence_info keyed by mainTxID so that
 	// CallBackQuorumUnpledge can look it up by the broadcast transaction ID.
 	if _, err := postTx.Exec(ctx, `
 		INSERT INTO unpledge_sequence_info(tx_id, pledge_tokens, epoch, quorum_did)
@@ -167,11 +205,10 @@ func (c *Core) PledgeV2(
 	}
 
 	if err := postTx.Commit(ctx); err != nil {
-		return fmt.Errorf("PledgeV2: commit post-persist tx for pledge %q: %w", pledgeTxID, err)
+		return fmt.Errorf("PledgeV2: commit post-persist tx for mainTxID %q: %w", mainTxID, err)
 	}
 
 	c.log.Info("PledgeV2 complete",
-		"pledgeTxID", pledgeTxID,
 		"mainTxID", mainTxID,
 		"tokens", len(tokenInfos),
 	)
