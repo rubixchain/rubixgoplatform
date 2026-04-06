@@ -8,6 +8,10 @@ import (
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
+// Deprecated: BuildPledgePayload is unused under the V2 single-transaction
+// architecture. PledgeV2 now performs inline SQL without building a payload.
+// Retained for reference only.
+//
 // BuildPledgePayload derives the tokenchain rows and token states required to
 // persist a pledge transaction. It reads current token state from the DB (no
 // writes) and builds rows that transition each token from LOCKED → PLEDGED
@@ -90,6 +94,10 @@ func (w *Wallet) BuildPledgePayload(
 	return tokenChainRows, tokenStates, tokenIDs, nil
 }
 
+// Deprecated: BuildUnpledgePayload is unused under the V2 single-transaction
+// architecture. UnpledgeV2 now performs an atomic UPDATE without building a payload.
+// Retained for reference only.
+//
 // BuildUnpledgePayload derives the tokenchain rows and token states required to
 // persist a single-token unpledge transaction. It reads current token state
 // from the DB (no writes) and builds rows that transition the token from

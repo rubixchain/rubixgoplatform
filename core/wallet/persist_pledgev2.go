@@ -9,6 +9,10 @@ import (
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
+// Deprecated: PersistPledgeV2 is unused under the V2 single-transaction
+// architecture. PledgeV2 now performs inline SQL in core/pledge_v2.go.
+// Retained for reference only.
+//
 // PersistPledgeV2 atomically persists a pledge transaction into the database.
 //
 // It is STANDALONE — it does NOT call PersistPostConsensus or
@@ -35,6 +39,10 @@ func (w *Wallet) PersistPledgeV2(
 		ExecutionRoleQuorum, tokenChainRows, tokenStates, affectedTokens)
 }
 
+// Deprecated: PersistUnpledgeV2 is unused under the V2 single-transaction
+// architecture. UnpledgeV2 now performs inline SQL in core/unpledge_v2.go.
+// Retained for reference only.
+//
 // PersistUnpledgeV2 atomically persists an unpledge transaction into the database.
 //
 // It is STANDALONE — it does NOT call PersistPostConsensus or
@@ -54,6 +62,10 @@ func (w *Wallet) PersistUnpledgeV2(
 		ExecutionRoleQuorum, tokenChainRows, tokenStates, affectedTokens)
 }
 
+// Deprecated: persistPledgeUnpledgeV2 is unused under the V2 single-transaction
+// architecture. Pledge/unpledge SQL is now inlined in core/pledge_v2.go and
+// core/unpledge_v2.go respectively. Retained for reference only.
+//
 // persistPledgeUnpledgeV2 is the shared implementation for PersistPledgeV2 and
 // PersistUnpledgeV2. It opens its own DB transaction and performs all SQL in one
 // atomic unit.
