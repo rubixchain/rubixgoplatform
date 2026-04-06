@@ -130,17 +130,18 @@ func (c *Core) PledgeV2(
 		}
 	}
 
-	// Step 2: UPDATE tokens (PLEDGED status, new position/role).
-	// transaction_id is NOT updated here — the tokens.transaction_id_fk constraint
-	// references transactions.id and updating it here is unnecessary; it is set
-	// by PersistPostConsensus once the full transfer completes.
+	// Step 2: UPDATE tokens (PLEDGED status, new position/role, transaction_id).
+	// transaction_id is set to mainTxID here. The FK constraint
+	// (transaction_id_fk -> transactions.id, DEFERRABLE INITIALLY DEFERRED)
+	// is satisfied because Step 0 already inserted the transactions row
+	// within this same pledgeTx.
 	for _, ti := range tokenInfos {
 		latestRow := latestRows[ti.TokenID]
 		if _, err := pledgeTx.Exec(ctx, `
 			UPDATE tokens
-			SET token_status = $2, latest_position = $3, latest_role = $4, updated_at = NOW()
+			SET token_status = $2, latest_position = $3, latest_role = $4, transaction_id = $5, updated_at = NOW()
 			WHERE token_id = $1
-		`, ti.TokenID, int16(constants.TokenStatus_Pledged), latestRow.Position+1, pledgeRoleID); err != nil {
+		`, ti.TokenID, int16(constants.TokenStatus_Pledged), latestRow.Position+1, pledgeRoleID, mainTxID); err != nil {
 			return fmt.Errorf("PledgeV2: update tokens for token %q: %w", ti.TokenID, err)
 		}
 	}
