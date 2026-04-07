@@ -3,6 +3,7 @@ package ipfsport
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"path"
@@ -55,7 +56,7 @@ func NewPeerManager(startPort uint16, lport uint16, maxNumPort uint16, ipfs *ipf
 	}
 	for _, bs := range p.bootStrap {
 		_, bsID := path.Split(bs)
-		err := p.ipfs.SwarmConnect(context.Background(), "/ipfs/"+bsID)
+		err := p.ipfs.SwarmConnect(context.Background(), bs)
 		if err == nil {
 			p.log.Info(fmt.Sprintf("Bootstrap swarm %v connected", bsID))
 		} else {
@@ -225,16 +226,20 @@ func (p *Peer) SendJSONRequest(method string, path string, querry map[string]str
 		}
 		defer httpResp.Body.Close()
 		if httpResp.StatusCode != http.StatusOK {
-			if httpResp.StatusCode == http.StatusInternalServerError {
-				err = fmt.Errorf("failed to get tokenchain, tokenchain does not exist in records")
-				p.log.Error("TC not available to sync. Possibly DS", "err", err)
-				//time.Sleep(time.Second * time.Duration(attempt)) // Exponential backoff
-				return err
-			}
-			err = fmt.Errorf("failed with status code %d", httpResp.StatusCode)
-			p.log.Error("request failed", "attempt", attempt, "status", httpResp.StatusCode)
-			time.Sleep(time.Second * time.Duration(attempt)) // Exponential backoff
-			continue
+			bodyBytes, _ := io.ReadAll(httpResp.Body)
+
+			err = fmt.Errorf(
+				"peer request failed: status=%d body=%s",
+				httpResp.StatusCode,
+				string(bodyBytes),
+			)
+
+			p.log.Error("peer request failed",
+				"status", httpResp.StatusCode,
+				"body", string(bodyBytes),
+			)
+
+			return err
 		}
 
 		if resp != nil {

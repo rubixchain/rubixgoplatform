@@ -15,7 +15,6 @@ type NFTEvent struct {
 	ExecutorDid  string  `json:"executorDid"`
 	ReceiverDid  string  `json:"receiverDid"`
 	Type         int     `json:"type"`
-	NFTBlockHash string  `json:"nftBlockHash"`
 	NFTValue     float64 `json:"nftValue"`
 	NFTMetadata  string  `json:"nftMetadata"`
 	NFTFileName  string  `json:"nftFileName"`

@@ -82,8 +82,9 @@ func PublishTransaction(pubsub *types.PubSub, tx *models.TransactionInfo, signat
 	}
 
 	eventTx := models.EventTransaction{
-		Status:      true,
-		Transaction: transaction,
+		Status:        true,
+		Transaction:   transaction,
+		TransactionID: txID,
 	}
 
 	if err := pubsub.Publish(constants.Event_RubixTxns, eventTx); err != nil {

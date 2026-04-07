@@ -87,7 +87,6 @@ type SyncedRBT struct {
 	TokenID       string
 	OwnerDID      string
 	PublisherDID  string
-	BlockHash     string
 	BlockHeight   uint64
 	TransactionID string
 	SyncStatus    int
@@ -101,7 +100,6 @@ type SyncedFT struct {
 	OwnerDID      string
 	CreatorDID    string
 	PublisherDID  string
-	BlockHash     string
 	BlockHeight   uint64
 	TransactionID string
 	SyncStatus    int
@@ -115,7 +113,6 @@ type SyncedNFT struct {
 	TokenID       string
 	OwnerDID      string
 	PublisherDID  string
-	BlockHash     string
 	BlockHeight   uint64
 	TransactionID string
 	SyncStatus    int
@@ -128,7 +125,6 @@ type SyncedSmartContract struct {
 	SmartContractHash string
 	Deployer          string
 	PublisherDID      string
-	BlockHash         string
 	BlockHeight       uint64
 	TransactionID     string
 	SyncStatus        int

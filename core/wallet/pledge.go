@@ -62,7 +62,7 @@ func (w *Wallet) PledgeTokens(tokenInfos []*models.TokenInfo, transaction *model
 		SET token_status=$1
 		WHERE token_id=ANY($2)
 	`, constants.TokenStatus_Pledged, tokenIDs); err != nil {
-		return fmt.Errorf("PledgeTokens(tx=%v): failed to add transaction details in `transactions` table, err: %v", transaction.ID, err)	
+		return fmt.Errorf("PledgeTokens(tx=%v): failed to add transaction details in `transactions` table, err: %v", transaction.ID, err)
 	}
 
 	// Phase 3: Add the incoming transaction to the `transactions` table
@@ -70,7 +70,7 @@ func (w *Wallet) PledgeTokens(tokenInfos []*models.TokenInfo, transaction *model
 		INSERT INTO transactions (id, info, signature)
 		VALUES ($1, $2, $3)
 	`, transaction.ID, transaction.Info, transaction.Signature); err != nil {
-		return fmt.Errorf("PledgeTokens(tx=%v): failed to add transaction details in `transactions` table, err: %v", transaction.ID, err)	
+		return fmt.Errorf("PledgeTokens(tx=%v): failed to add transaction details in `transactions` table, err: %v", transaction.ID, err)
 	}
 
 	// Phase 3: Populate the transactionID with pledge type role in `tokenchain` table for all pledge tokens
@@ -161,7 +161,7 @@ func (w *Wallet) PledgeTokens(tokenInfos []*models.TokenInfo, transaction *model
 		if err := rows.Scan(&id, &tokenId); err != nil {
 			return err
 		}
-		
+
 		tokenValue, err := util.GetTokenValueFromTokenID(tokenId)
 		if err != nil {
 			return err
@@ -170,9 +170,8 @@ func (w *Wallet) PledgeTokens(tokenInfos []*models.TokenInfo, transaction *model
 		if _, exists := tokenDenomMap[tokenValue]; !exists {
 			tokenDenomMap[tokenValue] = 1
 		} else {
-			tokenDenomMap[tokenValue] += 1 
+			tokenDenomMap[tokenValue] += 1
 		}
-
 
 		tokenchainRowIDMap[tokenId] = id
 	}
@@ -197,7 +196,7 @@ func (w *Wallet) PledgeTokens(tokenInfos []*models.TokenInfo, transaction *model
 	if err != nil {
 		return err
 	}
-	
+
 	// Phase 5: Update the Token Denom Array table
 	denomValueList, denomCountList := util.UnzipMap(tokenDenomMap)
 	_, err = tx.Exec(w.Ctx, `
@@ -247,7 +246,7 @@ func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Tr
 	}
 
 	var tokenInfos []models.TokenInfo = make([]models.TokenInfo, 0)
-	rowTokenInfo, err :=tx.Query(w.Ctx, `
+	rowTokenInfo, err := tx.Query(w.Ctx, `
 		SELECT token_id, transaction_id FROM tokens
 		WHERE token_id=ANY($1)
 	`, tokenIDs)
@@ -264,7 +263,7 @@ func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Tr
 		}
 
 		tokenInfos = append(tokenInfos, models.TokenInfo{
-			TokenID: tokenId,
+			TokenID:               tokenId,
 			PreviousTransactionID: transactionId,
 		})
 	}
@@ -279,7 +278,7 @@ func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Tr
 		AND token_status=$2
 	`, tokenIDs, constants.TokenStatus_Pledged).Scan(&areAllTokensPledged); err != nil {
 		return fmt.Errorf("UnpledgeTokens(tx=%v): failed to scan for query to check if all tokens are pledged, err: %v", prevTransactionId, err)
-	} 
+	}
 	if !areAllTokensPledged {
 		return fmt.Errorf("UnpledgeTokens(tx=%v): not all tokens were found to be in pledged state, tokens: %v", prevTransactionId, tokenIDs)
 	}
@@ -290,7 +289,7 @@ func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Tr
 		SET token_status=$1
 		WHERE token_id=ANY($2)
 	`, constants.TokenStatus_Free, tokenIDs); err != nil {
-		return fmt.Errorf("UnpledgeTokens(tx=%v): failed to add transaction details in `transactions` table, err: %v", prevTransactionId, err)	
+		return fmt.Errorf("UnpledgeTokens(tx=%v): failed to add transaction details in `transactions` table, err: %v", prevTransactionId, err)
 	}
 
 	// Phase 3: Store the incoming transaction in `transactions` table
@@ -298,7 +297,7 @@ func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Tr
 		INSERT INTO transactions (id, info, signature)
 		VALUES ($1, $2, $3)
 	`, transaction.ID, transaction.Info, transaction.Signature); err != nil {
-		return fmt.Errorf("UnpledgeTokens(tx=%v): failed to add transaction details in `transactions` table, err: %v", prevTransactionId, err)	
+		return fmt.Errorf("UnpledgeTokens(tx=%v): failed to add transaction details in `transactions` table, err: %v", prevTransactionId, err)
 	}
 
 	// Phase 4: Update tokenchain table, with unpledge status
@@ -388,7 +387,7 @@ func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Tr
 		if err := rows.Scan(&id, &tokenId); err != nil {
 			return err
 		}
-		
+
 		tokenValue, err := util.GetTokenValueFromTokenID(tokenId)
 		if err != nil {
 			return err
@@ -397,9 +396,8 @@ func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Tr
 		if _, exists := tokenDenomMap[tokenValue]; !exists {
 			tokenDenomMap[tokenValue] = 1
 		} else {
-			tokenDenomMap[tokenValue] += 1 
+			tokenDenomMap[tokenValue] += 1
 		}
-
 
 		tokenchainRowIDMap[tokenId] = id
 	}
@@ -466,28 +464,28 @@ func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Tr
 // present in the `unpledge_sequence_info` table or not. If they are, they are returned back
 func (w *Wallet) CheckTxnsPresentInUnpledgeSequenceInfo(txs []string) ([]string, error) {
 	rows, err := w.db.Pool().Query(
-        w.Ctx,
-        `
+		w.Ctx,
+		`
         SELECT tx_id
         FROM unpledge_sequence_info
         WHERE tx_id = ANY($1::TEXT[])
         `,
-        txs,
-    )
-    if err != nil {
-        return nil, err
-    }
-    defer rows.Close()
+		txs,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
-    var result []string
+	var result []string
 
-    for rows.Next() {
-        var txID string
-        if err := rows.Scan(&txID); err != nil {
-            return nil, err
-        }
-        result = append(result, txID)
-    }
+	for rows.Next() {
+		var txID string
+		if err := rows.Scan(&txID); err != nil {
+			return nil, err
+		}
+		result = append(result, txID)
+	}
 
-    return result, rows.Err()
+	return result, rows.Err()
 }
