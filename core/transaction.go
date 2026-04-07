@@ -199,16 +199,49 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	)
 
 	if err != nil {
+		if _, err := util.PublishTransaction(
+			c.ps, 
+			transactionInfo, 
+			&models.Signature{
+				InitiatorSignature: initiatorSignature,
+			}, 
+			false, 
+			err.Error(),
+		); err != nil {
+			c.log.Error("InitiateTransaction: Failed to publish transaction", "err", err)
+		}
+
 		resp.Message = err.Error()
 		return resp
 	}
 
 	if !consensusResponse.Status {
+		if _, err := util.PublishTransaction(
+			c.ps, 
+			transactionInfo, 
+			&models.Signature{
+				InitiatorSignature: initiatorSignature,
+			}, 
+			false, 
+			consensusResponse.Message,
+		); err != nil {
+			c.log.Error("InitiateTransaction: Failed to publish transaction", "err", err)
+		}
+
 		resp.Message = consensusResponse.Message
 		return resp
 	}
 
 	c.log.Info("InitiateTransaction: Consensus response received", "quorumDID", quorumAddresses[0], "quorumSignatureLength", len(consensusResponse.QuorumSignature))
+
+	quorumSignature := []models.QuorumSignature{{
+		Did:       quorumAddresses[0],
+		Signature: consensusResponse.QuorumSignature,
+	}}
+	signatureTobePublished := &models.Signature{
+		InitiatorSignature: initiatorSignature,
+		Quorums:            quorumSignature,
+	}
 
 	// When multiple transaction situation comes into picture this quorum signature part will change.
 	// We have kept this as an array to accomodate multiple quorums in future.
@@ -228,19 +261,16 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	c.log.Debug("InitiateTransaction: Verifying quorum signature", "quorumDID", quorumAddresses[0])
 	err = util.VerifySignature(quorumDC, transactionInfo, consensusResponse.QuorumSignature)
 	if err != nil {
+		if _, err := util.PublishTransaction(c.ps, transactionInfo, signatureTobePublished, false, err.Error()); err != nil {
+			c.log.Error("InitiateTransaction: Failed to publish transaction", "err", err)
+		}
+
 		c.log.Error("InitiateTransaction: Failed to verify quorum signature", "quorumDID", quorumAddresses[0], "err", err)
 		resp.Message = "InitiateTransaction: Failed to verify quorum signature: " + err.Error()
 		return resp
 	}
 	c.log.Info("InitiateTransaction: Quorum signature verified successfully", "quorumDID", quorumAddresses[0])
-	quorumSignature := []models.QuorumSignature{{
-		Did:       quorumAddresses[0],
-		Signature: consensusResponse.QuorumSignature,
-	}}
-	signatureTobePublished := &models.Signature{
-		InitiatorSignature: initiatorSignature,
-		Quorums:            quorumSignature,
-	}
+	
 	// Persist post-consensus state to PostgreSQL.
 	// On success the selected tokens are marked Transferred; remaining locked tokens
 	// (candidates not chosen by CollectRBTTokens) are then released back to Free.
@@ -274,7 +304,9 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		}
 	*/
 	//Publish transaction to the network
-	util.PublishTransaction(c.ps, transactionInfo, signatureTobePublished)
+	if _, err := util.PublishTransaction(c.ps, transactionInfo, signatureTobePublished, true, ""); err != nil {
+		c.log.Error("InitiateTransaction: Failed to publish transaction", "err", err)
+	}
 
 	// Send tokens to receiver asynchronously in background
 	go c.sendTokensToReceiver(nextOwnerDID, transactionId, transactionInfo, signatureTobePublished, request)

@@ -59,7 +59,7 @@ func VerifySignature(dc types.DIDCrypto, txInfo *models.TransactionInfo, signatu
 	return nil
 }
 
-func PublishTransaction(pubsub *types.PubSub, tx *models.TransactionInfo, signature *models.Signature) (*models.Transactions, error) {
+func PublishTransaction(pubsub *types.PubSub, tx *models.TransactionInfo, signature *models.Signature, isTxSuccess bool, message string) (*models.Transactions, error) {
 	txID, err := GetTransactionID(tx)
 	if err != nil {
 		return nil, fmt.Errorf("PublishTransaction: failed to get transaction ID: %v", err)
@@ -82,9 +82,10 @@ func PublishTransaction(pubsub *types.PubSub, tx *models.TransactionInfo, signat
 	}
 
 	eventTx := models.EventTransaction{
-		Status:        true,
+		Status:        isTxSuccess,
 		Transaction:   transaction,
 		TransactionID: txID,
+		Message:       message,
 	}
 
 	if err := pubsub.Publish(constants.Event_RubixTxns, eventTx); err != nil {
