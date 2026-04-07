@@ -260,12 +260,36 @@ func ValidateTransactionValueAndPledge(txnInfo *models.TransactionInfo) error {
 	}
 
 	transactionValue := rubixmath.ZeroFloat()
+
+	// Count RBT tokens
 	for _, t := range txnInfo.Tokens.RBT {
 		tokenValue, err := util.GetTokenValueFromTokenID(t.TokenID)
 		if err != nil {
 			return fmt.Errorf("failed to get value for RBT token %s: %w", t.TokenID, err)
 		}
 		transactionValue = rubixmath.AddFloat(transactionValue, tokenValue)
+	}
+
+	// Count NFT token values
+	// NFT value is optional - if not set or 0, default pledge requirement is 1 RBT
+	for _, t := range txnInfo.Tokens.NFT {
+		var tokenValue float64
+		if t.TokenValue > 0 {
+			tokenValue = t.TokenValue
+		} else {
+			// NFT with no explicit value requires 1 RBT pledge
+			tokenValue = 1.0
+		}
+		transactionValue = rubixmath.AddFloat(transactionValue, tokenValue)
+	}
+
+	// Count SmartContract token values
+	// SC value is mandatory and must be present in TokenValue field
+	for _, t := range txnInfo.Tokens.SmartContract {
+		if t.TokenValue <= 0 {
+			return fmt.Errorf("SmartContract token %s has invalid value %v: value must be greater than 0", t.TokenID, t.TokenValue)
+		}
+		transactionValue = rubixmath.AddFloat(transactionValue, t.TokenValue)
 	}
 
 	totalPledgeValue := rubixmath.ZeroFloat()

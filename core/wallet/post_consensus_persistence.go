@@ -447,6 +447,15 @@ func (pc *PostConsensusPersistenceCoordinator) insertTransaction(ctx context.Con
 		return fmt.Errorf("post-consensus persistence: read existing transaction: %w", err)
 	}
 	if !bytes.Equal(existingInfo, record.Info) || !bytes.Equal(existingSignature, record.Signature) {
+		pc.wallet.log.Error("post-consensus persistence: transaction payload mismatch",
+			"transactionID", record.ID,
+			"existingInfoLen", len(existingInfo),
+			"newInfoLen", len(record.Info),
+			"existingInfo", string(existingInfo),
+			"newInfo", string(record.Info),
+			"infoMatch", bytes.Equal(existingInfo, record.Info),
+			"signatureMatch", bytes.Equal(existingSignature, record.Signature),
+		)
 		return fmt.Errorf("post-consensus persistence: transaction payload mismatch for id %q", record.ID)
 	}
 
