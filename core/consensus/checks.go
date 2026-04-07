@@ -57,8 +57,9 @@ func ValidateTransactionInfoFields(txnInfo *models.TransactionInfo) error {
 	}
 
 	currentEpoch := int(time.Now().Unix())
-	if txnInfo.Epoch <= 0 || txnInfo.Epoch > currentEpoch {
-		return fmt.Errorf("invalid epoch %d: must be a positive integer less than current epoch %d", txnInfo.Epoch, currentEpoch)
+	if txnInfo.Epoch <= 0 || txnInfo.Epoch < constants.MinTransactionEpochUnix || txnInfo.Epoch > currentEpoch {
+		return fmt.Errorf("invalid epoch %d: must be a positive Unix time on or after 2026-04-01 00:00:00 UTC (epoch %d) and not after the current time (epoch %d)",
+			txnInfo.Epoch, constants.MinTransactionEpochUnix, currentEpoch)
 	}
 
 	if _, ok := validNetworks[txnInfo.Network]; !ok {
@@ -165,7 +166,7 @@ func ValidateTokenOwnershipByPrevTxn(txnInfo *models.TransactionInfo, isFullnode
 				} //TODO: Handle the case where there is no RBT token in the fullnode rbt tokens table
 				previousTransactionOwner := tokenDetails.DID
 				if previousTransactionOwner != quorum.Did {
-					return fmt.Errorf("ownership mismatch: quorum %s does not match owner %s of token %s", quorum.Did, tokenDetails.DID, t.TokenID)
+					return fmt.Errorf("ValidateTokenOwnershipByPrevTxn: ownership mismatch, quorum %s does not match owner %s of previous transaction %s", quorum.Did, tokenDetails.DID, t.TokenID)
 				}
 			}
 		}
@@ -530,9 +531,9 @@ func TokenChainIntigrityCheck(txnInfo *models.TransactionInfo, peer *ipfsport.Pe
 	}
 
 	tokenLists := map[string][]*models.TokenInfo{
-		constants.TokenType_RBT: txnInfo.Tokens.RBT,
-		constants.TokenType_FT:  txnInfo.Tokens.FT,
-		constants.TokenType_NFT: txnInfo.Tokens.NFT,
+		constants.TokenType_RBT:           txnInfo.Tokens.RBT,
+		constants.TokenType_FT:            txnInfo.Tokens.FT,
+		constants.TokenType_NFT:           txnInfo.Tokens.NFT,
 		constants.TokenType_SmartContract: txnInfo.Tokens.SmartContract,
 	}
 
