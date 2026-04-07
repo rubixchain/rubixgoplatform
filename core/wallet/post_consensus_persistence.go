@@ -1,7 +1,6 @@
 package wallet
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -124,18 +123,6 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 	if err := pc.upsertTokenStates(ctx, tx, req.TokenStates); err != nil {
 		return err
 	}
-
-	// Update committed tokens status from Locked to Committed
-	// Committed tokens are RBT tokens that back a Smart Contract's value during deployment.
-	if req.TransactionInfo != nil && len(req.TransactionInfo.CommittedTokens) > 0 {
-		if err := pc.updateCommittedTokensStatus(ctx, tx, req.TransactionInfo.CommittedTokens); err != nil {
-			return err
-		}
-	}
-
-	// Update token_denom table for balance tracking
-	// For ExecutionRoleReceiver: increment denom count for each received token.
-	// For ExecutionRoleInitiator: decrement denom count for each sent token.
 	if err := pc.upsertTokenDenomDeltas(ctx, tx, req.DID, req.TokenStates, req.ExecutionRole); err != nil {
 		return err
 	}
@@ -213,6 +200,7 @@ func buildTransactionRecordFromPayload(txInfo *models.TransactionInfo, signature
 		Signature: signatureBytes,
 	}, nil
 }
+
 
 func validatePostConsensusRequest(req *PostConsensusPersistenceRequest, transactionID string) error {
 	if req == nil {
@@ -426,39 +414,21 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 }
 
 func (pc *PostConsensusPersistenceCoordinator) insertTransaction(ctx context.Context, tx pgx.Tx, record *models.Transactions) error {
-	cmdTag, err := tx.Exec(ctx, `
+	// PersistPostConsensus carries the full canonical signature (all quorum
+	// entries assembled by the initiator). PledgeV2 may have already inserted
+	// a transactions row with a partial signature (single quorum entry) on the
+	// same node. Using DO UPDATE SET ensures this function always writes the
+	// authoritative payload, silently upgrading any partial row from PledgeV2.
+	if _, err := tx.Exec(ctx, `
 		INSERT INTO transactions (id, info, signature, created_at, updated_at)
 		VALUES ($1, $2, $3, NOW(), NOW())
-		ON CONFLICT (id) DO NOTHING
-	`, record.ID, record.Info, record.Signature)
-	if err != nil {
+		ON CONFLICT (id) DO UPDATE SET
+			info = EXCLUDED.info,
+			signature = EXCLUDED.signature,
+			updated_at = NOW()
+	`, record.ID, record.Info, record.Signature); err != nil {
 		return fmt.Errorf("post-consensus persistence: insert transaction: %w", err)
 	}
-	if cmdTag.RowsAffected() > 0 {
-		return nil
-	}
-
-	var existingInfo []byte
-	var existingSignature []byte
-	if err := tx.QueryRow(ctx,
-		`SELECT info, signature FROM transactions WHERE id = $1`,
-		record.ID,
-	).Scan(&existingInfo, &existingSignature); err != nil {
-		return fmt.Errorf("post-consensus persistence: read existing transaction: %w", err)
-	}
-	if !bytes.Equal(existingInfo, record.Info) || !bytes.Equal(existingSignature, record.Signature) {
-		pc.wallet.log.Error("post-consensus persistence: transaction payload mismatch",
-			"transactionID", record.ID,
-			"existingInfoLen", len(existingInfo),
-			"newInfoLen", len(record.Info),
-			"existingInfo", string(existingInfo),
-			"newInfo", string(record.Info),
-			"infoMatch", bytes.Equal(existingInfo, record.Info),
-			"signatureMatch", bytes.Equal(existingSignature, record.Signature),
-		)
-		return fmt.Errorf("post-consensus persistence: transaction payload mismatch for id %q", record.ID)
-	}
-
 	return nil
 }
 
@@ -631,52 +601,6 @@ func (pc *PostConsensusPersistenceCoordinator) upsertTokenStates(ctx context.Con
 			return fmt.Errorf("post-consensus persistence: upsert token states: %w", err)
 		}
 	}
-
-	return nil
-}
-
-// updateCommittedTokensStatus updates the status of committed tokens from Locked to Committed.
-// Committed tokens are RBT tokens that back a Smart Contract's value during deployment.
-// These tokens were initially marked as Locked in BuildTransactionInfoFromRequest,
-// and now need to be updated to Committed status after consensus completes successfully.
-func (pc *PostConsensusPersistenceCoordinator) updateCommittedTokensStatus(ctx context.Context, tx pgx.Tx, committedTokens []*models.TokenInfo) error {
-	if len(committedTokens) == 0 {
-		return nil
-	}
-
-	// Extract all committed token IDs
-	tokenIDs := make([]string, 0, len(committedTokens))
-	for _, token := range committedTokens {
-		if token != nil && token.TokenID != "" {
-			tokenIDs = append(tokenIDs, token.TokenID)
-		}
-	}
-
-	if len(tokenIDs) == 0 {
-		return nil
-	}
-
-	// Update all committed tokens to Committed status in a single batch operation
-	query := `
-		UPDATE tokens
-		SET token_status = $1, updated_at = NOW()
-		WHERE token_id = ANY($2::text[])
-	`
-	cmdTag, err := tx.Exec(ctx, query, constants.TokenStatus_Committed, tokenIDs)
-	if err != nil {
-		return fmt.Errorf("post-consensus persistence: update committed tokens status: %w", err)
-	}
-
-	rowsAffected := cmdTag.RowsAffected()
-	if rowsAffected != int64(len(tokenIDs)) {
-		pc.wallet.log.Warn("committed tokens status update mismatch",
-			"expected", len(tokenIDs),
-			"affected", rowsAffected)
-	}
-
-	pc.wallet.log.Info("updated committed tokens status",
-		"count", rowsAffected,
-		"status", "Committed")
 
 	return nil
 }

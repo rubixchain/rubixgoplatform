@@ -64,7 +64,7 @@ func (c *Core) CallBackQuorumUnpledge(tx *models.Transactions, did string) error
 		if !ok {
 			return fmt.Errorf("CallBackQuorumUnpledge: quorum DID not setup: %s", did)
 		}
-		if err := c.UnpledgeV2(context.Background(), txToUnpledge, tx.ID, did); err != nil {
+		if err := c.UnpledgeV2(context.Background(), txToUnpledge, did); err != nil {
 			c.log.Error("CallBackQuorumUnpledge: UnpledgeV2 failed",
 				"prevTxID", txToUnpledge,
 				"did", did,

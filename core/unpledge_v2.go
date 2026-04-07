@@ -11,28 +11,31 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-// UnpledgeV2 processes per-token unpledge transactions for all tokens
-// associated with mainTxID in the unpledge_sequence_info table.
+// UnpledgeV2 atomically updates tokenchain and token records to reflect the
+// unpledge of all tokens associated with mainTxID. Unpledge is a pure DB
+// bookkeeping operation — no TransactionInfo, no txID, no signature is created.
 //
-// Design: each token is unpledged independently — its own TransactionInfo, its
-// own txID, its own DB transaction (via PersistUnpledgeV2). This means partial
-// failure is tolerated: tokens that have already been committed remain
-// committed, and the unpledge_sequence_info row is only deleted when ALL
-// tokens succeed (enabling safe retry).
+// Steps performed atomically inside unpledgeTx:
+//  1. UPDATE tokenchain SET role=9 WHERE transaction_id=mainTxID AND role=8
+//  2. UPDATE tokens SET token_status=FREE, latest_role=9
+//
+// tokenchain_index is NOT rebuilt — an UPDATE does not change row positions or
+// add new rows, so the index remains valid.
+//
+// Post-commit (separate cleanupTx):
+//   - Increment token_denom for quorumDID
+//   - DELETE unpledge_sequence_info WHERE tx_id=mainTxID
 //
 // Idempotency: if no unpledge_sequence_info row exists for mainTxID the
 // function returns nil immediately (already unpledged or never pledged via V2).
-// Tokens already in FREE status are skipped in the per-token loop.
+// Tokens already in FREE status trigger early-return with sequence row cleanup.
 //
 // Parameters:
-//   - mainTxID:    lookup key in unpledge_sequence_info (NOT the pledge txID)
-//   - triggerTxID: ID of the broadcast main-transfer that triggered this
-//     unpledge — stored in the Memo field for auditability
-//   - quorumDID:   DID that owns the pledged tokens
+//   - mainTxID:   lookup key in unpledge_sequence_info (the main transfer txID)
+//   - quorumDID: DID that owns the pledged tokens
 func (c *Core) UnpledgeV2(
 	ctx context.Context,
 	mainTxID string,
-	triggerTxID string,
 	quorumDID string,
 ) error {
 	if mainTxID == "" {
@@ -40,11 +43,6 @@ func (c *Core) UnpledgeV2(
 	}
 	if quorumDID == "" {
 		return fmt.Errorf("UnpledgeV2: quorumDID is required")
-	}
-
-	dc := c.pqc[quorumDID]
-	if dc == nil {
-		return fmt.Errorf("UnpledgeV2: no DIDCrypto loaded for quorum DID %q — is quorum setup?", quorumDID)
 	}
 
 	// --- Idempotency guard: look up unpledge_sequence_info -------------------
@@ -102,32 +100,38 @@ func (c *Core) UnpledgeV2(
 		return nil
 	}
 
-	// --- Per-token unpledge loop ---------------------------------------------
-	var failedTokens []string
-	var succeededTokens []string
+	// --- Atomic unpledge: UPDATE tokenchain + UPDATE tokens in one tx -----------
+	unpledgeRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Unpledge))
+	pledgeRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Pledge))
 
-	for _, tokenID := range pledgeTokens {
-		// Skip tokens already FREE (partial retry — they were committed in a
-		// prior attempt).
-		if currentTokens[tokenID].TokenStatus == int16(constants.TokenStatus_Free) {
-			succeededTokens = append(succeededTokens, tokenID)
-			continue
-		}
+	unpledgeTx, err := c.w.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("UnpledgeV2: begin unpledge tx: %w", err)
+	}
+	defer unpledgeTx.Rollback(ctx) //nolint:errcheck
 
-		if err := c.unpledgeSingleTokenV2(ctx, tokenID, mainTxID, triggerTxID, quorumDID, dc, epoch, c.networkMode); err != nil {
-			c.log.Error("UnpledgeV2: per-token unpledge failed",
-				"tokenID", tokenID, "mainTxID", mainTxID, "error", err)
-			failedTokens = append(failedTokens, tokenID)
-			// Do NOT abort — other tokens may still succeed.
-			continue
-		}
-		succeededTokens = append(succeededTokens, tokenID)
+	// Step 1: Flip tokenchain role 8->9 for all pledge rows under mainTxID
+	if _, err := unpledgeTx.Exec(ctx, `
+		UPDATE tokenchain SET role = $2, updated_at = NOW()
+		WHERE transaction_id = $1 AND role = $3
+	`, mainTxID, unpledgeRoleID, pledgeRoleID); err != nil {
+		return fmt.Errorf("UnpledgeV2: update tokenchain role for mainTxID %q: %w", mainTxID, err)
 	}
 
-	// --- Post-loop: cleanup only if ALL tokens succeeded ---------------------
-	if len(failedTokens) > 0 {
-		return fmt.Errorf("UnpledgeV2: %d/%d tokens failed for mainTxID %q: %v",
-			len(failedTokens), len(pledgeTokens), mainTxID, failedTokens)
+	// Step 2: Set tokens status=FREE, latest_role=9
+	// NOTE: transaction_id and latest_position on the tokens row do NOT change —
+	// the tokenchain row position is unchanged; we only flip role and status.
+	if _, err := unpledgeTx.Exec(ctx, `
+		UPDATE tokens SET token_status = $2, latest_role = $3, updated_at = NOW()
+		WHERE token_id = ANY($1::text[])
+	`, pledgeTokens, int16(constants.TokenStatus_Free), unpledgeRoleID); err != nil {
+		return fmt.Errorf("UnpledgeV2: update token status for mainTxID %q: %w", mainTxID, err)
+	}
+
+	// NO tokenchain_index rebuild — UPDATE does not change position or add rows.
+
+	if err := unpledgeTx.Commit(ctx); err != nil {
+		return fmt.Errorf("UnpledgeV2: commit unpledge tx for mainTxID %q: %w", mainTxID, err)
 	}
 
 	// All tokens succeeded — increment token_denom and delete the sequence row.
@@ -165,7 +169,7 @@ func (c *Core) UnpledgeV2(
 		}
 	}
 
-	// Delete unpledge_sequence_info ONLY after all tokens committed.
+	// Delete unpledge_sequence_info after all tokens are committed.
 	if _, err := cleanupTx.Exec(ctx,
 		`DELETE FROM unpledge_sequence_info WHERE tx_id = $1`, mainTxID,
 	); err != nil {
@@ -181,14 +185,9 @@ func (c *Core) UnpledgeV2(
 	return nil
 }
 
-// unpledgeSingleTokenV2 builds and persists an independent unpledge transaction
-// for a single token. Each call opens its own DB transaction via PersistUnpledgeV2.
-//
-// The unpledgeTxID is deterministic: SHA3_256(SerializeTransactionInfo(txInfo)),
-// so retrying with the same inputs produces the same result (idempotent via
-// ON CONFLICT DO NOTHING in PersistUnpledgeV2).
-//
-// dc is passed in from UnpledgeV2 to avoid repeated c.pqc map lookups.
+// Deprecated: unpledgeSingleTokenV2 is unused under the V2 single-transaction
+// architecture. UnpledgeV2 now performs an atomic UPDATE on all pledge rows
+// instead of per-token INSERT. Retained for reference only.
 func (c *Core) unpledgeSingleTokenV2(
 	ctx context.Context,
 	tokenID string,

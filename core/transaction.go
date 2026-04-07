@@ -15,6 +15,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
+	"github.com/rubixchain/rubixgoplatform/core/consensus"
 )
 
 func (c *Core) InitiateTransaction(reqID string, req *models.TransactionRequest) {
@@ -184,14 +185,19 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	}
 	c.log.Info("InitiateTransaction: Received pledge tokens", "tokenCount", len(pledgeTokenResponse.PledgeTokens), "quorumDID", quorumAddresses[0])
 
-	// Attach quorum tokens
-	pledgeTokenPtrs := make([]*models.TokenInfo, len(pledgeTokenResponse.PledgeTokens))
-	for i := range pledgeTokenResponse.PledgeTokens {
-		pledgeTokenPtrs[i] = pledgeTokenResponse.PledgeTokens[i]
+	pledgeTokens := pledgeTokenResponse.PledgeTokens
+	for _, token := range pledgeTokens {
+		err = consensus.ValidateNewTokenContent(token.TokenID, true, c.testnet, c.mainnet, c.localnet, c.log)
+		if err != nil {
+			c.log.Error("InitiateTransaction: Failed to validate token content", "err", err)
+			resp.Message = "InitiateTransaction: Failed to validate token content"
+			return resp
+		}
 	}
+
 	pledegTokenInfo := &models.QuorumInfo{
 		Did:    quorumAddresses[0],
-		Tokens: pledgeTokenPtrs,
+		Tokens: pledgeTokens,
 	}
 	transactionInfo.Quorums = []*models.QuorumInfo{pledegTokenInfo}
 
