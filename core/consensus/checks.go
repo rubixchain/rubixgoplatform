@@ -436,9 +436,9 @@ func TokenChainIntegrityCheck(txnInfo *models.TransactionInfo, peer *ipfsport.Pe
 	}
 
 	tokenLists := map[string][]*models.TokenInfo{
-		constants.TokenType_RBT: txnInfo.Tokens.RBT,
-		constants.TokenType_FT:  txnInfo.Tokens.FT,
-		constants.TokenType_NFT: txnInfo.Tokens.NFT,
+		constants.TokenType_RBT:           txnInfo.Tokens.RBT,
+		constants.TokenType_FT:            txnInfo.Tokens.FT,
+		constants.TokenType_NFT:           txnInfo.Tokens.NFT,
 		constants.TokenType_SmartContract: txnInfo.Tokens.SmartContract,
 	}
 
@@ -448,14 +448,9 @@ func TokenChainIntegrityCheck(txnInfo *models.TransactionInfo, peer *ipfsport.Pe
 			tokenDetails, err := w.GetTokenByTokenID(t.TokenID)
 			if err != nil {
 				log.Debug("token not found locally, syncing full chain", "tokenID", t.TokenID)
-				postSyncInfo, syncErr := rubixsync.SyncTransactionChainFrom(peer, t.TokenID, tokenTypeInt, w, log)
+				_, syncErr := rubixsync.SyncTransactionChainFrom(peer, t.TokenID, tokenTypeInt, t.TokenValue, w, log)
 				if syncErr != nil {
 					return false, fmt.Errorf("failed to sync token chain for %s: %w", t.TokenID, syncErr)
-				}
-				
-				err := rubixsync.SyncTokenRecords(peer, w, t.TokenID, tokenTypeInt, t.TokenValue, postSyncInfo.Owner, postSyncInfo.TransactionID, int(postSyncInfo.Role), int(postSyncInfo.Position), log)
-				if err != nil {
-					return false, fmt.Errorf("failed to sync token records for %s: %w", t.TokenID, err)
 				}
 			}
 
@@ -465,7 +460,7 @@ func TokenChainIntegrityCheck(txnInfo *models.TransactionInfo, peer *ipfsport.Pe
 					"existingTransactionID", tokenDetails.TransactionID,
 					"incomingTransactionID", t.PreviousTransactionID,
 				)
-				if _, syncErr := rubixsync.SyncTransactionChainFrom(peer, t.TokenID, tokenTypeInt, w, log); syncErr != nil {
+				if _, syncErr := rubixsync.SyncTransactionChainFrom(peer, t.TokenID, tokenTypeInt, t.TokenValue, w, log); syncErr != nil {
 					return false, fmt.Errorf("failed to sync token chain for %s: %w", t.TokenID, syncErr)
 				}
 			}
@@ -503,14 +498,9 @@ func TokenChainIntegrityCheck(txnInfo *models.TransactionInfo, peer *ipfsport.Pe
 					tokenDetails, err := w.GetFullNodeRBTToken(t.TokenID)
 					if err != nil {
 						log.Debug("token not found locally, syncing full chain", "tokenID", t.TokenID)
-						postSyncInfo, syncErr := rubixsync.SyncTransactionChainFrom(peer, t.TokenID, tokenTypeInt, w, log)
+						_, syncErr := rubixsync.SyncTransactionChainFrom(peer, t.TokenID, tokenTypeInt, t.TokenValue, w, log)
 						if syncErr != nil {
 							return false, fmt.Errorf("TokenIntegrityCheck: fullnode: failed to sync token chain for %s: %w", t.TokenID, syncErr)
-						}
-
-						err := rubixsync.SyncTokenRecords(peer, w, t.TokenID, tokenTypeInt, t.TokenValue, postSyncInfo.Owner, postSyncInfo.TransactionID, int(postSyncInfo.Role), int(postSyncInfo.Position), log)
-						if err != nil {
-							return false, fmt.Errorf("TokenIntegrityCheck: fullnode: failed to sync token records for %s: %w", t.TokenID, err)
 						}
 					}
 
@@ -520,7 +510,7 @@ func TokenChainIntegrityCheck(txnInfo *models.TransactionInfo, peer *ipfsport.Pe
 							"existingTransactionID", tokenDetails.TransactionID,
 							"incomingTransactionID", t.PreviousTransactionID,
 						)
-						if _, syncErr := rubixsync.SyncTransactionChainFrom(peer, t.TokenID, tokenTypeInt, w, log); syncErr != nil {
+						if _, syncErr := rubixsync.SyncTransactionChainFrom(peer, t.TokenID, tokenTypeInt, t.TokenValue, w, log); syncErr != nil {
 							return false, fmt.Errorf("failed to sync token chain for %s: %w", t.TokenID, syncErr)
 						}
 					}
@@ -626,7 +616,7 @@ func ValidateTransaction(
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
 
-	if ok, syncErr  := TokenChainIntegrityCheck(&txnInfo, peer, isFullnode, w, log); syncErr != nil {
+	if ok, syncErr := TokenChainIntegrityCheck(&txnInfo, peer, isFullnode, w, log); syncErr != nil {
 		return false, fmt.Errorf("ValidateTransaction: %w", syncErr)
 	} else if !ok {
 		return false, fmt.Errorf("ValidateTransaction: token chain sync failed")

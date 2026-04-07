@@ -64,7 +64,7 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
 
         CREATE TABLE IF NOT EXISTS tokens (
             token_id         TEXT PRIMARY KEY,
-            parent_token_id  TEXT REFERENCES tokens(token_id) ON DELETE SET NULL,
+            parent_token_id  TEXT,
             token_value      NUMERIC NOT NULL CHECK (token_value >= 0),
             token_status     SMALLINT NOT NULL DEFAULT 99,
             did              TEXT NOT NULL,

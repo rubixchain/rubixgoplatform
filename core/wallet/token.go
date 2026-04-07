@@ -417,6 +417,17 @@ func (w *Wallet) IsDIDExist(did string) bool {
 	return exists
 }
 
+func (w *Wallet) IsTokenExist(tokenID string) bool {
+	var exists bool
+	err := w.db.Pool().QueryRow(w.Ctx,
+		`SELECT EXISTS(SELECT 1 FROM tokens WHERE token_id=$1)`, tokenID,
+	).Scan(&exists)
+	if err != nil {
+		return false
+	}
+	return exists
+}
+
 func (w *Wallet) ReadToken(tokenID string) (*models.Token, error) {
 	row := w.db.Pool().QueryRow(w.Ctx,
 		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,

@@ -465,6 +465,7 @@ func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Tr
 // CheckTxnsPresentInUnpledgeSequenceInfo checks if the provided transactions are
 // present in the `unpledge_sequence_info` table or not. If they are, they are returned back
 func (w *Wallet) CheckTxnsPresentInUnpledgeSequenceInfo(txs []string) ([]string, error) {
+	w.log.Warn(fmt.Sprintf("CheckTxnsPresentInUnpledgeSequenceInfo: checking for transactions in unpledge_sequence_info, txs: %v", txs))	
 	rows, err := w.db.Pool().Query(
         w.Ctx,
         `

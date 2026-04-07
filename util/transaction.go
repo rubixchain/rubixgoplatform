@@ -59,12 +59,7 @@ func VerifySignature(dc types.DIDCrypto, txInfo *models.TransactionInfo, signatu
 	return nil
 }
 
-func PublishTransaction(pubsub *types.PubSub, tx *models.TransactionInfo, signature *models.Signature) (*models.Transactions, error) {
-	txID, err := GetTransactionID(tx)
-	if err != nil {
-		return nil, fmt.Errorf("PublishTransaction: failed to get transaction ID: %v", err)
-	}
-
+func PublishTransaction(pubsub *types.PubSub, txID string, tx *models.TransactionInfo, signature *models.Signature) (*models.Transactions, error) {
 	txInfoBytes, err := models.SerializeTransactionInfo(tx)
 	if err != nil {
 		return nil, fmt.Errorf("PublishTransaction: failed to serialize TransactionInfo, err: %v", err)

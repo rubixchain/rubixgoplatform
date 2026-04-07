@@ -252,16 +252,19 @@ type SyncTransactionChainRequest struct {
 type GenesisAndLatestTransactionSyncRequest struct {
 	Token string `json:"token"`
 }
+
 type TransactionChainSyncRequest struct {
 	TokenID       string `json:"token_id"`
 	TransactionID string `json:"transaction_id"`
 }
+
 type TransactionChainSyncResponse struct {
 	Status                   bool     `json:"status"`
 	Message                  string   `json:"message"`
 	NextTransactionID        string   `json:"next_transaction_id"`
 	SyncTransactionInfoBytes [][]byte `json:"transactions"`
 }
+
 type GenesisAndLatestTransactionSyncReply struct {
 	Status             bool   `json:"status"`
 	Message            string `json:"message"`

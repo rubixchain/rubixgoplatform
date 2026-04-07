@@ -585,13 +585,13 @@ func (c *Core) FetchDID(did string) error {
 			return err
 		}
 		err = c.ipfsOps.Get(did, didDir+"/")
-		if err == nil {
+		if err != nil {
 			c.log.Error("failed to perform ipfs get on input did", "did", did, "err", err)
 			return err
 		}
 		return err
 	}
-	// Directory and pubKey.pem exist, nothing to do
+
 	return nil
 }
 

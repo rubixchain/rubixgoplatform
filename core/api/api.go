@@ -8,14 +8,9 @@ import (
 )
 
 const APISyncTransactionChain = "/api/sync-transaction-chain"
-const APISyncTokenRecord = "/api/sync-token-record"
 
 func SetupAPI(listener *ipfsport.Listener, w *wallet.Wallet, log logger.Logger) {
 	listener.AddRoute(APISyncTransactionChain, "POST", func(req *ensweb.Request) *ensweb.Result {
 		return SyncTransactionChain(req, listener, w, log)
-	})
-	
-	listener.AddRoute(APISyncTokenRecord, "POST", func(req *ensweb.Request) *ensweb.Result {
-		return SyncTokenRecord(req, listener, w, log)
 	})
 }

@@ -238,26 +238,51 @@ func (w *Wallet) GetTokenChainByTokenID(tokenID string) ([]models.TokenChain, er
 	return pgx.CollectRows(rows, pgx.RowToStructByName[models.TokenChain])
 }
 
-// GetTokenChainByTokenIDAndPrevTxnId fetches the token chain from the input transaction id, with a limit of 100 transactions
-func (w *Wallet) GetTokenChainByTokenIDAndPrevTxnId(tokenID string, txnID string) ([]models.TokenChain, error) {
+func (w *Wallet) GetAllTokenChains(tokenID string) ([]models.TokenChain, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
-		`SELECT tc.*
-			FROM tokenchain tc
-			WHERE tc.token_id = $1
-			AND tc.position >= (
-				SELECT position
-				FROM tokenchain
-				WHERE token_id = $1
-				AND previous_transaction_id = $2
-				)
-			ORDER BY tc.position
-			LIMIT 100`, tokenID, txnID,
+		`SELECT id, token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at
+		 FROM tokenchain WHERE token_id = $1 ORDER BY position ASC`, tokenID,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("GetTokenChainByTokenIDAndPrevTxnId: %w", err)
+		return nil, fmt.Errorf("GetAllTokenChains: %w", err)
 	}
 
 	return pgx.CollectRows(rows, pgx.RowToStructByName[models.TokenChain])
+}
+
+// GetTokenChainByTokenIDAndPrevTxnId fetches the token chain from the input transaction id, with a limit of 100 transactions
+func (w *Wallet) GetTokenChainByTokenIDAndPrevTxnId(tokenID string, txnID string) ([]models.TokenChain, error) {
+	if txnID == "" {
+		rows, err := w.db.Pool().Query(w.Ctx, `SELECT tc.*
+		FROM tokenchain tc
+		WHERE tc.token_id = $1
+		ORDER BY tc.position
+		LIMIT 100`, tokenID)
+		if err != nil {
+			return nil, fmt.Errorf("GetTokenChainByTokenIDAndPrevTxnId: failed to get token chain; error: %v ", err)
+		}
+
+		return pgx.CollectRows(rows, pgx.RowToStructByName[models.TokenChain])
+	} else {
+		rows, err := w.db.Pool().Query(w.Ctx,
+			`SELECT tc.*
+				FROM tokenchain tc
+				WHERE tc.token_id = $1
+				AND tc.position >= (
+					SELECT position
+					FROM tokenchain
+					WHERE token_id = $1
+					AND previous_transaction_id = $2
+					)
+				ORDER BY tc.position
+				LIMIT 100`, tokenID, txnID,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("GetTokenChainByTokenIDAndPrevTxnId: %w", err)
+		}
+
+		return pgx.CollectRows(rows, pgx.RowToStructByName[models.TokenChain])
+	}
 }
 
 func (w *Wallet) GetLatestTransactionAndRoleByTokenID(tokenID string) (*models.Transactions, int16, error) {
@@ -551,7 +576,7 @@ func (w *Wallet) PersistGenesisTokenRecord(
 	}
 
 	if network != constants.NetworkMode_Localnet {
-		if _, err := util.PublishTransaction(ps, txInfo, sigStruct); err != nil {
+		if _, err := util.PublishTransaction(ps, genesisTx.ID, txInfo, sigStruct); err != nil {
 			return "", err
 		}
 	}
@@ -650,6 +675,10 @@ func (w *Wallet) GetTransactionsForChainSync(tokenID string, txnId string) ([]mo
 		return nil, "", fmt.Errorf("GetAllTransactionsInBytesByTokenId: failed to get token chain; error: %v ", err)
 	}
 
+	if len(tokenChain) == 0 {
+		return syncTransactionInfoList, "", nil
+	}
+
 	// process each txn in the chain in a loop
 	for _, txnInfo := range tokenChain {
 		// fetch the txn by txnId
@@ -665,6 +694,11 @@ func (w *Wallet) GetTransactionsForChainSync(tokenID string, txnId string) ([]mo
 			PreviousTransactionID: txnInfo.PreviousTransactionID,
 		})
 	}
+
+	if len(tokenChain) <= 100 {
+		return syncTransactionInfoList, "", nil	
+	}
+
 	return syncTransactionInfoList, tokenChain[len(tokenChain)-1].TransactionID, nil
 }
 

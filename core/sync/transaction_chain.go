@@ -16,8 +16,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
@@ -53,7 +53,7 @@ func FindTokenRoleInTxn(tokenID string, txInfo *models.TransactionInfo) int16 {
 	return int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
 }
 
-func SyncTokenRecords(p *ipfsport.Peer, w *wallet.Wallet, tokenID string, tokenType int, tokenValue float64, newOwnerDID string, latestTxID string, latestTxRole int, latestTxPosition int, log logger.Logger) error {
+func UpdateTokenRecord(w *wallet.Wallet, tokenID string, tokenType int, tokenValue float64, newOwnerDID string, latestTxID string, latestTxRole int, latestTxPosition int, log logger.Logger) error {
 	tx, err := w.BeginTx(w.Ctx)
 	if err != nil {
 		log.Error("failed to begin transaction", "err", err)
@@ -77,23 +77,6 @@ func SyncTokenRecords(p *ipfsport.Peer, w *wallet.Wallet, tokenID string, tokenT
 			return fmt.Errorf("failed to update token record: %w", err)
 		}
 	} else {
-		genesisTransaction, err := w.GetGenesisTransaction(tokenID, false)
-		if err != nil {
-			log.Error("failed to get genesis transaction", "err", err)
-			return fmt.Errorf("failed to get genesis transaction: %w", err)
-		}
-
-		var genesisTxInfo models.TransactionInfo
-		if err = json.Unmarshal(genesisTransaction.Info, &genesisTxInfo); err != nil {
-			log.Error("failed to unmarshal genesis transaction info", "err", err)
-			return fmt.Errorf("failed to unmarshal genesis transaction info: %w", err)
-		}
-
-		if err := buildTokenRecord(w.Ctx, tx, p, &genesisTxInfo, tokenType, log); err != nil {
-			log.Error("failed to build token record", "err", err)
-			return fmt.Errorf("failed to build token record: %w", err)
-		}
-
 		// Expect only RBT tokens to have parent tokens
 		var parenTokenIDObj pgtype.Text
 		switch tokenType {
@@ -122,6 +105,34 @@ func SyncTokenRecords(p *ipfsport.Peer, w *wallet.Wallet, tokenID string, tokenT
 			UpdatedAt:      time.Now(),
 		}
 
+		// Remove the following, only for DEBUG
+		var txExists bool
+		_ = tx.QueryRow(w.Ctx,
+			`SELECT EXISTS(SELECT 1 FROM transactions WHERE id=$1)`, latestTxID,
+		).Scan(&txExists)
+
+		if !txExists {
+			rows, err := tx.Query(w.Ctx, `SELECT * FROM transactions`)
+			if err != nil {
+				log.Error("failed to query transactions", "err", err)
+				return fmt.Errorf("failed to query transactions: %w", err)
+			}
+			defer rows.Close()
+
+			txes, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.Transactions])
+			if err != nil {
+				log.Error("failed to collect transactions", "err", err)
+				return fmt.Errorf("failed to collect transactions: %w", err)
+			}
+
+			log.Warn(fmt.Sprintf("All transactions in DB: %+v", txes))
+
+			log.Error("Transaction does not exist in DB", "txID", latestTxID)
+			return fmt.Errorf("transaction does not exist in DB: %s", latestTxID)
+		} else {
+			log.Warn("Transaction exists in DB", "txID", latestTxID)
+		}
+
 		if _, err := tx.Exec(w.Ctx,
 			`INSERT INTO tokens(token_id, parent_token_id, token_value, token_status, did, transaction_id,
 			token_state_hash, token_type, latest_position, latest_role, created_at, updated_at)
@@ -130,13 +141,23 @@ func SyncTokenRecords(p *ipfsport.Peer, w *wallet.Wallet, tokenID string, tokenT
 			tokenRecord.DID, tokenRecord.TransactionID, tokenRecord.TokenStateHash, tokenRecord.TokenType,
 			tokenRecord.LatestPosition, tokenRecord.LatestRole, tokenRecord.CreatedAt, tokenRecord.UpdatedAt,
 		); err != nil {
-			return fmt.Errorf("CreateToken: %w", err)
+			return fmt.Errorf("updateTokenRecord: failed to insert token record: %w", err)
 		}
 	}
 
+	if _, err := tx.Exec(w.Ctx,
+		`UPDATE tokens
+		SET did = $1, transaction_id = $2, latest_position = $3, latest_role = $4, updated_at = NOW()
+		WHERE token_id = $5`,
+		newOwnerDID, latestTxID, latestTxPosition, latestTxRole, tokenID,
+	); err != nil {
+		log.Error("failed to update token record", "err", err)
+		return fmt.Errorf("failed to update token record: %w", err)
+	}
+
 	if err = tx.Commit(w.Ctx); err != nil {
-		log.Error("failed to commit transaction", "err", err)
-		return fmt.Errorf("failed to commit transaction: %w", err)
+		log.Error("updateTokenRecord: failed to commit transaction", "err", err)
+		return fmt.Errorf("updateTokenRecord: failed to commit transaction: %w", err)
 	}
 
 	return nil
@@ -150,9 +171,7 @@ type LatestTransactionInfoPostSync struct {
 }
 
 // SyncTransactionChainFrom fetches missing transactions from a peer and writes them locally.
-func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, tokenType int, w *wallet.Wallet, log logger.Logger) (*LatestTransactionInfoPostSync, error) {
-	var err error
-
+func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, tokenType int, tokenValue float64, w *wallet.Wallet, log logger.Logger) (*LatestTransactionInfoPostSync, error) {
 	latestTransactionInfoPostSync := &LatestTransactionInfoPostSync{}
 
 	syncReq := models.TransactionChainSyncRequest{
@@ -160,25 +179,28 @@ func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, tokenType int, w
 		TransactionID: "",
 	}
 
+	var tokenRecordExists bool = w.IsTokenExist(tokenID)
+
 	tx, err := w.BeginTx(w.Ctx)
 	if err != nil {
 		log.Error("failed to begin transaction", "err", err)
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback(w.Ctx)
 
 	for {
+		
+		defer tx.Rollback(w.Ctx)
 		// Call the Sync API to sync the transaction details of a token
 		// from the peer
 		var trep models.TransactionChainSyncResponse
 		err = p.SendJSONRequest("POST", api.APISyncTransactionChain, nil, &syncReq, &trep, false)
 		if err != nil {
-			log.Error("failed to sync transaction chain")
-			return nil, err
+			log.Error(fmt.Sprintf("APISyncTransactionChain: failed to sync transaction chain: %v", err))
+			return nil, fmt.Errorf("APISyncTransactionChain: failed to sync transaction chain: %v", err)
 		}
 		if !trep.Status {
-			log.Error("failed to sync transaction chain")
-			return nil, fmt.Errorf(trep.Message)
+			log.Error(fmt.Sprintf("APISyncTransactionChain: failed to sync transaction chain: %s", trep.Message))
+			return nil, fmt.Errorf("APISyncTransactionChain: failed to sync transaction chain: %s", trep.Message)
 		}
 
 		if len(trep.SyncTransactionInfoBytes) > 0 {
@@ -200,6 +222,7 @@ func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, tokenType int, w
 				return cmp.Compare(a.Position, b.Position)
 			})
 
+			// Initially add all the transactions in `transactions`
 			var rowIDList []int32 = make([]int32, 0)
 			for _, syncInfo := range syncInfoList {
 				var txInfo models.TransactionInfo
@@ -207,8 +230,6 @@ func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, tokenType int, w
 					log.Error("failed to unmarshal transaction info", "err", err)
 					return nil, fmt.Errorf("failed to unmarshal transaction info: %w", err)
 				}
-
-				role := syncInfo.Role
 
 				// Update `transactions` table
 				rowsAffected, err := tx.Exec(w.Ctx,
@@ -220,18 +241,73 @@ func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, tokenType int, w
 					log.Error("failed to insert transaction", "err", err)
 					return nil, fmt.Errorf("failed to insert transaction: %w", err)
 				}
-
 				if rowsAffected.RowsAffected() == 0 {
 					continue
 				}
 
+				latestTransactionInfoPostSync.TransactionID = syncInfo.Transaction.ID
+			}
+
+			// Add an initial token record if they dont exist.
+			// Rest of the details will be updated when we add the token chain entries
+			if !tokenRecordExists {
+				var parenTokenIDObj pgtype.Text
+				var tknValue float64 = tokenValue
+
+				switch tokenType {
+					case models.GetTokenTypeID(constants.TokenType_RBT):
+						parentTokenID, err := parts.NewTokenIDFromString(tokenID).GetParentToken()
+						if err != nil {
+							log.Error("failed to get parent token ID", "err", err)
+							return nil, fmt.Errorf("failed to get parent token ID: %w", err)
+						}
+						parenTokenIDObj = pgtype.Text{String: parentTokenID, Valid: true}
+
+						tknValue, err = util.GetTokenValueFromTokenID(tokenID)
+						if err != nil {
+							log.Error("failed to get token value", "err", err)
+							return nil, fmt.Errorf("failed to get token value: %w", err)
+						}
+					default:
+						parenTokenIDObj = pgtype.Text{}
+				}
+
+				tokenRecord := models.Token{
+					TokenID:        tokenID,
+					ParentTokenID:  parenTokenIDObj,
+					TokenValue:     tknValue,
+					TokenStatus:    constants.TokenStatus_Free,
+					DID:            p.GetPeerDID(),
+					TransactionID:  latestTransactionInfoPostSync.TransactionID,
+					TokenType:      int16(tokenType),
+					LatestPosition: 0,
+					LatestRole:     0,
+					CreatedAt:      time.Now(),
+					UpdatedAt:      time.Now(),
+				}
+
+				if _, err := tx.Exec(w.Ctx,
+					`INSERT INTO tokens(token_id, parent_token_id, token_value, token_status, did, transaction_id,
+					token_state_hash, token_type, latest_position, latest_role, created_at, updated_at)
+					VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+					tokenRecord.TokenID, tokenRecord.ParentTokenID, tokenRecord.TokenValue, tokenRecord.TokenStatus,
+					tokenRecord.DID, tokenRecord.TransactionID, tokenRecord.TokenStateHash, tokenRecord.TokenType,
+					tokenRecord.LatestPosition, tokenRecord.LatestRole, tokenRecord.CreatedAt, tokenRecord.UpdatedAt,
+				); err != nil {
+					return nil, fmt.Errorf("updateTokenRecord: failed to insert token record: %w", err)
+				}
+			}
+
+			// Then add entries into `tokenchain` table and update the token record with the latest transaction details
+			for _, syncInfo := range syncInfoList {
 				entry := &models.TokenChain{
 					TokenID:               tokenID,
 					TransactionID:         syncInfo.Transaction.ID,
-					Role:                  role,
+					Role:                  syncInfo.Role,
 					Position:              syncInfo.Position,
 					PreviousTransactionID: syncInfo.PreviousTransactionID,
 				}
+
 				var rowID int32
 				if err := tx.QueryRow(w.Ctx, `
 					INSERT INTO tokenchain (token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at)
@@ -240,12 +316,13 @@ func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, tokenType int, w
 				`, entry.TokenID, entry.TransactionID, entry.PreviousTransactionID, entry.Role, entry.Position).Scan(&rowID); err != nil {
 					return nil, fmt.Errorf("AddTokenChainEntry: %w", err)
 				}
+
 				rowIDList = append(rowIDList, rowID)
 
 				latestTransactionInfoPostSync.TransactionID = syncInfo.Transaction.ID
-				latestTransactionInfoPostSync.Role = role
+				latestTransactionInfoPostSync.Role = syncInfo.Role
 				latestTransactionInfoPostSync.Position = syncInfo.Position
-				latestTransactionInfoPostSync.Owner = txInfo.Owner
+				latestTransactionInfoPostSync.Owner = p.GetPeerDID()
 			}
 
 			if len(rowIDList) > 0 {
@@ -261,70 +338,32 @@ func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, tokenType int, w
 				}
 			}
 		}
+
 		if trep.NextTransactionID == "" {
 			break
 		}
 		syncReq.TransactionID = trep.NextTransactionID
 	}
 
-	if err = tx.Commit(w.Ctx); err != nil {
+	if _, err := tx.Exec(w.Ctx,
+		`
+			UPDATE tokens
+			SET transaction_id = $1, latest_position = $2, latest_role = $3, updated_at = NOW()
+			WHERE token_id = $4
+		`,
+		latestTransactionInfoPostSync.TransactionID, 
+		latestTransactionInfoPostSync.Position, latestTransactionInfoPostSync.Role, tokenID,
+	); err != nil {
+		log.Error("failed to update token record", "err", err)
+		return nil, fmt.Errorf("failed to update token record: %w", err)
+	}
+
+	if err := tx.Commit(w.Ctx); err != nil {
 		log.Error("failed to commit transaction", "err", err)
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return latestTransactionInfoPostSync, nil
-}
-
-func buildTokenRecord(ctx context.Context, tx pgx.Tx, senderPeer *ipfsport.Peer, tokenGensis *models.TransactionInfo, tokenType int, log logger.Logger) error {
-	committedTokensToSync, err := getCommittedTokensFromGenesisTx(tokenGensis, tokenType)
-	if err != nil {
-		return fmt.Errorf("failed to get committed tokens from genesis transaction: %w", err)
-	}
-
-	finalTokensToSync, err := getTokenRecordsToSync(ctx, committedTokensToSync, tx)
-	if err != nil {
-		return fmt.Errorf("failed to get token records to sync: %w", err)
-	}
-
-	if len(finalTokensToSync) == 0 {
-		return nil
-	}
-
-	resp, err := syncTokenRecordFrom(senderPeer, finalTokensToSync, log)
-	if err != nil {
-		return fmt.Errorf("failed to sync token records from peer: %w", err)
-	}
-
-	// Get keys in a temp list
-	var tmpList []string = make([]string, 0)
-	for tokenID := range resp.ResultMap {
-		tmpList = append(tmpList, tokenID)
-	}
-
-	tmpList = sortTokenIDs(tmpList)
-
-	for _, tokenIDKey := range tmpList {
-		var tokenRecord models.Token
-		if err = json.Unmarshal(resp.ResultMap[tokenIDKey], &tokenRecord); err != nil {
-			log.Error("failed to unmarshal token record bytes", "err", err)
-			return fmt.Errorf("failed to unmarshal token record bytes: %w", err)
-		}
-
-		_, err := tx.Exec(ctx,
-			`INSERT INTO tokens(token_id, parent_token_id, token_value, token_status, did, transaction_id,
-			token_state_hash, token_type, latest_position, latest_role, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-			tokenRecord.TokenID, tokenRecord.ParentTokenID, tokenRecord.TokenValue, tokenRecord.TokenStatus,
-			tokenRecord.DID, tokenRecord.TransactionID, tokenRecord.TokenStateHash, tokenRecord.TokenType,
-			tokenRecord.LatestPosition, tokenRecord.LatestRole, tokenRecord.CreatedAt, tokenRecord.UpdatedAt,
-		)
-		if err != nil {
-			log.Error("failed to insert token record", "err", err)
-			return fmt.Errorf("failed to insert token record: %w", err)
-		}
-	}
-
-	return nil
 }
 
 func sortTokenIDs(tokenIDs []string) []string {
@@ -402,19 +441,4 @@ func getTokenRecordsToSync(ctx context.Context, tokenIDs []string, tx pgx.Tx) ([
 	}
 
 	return missingTokens, nil
-}
-
-func syncTokenRecordFrom(p *ipfsport.Peer, tokenIDs []string, log logger.Logger) (*types.SyncTokenRecordResponse, error) {
-	syncReq := types.SyncTokenRecordRequest{
-		TokenIDs: tokenIDs,
-	}
-
-	var syncRep types.SyncTokenRecordResponse
-	err := p.SendJSONRequest("POST", api.APISyncTokenRecord, nil, &syncReq, &syncRep, false)
-	if err != nil {
-		log.Error("failed to sync token record", "err", err)
-		return nil, err
-	}
-
-	return &syncRep, nil
 }

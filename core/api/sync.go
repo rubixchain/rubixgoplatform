@@ -7,7 +7,6 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
@@ -43,41 +42,13 @@ func SyncTransactionChain(req *ensweb.Request, l *ipfsport.Listener, w *wallet.W
 
 	syncTransactionInfo, nextTransactionID, err := GetTransactionsForChainSync(w, syncRequest.TokenID, syncRequest.TransactionID)
 	if err != nil {
-		log.Error("failed to get transactions")
-		return l.RenderJSON(req, &models.TransactionChainSyncResponse{Status: false, Message: "Failed to get transactions"}, http.StatusOK)
+		log.Error(fmt.Sprintf("failed to get transactions, err: %v", err))
+		return l.RenderJSON(req, &models.TransactionChainSyncResponse{Status: false, Message: fmt.Sprintf("SyncTransactionChain: Failed to get transactions: %v", err)}, http.StatusNotFound)
 	}
 
 	syncReply.SyncTransactionInfoBytes = syncTransactionInfo
 	syncReply.NextTransactionID = nextTransactionID
 	syncReply.Status = true
 	syncReply.Message = "Successfully got transactions"
-	return l.RenderJSON(req, &syncReply, http.StatusOK)
-}
-
-func SyncTokenRecord(req *ensweb.Request, l *ipfsport.Listener, w *wallet.Wallet, log logger.Logger) *ensweb.Result {
-	var syncRequest types.SyncTokenRecordRequest
-	var syncReply types.SyncTokenRecordResponse
-	err := l.ParseJSON(req, &syncRequest)
-	if err != nil {
-		log.Error("failed to parse token record sync request")
-		return l.RenderJSON(req, &types.SyncTokenRecordResponse{}, http.StatusOK)
-	}
-
-	syncReply.ResultMap = make(map[string][]byte)
-	for _, tokenID := range syncRequest.TokenIDs {
-		tokenRecord, err := w.GetTokenByTokenID(tokenID)
-		if err != nil {
-			log.Error(fmt.Sprintf("failed to get token record for tokenID: %s, err: %v", tokenID, err))
-			continue
-		}
-
-		tokenRecordBytes, err := json.Marshal(tokenRecord)
-		if err != nil {
-			log.Error(fmt.Sprintf("failed to marshal token record for tokenID: %s, err: %v", tokenID, err))
-			continue
-		}
-
-		syncReply.ResultMap[tokenID] = tokenRecordBytes
-	}
 	return l.RenderJSON(req, &syncReply, http.StatusOK)
 }
