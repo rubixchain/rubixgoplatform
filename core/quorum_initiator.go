@@ -238,28 +238,77 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 		return c.l.RenderJSON(request, &response, http.StatusInternalServerError)
 	}
 
-	// Pledge tokens after consensus succeeds. The transactionId is already
-	// computed above (txID); InitiateConsensus returns the same value.
-	pledgeDetails := txnInfo.Quorums
-	if len(pledgeDetails) > 0 {
-		pledgeTokenDetails := pledgeDetails[0].Tokens
-		if err := c.PledgeV2(
-			context.Background(),
-			pledgeTokenDetails,
-			txID,
-			quorumDid,
-			txnInfo.Epoch,
-			txnInfo.Network,
-			txnInfo,
-			consensusRequest.InitiatorSignature,
-			consensusResponse.QuorumSignature,
-		); err != nil {
-			c.log.Error("initiateConsensusHandler: PledgeV2 failed", "err", err)
-			response.Message = "initiateConsensusHandler: PledgeV2 failed: " + err.Error()
-			// ### Note: consensus succeeded but pledge failed, which is a critical state.
-			// Alerting is needed to investigate and resolve the underlying issue.
+	// Locate this quorum's pledge token entry by DID match, not by slice index.
+	// txnInfo.Quorums may list multiple quorums; the entry for THIS quorum may
+	// not be at index 0.
+	var pledgeTokenDetails []*models.TokenInfo
+	for _, q := range txnInfo.Quorums {
+		if q.Did == quorumDid {
+			pledgeTokenDetails = q.Tokens
+			break
+		}
+	}
+	if len(pledgeTokenDetails) == 0 {
+		c.log.Error("initiateConsensusHandler: no quorum tokens found for DID", "quorumDID", quorumDid)
+		response.Message = fmt.Errorf("no quorum tokens found for DID %s", quorumDid).Error()
+		return c.l.RenderJSON(request, response, http.StatusInternalServerError)
+	}
+
+	// Token consistency validation BEFORE PledgeV2.
+	// Extract token IDs from both views of the pledge set and confirm they
+	// agree on count and membership. In the current single-source code path
+	// these are the same slice, so this is a defensive check that will fire
+	// only if a future refactor introduces a second token list out of band.
+	pledgeTokenIDsFromTxnInfo := make(map[string]struct{}, len(pledgeTokenDetails))
+	for _, ti := range pledgeTokenDetails {
+		if ti == nil {
+			c.log.Error("initiateConsensusHandler: nil TokenInfo in pledgeTokenDetails")
+			response.Message = "initiateConsensusHandler: nil TokenInfo in pledgeTokenDetails"
 			return c.l.RenderJSON(request, response, http.StatusInternalServerError)
 		}
+		pledgeTokenIDsFromTxnInfo[ti.TokenID] = struct{}{}
+	}
+	// tokenInfos is the slice that will actually be passed to PledgeV2.
+	// In the current flow this is the same as pledgeTokenDetails; the
+	// consistency check here ensures the two views remain in sync.
+	tokenInfos := pledgeTokenDetails
+	if len(tokenInfos) != len(pledgeTokenDetails) {
+		c.log.Error("initiateConsensusHandler: pledge token count mismatch",
+			"fromTxnInfo", len(pledgeTokenDetails),
+			"actual", len(tokenInfos))
+		response.Message = "initiateConsensusHandler: pledge token count mismatch"
+		return c.l.RenderJSON(request, response, http.StatusInternalServerError)
+	}
+	for _, ti := range tokenInfos {
+		if ti == nil {
+			c.log.Error("initiateConsensusHandler: nil TokenInfo in tokenInfos")
+			response.Message = "initiateConsensusHandler: nil TokenInfo in tokenInfos"
+			return c.l.RenderJSON(request, response, http.StatusInternalServerError)
+		}
+		if _, ok := pledgeTokenIDsFromTxnInfo[ti.TokenID]; !ok {
+			c.log.Error("initiateConsensusHandler: pledge token ID set mismatch",
+				"unexpectedTokenID", ti.TokenID)
+			response.Message = "initiateConsensusHandler: pledge token ID set mismatch"
+			return c.l.RenderJSON(request, response, http.StatusInternalServerError)
+		}
+	}
+
+	if err := c.PledgeV2(
+		context.Background(),
+		tokenInfos,
+		txID,
+		quorumDid,
+		txnInfo.Epoch,
+		txnInfo.Network,
+		txnInfo,
+		consensusRequest.InitiatorSignature,
+		consensusResponse.QuorumSignature,
+	); err != nil {
+		c.log.Error("initiateConsensusHandler: PledgeV2 failed", "err", err)
+		response.Message = "initiateConsensusHandler: PledgeV2 failed: " + err.Error()
+		// ### Note: consensus succeeded but pledge failed, which is a critical state.
+		// Alerting is needed to investigate and resolve the underlying issue.
+		return c.l.RenderJSON(request, response, http.StatusInternalServerError)
 	}
 
 	return c.l.RenderJSON(request, &consensusResponse, http.StatusOK)

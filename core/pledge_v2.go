@@ -101,7 +101,7 @@ func (c *Core) PledgeV2(
 		  AND token_status = $2
 		ORDER BY token_id
 		FOR UPDATE
-	`, tokenIDs, int16(constants.TokenStatus_Free))
+	`, tokenIDs, int16(constants.TokenStatus_Locked))
 	if err != nil {
 		return fmt.Errorf("PledgeV2: SELECT FOR UPDATE on tokens: %w", err)
 	}
