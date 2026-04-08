@@ -2,15 +2,23 @@ package wallet
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	stdmath "math"
+	"math/rand"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/types/models"
+)
+
+const (
+	lockTokensForSplitRetryBudget = 3 * time.Second
+	lockTokensForSplitMaxRetries  = 5
 )
 
 // ── Pure selection helper ──────────────────────────────────────────────
@@ -328,69 +336,171 @@ func (w *Wallet) LockFTTokens(ctx context.Context, ownerDID string, ftName strin
 //  3. UPDATE token_status to Locked + commit; non-selected rows release locks.
 //
 // Returns only the selected (now-locked) tokens; callers must eventually release or consume them.
-func (w *Wallet) LockTokensForSplit(ctx context.Context, ownerDID string, amount float64) ([]models.Token, error) {
+func (w *Wallet) LockTokensForSplit(ctx context.Context, ownerDID string, amount float64, referenceID string) ([]models.Token, error) {
 	w.log.Info("LockTokensForSplit: locking tokens for split", "ownerDID", ownerDID, "amount", amount)
+	retryCtx, cancel := context.WithTimeout(ctx, lockTokensForSplitRetryBudget)
+	defer cancel()
+	deadline := time.Now().Add(lockTokensForSplitRetryBudget)
+
+	var lastErr error
+	for retry := 0; retry <= lockTokensForSplitMaxRetries; retry++ {
+		selected, err := w.lockTokensForSplitOnce(retryCtx, ownerDID, amount, referenceID)
+		if err == nil {
+			return selected, nil
+		}
+		lastErr = err
+
+		if !shouldRetryLockTokensForSplit(err) {
+			return nil, err
+		}
+		if retry == lockTokensForSplitMaxRetries {
+			break
+		}
+
+		sleepFor := lockTokensForSplitJitter(time.Until(deadline), lockTokensForSplitMaxRetries-retry)
+		if sleepFor <= 0 {
+			break
+		}
+
+		w.log.Warn("LockTokensForSplit: contention detected, retrying",
+			"retry", retry+1,
+			"maxRetries", lockTokensForSplitMaxRetries,
+			"sleepFor", sleepFor,
+			"err", err,
+		)
+
+		select {
+		case <-time.After(sleepFor):
+		case <-retryCtx.Done():
+			return nil, fmt.Errorf("LockTokensForSplit: retry budget exhausted after %s: %w", lockTokensForSplitRetryBudget, lastErr)
+		}
+	}
+
+	if errors.Is(retryCtx.Err(), context.DeadlineExceeded) && lastErr != nil {
+		return nil, fmt.Errorf("LockTokensForSplit: retry budget exhausted after %s: %w", lockTokensForSplitRetryBudget, lastErr)
+	}
+	if lastErr != nil {
+		return nil, fmt.Errorf("LockTokensForSplit: retries exhausted after %d retries: %w", lockTokensForSplitMaxRetries, lastErr)
+	}
+
+	return nil, fmt.Errorf("LockTokensForSplit: retries exhausted without a concrete error")
+}
+
+func (w *Wallet) lockTokensForSplitOnce(ctx context.Context, ownerDID string, amount float64, referenceID string) ([]models.Token, error) {
 	tx, err := w.db.BeginTx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("LockTokensForSplit: begin tx: %w", err)
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	defer tx.Rollback(ctx)
 
-	if _, err := tx.Exec(ctx, "SET LOCAL lock_timeout = '5s'"); err != nil {
+	if _, err := tx.Exec(ctx, "SET LOCAL lock_timeout = '1500ms'"); err != nil {
 		return nil, fmt.Errorf("LockTokensForSplit: set lock_timeout: %w", err)
 	}
 
-	// ── Phase 1: Atomic candidate fetch with row-level lock ───────────
-	candidateRows, err := tx.Query(ctx, `
-		SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
-		       token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
-		FROM tokens
-		WHERE did=$1
-		  AND token_type=(SELECT id FROM token_type WHERE name=$2)
-		  AND token_status=$3
-		ORDER BY token_value ASC
-		FOR UPDATE SKIP LOCKED
-	`, ownerDID, constants.TokenType_RBT, constants.TokenStatus_Free)
-	if err != nil {
-		return nil, fmt.Errorf("LockTokensForSplit: candidate query: %w", err)
-	}
-	defer candidateRows.Close()
-
 	var candidates []models.Token
-	for candidateRows.Next() {
-		var tok models.Token
-		if err := candidateRows.Scan(
-			&tok.TokenID, &tok.ParentTokenID, &tok.TokenValue, &tok.TokenStatus,
-			&tok.DID, &tok.TransactionID, &tok.TokenStateHash, &tok.TokenType,
-			&tok.LatestPosition, &tok.LatestRole, &tok.CreatedAt, &tok.UpdatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("LockTokensForSplit: candidate scan: %w", err)
+	var accumulated float64
+
+	batchSize := 100
+
+	// Cursor-based batching is required because SKIP LOCKED only skips rows held
+	// by OTHER transactions — it does NOT skip rows held by this same transaction.
+	// Without a cursor, each loop iteration re-scans the same rows and pushes them
+	// into candidates multiple times, producing duplicate token_id entries.
+	// Using WHERE token_id > $lastSeenID ORDER BY token_id ASC advances the scan
+	// window past all rows already seen in prior batches.
+	// Reference: RESEARCH.md section 1.
+	var lastSeenID string // cursor: "" means "no lower bound"
+	// Note: the empty string comparison is correct even for the first batch because
+	// token_id values are hex-encoded hashes and are never the empty string.
+
+	for {
+		rows, err := tx.Query(ctx, `
+			SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
+			       token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+			FROM tokens
+			WHERE did=$1
+			  AND token_type=(SELECT id FROM token_type WHERE name=$2)
+			  AND token_status=$3
+			  AND token_id > $5
+			ORDER BY token_id ASC
+			LIMIT $4
+			FOR UPDATE SKIP LOCKED
+		`, ownerDID, constants.TokenType_RBT, constants.TokenStatus_Free, batchSize, lastSeenID)
+
+		if err != nil {
+			return nil, fmt.Errorf("LockTokensForSplit: candidate query: %w", err)
 		}
-		candidates = append(candidates, tok)
-	}
-	if err := candidateRows.Err(); err != nil {
-		return nil, fmt.Errorf("LockTokensForSplit: candidate rows: %w", err)
+
+		count := 0
+
+		for rows.Next() {
+			count++
+
+			var tok models.Token
+			if err := rows.Scan(
+				&tok.TokenID, &tok.ParentTokenID, &tok.TokenValue, &tok.TokenStatus,
+				&tok.DID, &tok.TransactionID, &tok.TokenStateHash, &tok.TokenType,
+				&tok.LatestPosition, &tok.LatestRole, &tok.CreatedAt, &tok.UpdatedAt,
+			); err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("LockTokensForSplit: scan: %w", err)
+			}
+
+			candidates = append(candidates, tok)
+			accumulated = rubixmath.AddFloat(accumulated, tok.TokenValue)
+			// Advance the cursor: rows arrive in token_id ASC order, so the last
+			// row processed in this batch is always the highest token_id seen so far.
+			lastSeenID = tok.TokenID
+
+			if rubixmath.FloatPrecision(accumulated) >= rubixmath.FloatPrecision(amount) {
+				break
+			}
+		}
+
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("LockTokensForSplit: scan iter: %w", err)
+		}
+
+		rows.Close()
+
+		// stop if enough tokens
+		if rubixmath.FloatPrecision(accumulated) >= rubixmath.FloatPrecision(amount) {
+			break
+		}
+
+		// stop if no more tokens available
+		if count < batchSize {
+			break
+		}
 	}
 
-	// ── Phase 2: Apply selection logic in Go ──────────────────────────
+	if len(candidates) == 0 {
+		return nil, fmt.Errorf("LockTokensForSplit: no candidates")
+	}
+
+	// ── Selection ─────────────────────────────
 	selected, err := selectTokensForAmount(candidates, amount)
 	if err != nil {
 		return nil, fmt.Errorf("LockTokensForSplit: selection: %w", err)
 	}
 
-	// ── Phase 3: Update status + commit ──────────────────────────────
 	selectedIDs := make([]string, len(selected))
 	for i, tok := range selected {
 		selectedIDs[i] = tok.TokenID
 	}
-	sort.Strings(selectedIDs) // deadlock prevention: always lock in a deterministic order
 
-	_, err = tx.Exec(ctx,
-		`UPDATE tokens SET token_status = $1, updated_at = $2 WHERE token_id = ANY($3::text[])`,
-		constants.TokenStatus_Locked, time.Now(), selectedIDs,
-	)
+	sort.Strings(selectedIDs)
+
+	// ── Lock selected tokens ─────────────────
+	_, err = tx.Exec(ctx, `
+		UPDATE tokens
+		SET token_status = $1, updated_at = NOW(), lock_reference_id = $3
+		WHERE token_id = ANY($2::text[])
+	`, constants.TokenStatus_Locked, selectedIDs, referenceID)
+
 	if err != nil {
-		return nil, fmt.Errorf("LockTokensForSplit: update status: %w", err)
+		return nil, fmt.Errorf("LockTokensForSplit: update selected: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -398,6 +508,36 @@ func (w *Wallet) LockTokensForSplit(ctx context.Context, ownerDID string, amount
 	}
 
 	return selected, nil
+}
+
+func shouldRetryLockTokensForSplit(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+
+	msg := err.Error()
+	return strings.Contains(msg, "selectTokensForAmount: no candidate tokens available") ||
+		strings.Contains(msg, "selectTokensForAmount: insufficient balance") ||
+		strings.Contains(msg, "LockTokensForSplit: candidate query:") ||
+		strings.Contains(msg, "lock timeout") ||
+		strings.Contains(msg, "deadlock detected") ||
+		strings.Contains(msg, "could not serialize access")
+}
+
+func lockTokensForSplitJitter(remaining time.Duration, retriesLeft int) time.Duration {
+	if remaining <= 0 || retriesLeft <= 0 {
+		return 0
+	}
+
+	maxSleep := remaining / time.Duration(retriesLeft)
+	if maxSleep <= 0 {
+		return 0
+	}
+
+	return time.Duration(rand.Int63n(int64(maxSleep) + 1))
 }
 
 // LockNFTTokens locks NFT tokens by IDs. Self-contained.
@@ -430,14 +570,14 @@ func (w *Wallet) LockSmartContractToken(ctx context.Context, ownerDID string, to
 
 // UnlockLockedTokens releases specific locked tokens for a DID back to Free status.
 // Called during transaction abort to return locked tokens to their Free state.
-func (w *Wallet) UnlockLockedTokens(did string, tokens []string) error {
+func (w *Wallet) UnlockLockedTokens(did string, tokens []string, referenceID string) error {
 	if len(tokens) == 0 {
 		return nil
 	}
 	_, err := w.db.Pool().Exec(w.Ctx,
-		`UPDATE tokens SET token_status=$1, updated_at=$2
-		 WHERE did=$3 AND token_id = ANY($4::text[]) AND token_status=$5`,
-		constants.TokenStatus_Free, time.Now(), did, tokens, constants.TokenStatus_Locked,
+		`UPDATE tokens SET token_status=$1, updated_at=$2, lock_reference_id=NULL
+		 WHERE did=$3 AND token_id = ANY($4::text[]) AND token_status=$5 AND lock_reference_id=$6`,
+		constants.TokenStatus_Free, time.Now(), did, tokens, constants.TokenStatus_Locked, referenceID,
 	)
 	return err
 }
