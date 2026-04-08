@@ -3,6 +3,9 @@ package core
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/constants"
@@ -257,4 +260,33 @@ func (c *Core) unpledgeSingleTokenV2(
 	}
 
 	return nil
+}
+
+// writeUnpledgeMismatch appends a single-line audit record to
+// unpledge_mismatch.log in the node config directory. Lazy-initialized on
+// first call via sync.Once — most nodes will never hit a mismatch, so we
+// avoid opening the file at startup. Writes are serialized via a mutex
+// because os.File.Write is not safe for concurrent callers.
+//
+// This function never returns an error and never panics: audit logging must
+// not crash the node. On open failure, the event is still visible via c.log.
+func (c *Core) writeUnpledgeMismatch(line string) {
+	c.unpledgeAuditLogOnce.Do(func() {
+		path := filepath.Join(c.cfg.NodeConfigDir, "unpledge_mismatch.log")
+		fp, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			c.log.Error("writeUnpledgeMismatch: failed to open audit log",
+				"path", path, "err", err)
+			return
+		}
+		c.unpledgeAuditLog = fp
+	})
+	if c.unpledgeAuditLog == nil {
+		return
+	}
+	c.unpledgeAuditLogMu.Lock()
+	defer c.unpledgeAuditLogMu.Unlock()
+	_, _ = c.unpledgeAuditLog.WriteString(
+		time.Now().UTC().Format(time.RFC3339Nano) + " " + line + "\n",
+	)
 }
