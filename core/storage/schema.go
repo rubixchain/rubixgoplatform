@@ -138,12 +138,12 @@ CREATE TABLE IF NOT EXISTS tokenchain (
         );
 
         CREATE TABLE IF NOT EXISTS fts (
-            id          TEXT PRIMARY KEY,
-            ft_name     TEXT,
+            ft_name     TEXT        NOT NULL,
+            creator_did TEXT        NOT NULL,
             ft_count    INTEGER,
-            creator_did TEXT,
             created_at  TIMESTAMPTZ DEFAULT NOW(),
-            updated_at  TIMESTAMPTZ DEFAULT NOW()
+            updated_at  TIMESTAMPTZ DEFAULT NOW(),
+            PRIMARY KEY (ft_name, creator_did)
         );
 
         CREATE TABLE IF NOT EXISTS token_recovery (

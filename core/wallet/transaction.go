@@ -124,43 +124,34 @@ func (w *Wallet) GetGenesisTransactionIdByTokenId(tokenID string, isFullNode boo
 
 // get latest transaction id of the given token id
 func (w *Wallet) GetLatestTransactionIdByTokenId(tokenID string, isFullNode bool) (string, error) {
-	var row pgx.Row
-	var err error
-	if isFullNode {
-		row, err = w.db.Pool().Query(w.Ctx,
-			`SELECT transaction_id 
-			FROM fullnode_tokenchain 
-			WHERE id = (
-				SELECT index[array_upper(index, 1)] 
-				FROM fullnode_tokenchain_index
-				WHERE token_id = $1
-			)`,
-			tokenID,
-		)
-	} else {
-		row, err = w.db.Pool().Query(w.Ctx,
-			`SELECT transaction_id 
-			FROM fullnode_tokenchain 
-			WHERE id = (
-				SELECT index[array_upper(index, 1)] 
-				FROM tokenchain_index 
-				WHERE token_id = $1 
-			)`,
-			tokenID,
-		)
-	}
-	if err != nil {
-		return "", fmt.Errorf("GetLatestTransactionIdByTokenId: %w", err)
-	}
-	var latestTxnId string
-	if err := row.Scan(&latestTxnId); err != nil {
-		if err == pgx.ErrNoRows {
-			return "", fmt.Errorf("latest transaction id not found for token %s", tokenID)
-		}
-		return "", fmt.Errorf("GetLatestTransactionIdByTokenId scan: %w", err)
-	}
+    var query string
+    if isFullNode {
+        query = `SELECT transaction_id 
+            FROM fullnode_tokenchain 
+            WHERE id = (
+                SELECT index[array_upper(index, 1)] 
+                FROM fullnode_tokenchain_index
+                WHERE token_id = $1
+            )`
+    } else {
+        query = `SELECT transaction_id 
+            FROM tokenchain 
+            WHERE id = (
+                SELECT index[array_upper(index, 1)] 
+                FROM tokenchain_index 
+                WHERE token_id = $1 
+            )`
+    }
 
-	return latestTxnId, nil
+    var latestTxnId string
+    err := w.db.Pool().QueryRow(w.Ctx, query, tokenID).Scan(&latestTxnId)
+    if err != nil {
+        if err == pgx.ErrNoRows {
+            return "", fmt.Errorf("GetLatestTransactionIdByTokenId: latest transaction id not found for token %s", tokenID)
+        }
+        return "", fmt.Errorf("GetLatestTransactionIdByTokenId: %w", err)
+    }
+    return latestTxnId, nil
 }
 
 // get transaction id by Index id

@@ -89,7 +89,7 @@ const (
 	FaucetTokenCheck               string = "faucettokencheck"
 	ValidateTokenchainCmd          string = "validatetokenchain"
 	FaucetTokenChainValidate       string = "faucettokenchainvalidate"
-	CreateFTCmd                    string = "create-ft"
+	CreateFTCmd                    string = "createft"
 	DumpFTTokenChainCmd            string = "dump-ft"
 	TransferFTCmd                  string = "transfer-ft"
 	ValidateTokenCmd               string = "validatetoken"

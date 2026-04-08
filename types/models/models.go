@@ -99,7 +99,6 @@ type UnpledgeSequenceInfo struct {
 }
 
 type FT struct {
-	ID         string    `db:"id"`
 	FTName     string    `db:"ft_name"`
 	FTCount    int64     `db:"ft_count"`
 	CreatorDID string    `db:"creator_did"`

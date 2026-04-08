@@ -67,7 +67,6 @@ const (
 	APIValidateTokenChain               string = "/api/validate-token-chain"
 	APIGenerateFaucetTestToken          string = "/api/generate-faucettest-token"
 	APIFaucetTokenCheck                 string = "/api/faucet-token-check"
-	APICreateFT                         string = "/rubix/v1/fts/mint"
 	APIDumpFTTokenChainBlock            string = "/api/dump-ft-token-chain"
 	APIInitiateFTTransfer               string = "/api/initiate-ft-transfer"
 	APIFixFTCreator                     string = "/api/fix-ft-creator"
@@ -125,8 +124,9 @@ const (
 	APITransaction           string = "/rubix/v1/tx"
 	APIGetTransactionByID    string = "/rubix/v1/tx/{tx_id}"
 
-	// New endpoints
-	APIListFT string = "/rubix/v1/fts"
+	// FT endpoints
+	APIListFT   string = "/rubix/v1/fts"
+	APICreateFT string = "/rubix/v1/fts/mint"
 )
 
 // jwt.RegisteredClaims

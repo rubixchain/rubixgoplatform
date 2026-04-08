@@ -523,3 +523,31 @@ func (w *Wallet) GetTokenByDIDAndTokenType(didStr string, tokenType int16) ([]mo
 	}
 	return tokens, rows.Err()
 }
+
+func (w *Wallet) GetWholeRBTs(numToken int, didStr string) (remainingAmount int, wholeRbtList []models.Token, err error) {
+	rows, err := w.db.Pool().Query(w.Ctx,
+		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
+		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+		 FROM tokens 
+		 WHERE did=$1 AND token_type=$2 AND token_value=$3 AND token_status=$4 
+		 LIMIT $5::int`,
+		didStr, models.GetTokenTypeID(constants.TokenType_RBT), float64(1), constants.TokenStatus_Free, numToken,
+	)
+	if err != nil {
+		return -1, nil, fmt.Errorf("GetAllTokens: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var t models.Token
+		if err := rows.Scan(
+			&t.TokenID, &t.ParentTokenID, &t.TokenValue, &t.TokenStatus,
+			&t.DID, &t.TransactionID, &t.TokenStateHash, &t.TokenType,
+			&t.LatestPosition, &t.LatestRole, &t.CreatedAt, &t.UpdatedAt,
+		); err != nil {
+			return -1, nil, fmt.Errorf("GetAllTokens scan: %w", err)
+		}
+		wholeRbtList = append(wholeRbtList, t)
+	}
+	remainingAmount = numToken - len(wholeRbtList)
+	return remainingAmount, wholeRbtList, rows.Err()
+}
