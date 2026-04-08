@@ -133,7 +133,7 @@ func (c *Core) createFTs(reqID string, req types.CreateFTReq) error {
 		}
 		lockedRBTs = append(lockedRBTs, &models.TokenInfo{
 			TokenID:               rbt.TokenID,
-			DID:                   rbt.DID,
+			// DID:                   rbt.DID,
 			TokenValue:            rbt.TokenValue,
 			PreviousTransactionID: latestTxnID,
 		})

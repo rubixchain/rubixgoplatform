@@ -584,7 +584,7 @@ func (w *Wallet) FTGenesisTxn(tx pgx.Tx,
 			TokenID:               ftId,
 			PreviousTransactionID: "",
 			TokenValue:            ftValue,
-			DID:                   did,
+			// DID:                   did,
 		})
 		w.log.Debug("******* new FT id ", ftId)
 	}
@@ -639,8 +639,8 @@ func (w *Wallet) FTGenesisTxn(tx pgx.Tx,
 
 	// Build FT Record
 	for _, token := range txTokensInfo {
-		w.log.Debug("******** initiating db operations for ", token.TokenID, "token value ", token.TokenValue, "did ", token.DID, "prev txn id ", token.PreviousTransactionID)
-		err := w.InsertGenesisTokenInfo(tx, token, txnID, constants.TokenType_FT, constants.TokenRole_Mint)
+		w.log.Debug("******** initiating db operations for ", token.TokenID, "token value ", token.TokenValue, "did ", did, "prev txn id ", token.PreviousTransactionID)
+		err := w.InsertGenesisTokenInfo(tx, token, did, txnID, constants.TokenType_FT, constants.TokenRole_Mint)
 		if err != nil {
 			return "", fmt.Errorf("FTGenesisTxn: failed to update FT info in DB: %w", err)
 		}
@@ -662,27 +662,27 @@ func (w *Wallet) FTGenesisTxn(tx pgx.Tx,
 		return "", fmt.Errorf("FTGenesisTxn: query tokenchain_index %w", err)
 	}
 	// Build Parent Token record
-	err = w.UpdateTokenInfo(tx, parentToken, txnID, ExecutionRoleInitiator, int64(indexLength), constants.TokenStatus_BurntForFT, constants.TokenType_RBT, constants.TokenRole_Commit)
+	err = w.UpdateTokenInfo(tx, parentToken, did, txnID, ExecutionRoleInitiator, int64(indexLength), constants.TokenStatus_BurntForFT, constants.TokenType_RBT, constants.TokenRole_Commit)
 	if err != nil {
 		return "", fmt.Errorf("FTGenesisTxn: failed to update parent RBT %s info in DB: %w", parentToken.TokenID, err)
 	}
 
 	// publish txn
-	if _, err = util.PublishTransaction(ps, txnInfo, sigStruct); err != nil {
+	if _, err = util.PublishTransaction(ps, txnInfo, sigStruct, true, ""); err != nil {
 		return "", fmt.Errorf("FTGenesisTxn: publish transaction failed: %w", err)
 	}
 
 	return txnID, nil
 }
 
-func (w *Wallet) InsertGenesisTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, txID string, tokenType, tokenRole string) error {
+func (w *Wallet) InsertGenesisTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, did, txID string, tokenType, tokenRole string) error {
 	tokenRoleID := int16(models.GetTokenRoleID(tokenRole))
 	tokenTypeID := int16(models.GetTokenTypeID(tokenType))
 
 	// TODO: insert parent token ID for new FTs
 	token := &models.Token{
 		TokenID:        tokenInfo.TokenID, // assigned by PersistGenesisTokenRecord
-		DID:            tokenInfo.DID,
+		DID:            did,
 		TokenValue:     rubixmath.OneFloat(),
 		TokenStatus:    int16(constants.TokenStatus_Free),
 		TransactionID:  txID,
@@ -768,13 +768,13 @@ func (w *Wallet) InsertGenesisTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, 
 	return nil
 }
 
-func (w *Wallet) UpdateTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, txID, txnExecutionRole string, newTokenChainHeight int64, tokenStatus int, tokenType, tokenRole string) error {
+func (w *Wallet) UpdateTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, did, txID, txnExecutionRole string, newTokenChainHeight int64, tokenStatus int, tokenType, tokenRole string) error {
 	tokenRoleID := int16(models.GetTokenRoleID(tokenRole))
 
 	// TODO: insert parent token ID for new FTs
 	token := &models.Token{
 		TokenID:        tokenInfo.TokenID, // assigned by PersistGenesisTokenRecord
-		DID:            tokenInfo.DID,
+		DID:            did,
 		TokenStatus:    int16(tokenStatus),
 		TransactionID:  txID,
 		LatestPosition: newTokenChainHeight,
