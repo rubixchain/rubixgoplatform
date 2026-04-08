@@ -104,6 +104,29 @@ func (c *Core) requestPledgeTokenHandler(request *ensweb.Request) *ensweb.Result
 		return c.l.RenderJSON(request, &response, http.StatusNotFound)
 	}
 	dc := c.pqc[did]
+	// Strict minimal liquidity guard (260409-0ko):
+	// Cheap pre-check to short-circuit pledge requests when the quorum clearly
+	// does not have enough free RBT balance. This avoids entering
+	// LockTokensForSplit under load for trivially-rejectable requests. Note
+	// that this check is advisory — concurrent requests between here and
+	// LockTokensForSplit are still handled by the existing SKIP LOCKED /
+	// retry logic in LockTokensForSplit. Uses strict "<" comparison: equal
+	// balance is allowed through.
+	freeBalance, balErr := c.w.GetFreeRBTBalanceByDID(did)
+	if balErr != nil {
+		c.log.Error("requestPledgeTokenHandler : failed to fetch free balance", "did", did, "err", balErr)
+		response.Message = "requestPledgeTokenHandler : failed to fetch free balance"
+		return c.l.RenderJSON(request, &response, http.StatusInternalServerError)
+	}
+	if freeBalance < pledgeTokenRequest.TransactionValue {
+		c.log.Debug("requestPledgeTokenHandler : insufficient quorum liquidity",
+			"did", did,
+			"freeBalance", freeBalance,
+			"required", pledgeTokenRequest.TransactionValue,
+		)
+		response.Message = "insufficient quorum liquidity"
+		return c.l.RenderJSON(request, &response, http.StatusOK)
+	}
 	pledgeTokenResponse, err := consensus.ReqPledgeToken(dc, c.w, pledgeTokenRequest.TransactionValue, c.networkMode, c.log, c.ps, pledgeTokenRequest.ReferenceId)
 	if err != nil {
 		c.log.Error("requestPledgeTokenHandler : Failed to process pledge token request", "err", err)
