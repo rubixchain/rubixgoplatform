@@ -422,20 +422,28 @@ func (w *Wallet) GetTokenLockReferenceIDs(ctx context.Context, tokenIDs []string
 	return out, nil
 }
 
-// ReleaseTokens sets the status of a slice of tokens back to Free (unlocked).
+// ReleaseTokens sets the status of a slice of tokens back to Free (unlocked),
+// scoped to the provided referenceID so it cannot accidentally free tokens
+// belonging to a concurrent request with a different lock_reference_id.
 // It accepts the same []*models.TokenInfo slice returned by CollectRBTTokens.
 // This is a best-effort operation: errors are logged but do not abort the loop.
-func (w *Wallet) ReleaseTokens(tokens []*models.TokenInfo) {
+// If referenceID is empty the function is a no-op to guard against unscoped calls.
+func (w *Wallet) ReleaseTokens(tokens []*models.TokenInfo, referenceID string) {
+	if referenceID == "" {
+		w.log.Warn("ReleaseTokens: called with empty referenceID; refusing to release", "tokenCount", len(tokens))
+		return
+	}
 	for _, t := range tokens {
 		if t == nil || t.TokenID == "" {
 			continue
 		}
 		if _, err := w.db.Pool().Exec(w.Ctx,
-			`UPDATE tokens SET token_status=$1, lock_reference_id=NULL WHERE token_id=$2`,
-			constants.TokenStatus_Free, t.TokenID,
+			`UPDATE tokens SET token_status=$1, lock_reference_id=NULL
+			 WHERE token_id=$2 AND lock_reference_id=$3`,
+			constants.TokenStatus_Free, t.TokenID, referenceID,
 		); err != nil {
 			// Log but do not propagate — release is best-effort
-			_ = fmt.Errorf("ReleaseTokens: failed to release token %s: %w", t.TokenID, err)
+			w.log.Warn("ReleaseTokens: failed to release token", "tokenID", t.TokenID, "err", err)
 		}
 	}
 }
