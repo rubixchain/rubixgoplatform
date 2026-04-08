@@ -57,8 +57,9 @@ func ValidateTransactionInfoFields(txnInfo *models.TransactionInfo) error {
 	}
 
 	currentEpoch := int(time.Now().Unix())
-	if txnInfo.Epoch <= 0 || txnInfo.Epoch > currentEpoch {
-		return fmt.Errorf("invalid epoch %d: must be a positive integer less than current epoch %d", txnInfo.Epoch, currentEpoch)
+	if txnInfo.Epoch <= 0 || txnInfo.Epoch < constants.MinTransactionEpochUnix || txnInfo.Epoch > currentEpoch {
+		return fmt.Errorf("invalid epoch %d: must be a positive Unix time on or after 2026-04-01 00:00:00 UTC (epoch %d) and not after the current time (epoch %d)",
+			txnInfo.Epoch, constants.MinTransactionEpochUnix, currentEpoch)
 	}
 
 	if _, ok := validNetworks[txnInfo.Network]; !ok {
@@ -165,7 +166,7 @@ func ValidateTokenOwnershipByPrevTxn(txnInfo *models.TransactionInfo, isFullnode
 				} //TODO: Handle the case where there is no RBT token in the fullnode rbt tokens table
 				previousTransactionOwner := tokenDetails.DID
 				if previousTransactionOwner != quorum.Did {
-					return fmt.Errorf("ownership mismatch: quorum %s does not match owner %s of previous transaction %s (affected tokens: %v)", quorum.Did, tokenDetails.DID, t.TokenID)
+					return fmt.Errorf("ValidateTokenOwnershipByPrevTxn: ownership mismatch, quorum %s does not match owner %s of previous transaction %s", quorum.Did, tokenDetails.DID, t.TokenID)
 				}
 			}
 		}
@@ -182,6 +183,8 @@ func ValidateNewTokenContent(tokenID string, isQuorum bool, testnet bool, mainne
 		tokenTypeString = PartString
 	}
 
+	// level is the token-mapping level (e.g. 10000 + mapLevel for localnet tokens).
+	// This is NOT the denom-tree level (0-6). Here we subtract the network offset to get the TokenMap lookup key.
 	level, err := strconv.Atoi(strings.TrimLeft(devidedParts[0], "0"))
 	if err != nil {
 		return fmt.Errorf("invalid token level in token content: %s", tokenID)
@@ -346,6 +349,9 @@ func IsParentTokenBurnt(isFullNode bool, tokenID string, w *wallet.Wallet) (erro
 func ValidateGenuineTokenCreator(tokenID string, isFullNode bool, w *wallet.Wallet) error {
 	devidedParts := strings.Split(tokenID, "_")
 
+	// level is the token-mapping level (e.g. 10001 for localnet), NOT the denom-tree level (0-6).
+	// NOTE: The check below (level == 1) appears to be a legacy guard for an older token format
+	// that predates the 10000-offset scheme. It is dead code for tokens with level >= 10001.
 	level, err := strconv.Atoi(strings.TrimLeft(devidedParts[0], "0"))
 	if err != nil {
 		return fmt.Errorf("invalid token level in token content: %s", tokenID)
@@ -525,9 +531,9 @@ func TokenChainIntigrityCheck(txnInfo *models.TransactionInfo, peer *ipfsport.Pe
 	}
 
 	tokenLists := map[string][]*models.TokenInfo{
-		constants.TokenType_RBT: txnInfo.Tokens.RBT,
-		constants.TokenType_FT:  txnInfo.Tokens.FT,
-		constants.TokenType_NFT: txnInfo.Tokens.NFT,
+		constants.TokenType_RBT:           txnInfo.Tokens.RBT,
+		constants.TokenType_FT:            txnInfo.Tokens.FT,
+		constants.TokenType_NFT:           txnInfo.Tokens.NFT,
 		constants.TokenType_SmartContract: txnInfo.Tokens.SmartContract,
 	}
 

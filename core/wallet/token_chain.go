@@ -553,7 +553,7 @@ func (w *Wallet) PersistGenesisTokenRecord(
 	}
 
 	if network != constants.NetworkMode_Localnet {
-		if _, err := util.PublishTransaction(ps, txInfo, sigStruct); err != nil {
+		if _, err := util.PublishTransaction(ps, txInfo, sigStruct, true, ""); err != nil {
 			return "", err
 		}
 	}

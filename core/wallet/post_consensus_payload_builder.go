@@ -6,12 +6,15 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 type persistenceTokenInput struct {
 	TokenID               string
 	PreviousTransactionID string
 	RoleName              string
+	TokenTypeName         string
+	TokenValue            float64
 }
 
 // BuildPersistencePayload derives tokenchain rows and token states from
@@ -72,7 +75,34 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 	for _, input := range inputs {
 		currentToken, exists := currentTokens[input.TokenID]
 		if !exists {
-			return nil, nil, nil, fmt.Errorf("post-consensus persistence: token state for token %q is required to derive payload", input.TokenID)
+			if executionRole != ExecutionRoleReceiver {
+				return nil, nil, nil, fmt.Errorf("post-consensus persistence: token state for token %q is required to derive payload", input.TokenID)
+			}
+			// Receiver genesis case: token is arriving for the first time.
+			// Synthesize a zero-value token so buildDerivedTokenChainRow produces position=0.
+			tokenValue := input.TokenValue
+			if tokenValue == 0 {
+				// Fallback: derive from token ID (for tokens created before TokenValue was populated in TokenInfo)
+				if derived, err := util.GetTokenValueFromTokenID(input.TokenID); err == nil && derived > 0 {
+					tokenValue = derived
+				}
+			}
+			if tokenValue == 0 {
+				return nil, nil, nil, fmt.Errorf("post-consensus persistence: cannot determine token value for genesis token %q", input.TokenID)
+			}
+			tokenTypeID := models.GetTokenTypeID(input.TokenTypeName)
+			if tokenTypeID <= 0 {
+				tokenTypeID = models.GetTokenTypeID(constants.TokenType_RBT)
+			}
+			currentToken = models.Token{
+				TokenID:   input.TokenID,
+				TokenValue: tokenValue,
+				TokenType:  int16(tokenTypeID),
+			}
+			// Force position=0: receiver's chain starts fresh for this token.
+			// Without this, PreviousTransactionID != "" would push position to 1,
+			// causing validateTransferChainContinuity to reject a token not yet in DB.
+			input.PreviousTransactionID = ""
 		}
 
 		roleID := models.GetTokenRoleID(input.RoleName)
@@ -94,10 +124,15 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 			if txInfo.Owner != "" {
 				state.DID = txInfo.Owner
 			}
+			state.TokenStatus = int16(constants.TokenStatus_Free)
 		case ExecutionRoleInitiator:
 			if txInfo.Initiator != "" {
 				state.DID = txInfo.Initiator
 			}
+			// Tokens are leaving the initiator — mark as Transferred so they are no
+			// longer counted as available balance. Non-selected locked tokens will be
+			// released separately by ReleaseAllLockedRBTTokensForDID.
+			state.TokenStatus = int16(constants.TokenStatus_Transferred)
 		}
 
 		tokenChains = append(tokenChains, row)
@@ -112,7 +147,7 @@ func collectPersistenceTokenInputs(txInfo *models.TransactionInfo) ([]persistenc
 	inputs := make([]persistenceTokenInput, 0)
 	affected := make([]string, 0)
 
-	appendInputs := func(tokens []*models.TokenInfo, roleName string) error {
+	appendInputs := func(tokens []*models.TokenInfo, roleName string, tokenTypeName string) error {
 		for _, tokenInfo := range tokens {
 			if tokenInfo == nil {
 				return fmt.Errorf("post-consensus persistence: transaction token is nil")
@@ -133,26 +168,28 @@ func collectPersistenceTokenInputs(txInfo *models.TransactionInfo) ([]persistenc
 				TokenID:               tokenInfo.TokenID,
 				PreviousTransactionID: tokenInfo.PreviousTransactionID,
 				RoleName:              derivedRoleName,
+				TokenTypeName:         tokenTypeName,
+				TokenValue:            tokenInfo.TokenValue,
 			})
 		}
 		return nil
 	}
 
 	if txInfo.Tokens != nil {
-		if err := appendInputs(txInfo.Tokens.RBT, constants.TokenRole_Transfer); err != nil {
+		if err := appendInputs(txInfo.Tokens.RBT, constants.TokenRole_Transfer, constants.TokenType_RBT); err != nil {
 			return nil, nil, err
 		}
-		if err := appendInputs(txInfo.Tokens.NFT, constants.TokenRole_Transfer); err != nil {
+		if err := appendInputs(txInfo.Tokens.NFT, constants.TokenRole_Transfer, constants.TokenType_NFT); err != nil {
 			return nil, nil, err
 		}
-		if err := appendInputs(txInfo.Tokens.FT, constants.TokenRole_Transfer); err != nil {
+		if err := appendInputs(txInfo.Tokens.FT, constants.TokenRole_Transfer, constants.TokenType_FT); err != nil {
 			return nil, nil, err
 		}
-		if err := appendInputs(txInfo.Tokens.SmartContract, constants.TokenRole_Transfer); err != nil {
+		if err := appendInputs(txInfo.Tokens.SmartContract, constants.TokenRole_Transfer, constants.TokenType_SmartContract); err != nil {
 			return nil, nil, err
 		}
 	}
-	if err := appendInputs(txInfo.CommittedTokens, constants.TokenRole_Commit); err != nil {
+	if err := appendInputs(txInfo.CommittedTokens, constants.TokenRole_Commit, constants.TokenType_RBT); err != nil {
 		return nil, nil, err
 	}
 

@@ -3,6 +3,7 @@ package core
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -165,6 +166,36 @@ func (c *Core) configIPFS() error {
 	return nil
 }
 
+// ensureLibp2pStreamMounting patches the IPFS config file to enable
+// Experimental.Libp2pStreamMounting before the daemon starts. This must be
+// done via file edit (not API) so it works on both first-run and subsequent
+// runs without requiring a running daemon.
+func (c *Core) ensureLibp2pStreamMounting(ipfsDir string) error {
+	configFile := path.Join(ipfsDir, IPFSConfigFilename)
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		return fmt.Errorf("failed to read ipfs config: %w", err)
+	}
+	var cfg map[string]interface{}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return fmt.Errorf("failed to parse ipfs config: %w", err)
+	}
+	experimental, _ := cfg["Experimental"].(map[string]interface{})
+	if experimental == nil {
+		experimental = make(map[string]interface{})
+	}
+	if experimental["Libp2pStreamMounting"] == true {
+		return nil
+	}
+	experimental["Libp2pStreamMounting"] = true
+	cfg["Experimental"] = experimental
+	updated, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal ipfs config: %w", err)
+	}
+	return os.WriteFile(configFile, updated, 0644)
+}
+
 // runIPFS will run the IPFS
 func (c *Core) runIPFS() {
 	cmd := exec.Command(c.ipfsApp, "daemon", "--enable-pubsub-experiment")
@@ -277,6 +308,11 @@ func (c *Core) RunIPFS() error {
 	err := c.initIPFS(ipfsDir)
 	if err != nil {
 		c.log.Error("failed to initialize IPFS", "err", err)
+		return err
+	}
+
+	if err := c.ensureLibp2pStreamMounting(ipfsDir); err != nil {
+		c.log.Error("failed to enable Libp2pStreamMounting in IPFS config", "err", err)
 		return err
 	}
 
