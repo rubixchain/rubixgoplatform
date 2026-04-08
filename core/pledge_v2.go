@@ -127,7 +127,7 @@ func (c *Core) PledgeV2(
 				missing = append(missing, id)
 			}
 		}
-		return fmt.Errorf("PledgeV2: %d token(s) not found or not Free: %v", len(tokenIDs)-len(lockedRows), missing)
+		return fmt.Errorf("PledgeV2: %d token(s) not locked by this referenceID %q: | %v", len(tokenIDs)-len(lockedRows), referenceID, missing)
 	}
 
 	// Step 0: INSERT transactions row for mainTxID so that tokenchain rows
@@ -176,7 +176,10 @@ func (c *Core) PledgeV2(
 			UPDATE tokens
 			SET token_status = $2, latest_position = $3, latest_role = $4, transaction_id = $5, updated_at = NOW()
 			WHERE token_id = $1
-		`, ti.TokenID, int16(constants.TokenStatus_Pledged), locked.latestPosition+1, pledgeRoleID, mainTxID); err != nil {
+				AND token_status = $6
+      			AND lock_reference_id = $7
+		`, ti.TokenID, int16(constants.TokenStatus_Pledged), locked.latestPosition+1, pledgeRoleID, mainTxID, int16(constants.TokenStatus_Locked),
+			referenceID); err != nil {
 			return fmt.Errorf("PledgeV2: update tokens for token %q: %w", ti.TokenID, err)
 		}
 	}
