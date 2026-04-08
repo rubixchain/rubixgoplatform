@@ -396,6 +396,7 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 		txnInfo,
 		consensusRequest.InitiatorSignature,
 		consensusResponse.QuorumSignature,
+		consensusRequest.ReferenceId,
 	); err != nil {
 		c.log.Error("initiateConsensusHandler: PledgeV2 failed", "err", err)
 		response.Message = "initiateConsensusHandler: PledgeV2 failed: " + err.Error()

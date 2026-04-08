@@ -16,14 +16,14 @@ import (
 //
 // Steps performed atomically inside pledgeTx:
 //
-//	0. SELECT FOR UPDATE on tokens (locks rows in ORDER BY token_id order,
-//	   verifies all tokens are Free, reads latest_position and transaction_id)
-//	1. INSERT transactions row (id = mainTxID, info = serialized txnInfo,
-//	   signature = combined initiator+quorum) so that tokenchain rows
-//	   (transaction_id = mainTxID) have a backing transactions.id.
-//	2. INSERT tokenchain rows (one per token, transaction_id = mainTxID, role = 8)
-//	3. UPDATE tokens (status = PLEDGED, latest_position, latest_role = 8)
-//	4. Rebuild tokenchain_index for affected tokens
+//  0. SELECT FOR UPDATE on tokens (locks rows in ORDER BY token_id order,
+//     verifies all tokens are Free, reads latest_position and transaction_id)
+//  1. INSERT transactions row (id = mainTxID, info = serialized txnInfo,
+//     signature = combined initiator+quorum) so that tokenchain rows
+//     (transaction_id = mainTxID) have a backing transactions.id.
+//  2. INSERT tokenchain rows (one per token, transaction_id = mainTxID, role = 8)
+//  3. UPDATE tokens (status = PLEDGED, latest_position, latest_role = 8)
+//  4. Rebuild tokenchain_index for affected tokens
 //
 // Post-commit (separate postTx):
 //   - Decrement token_denom for quorumDID
@@ -46,6 +46,7 @@ func (c *Core) PledgeV2(
 	txnInfo *models.TransactionInfo,
 	initiatorSignature string,
 	quorumSignature string,
+	referenceID string,
 ) error {
 	// --- Validation ----------------------------------------------------------
 	if len(tokenInfos) == 0 {
@@ -99,9 +100,10 @@ func (c *Core) PledgeV2(
 		FROM tokens
 		WHERE token_id = ANY($1::text[])
 		  AND token_status = $2
+		  AND lock_reference_id = $3
 		ORDER BY token_id
 		FOR UPDATE
-	`, tokenIDs, int16(constants.TokenStatus_Locked))
+	`, tokenIDs, int16(constants.TokenStatus_Locked), referenceID)
 	if err != nil {
 		return fmt.Errorf("PledgeV2: SELECT FOR UPDATE on tokens: %w", err)
 	}
