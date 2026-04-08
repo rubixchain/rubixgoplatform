@@ -109,7 +109,7 @@ func (c *Core) requestPledgeTokenHandler(request *ensweb.Request) *ensweb.Result
 		c.log.Error("requestPledgeTokenHandler : Failed to process pledge token request", "err", err)
 		// Release ALL locked tokens since pledge selection failed — LockTokensForSplit locked them
 		// but no subset was successfully selected, so all must be returned to Free.
-		if releaseErr := c.w.ReleaseAllLockedRBTTokensForDID(c.w.Ctx, did); releaseErr != nil {
+		if releaseErr := c.w.ReleaseAllLockedRBTTokensForDID(c.w.Ctx, did, pledgeTokenRequest.ReferenceId); releaseErr != nil {
 			c.log.Error("requestPledgeTokenHandler: failed to release locked tokens after pledge failure", "err", releaseErr)
 		}
 		response.Message = "requestPledgeTokenHandler : " + err.Error()
@@ -125,7 +125,7 @@ func (c *Core) requestPledgeTokenHandler(request *ensweb.Request) *ensweb.Result
 			selectedTokenIDs = append(selectedTokenIDs, t.TokenID)
 		}
 	}
-	if releaseErr := c.w.ReleaseNonSelectedLockedRBTTokensForDID(c.w.Ctx, did, selectedTokenIDs); releaseErr != nil {
+	if releaseErr := c.w.ReleaseNonSelectedLockedRBTTokensForDID(c.w.Ctx, did, selectedTokenIDs, pledgeTokenRequest.ReferenceId); releaseErr != nil {
 		c.log.Error("requestPledgeTokenHandler: failed to release non-selected locked tokens", "err", releaseErr)
 	} else {
 		c.log.Info("requestPledgeTokenHandler: released non-selected locked tokens", "did", did, "selectedCount", len(selectedTokenIDs))

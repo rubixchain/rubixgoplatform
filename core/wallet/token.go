@@ -361,29 +361,33 @@ func (w *Wallet) GetAllPinnedTokens(did string) ([]models.Token, error) {
 // ReleaseAllLockedRBTTokensForDID resets all Locked RBT tokens for a DID back to Free.
 // Called on transaction failure after LockTokensForSplit to prevent tokens from staying
 // permanently locked when the transaction does not complete.
-func (w *Wallet) ReleaseAllLockedRBTTokensForDID(ctx context.Context, ownerDID string) error {
+func (w *Wallet) ReleaseAllLockedRBTTokensForDID(ctx context.Context, ownerDID string, referenceId string) error {
 	_, err := w.db.Pool().Exec(ctx,
-		`UPDATE tokens SET token_status=$1, updated_at=$2
-		 WHERE did=$3
-		   AND token_status=$4
-		   AND token_type=(SELECT id FROM token_type WHERE name=$5)`,
-		constants.TokenStatus_Free, time.Now(), ownerDID, constants.TokenStatus_Locked, constants.TokenType_RBT,
+		`UPDATE tokens SET token_status=$1, updated_at=$2, lock_reference_id=NULL
+		 WHERE did=$4
+		   AND token_status=$5
+		   AND lock_reference_id=$3
+		   AND token_type=(SELECT id FROM token_type WHERE name=$6)`,
+		constants.TokenStatus_Free, time.Now(), referenceId, ownerDID, constants.TokenStatus_Locked, constants.TokenType_RBT,
 	)
 	return err
 }
 
 // ReleaseNonSelectedLockedRBTTokensForDID resets all Locked RBT tokens for a DID back to Free,
-// EXCLUDING the specified selectedTokenIDs. Used by the quorum pledge handler to release
-// candidate tokens that were locked by LockTokensForSplit but not chosen for the pledge,
-// while keeping the selected pledge tokens Locked so PledgeTokens can transition them to Pledged.
-func (w *Wallet) ReleaseNonSelectedLockedRBTTokensForDID(ctx context.Context, ownerDID string, selectedTokenIDs []string) error {
+// EXCLUDING the specified selectedTokenIDs, scoped to the given referenceID so that concurrent
+// pledge requests for the same DID cannot accidentally free each other's locked tokens.
+// Used by the quorum pledge handler to release candidate tokens that were locked by
+// LockTokensForSplit but not chosen for the pledge, while keeping the selected pledge
+// tokens Locked so PledgeTokens can transition them to Pledged.
+func (w *Wallet) ReleaseNonSelectedLockedRBTTokensForDID(ctx context.Context, ownerDID string, selectedTokenIDs []string, referenceID string) error {
 	_, err := w.db.Pool().Exec(ctx,
-		`UPDATE tokens SET token_status=$1, updated_at=$2
+		`UPDATE tokens SET token_status=$1, updated_at=$2, lock_reference_id=NULL
 		 WHERE did=$3
 		   AND token_status=$4
-		   AND token_type=(SELECT id FROM token_type WHERE name=$5)
-		   AND token_id != ALL($6::text[])`,
-		constants.TokenStatus_Free, time.Now(), ownerDID, constants.TokenStatus_Locked, constants.TokenType_RBT, selectedTokenIDs,
+		   AND lock_reference_id=$5
+		   AND token_type=(SELECT id FROM token_type WHERE name=$6)
+		   AND token_id != ALL($7::text[])`,
+		constants.TokenStatus_Free, time.Now(), ownerDID, constants.TokenStatus_Locked, referenceID, constants.TokenType_RBT, selectedTokenIDs,
 	)
 	return err
 }
@@ -397,13 +401,29 @@ func (w *Wallet) ReleaseTokens(tokens []*models.TokenInfo) {
 			continue
 		}
 		if _, err := w.db.Pool().Exec(w.Ctx,
-			`UPDATE tokens SET token_status=$1 WHERE token_id=$2`,
+			`UPDATE tokens SET token_status=$1, lock_reference_id=NULL WHERE token_id=$2`,
 			constants.TokenStatus_Free, t.TokenID,
 		); err != nil {
 			// Log but do not propagate — release is best-effort
 			_ = fmt.Errorf("ReleaseTokens: failed to release token %s: %w", t.TokenID, err)
 		}
 	}
+}
+
+// ReleaseTokens sets the status of a slice of tokens back to Free (unlocked).
+// It accepts the same []*models.TokenInfo slice returned by CollectRBTTokens.
+// This is a best-effort operation: errors are logged but do not abort the loop.
+func (w *Wallet) ReleaseReferenceID(referenceId string) error {
+
+	if _, err := w.db.Pool().Exec(w.Ctx,
+		`UPDATE tokens SET lock_reference_id=NULL WHERE lock_reference_id=$1`,
+		referenceId,
+	); err != nil {
+		// Log but do not propagate — release is best-effort
+		_ = fmt.Errorf("ReleaseReferenceID: failed to release tokens for reference ID %s: %w", referenceId, err)
+		return fmt.Errorf("ReleaseReferenceID: failed to release tokens for reference ID %s: %w", referenceId, err)
+	}
+	return nil
 }
 
 func (w *Wallet) IsDIDExist(did string) bool {
