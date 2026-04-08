@@ -1,6 +1,7 @@
 package wallet
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -93,4 +94,29 @@ func (w *Wallet) GetFullNodeSmartContractToken(tokenID string) (models.FullNodeS
 	}
 
 	return t, nil
+}
+
+// StoreInvalidTransaction stores failed validation payloads in fullnode_invalid_transactions.
+func (w *Wallet) StoreInvalidTransaction(transaction *models.Transactions, reason string) error {
+	if transaction == nil {
+		return fmt.Errorf("StoreInvalidTransaction: transaction is nil")
+	}
+	if reason == "" {
+		return fmt.Errorf("StoreInvalidTransaction: reason is required")
+	}
+
+	payload, err := json.Marshal(transaction)
+	if err != nil {
+		return fmt.Errorf("StoreInvalidTransaction: marshal transaction: %w", err)
+	}
+
+	_, err = w.db.Pool().Exec(w.Ctx, `
+		INSERT INTO fullnode_invalid_transactions (transaction, reason, created_at, updated_at)
+		VALUES ($1::json, $2, NOW(), NOW())
+	`, payload, reason)
+	if err != nil {
+		return fmt.Errorf("StoreInvalidTransaction: insert invalid transaction: %w", err)
+	}
+
+	return nil
 }

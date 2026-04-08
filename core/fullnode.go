@@ -8,7 +8,10 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/core/consensus"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -153,14 +156,73 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 
 // Enhanced single transaction processing with better error handling
 func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error {
-	// TODO: Full node block processing removed — block package eliminated.
-	// This function previously parsed incoming block data via block.InitBlock,
-	// validated block sequences, checked ownership, and stored blocks in the
-	// full node token chain. Needs reimplementation using PostgreSQL-backed
-	// transaction/token chain model.
-	c.log.Info("processSingleTransaction: block-based processing removed, skipping",
-		"txnID", newEvent.TransactionID,
-		"assetType", newEvent.AssetType)
+	//1. unmarshal the transaction
+	//2. validate the transaction
+	//3. store the transaction
+
+	//1. unmarshal the transaction
+	txn := &models.Transactions{}
+	err := json.Unmarshal(newEvent.Transaction.Info, txn)
+	if err != nil {
+		c.log.Error("processSingleTransaction:failed to unmarshal transaction event", "error", err)
+		return fmt.Errorf("processSingleTransaction: failed to unmarshal transaction event: %w", err)
+	}
+
+	//2. validate the transaction
+	//First unMarshal the transaction info
+	transactionInfo := &models.TransactionInfo{}
+	err = json.Unmarshal(txn.Info, transactionInfo)
+	if err != nil {
+		c.log.Error("processSingleTransaction:failed to unmarshal transaction info", "error", err)
+		return fmt.Errorf("processSingleTransaction: failed to unmarshal transaction info: %w", err)
+	}
+	initiatorDIDCrypto, err := c.InitialiseDID(transactionInfo.Initiator)
+	if err != nil {
+		c.log.Error("processSingleTransaction:failed to initialise initiator DID", "error", err)
+		return fmt.Errorf("processSingleTransaction: failed to initialise initiator DID: %w", err)
+	}
+	quorumDCs := make(map[string]types.DIDCrypto, len(transactionInfo.Quorums))
+	for _, quorum := range transactionInfo.Quorums {
+		quorumDIDCrypto, err := c.InitialiseDID(quorum.Did)
+		if err != nil {
+			c.log.Error("processSingleTransaction:failed to initialise quorum DID", "error", err)
+			return fmt.Errorf("processSingleTransaction: failed to initialise quorum DID: %w", err)
+		}
+		quorumDCs[quorum.Did] = quorumDIDCrypto
+	}
+
+	peer, err := c.getPeer(transactionInfo.Initiator)
+	if err != nil {
+		c.log.Error("processSingleTransaction:failed to get peer", "error", err)
+		return fmt.Errorf("processSingleTransaction: failed to get peer: %w", err)
+	}
+	defer peer.Close()
+
+	isTransactionInfoValidated, err := consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, quorumDCs, peer, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned)
+	if err != nil {
+		c.log.Error("processSingleTransaction:failed to validate transaction", "error", err)
+		return fmt.Errorf("processSingleTransaction: failed to validate transaction: %w", err)
+	}
+	if !isTransactionInfoValidated {
+		validationErr := fmt.Errorf("transaction validation failed")
+		c.log.Error("processSingleTransaction:failed to validate transaction", "error", validationErr)
+
+		if persistErr := c.w.StoreInvalidTransaction(txn, validationErr.Error()); persistErr != nil {
+			c.log.Error("processSingleTransaction:failed to persist invalid transaction", "error", persistErr)
+		}
+
+		return fmt.Errorf("processSingleTransaction: failed to validate transaction: %w", validationErr)
+	}
+
+	//3. store the transaction
+	if err := c.w.PersistFullNodeTransaction(c.w.Ctx, &wallet.FullNodePersistenceRequest{
+		Transaction:     txn,
+		TransactionInfo: transactionInfo,
+	}); err != nil {
+		c.log.Error("processSingleTransaction:failed to persist fullnode transaction", "error", err, "transaction_id", txn.ID)
+		return fmt.Errorf("processSingleTransaction: failed to persist fullnode transaction: %w", err)
+	}
+
 	return nil
 }
 
@@ -268,4 +330,21 @@ func (c *Core) processIncomingTransactionHistory(txns []model.FullNodeTxnHistory
 	}
 
 	c.log.Info("Stored transaction history batch", "count", len(txns))
+}
+func (c *Core) checkTokenStateHashPinned(tokenID string, previousTransactionID string) error {
+	if previousTransactionID == "" {
+		return nil
+	}
+
+	tokenStateHash := tokenID + "." + previousTransactionID
+
+	record, err := c.ipfsProviderStore.GetProviderByCID(tokenStateHash)
+	if err != nil {
+		return fmt.Errorf("failed to check pin status for %s: %w", tokenStateHash, err)
+	}
+	if record != nil {
+		return fmt.Errorf("token %s is already pinned", tokenStateHash)
+	}
+
+	return nil
 }
