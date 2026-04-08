@@ -392,6 +392,36 @@ func (w *Wallet) ReleaseNonSelectedLockedRBTTokensForDID(ctx context.Context, ow
 	return err
 }
 
+// GetTokenLockReferenceIDs returns a map token_id -> lock_reference_id for the
+// given token IDs. A nil string pointer means the row exists but lock_reference_id
+// IS NULL. Missing keys mean the token row does not exist in the DB.
+func (w *Wallet) GetTokenLockReferenceIDs(ctx context.Context, tokenIDs []string) (map[string]*string, error) {
+	if len(tokenIDs) == 0 {
+		return map[string]*string{}, nil
+	}
+	rows, err := w.db.Pool().Query(ctx,
+		`SELECT token_id, lock_reference_id FROM tokens WHERE token_id = ANY($1::text[])`,
+		tokenIDs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetTokenLockReferenceIDs: query: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[string]*string, len(tokenIDs))
+	for rows.Next() {
+		var id string
+		var ref *string
+		if err := rows.Scan(&id, &ref); err != nil {
+			return nil, fmt.Errorf("GetTokenLockReferenceIDs: scan: %w", err)
+		}
+		out[id] = ref
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("GetTokenLockReferenceIDs: iter: %w", err)
+	}
+	return out, nil
+}
+
 // ReleaseTokens sets the status of a slice of tokens back to Free (unlocked).
 // It accepts the same []*models.TokenInfo slice returned by CollectRBTTokens.
 // This is a best-effort operation: errors are logged but do not abort the loop.

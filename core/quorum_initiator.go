@@ -293,6 +293,76 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 		}
 	}
 
+	// Soft dedup guard (F-2): log + dedupe + metric, continue on duplicates.
+	// Hard guard in PledgeV2 remains the last line of defense; this guard
+	// exists so a duplicate under load is visible without cascading failure.
+	{
+		seenDedup := make(map[string]struct{}, len(tokenInfos))
+		deduped := make([]*models.TokenInfo, 0, len(tokenInfos))
+		dupCount := 0
+		for _, ti := range tokenInfos {
+			if ti == nil {
+				continue
+			}
+			if _, dup := seenDedup[ti.TokenID]; dup {
+				dupCount++
+				c.log.Warn("initiateConsensusHandler: duplicate token in pledge tokenInfos (soft-deduped)",
+					"metric", "pledge_v2_duplicate_token_total",
+					"count", dupCount,
+					"tokenID", ti.TokenID,
+					"quorumDID", quorumDid,
+					"txID", txID,
+					"referenceID", consensusRequest.ReferenceId,
+				)
+				continue
+			}
+			seenDedup[ti.TokenID] = struct{}{}
+			deduped = append(deduped, ti)
+		}
+		tokenInfos = deduped
+	}
+
+	// VULN-4: validate lock_reference_id matches the incoming consensus ReferenceId
+	// BEFORE pledging. Prevents replayed/interleaved requests from pledging tokens
+	// that belong to a different reference_id.
+	{
+		tokenIDsForLockCheck := make([]string, 0, len(tokenInfos))
+		for _, ti := range tokenInfos {
+			tokenIDsForLockCheck = append(tokenIDsForLockCheck, ti.TokenID)
+		}
+		lockRefs, err := c.w.GetTokenLockReferenceIDs(context.Background(), tokenIDsForLockCheck)
+		if err != nil {
+			c.log.Error("initiateConsensusHandler: failed to read lock_reference_id for pledge tokens", "err", err)
+			response.Message = "initiateConsensusHandler: failed to validate token locks: " + err.Error()
+			return c.l.RenderJSON(request, response, http.StatusInternalServerError)
+		}
+		for _, id := range tokenIDsForLockCheck {
+			ref, found := lockRefs[id]
+			if !found {
+				c.log.Error("initiateConsensusHandler: pledge token not found in tokens table",
+					"tokenID", id, "quorumDID", quorumDid, "txID", txID)
+				response.Message = fmt.Sprintf("initiateConsensusHandler: token %q not found in tokens table", id)
+				return c.l.RenderJSON(request, response, http.StatusBadRequest)
+			}
+			if ref == nil {
+				c.log.Error("initiateConsensusHandler: pledge token has no lock_reference_id",
+					"tokenID", id, "quorumDID", quorumDid, "txID", txID)
+				response.Message = fmt.Sprintf("initiateConsensusHandler: token %q has no lock_reference_id (was never locked by this flow)", id)
+				return c.l.RenderJSON(request, response, http.StatusBadRequest)
+			}
+			if *ref != consensusRequest.ReferenceId {
+				c.log.Error("initiateConsensusHandler: pledge token lock_reference_id mismatch",
+					"tokenID", id, "expected", consensusRequest.ReferenceId, "got", *ref,
+					"quorumDID", quorumDid, "txID", txID)
+				response.Message = fmt.Sprintf("initiateConsensusHandler: token %q lock_reference_id mismatch: expected %q, got %q",
+					id, consensusRequest.ReferenceId, *ref)
+				return c.l.RenderJSON(request, response, http.StatusBadRequest)
+			}
+		}
+		c.log.Info("initiateConsensusHandler: lock_reference_id validation passed",
+			"txID", txID, "tokens", len(tokenInfos), "referenceID", consensusRequest.ReferenceId)
+	}
+
 	if err := c.PledgeV2(
 		context.Background(),
 		tokenInfos,
