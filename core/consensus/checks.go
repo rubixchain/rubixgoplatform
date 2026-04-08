@@ -52,8 +52,12 @@ func ValidateTransactionInfoFields(txnInfo *models.TransactionInfo) error {
 		return err
 	}
 
-	if err := validateDID(txnInfo.Owner, "owner"); err != nil {
-		return err
+	// Owner DID is optional for deployment transactions (SC/NFT deployment)
+	// It should only be validated if it's not empty
+	if txnInfo.Owner != "" {
+		if err := validateDID(txnInfo.Owner, "owner"); err != nil {
+			return err
+		}
 	}
 
 	currentEpoch := int(time.Now().Unix())

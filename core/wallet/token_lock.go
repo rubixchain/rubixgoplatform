@@ -238,6 +238,78 @@ func (w *Wallet) QueryAndLockByIDs(ctx context.Context, tx pgx.Tx, ownerDID stri
 	return locked, nil
 }
 
+// QueryAndLockForExecution locks NFT or SmartContract tokens for execution.
+// Accepts tokens in Deployed or Executed status (after previous deployment/execution).
+// tokenIDs must be pre-sorted by the caller for deadlock prevention.
+// checkOwnership controls whether tokens.did must match ownerDID:
+//   - true  for NFT with TransferNFTOwnership=true: only the current owner may execute
+//   - false for SC (any subscriber may execute) and NFT with TransferNFTOwnership=false
+//
+// Returns all matched tokens or an error if any are missing or not in executable status.
+func (w *Wallet) QueryAndLockForExecution(ctx context.Context, tx pgx.Tx, ownerDID string, tokenIDs []string, tokenTypeName string, checkOwnership bool) ([]models.Token, error) {
+	if len(tokenIDs) == 0 {
+		return nil, nil
+	}
+
+	var (
+		rows pgx.Rows
+		err  error
+	)
+
+	if checkOwnership {
+		rows, err = tx.Query(ctx, `
+			SELECT t.token_id, t.parent_token_id, t.token_value, t.token_status,
+			       t.did, t.transaction_id, t.token_state_hash, t.token_type,
+			       t.latest_position, t.latest_role, t.created_at, t.updated_at
+			FROM tokens t
+			WHERE t.token_id = ANY($1::text[])
+			  AND t.did = $2
+			  AND t.token_type = (SELECT id FROM token_type WHERE name = $3)
+			  AND (t.token_status = $4 OR t.token_status = $5)
+			ORDER BY t.token_id
+			FOR UPDATE OF t
+		`, tokenIDs, ownerDID, tokenTypeName, constants.TokenStatus_Deployed, constants.TokenStatus_Executed)
+	} else {
+		// SC execution or NFT without ownership transfer: any subscriber can execute.
+		rows, err = tx.Query(ctx, `
+			SELECT t.token_id, t.parent_token_id, t.token_value, t.token_status,
+			       t.did, t.transaction_id, t.token_state_hash, t.token_type,
+			       t.latest_position, t.latest_role, t.created_at, t.updated_at
+			FROM tokens t
+			WHERE t.token_id = ANY($1::text[])
+			  AND t.token_type = (SELECT id FROM token_type WHERE name = $2)
+			  AND (t.token_status = $3 OR t.token_status = $4)
+			ORDER BY t.token_id
+			FOR UPDATE OF t
+		`, tokenIDs, tokenTypeName, constants.TokenStatus_Deployed, constants.TokenStatus_Executed)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("QueryAndLockForExecution(%s): query: %w", tokenTypeName, err)
+	}
+
+	locked, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.Token])
+	if err != nil {
+		return nil, fmt.Errorf("QueryAndLockForExecution(%s): collect: %w", tokenTypeName, err)
+	}
+
+	if len(locked) != len(tokenIDs) {
+		foundSet := make(map[string]bool, len(locked))
+		for _, tok := range locked {
+			foundSet[tok.TokenID] = true
+		}
+		var missing []string
+		for _, id := range tokenIDs {
+			if !foundSet[id] {
+				missing = append(missing, id)
+			}
+		}
+		return nil, fmt.Errorf("QueryAndLockForExecution(%s): tokens not found or not in executable status (Deployed/Executed): %v",
+			tokenTypeName, missing)
+	}
+
+	return locked, nil
+}
+
 // ── Self-contained wrappers ────────────────────────────────────────────
 // These open their own transaction, lock tokens, update status, and commit.
 // Use these when locking a single asset type independently.

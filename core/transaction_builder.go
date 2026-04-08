@@ -137,7 +137,7 @@ func BuildTransactionInfoFromRequest(
 				if exists {
 					// EXECUTION MODE: Token exists, lock it for execution
 					log.Info("BuildTransactionInfoFromRequest: NFT exists - EXECUTION MODE", "nftID", nftInfo.NFTId)
-					locked, err := w.QueryAndLockByIDs(ctx, tx, req.Initiator, []string{nftInfo.NFTId}, constants.TokenType_NFT)
+					locked, err := w.QueryAndLockForExecution(ctx, tx, req.Initiator, []string{nftInfo.NFTId}, constants.TokenType_NFT, req.Tokens.TransferNFTOwnership)
 					if err != nil {
 						log.Error("BuildTransactionInfoFromRequest: NFT lock failed", "err", err, "nftID", nftInfo.NFTId)
 						return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: NFT lock failed for %s: %w", nftInfo.NFTId, err)
@@ -152,6 +152,7 @@ func BuildTransactionInfoFromRequest(
 						TokenID:               tok.TokenID,
 						PreviousTransactionID: tok.TransactionID,
 						Data:                  nftInfo.Data,
+						TokenValue:            tok.TokenValue,
 					})
 					allLockedIDs = append(allLockedIDs, tok.TokenID)
 					totalAmount += tok.TokenValue
@@ -187,7 +188,7 @@ func BuildTransactionInfoFromRequest(
 				if exists {
 					// EXECUTION MODE: Token exists, lock it for execution
 					log.Info("BuildTransactionInfoFromRequest: SC exists - EXECUTION MODE", "scID", scInfo.SmartContractId)
-					locked, err := w.QueryAndLockByIDs(ctx, tx, req.Initiator, []string{scInfo.SmartContractId}, constants.TokenType_SmartContract)
+					locked, err := w.QueryAndLockForExecution(ctx, tx, req.Initiator, []string{scInfo.SmartContractId}, constants.TokenType_SmartContract, false)
 					if err != nil {
 						log.Error("BuildTransactionInfoFromRequest: SC lock failed", "err", err, "scID", scInfo.SmartContractId)
 						return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: SC lock failed for %s: %w", scInfo.SmartContractId, err)
@@ -202,6 +203,7 @@ func BuildTransactionInfoFromRequest(
 						TokenID:               tok.TokenID,
 						PreviousTransactionID: tok.TransactionID,
 						Data:                  scInfo.Data,
+						TokenValue:            tok.TokenValue,
 					})
 					allLockedIDs = append(allLockedIDs, tok.TokenID)
 					totalAmount += tok.TokenValue
