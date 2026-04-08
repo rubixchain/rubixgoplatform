@@ -65,6 +65,33 @@ func (w *Wallet) GetFreeRBTTokens(ownerDid string) ([]models.Token, []string, er
 	return freeTokens, freeTokenIDs, nil
 }
 
+// GetFreeRBTBalanceByDID returns the total token_value of all free RBT tokens
+// owned by the given DID. Returns 0.0 if no free RBT tokens exist for the DID.
+//
+// This helper MUST match the filter semantics used by LockTokensForSplit so
+// that the resulting balance reflects exactly what the locker would see:
+//   - token_type = RBT
+//   - token_status = Free
+//   - did = <arg>
+//
+// Used by requestPledgeTokenHandler as a cheap pre-check to avoid calling
+// LockTokensForSplit when the quorum clearly cannot satisfy the request.
+func (w *Wallet) GetFreeRBTBalanceByDID(did string) (float64, error) {
+	var balance float64
+	err := w.db.Pool().QueryRow(w.Ctx,
+		`SELECT COALESCE(SUM(token_value), 0)
+		 FROM tokens
+		 WHERE did = $1
+		   AND token_type = (SELECT id FROM token_type WHERE name = $2)
+		   AND token_status = $3`,
+		did, constants.TokenType_RBT, constants.TokenStatus_Free,
+	).Scan(&balance)
+	if err != nil {
+		return 0, fmt.Errorf("GetFreeRBTBalanceByDID: %w", err)
+	}
+	return balance, nil
+}
+
 func (w *Wallet) GetTokenByTokenID(tokenID string) (models.Token, error) {
 	row := w.db.Pool().QueryRow(w.Ctx,
 		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
