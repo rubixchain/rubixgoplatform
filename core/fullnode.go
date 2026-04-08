@@ -342,6 +342,7 @@ func (c *Core) checkTokenStateHashPinned(tokenID string, previousTransactionID s
 	if err != nil {
 		return fmt.Errorf("failed to check pin status for %s: %w", tokenStateHash, err)
 	}
+	
 	if record != nil {
 		return fmt.Errorf("token %s is already pinned", tokenStateHash)
 	}
