@@ -122,35 +122,6 @@ func (c *Core) UnpledgeV2(
 		return nil
 	}
 
-	// --- Chain-progress guard ------------------------------------------------
-	// Unpledge is legitimate only when the pledged tokens have been consumed
-	// by a downstream transaction — i.e. at least one tokenchain row exists
-	// whose token_id is in pledge_tokens AND previous_transaction_id = mainTxID.
-	// Without this, UnpledgeV2 would fire purely on the existence of an
-	// unpledge_sequence_info row (premature unpledge). On mismatch: audit log
-	// and hard skip (return nil). Do NOT error — the caller's loop continues
-	// processing siblings.
-	{
-		var dummy int
-		err := c.w.Pool().QueryRow(ctx, `
-			SELECT 1
-			FROM tokenchain
-			WHERE token_id = ANY($1::text[])
-			  AND previous_transaction_id = $2
-			LIMIT 1
-		`, pledgeTokens, mainTxID).Scan(&dummy)
-		if err == pgx.ErrNoRows {
-			msg := fmt.Sprintf("UnpledgeV2: chain-progress guard fail — no successor tokenchain row; skip mainTxID=%s quorumDID=%s pledgeTokens=%v",
-				mainTxID, quorumDID, pledgeTokens)
-			c.log.Warn(msg)
-			c.writeUnpledgeMismatch(msg)
-			return nil
-		}
-		if err != nil {
-			return fmt.Errorf("UnpledgeV2: chain-progress guard query for mainTxID %q: %w", mainTxID, err)
-		}
-	}
-
 	// --- Atomic unpledge: UPDATE tokenchain + UPDATE tokens in one tx -----------
 	unpledgeRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Unpledge))
 	pledgeRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Pledge))
