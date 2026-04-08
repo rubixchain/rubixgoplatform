@@ -52,14 +52,33 @@ func (c *Core) UnpledgeV2(
 	var pledgeTokens []string
 	var epoch int
 	err := c.w.Pool().QueryRow(ctx,
-		`SELECT pledge_tokens, epoch FROM unpledge_sequence_info WHERE tx_id = $1`,
-		mainTxID,
+		`SELECT pledge_tokens, epoch FROM unpledge_sequence_info WHERE tx_id = $1 AND quorum_did = $2`,
+		mainTxID, quorumDID,
 	).Scan(&pledgeTokens, &epoch)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			// Already unpledged or never pledged via V2 — idempotent success.
-			c.log.Info("UnpledgeV2: no unpledge_sequence_info row — skip (already unpledged or not pledged via V2)",
-				"mainTxID", mainTxID)
+			// Either no row exists (idempotent success — already unpledged or
+			// never pledged via V2), OR a row exists but is owned by a different
+			// quorum DID (mismatch — audit and hard skip). Distinguish the two
+			// cases with a second query so the mismatch is not swallowed silently.
+			var owner string
+			qerr := c.w.Pool().QueryRow(ctx,
+				`SELECT quorum_did FROM unpledge_sequence_info WHERE tx_id = $1`,
+				mainTxID,
+			).Scan(&owner)
+			if qerr == pgx.ErrNoRows {
+				c.log.Info("UnpledgeV2: no unpledge_sequence_info row — skip (already unpledged or not pledged via V2)",
+					"mainTxID", mainTxID)
+				return nil
+			}
+			if qerr != nil {
+				return fmt.Errorf("UnpledgeV2: ownership-check query unpledge_sequence_info for mainTxID %q: %w", mainTxID, qerr)
+			}
+			// Row exists but belongs to a different quorum — defense-in-depth catch.
+			msg := fmt.Sprintf("UnpledgeV2: quorum ownership mismatch — skip mainTxID=%s caller_did=%s row_owner=%s",
+				mainTxID, quorumDID, owner)
+			c.log.Warn(msg)
+			c.writeUnpledgeMismatch(msg)
 			return nil
 		}
 		return fmt.Errorf("UnpledgeV2: query unpledge_sequence_info for mainTxID %q: %w", mainTxID, err)
@@ -101,6 +120,35 @@ func (c *Core) UnpledgeV2(
 			// Non-fatal: the tokens are free; return nil.
 		}
 		return nil
+	}
+
+	// --- Chain-progress guard ------------------------------------------------
+	// Unpledge is legitimate only when the pledged tokens have been consumed
+	// by a downstream transaction — i.e. at least one tokenchain row exists
+	// whose token_id is in pledge_tokens AND previous_transaction_id = mainTxID.
+	// Without this, UnpledgeV2 would fire purely on the existence of an
+	// unpledge_sequence_info row (premature unpledge). On mismatch: audit log
+	// and hard skip (return nil). Do NOT error — the caller's loop continues
+	// processing siblings.
+	{
+		var dummy int
+		err := c.w.Pool().QueryRow(ctx, `
+			SELECT 1
+			FROM tokenchain
+			WHERE token_id = ANY($1::text[])
+			  AND previous_transaction_id = $2
+			LIMIT 1
+		`, pledgeTokens, mainTxID).Scan(&dummy)
+		if err == pgx.ErrNoRows {
+			msg := fmt.Sprintf("UnpledgeV2: chain-progress guard fail — no successor tokenchain row; skip mainTxID=%s quorumDID=%s pledgeTokens=%v",
+				mainTxID, quorumDID, pledgeTokens)
+			c.log.Warn(msg)
+			c.writeUnpledgeMismatch(msg)
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("UnpledgeV2: chain-progress guard query for mainTxID %q: %w", mainTxID, err)
+		}
 	}
 
 	// --- Atomic unpledge: UPDATE tokenchain + UPDATE tokens in one tx -----------
