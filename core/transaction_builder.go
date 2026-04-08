@@ -33,6 +33,7 @@ func BuildTransactionInfoFromRequest(
 	networkMode string, // The isTestNet bool changed to networkMode string to be passed to CollectRBTTokens
 	log logger.Logger,
 	pubsub *types.PubSub, // punishFn which was of type func(*model.PubSubTxnInfo)  is change to types.PubSub to be passed to CollectRBTTokens
+	referenceID string, // referenceID is added to be passed to LockTokensForSplit and CollectRBTTokens for better traceability of locked tokens
 ) (*models.TransactionInfo, float64, error) {
 
 	txTokens := &models.TransactionTokens{}
@@ -41,7 +42,7 @@ func BuildTransactionInfoFromRequest(
 	// --- RBT path (separate — CollectRBTTokens manages its own locking) ---
 	if req.HasRBT() {
 		ownerDID := dc.GetDID()
-		ownedRBTTokens, err := w.LockTokensForSplit(ctx, ownerDID, req.GetRBTAmount())
+		ownedRBTTokens, err := w.LockTokensForSplit(ctx, ownerDID, req.GetRBTAmount(), referenceID)
 		if err != nil {
 			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: lock RBT tokens for split: %w", err)
 		}

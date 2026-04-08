@@ -1689,7 +1689,7 @@ func (c *Core) unlockTokens(req *ensweb.Request) *ensweb.Result {
 		crep.Message = "Failed to parse json request"
 		return c.l.RenderJSON(req, &crep, http.StatusOK)
 	}
-	err = c.w.UnlockLockedTokens(tokenList.DID, tokenList.Tokens)
+	err = c.w.UnlockLockedTokens(tokenList.DID, tokenList.Tokens, req.ID)
 	if err != nil {
 		c.log.Error("Failed to update token status", "err", err)
 		return c.l.RenderJSON(req, &crep, http.StatusOK)

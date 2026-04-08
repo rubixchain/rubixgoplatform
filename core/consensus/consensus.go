@@ -25,7 +25,7 @@ func ReqPledgeToken(
 
 	log.Info("ReqPledgeToken : Request received to pledge tokens for transaction", "referenceId", referenceId, "transactionValue", transactionValue, "networkMode", networkMode)
 	// Lock and fetch free RBT tokens for split/transfer.
-	lockedTokens, err := w.LockTokensForSplit(context.Background(), dc.GetDID(), transactionValue)
+	lockedTokens, err := w.LockTokensForSplit(context.Background(), dc.GetDID(), transactionValue, referenceId)
 	if err != nil {
 		return models.PledgeTokenResponse{}, fmt.Errorf("ReqPledgeToken: failed to lock tokens for split: %w", err)
 	}
