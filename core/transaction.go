@@ -153,6 +153,51 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	}
 
 	pledgeTokens := pledgeTokenResponse.PledgeTokens
+
+	// --- PRE-CONSENSUS GUARD ------------------------------------
+
+	if len(pledgeTokens) == 0 {
+		c.log.Debug("InitiateTransaction: no pledge tokens received",
+			"referenceID", reqID,
+			"requiredAmount", transactionValue,
+		)
+
+		resp.Message = "insufficient quorum liquidity"
+		return resp
+	}
+
+	// compute total pledged value
+	var totalPledged float64
+	/* 	for _, t := range pledgeTokens {
+		totalPledged += t.TokenValue
+	} */
+
+	// compute total pledged value (TRUSTLESS — derive from TokenID)
+	for _, t := range pledgeTokens {
+		val, err := util.GetTokenValueFromTokenID(t.TokenID)
+		if err != nil {
+			c.log.Error("InitiateTransaction: invalid token value",
+				"tokenID", t.TokenID,
+				"err", err,
+			)
+			resp.Message = "invalid quorum token"
+			return resp
+		}
+		totalPledged += val
+	}
+
+	if totalPledged < transactionValue {
+		c.log.Debug("InitiateTransaction: insufficient pledged value",
+			"referenceID", reqID,
+			"requiredAmount", transactionValue,
+			"pledgedAmount", totalPledged,
+		)
+
+		resp.Message = "insufficient quorum liquidity"
+		return resp
+	}
+	// ------------------------------------------------------------
+
 	for _, token := range pledgeTokens {
 		err = consensus.ValidateNewTokenContent(token.TokenID, true, c.testnet, c.mainnet, c.localnet, c.log)
 		if err != nil {
@@ -161,12 +206,17 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 			return resp
 		}
 	}
-
-	pledegTokenInfo := &models.QuorumInfo{
-		Did:    quorumAddresses[0],
-		Tokens: pledgeTokens,
+	//Harden quorum assignment
+	if len(pledgeTokens) > 0 {
+		pledegTokenInfo := &models.QuorumInfo{
+			Did:    quorumAddresses[0],
+			Tokens: pledgeTokens,
+		}
+		transactionInfo.Quorums = []*models.QuorumInfo{pledegTokenInfo}
+	} else {
+		resp.Message = "insufficient quorum liquidity"
+		return resp
 	}
-	transactionInfo.Quorums = []*models.QuorumInfo{pledegTokenInfo}
 	transactionId, err := util.GetTransactionID(transactionInfo)
 	if err != nil {
 		c.log.Error("InitiateTransaction: Failed to get transaction ID", "err", err)
