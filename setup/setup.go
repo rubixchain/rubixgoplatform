@@ -122,8 +122,11 @@ const (
 	APICreateNFT             string = "/rubix/v1/nfts/generate"
 	APIListNFTs              string = "/rubix/v1/nfts"
 	APIGetNFTChain           string = "/rubix/v1/nfts/{nft_id}/chain"
-	APITransaction           string = "/rubix/v1/tx"
-	APIGetTransactionByID    string = "/rubix/v1/tx/{tx_id}"
+
+	// Transactions endpoints
+	APITransaction          string = "/rubix/v1/tx"
+	APIGetTransactionByID   string = "/rubix/v1/tx/{tx_id}"
+	APIGetTransactionsByDID string = "/rubix/v1/tx/{did}/{token_type}"
 
 	// FT endpoints
 	APIListFT   string = "/rubix/v1/fts"

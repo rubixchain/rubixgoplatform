@@ -1188,7 +1188,7 @@ const docTemplate = `{
                     "tx"
                 ],
                 "summary": "List transactions",
-                "operationId": "tx-k",
+                "operationId": "getAllTx",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1210,7 +1210,7 @@ const docTemplate = `{
                     "tx"
                 ],
                 "summary": "Initiates a transaction",
-                "operationId": "tx-s",
+                "operationId": "txInit",
                 "parameters": [
                     {
                         "description": "transaction",
@@ -1220,6 +1220,45 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/models.TransactionRequest"
                         }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/tx/{did}/{token_type}": {
+            "get": {
+                "description": "Get Transactions by DID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tx"
+                ],
+                "summary": "Get Transactions by DID",
+                "operationId": "getTxnsByDID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "DID",
+                        "name": "did",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Token Type (rbt, nft, ft, smartContract)",
+                        "name": "token_type",
+                        "in": "path"
                     }
                 ],
                 "responses": {
@@ -1245,7 +1284,7 @@ const docTemplate = `{
                     "tx"
                 ],
                 "summary": "Get Transactions by ID",
-                "operationId": "tx-d",
+                "operationId": "txQuery",
                 "parameters": [
                     {
                         "type": "string",

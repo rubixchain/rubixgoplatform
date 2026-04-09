@@ -67,3 +67,32 @@ func (s *Server) APIGetTransactions(req *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(req, true, "", transactions)
 }
 
+// APIGetTransactionsByDID godoc
+// @Summary      Get Transactions by DID
+// @Description  Get Transactions by DID
+// @Tags         tx
+// @ID           getTxnsByDID
+// @Accept       json
+// @Produce      json
+// @Param        did        path   string  true   "DID"
+// @Param        token_type path  string  true  "Token Type (rbt, nft, ft, smartContract)"
+// @Success      200  {object}  model.BasicResponse
+// @Router       /rubix/v1/tx/{did}/{token_type} [get]
+func (s *Server) APIGetTransactionsByDID(req *ensweb.Request) *ensweb.Result {
+	did := s.GetRouteVar(req, "did")
+	if did == "" {
+		return s.BasicResponse(req, false, "empty did", nil)
+	}
+
+	tokenType := s.GetRouteVar(req, "token_type")
+	if tokenType == "" {
+		return s.BasicResponse(req, false, "empty token type", nil)
+	}
+
+	txInfo, err := s.c.GetTransactionsByDIDAndTokenType(did, tokenType)
+	if err != nil {
+		return s.BasicResponse(req, false, err.Error(), nil)
+	}
+
+	return s.BasicResponse(req, true, "", txInfo)
+}

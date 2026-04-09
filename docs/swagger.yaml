@@ -1078,7 +1078,7 @@ paths:
       consumes:
       - application/json
       description: List transactions
-      operationId: tx-k
+      operationId: getAllTx
       produces:
       - application/json
       responses:
@@ -1093,7 +1093,7 @@ paths:
       consumes:
       - application/json
       description: Initiate a transaction
-      operationId: tx-s
+      operationId: txInit
       parameters:
       - description: transaction
         in: body
@@ -1111,12 +1111,38 @@ paths:
       summary: Initiates a transaction
       tags:
       - tx
+  /rubix/v1/tx/{did}/{token_type}:
+    get:
+      consumes:
+      - application/json
+      description: Get Transactions by DID
+      operationId: getTxnsByDID
+      parameters:
+      - description: DID
+        in: path
+        name: did
+        required: true
+        type: string
+      - description: Token Type (rbt, nft, ft, smartContract)
+        in: path
+        name: token_type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get Transactions by DID
+      tags:
+      - tx
   /rubix/v1/tx/{tx_id}:
     get:
       consumes:
       - application/json
       description: Get Transactions by ID
-      operationId: tx-d
+      operationId: txQuery
       parameters:
       - description: Transaction ID
         in: path

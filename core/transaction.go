@@ -493,3 +493,7 @@ func retryBackoff(attempt int) time.Duration {
 	// 50ms → 100ms → 150ms
 	return time.Duration(attempt*50) * time.Millisecond
 }
+
+func (c *Core) GetTransactionsByDIDAndTokenType(did, tokenType string) ([]models.Transactions, error) {
+	return c.w.GetTransactionsByDIDAndTokenType(did, tokenType)
+}
