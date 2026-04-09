@@ -48,14 +48,28 @@ func SyncTransactionChain(req *ensweb.Request, l *ipfsport.Listener, w *wallet.W
 // FindTokenRoleInTxn determines the role a token played in a given transaction.
 func FindTokenRoleInTxn(tokenID string, txInfo *models.TransactionInfo) int16 {
 	if txInfo.Tokens != nil {
-		for _, lists := range [][]*models.TokenInfo{
-			txInfo.Tokens.RBT, txInfo.Tokens.NFT,
-			txInfo.Tokens.FT, txInfo.Tokens.SmartContract,
-		} {
-			for _, t := range lists {
-				if t.TokenID == tokenID {
-					return int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
+		for _, t := range txInfo.Tokens.RBT {
+			if t.TokenID == tokenID {
+				return int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
+			}
+		}
+		for _, t := range txInfo.Tokens.NFT {
+			if t.TokenID == tokenID {
+				return int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
+			}
+		}
+		for _, t := range txInfo.Tokens.FT {
+			if t.TokenID == tokenID {
+				return int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
+			}
+		}
+		for _, t := range txInfo.Tokens.SmartContract {
+			if t.TokenID == tokenID {
+				// Genesis (empty PreviousTransactionID) = Deploy; otherwise Execute.
+				if t.PreviousTransactionID == "" {
+					return int16(models.GetTokenRoleID(constants.TokenRole_Deploy))
 				}
+				return int16(models.GetTokenRoleID(constants.TokenRole_Execute))
 			}
 		}
 	}
@@ -77,15 +91,64 @@ func FindTokenRoleInTxn(tokenID string, txInfo *models.TransactionInfo) int16 {
 	return int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
 }
 
+// findTokenValue returns the TokenValue for tokenID from any token list in txInfo.
+// For NFT tokens, a minimum value of 1.0 is enforced (1 RBT must always be pledged).
+// Returns 0 if not found.
+func findTokenValue(tokenID string, txInfo *models.TransactionInfo) float64 {
+	if txInfo.Tokens != nil {
+		for _, t := range txInfo.Tokens.RBT {
+			if t.TokenID == tokenID {
+				return t.TokenValue
+			}
+		}
+		for _, t := range txInfo.Tokens.NFT {
+			if t.TokenID == tokenID {
+				if t.TokenValue < 1.0 {
+					return 1.0
+				}
+				return t.TokenValue
+			}
+		}
+		for _, t := range txInfo.Tokens.FT {
+			if t.TokenID == tokenID {
+				return t.TokenValue
+			}
+		}
+		for _, t := range txInfo.Tokens.SmartContract {
+			if t.TokenID == tokenID {
+				return t.TokenValue
+			}
+		}
+	}
+	return 0
+}
+
+// findPreviousTransactionID returns the PreviousTransactionID for tokenID from
+// any token list in txInfo. Returns "" if not found (genesis case).
+func findPreviousTransactionID(tokenID string, txInfo *models.TransactionInfo) string {
+	if txInfo.Tokens != nil {
+		for _, lists := range [][]*models.TokenInfo{
+			txInfo.Tokens.RBT, txInfo.Tokens.NFT,
+			txInfo.Tokens.FT, txInfo.Tokens.SmartContract,
+		} {
+			for _, t := range lists {
+				if t.TokenID == tokenID {
+					return t.PreviousTransactionID
+				}
+			}
+		}
+	}
+	return ""
+}
+
 // SyncTransactionChainFrom fetches missing transactions from a peer and writes them locally.
+// If the token is not yet known locally, latestTransactionID will be "" which signals
+// the server to return the full chain from genesis.
 func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, tokenType int, w *wallet.Wallet, log logger.Logger) (error, *models.TransactionChainSyncReply) {
 	var err error
 
+	// "" means token not in local DB yet — server interprets "" as "send from genesis".
 	latestTransactionID := w.GetLatestTransactionID(tokenID)
-	if latestTransactionID == "" {
-		log.Error("failed to get latest transaction id")
-		return err, nil
-	}
 
 	syncReq := models.TransactionChainSyncRequest{
 		TokenID:       tokenID,
@@ -118,17 +181,56 @@ func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, tokenType int, w
 
 				role := FindTokenRoleInTxn(tokenID, &txInfo)
 
+				// Derive the correct token status from the role, mirroring
+				// post_consensus_payload_builder.go so the synced record matches
+				// what the originating node wrote.
+				tokenStatus := int16(constants.TokenStatus_Free)
+				switch role {
+				case int16(models.GetTokenRoleID(constants.TokenRole_Deploy)):
+					tokenStatus = int16(constants.TokenStatus_Deployed)
+				case int16(models.GetTokenRoleID(constants.TokenRole_Execute)):
+					tokenStatus = int16(constants.TokenStatus_Executed)
+				}
+
 				if err = w.CreateTransaction(tx); err != nil {
 					log.Error("failed to add transaction to transactions table", "err", err)
 					return fmt.Errorf("failed to add transaction: %w", err), nil
 				}
 
+				// Ensure the owner DID exists in the dids table before writing the
+				// token — tokens.did has a FK to dids.did. The owner may be a remote
+				// peer whose DID was never registered locally, so we upsert it as a
+				// non-local entry. We must also resolve algo_id (FK to did_algo) since
+				// the zero value violates the algo_id_fk constraint.
+				ownerDID := txInfo.Owner
+				if ownerDID == "" {
+					ownerDID = txInfo.Initiator
+				}
+				if ownerDID != "" {
+					algoID, algoErr := w.GetDidAlgoIDByName(constants.DidAlgo_SECP256K1)
+					if algoErr != nil {
+						log.Error("failed to resolve algo ID for owner DID upsert", "did", ownerDID, "err", algoErr)
+						return fmt.Errorf("failed to resolve algo ID for DID %s: %w", ownerDID, algoErr), nil
+					}
+					if didErr := w.CreateOrUpdateDID(&models.DID{
+						DID:    ownerDID,
+						Local:  false,
+						AlgoID: algoID,
+					}); didErr != nil {
+						log.Error("failed to upsert owner DID before creating token", "did", ownerDID, "err", didErr)
+						return fmt.Errorf("failed to upsert owner DID %s: %w", ownerDID, didErr), nil
+					}
+				}
+
+				tokenValue := findTokenValue(tokenID, &txInfo)
+
 				tokenDetails, err := w.GetTokenByTokenID(tokenID)
 				if err != nil {
 					newToken := models.Token{
 						TokenID:        tokenID,
-						TokenStatus:    constants.TokenStatus_Free,
-						DID:            txInfo.Owner,
+						TokenStatus:    tokenStatus,
+						TokenValue:     tokenValue,
+						DID:            ownerDID,
 						TransactionID:  tx.ID,
 						TokenType:      int16(tokenType),
 						LatestPosition: 0,
@@ -142,7 +244,9 @@ func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, tokenType int, w
 					}
 					tokenDetails = newToken
 				} else {
-					tokenDetails.DID = txInfo.Owner
+					tokenDetails.DID = ownerDID
+					tokenDetails.TokenStatus = tokenStatus
+					tokenDetails.TokenValue = tokenValue
 					tokenDetails.TransactionID = tx.ID
 					tokenDetails.LatestPosition++
 					tokenDetails.LatestRole = role
@@ -152,11 +256,18 @@ func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, tokenType int, w
 					}
 				}
 
+				// Populate PreviousTransactionID from the token's own chain history.
+				// position=0 (genesis) must be NULL; position>0 must be a valid tx ID.
+				var prevTxID *string
+				if raw := findPreviousTransactionID(tokenID, &txInfo); raw != "" {
+					prevTxID = &raw
+				}
 				entry := &models.TokenChain{
-					TokenID:       tokenID,
-					TransactionID: tx.ID,
-					Role:          role,
-					Position:      tokenDetails.LatestPosition,
+					TokenID:               tokenID,
+					TransactionID:         tx.ID,
+					PreviousTransactionID: prevTxID,
+					Role:                  role,
+					Position:              tokenDetails.LatestPosition,
 				}
 				if err = w.AddTokenChainEntry(entry); err != nil {
 					log.Error("failed to add token chain entry", "err", err)

@@ -87,6 +87,18 @@ func (w *Wallet) GetTokenByTokenID(tokenID string) (models.Token, error) {
 	return token, nil
 }
 
+// GetLatestTransactionID returns the latest transaction ID for a given token
+// by reading tokens.transaction_id. Returns "" if the token does not exist
+// locally yet — callers treat "" as "sync from genesis".
+func (w *Wallet) GetLatestTransactionID(tokenID string) string {
+	token, err := w.GetTokenByTokenID(tokenID)
+	if err != nil {
+		// Token not found locally — "" signals the caller to sync from genesis.
+		return ""
+	}
+	return token.TransactionID
+}
+
 func (w *Wallet) GetRBTTokenByStatus(tokenID string, tokenStatus int) (models.Token, error) {
 	row := w.db.Pool().QueryRow(w.Ctx,
 		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,

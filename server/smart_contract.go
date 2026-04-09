@@ -236,7 +236,9 @@ func (s *Server) APISubscribecontract(request *ensweb.Request) *ensweb.Result {
 
 	topic := smartContractToken
 	s.c.AddWebReq(request)
-	go s.c.SubsribeContractSetup(request.ID, topic)
+	if err := s.c.SubsribeContractSetup(request.ID, topic); err != nil {
+		return s.BasicResponse(request, false, err.Error(), nil)
+	}
 	return s.BasicResponse(request, true, "Smart contract subscribed successfully", nil)
 }
 

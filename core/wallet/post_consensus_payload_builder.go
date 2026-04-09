@@ -94,12 +94,14 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 					// Synthesize a zero-value token so buildDerivedTokenChainRow produces position=0.
 					tokenValue := input.TokenValue
 					if tokenValue == 0 {
-						// Fallback: derive from token ID
+						// Fallback: derive from token ID (only works for RBT tokens)
 						if derived, err := util.GetTokenValueFromTokenID(input.TokenID); err == nil && derived > 0 {
 							tokenValue = derived
 						}
 					}
-					if tokenValue == 0 {
+					// NFT tokens can have zero value (collectibles with no monetary value)
+					// RBT and SmartContract tokens must have a value > 0
+					if tokenValue == 0 && input.TokenTypeName != constants.TokenType_NFT {
 						return nil, nil, nil, fmt.Errorf("post-consensus persistence: cannot determine token value for genesis token %q", input.TokenID)
 					}
 					tokenTypeID := models.GetTokenTypeID(input.TokenTypeName)
@@ -146,20 +148,38 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 		state.TransactionID = transactionID
 		state.LatestPosition = position
 		state.LatestRole = int16(roleID)
-		switch executionRole {
-		case ExecutionRoleReceiver:
-			if txInfo.Owner != "" {
-				state.DID = txInfo.Owner
-			}
-			state.TokenStatus = int16(constants.TokenStatus_Free)
-		case ExecutionRoleInitiator:
+
+		// Set token status based on role and execution context
+		switch input.RoleName {
+		case constants.TokenRole_Deploy:
+			// NFT/SC Deployment - token stays with initiator in Deployed status
 			if txInfo.Initiator != "" {
 				state.DID = txInfo.Initiator
 			}
-			// Tokens are leaving the initiator — mark as Transferred so they are no
-			// longer counted as available balance. Non-selected locked tokens will be
-			// released separately by ReleaseAllLockedRBTTokensForDID.
-			state.TokenStatus = int16(constants.TokenStatus_Transferred)
+			state.TokenStatus = int16(constants.TokenStatus_Deployed)
+		case constants.TokenRole_Execute:
+			// SC/NFT Execution - token stays with initiator in Executed status
+			if txInfo.Initiator != "" {
+				state.DID = txInfo.Initiator
+			}
+			state.TokenStatus = int16(constants.TokenStatus_Executed)
+		default:
+			// Transfer, Mint, Commit roles - use existing logic based on execution role
+			switch executionRole {
+			case ExecutionRoleReceiver:
+				if txInfo.Owner != "" {
+					state.DID = txInfo.Owner
+				}
+				state.TokenStatus = int16(constants.TokenStatus_Free)
+			case ExecutionRoleInitiator:
+				if txInfo.Initiator != "" {
+					state.DID = txInfo.Initiator
+				}
+				// Tokens are leaving the initiator — mark as Transferred so they are no
+				// longer counted as available balance. Non-selected locked tokens will be
+				// released separately by ReleaseAllLockedRBTTokensForDID.
+				state.TokenStatus = int16(constants.TokenStatus_Transferred)
+			}
 		}
 
 		tokenChains = append(tokenChains, row)
@@ -209,9 +229,10 @@ func collectPersistenceTokenInputs(txInfo *models.TransactionInfo) ([]persistenc
 			return nil, nil, err
 		}
 
-		// NFT tokens: Check if genesis (deployment) or execution/transfer
+		// NFT tokens: Check if genesis (deployment), execution, or transfer
 		// - If PreviousTransactionID is empty → Deploy (genesis)
-		// - Otherwise → Transfer or Execute (existing NFT)
+		// - If Owner == Initiator (or empty) → Execute (self-execution, no ownership change)
+		// - If Owner != Initiator → Transfer (ownership change)
 		for _, nft := range txInfo.Tokens.NFT {
 			if nft == nil {
 				return nil, nil, fmt.Errorf("post-consensus persistence: transaction token is nil")
@@ -225,10 +246,16 @@ func collectPersistenceTokenInputs(txInfo *models.TransactionInfo) ([]persistenc
 			seen[nft.TokenID] = struct{}{}
 			affected = append(affected, nft.TokenID)
 
-			// Determine role based on PreviousTransactionID
-			roleName := constants.TokenRole_Transfer // Can be Execute or Transfer for existing NFT
+			// Determine role based on PreviousTransactionID and ownership
+			var roleName string
 			if nft.PreviousTransactionID == "" {
 				roleName = constants.TokenRole_Deploy // Genesis - NFT deployment
+			} else if txInfo.Owner == "" || txInfo.Owner == txInfo.Initiator {
+				// Self-execution: Owner is same as Initiator or not specified
+				roleName = constants.TokenRole_Execute
+			} else {
+				// Transfer: Ownership is changing to a different DID
+				roleName = constants.TokenRole_Transfer
 			}
 
 			inputs = append(inputs, persistenceTokenInput{
