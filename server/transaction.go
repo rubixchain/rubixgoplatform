@@ -8,7 +8,7 @@ import (
 // @Summary Initiates a transaction
 // @Description Initiate a transaction
 // @ID txInit
-// @Tags tx
+// @Tags Transactions
 // @Accept json
 // @Produce json
 // @Param   input body models.TransactionRequest true "transaction"
@@ -28,7 +28,7 @@ func (s *Server) APIInitiateTransaction(req *ensweb.Request) *ensweb.Result {
 // NFT godoc
 // @Summary      Get Transactions by ID
 // @Description  Get Transactions by ID
-// @Tags         tx
+// @Tags         Transactions
 // @ID           txQuery
 // @Accept       json
 // @Produce      json
@@ -52,7 +52,7 @@ func (s *Server) APIGetTransactionByID(req *ensweb.Request) *ensweb.Result {
 // NFT godoc
 // @Summary      List transactions
 // @Description  List transactions
-// @Tags         tx
+// @Tags         Transactions
 // @ID           getAllTx
 // @Accept       json
 // @Produce      json
@@ -70,7 +70,7 @@ func (s *Server) APIGetTransactions(req *ensweb.Request) *ensweb.Result {
 // APIGetTransactionsByDID godoc
 // @Summary      Get Transactions by DID
 // @Description  Get Transactions by DID
-// @Tags         tx
+// @Tags         Transactions
 // @ID           getTxnsByDID
 // @Accept       json
 // @Produce      json

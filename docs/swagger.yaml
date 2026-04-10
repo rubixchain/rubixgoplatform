@@ -279,25 +279,6 @@ definitions:
       password:
         type: string
     type: object
-  server.TransferFTReqSwaggoInput:
-    properties:
-      comment:
-        type: string
-      creatorDID:
-        type: string
-      ft_count:
-        type: integer
-      ft_name:
-        type: string
-      password:
-        type: string
-      quorum_type:
-        type: integer
-      receiver:
-        type: string
-      sender:
-        type: string
-    type: object
 info:
   contact:
     email: murali.c@ensurity.com
@@ -651,28 +632,6 @@ paths:
       summary: Get Smart Contract Token Chain Data
       tags:
       - Smart Contract
-  /api/initiate-ft-transfer:
-    post:
-      consumes:
-      - application/json
-      description: This API endpoint will initiate transfer of FTs.
-      parameters:
-      - description: Transfer FT
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.TransferFTReqSwaggoInput'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Initiate an FT transfer
-      tags:
-      - FT
   /api/initiate-self-transfer:
     post:
       consumes:
@@ -988,7 +947,7 @@ paths:
             $ref: '#/definitions/model.BasicResponse'
       summary: List FTs
       tags:
-      - fts
+      - FT
   /rubix/v1/fts/mint:
     post:
       consumes:
@@ -1088,7 +1047,7 @@ paths:
             $ref: '#/definitions/model.BasicResponse'
       summary: List transactions
       tags:
-      - tx
+      - Transactions
     post:
       consumes:
       - application/json
@@ -1110,7 +1069,7 @@ paths:
             $ref: '#/definitions/model.BasicResponse'
       summary: Initiates a transaction
       tags:
-      - tx
+      - Transactions
   /rubix/v1/tx/{did}/{token_type}:
     get:
       consumes:
@@ -1126,6 +1085,7 @@ paths:
       - description: Token Type (rbt, nft, ft, smartContract)
         in: path
         name: token_type
+        required: true
         type: string
       produces:
       - application/json
@@ -1136,7 +1096,7 @@ paths:
             $ref: '#/definitions/model.BasicResponse'
       summary: Get Transactions by DID
       tags:
-      - tx
+      - Transactions
   /rubix/v1/tx/{tx_id}:
     get:
       consumes:
@@ -1158,7 +1118,7 @@ paths:
             $ref: '#/definitions/model.BasicResponse'
       summary: Get Transactions by ID
       tags:
-      - tx
+      - Transactions
 securityDefinitions:
   SessionToken:
     in: header

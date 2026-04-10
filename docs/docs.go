@@ -539,40 +539,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/initiate-ft-transfer": {
-            "post": {
-                "description": "This API endpoint will initiate transfer of FTs.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "FT"
-                ],
-                "summary": "Initiate an FT transfer",
-                "parameters": [
-                    {
-                        "description": "Transfer FT",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.TransferFTReqSwaggoInput"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/initiate-self-transfer": {
             "post": {
                 "description": "This API will initiate self RBT transfer for a specific DID",
@@ -1036,7 +1002,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "fts"
+                    "FT"
                 ],
                 "summary": "List FTs",
                 "responses": {
@@ -1185,7 +1151,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "tx"
+                    "Transactions"
                 ],
                 "summary": "List transactions",
                 "operationId": "getAllTx",
@@ -1207,7 +1173,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "tx"
+                    "Transactions"
                 ],
                 "summary": "Initiates a transaction",
                 "operationId": "txInit",
@@ -1242,7 +1208,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "tx"
+                    "Transactions"
                 ],
                 "summary": "Get Transactions by DID",
                 "operationId": "getTxnsByDID",
@@ -1258,7 +1224,8 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Token Type (rbt, nft, ft, smartContract)",
                         "name": "token_type",
-                        "in": "path"
+                        "in": "path",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -1281,7 +1248,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "tx"
+                    "Transactions"
                 ],
                 "summary": "Get Transactions by ID",
                 "operationId": "txQuery",
@@ -1733,35 +1700,6 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "password": {
-                    "type": "string"
-                }
-            }
-        },
-        "server.TransferFTReqSwaggoInput": {
-            "type": "object",
-            "properties": {
-                "comment": {
-                    "type": "string"
-                },
-                "creatorDID": {
-                    "type": "string"
-                },
-                "ft_count": {
-                    "type": "integer"
-                },
-                "ft_name": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string"
-                },
-                "quorum_type": {
-                    "type": "integer"
-                },
-                "receiver": {
-                    "type": "string"
-                },
-                "sender": {
                     "type": "string"
                 }
             }

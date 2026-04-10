@@ -54,15 +54,7 @@ func (s *Server) APICreateFT(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
-// ShowAccount godoc
-// @Summary      Initiate an FT transfer
-// @Description  This API endpoint will initiate transfer of FTs.
-// @Tags         FT
-// @Accept       json
-// @Produce      json
-// @Param        input body TransferFTReqSwaggoInput true "Transfer FT"
-// @Success      200  {object}  model.BasicResponse
-// @Router       /api/initiate-ft-transfer [post]
+
 func (s *Server) APIInitiateFTTransfer(req *ensweb.Request) *ensweb.Result {
 	var rbtReq model.TransferFTReq
 	err := s.ParseJSON(req, &rbtReq)
@@ -168,7 +160,7 @@ func (s *Server) APIGetFTCreatorStats(req *ensweb.Request) *ensweb.Result {
 // ShowAccount godoc
 // @Summary      List FTs
 // @Description  This API endpoint will list FTs.
-// @Tags         fts
+// @Tags         FT
 // @Accept       json
 // @Produce      json
 // @Success      200  {object}  model.BasicResponse
