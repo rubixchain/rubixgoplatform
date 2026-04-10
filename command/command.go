@@ -579,7 +579,7 @@ func (cmd *Command) runApp() {
 
 	serverConfig := &server.Config{
 		Config: srvcfg.Config{
-			HostAddress: "localhost",
+			HostAddress: "0.0.0.0",
 			HostPort:    fmt.Sprintf("%d", cmd.cfg.PortConfig.RubixServerPort),
 			Production:  "false",
 
