@@ -503,6 +503,51 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 		return c.l.RenderJSON(request, &crep, http.StatusBadRequest)
 	}
 
+	// --- Token chain sync: fill gaps from sender before persisting ---
+	// Collect all token IDs and their PreviousTransactionIDs from the incoming transaction.
+	var syncTokenIDs []string
+	prevTxIDs := make(map[string]string)
+	if txns := sendTokensRequest.TransactionInfo.Tokens; txns != nil {
+		for _, t := range txns.RBT {
+			if t != nil {
+				syncTokenIDs = append(syncTokenIDs, t.TokenID)
+				if t.PreviousTransactionID != "" {
+					prevTxIDs[t.TokenID] = t.PreviousTransactionID
+				}
+			}
+		}
+		for _, t := range txns.FT {
+			if t != nil {
+				syncTokenIDs = append(syncTokenIDs, t.TokenID)
+				if t.PreviousTransactionID != "" {
+					prevTxIDs[t.TokenID] = t.PreviousTransactionID
+				}
+			}
+		}
+		// NFT: only sync if this is an ownership transfer
+		if sendTokensRequest.NFTOwnershipTransfer {
+			for _, t := range txns.NFT {
+				if t != nil {
+					syncTokenIDs = append(syncTokenIDs, t.TokenID)
+					if t.PreviousTransactionID != "" {
+						prevTxIDs[t.TokenID] = t.PreviousTransactionID
+					}
+				}
+			}
+		}
+	}
+
+	// Synchronous/blocking sync from sender (initiator) before we persist.
+	// prevTxIDs allows applyTokenChainFromSync to skip tokens whose chain
+	// tail already matches — avoiding redundant network + DB work.
+	// Errors are logged but never break SendTokens — sync is best-effort.
+	if len(syncTokenIDs) > 0 {
+		initiatorDID := sendTokensRequest.TransactionInfo.Initiator
+		if err := c.SyncTransactionChainsFromPeer(initiatorDID, syncTokenIDs, prevTxIDs); err != nil {
+			c.log.Warn("SendTokens: chain sync from sender failed (non-fatal)", "initiator", initiatorDID, "err", err)
+		}
+	}
+
 	persistErr := c.w.PersistPostConsensus(c.Ctx, &wallet.PostConsensusPersistenceRequest{
 		TransactionInfo:           sendTokensRequest.TransactionInfo,
 		Signature:                 sendTokensRequest.Signature,
