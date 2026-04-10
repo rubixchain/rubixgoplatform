@@ -8,11 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/consensus"
-	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	rubixsync "github.com/rubixchain/rubixgoplatform/core/sync"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -444,40 +441,6 @@ func (c *Core) TransactionSetup() {
 	c.l.AddRoute(APISyncTransactionChain, "POST", c.SyncTransactionChain)
 }
 
-// This function has been added here since the other corresponding sync functions has not been added yet.
-// Once the other sync functions and all are added, we can move this along with that.
-func (c *Core) syncTransactionTokens(
-	peer *ipfsport.Peer,
-	tokens *models.TransactionTokens,
-	NFTOwnershipTransfer bool,
-) error {
-
-	tokenGroups := map[string][]*models.TokenInfo{
-		constants.TokenType_RBT: tokens.RBT,
-		constants.TokenType_FT:  tokens.FT,
-	}
-
-	// Add NFT only if flag is true
-	if NFTOwnershipTransfer {
-		tokenGroups[constants.TokenType_NFT] = tokens.NFT
-	}
-
-	for tokenTypeStr, group := range tokenGroups {
-		tokenType := models.GetTokenTypeID(tokenTypeStr)
-		for _, token := range group {
-			if token == nil {
-				continue
-			}
-			//Handling the response in the future.
-			err, _ := rubixsync.SyncTransactionChainFrom(peer, token.TokenID, tokenType, c.w, c.log)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
 
 func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 	crep := model.BasicResponse{Status: false}
@@ -543,7 +506,7 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 	// Errors are logged but never break SendTokens — sync is best-effort.
 	if len(syncTokenIDs) > 0 {
 		initiatorDID := sendTokensRequest.TransactionInfo.Initiator
-		if err := c.SyncTransactionChainsFromPeer(initiatorDID, syncTokenIDs, prevTxIDs); err != nil {
+		if err := c.SyncTransactionChainsFromPeer(initiatorDID, syncTokenIDs, prevTxIDs, nil); err != nil {
 			c.log.Warn("SendTokens: chain sync from sender failed (non-fatal)", "initiator", initiatorDID, "err", err)
 		}
 	}

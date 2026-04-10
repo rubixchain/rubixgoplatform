@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	rubixsync "github.com/rubixchain/rubixgoplatform/core/sync"
 	"github.com/rubixchain/rubixgoplatform/types/models"
@@ -12,8 +13,9 @@ import (
 
 // syncTxChainRequest is the request body for the batch token chain sync API.
 type syncTxChainRequest struct {
-	DID      string   `json:"did"`
-	TokenIDs []string `json:"token_ids"`
+	DID                   string   `json:"did"`
+	TokenIDs              []string `json:"token_ids"`
+	ExcludeTransactionIDs []string `json:"exclude_transaction_ids,omitempty"`
 }
 
 // syncTxChainResponse is the response body for the batch token chain sync API.
@@ -42,12 +44,27 @@ func (c *Core) SyncTransactionChain(request *ensweb.Request) *ensweb.Result {
 		}, http.StatusOK)
 	}
 
+	// Build exclusion set (typically 1 entry — the current transaction).
+	excludeSet := make(map[string]bool, len(req.ExcludeTransactionIDs))
+	for _, id := range req.ExcludeTransactionIDs {
+		excludeSet[id] = true
+	}
+
 	result := make(map[string][]models.Transactions)
 	for _, tokenID := range req.TokenIDs {
 		txs, err := c.w.GetTransactionsByTokenID(tokenID)
 		if err != nil {
 			c.log.Warn("SyncTransactionChain: failed to fetch chain", "tokenID", tokenID, "err", err)
 			continue
+		}
+		if len(excludeSet) > 0 {
+			filtered := make([]models.Transactions, 0, len(txs))
+			for _, tx := range txs {
+				if !excludeSet[tx.ID] {
+					filtered = append(filtered, tx)
+				}
+			}
+			txs = filtered
 		}
 		result[tokenID] = txs
 	}
@@ -64,12 +81,12 @@ func (c *Core) SyncTransactionChain(request *ensweb.Request) *ensweb.Result {
 //
 // prevTxIDs maps tokenID -> PreviousTransactionID from the incoming sendTokensRequest.
 // When a token's prevTxID already exists in the local chain, sync is skipped for that token.
-func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, prevTxIDs map[string]string) error {
+func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error {
 	if len(tokenIDs) == 0 {
 		return nil
 	}
 
-	req := syncTxChainRequest{DID: peerDID, TokenIDs: tokenIDs}
+	req := syncTxChainRequest{DID: peerDID, TokenIDs: tokenIDs, ExcludeTransactionIDs: excludeTxIDs}
 
 	p, err := c.getPeer(peerDID)
 	if err != nil {
@@ -78,7 +95,7 @@ func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, 
 	defer p.Close()
 
 	var resp syncTxChainResponse
-	if err = p.SendJSONRequest("POST", APISyncTransactionChain, nil, &req, &resp, false); err != nil {
+	if err = p.SendJSONRequest("POST", APISyncTransactionChain, nil, &req, &resp, false, 30*time.Second); err != nil {
 		return fmt.Errorf("SyncTransactionChainsFromPeer: request failed: %w", err)
 	}
 
