@@ -135,8 +135,8 @@ func (c *Core) getPeer(addr string) (*ipfsport.Peer, error) {
 		peerInfo, err := c.GetPeerDIDInfo(did)
 		if err != nil {
 			if peerInfo == nil {
-				c.log.Error("could not get peerId of peer ", did, "error", err)
-				return nil, fmt.Errorf("could not get peerId of peer %v, error : %v", did, err)
+				c.log.Error("getPeer: could not get peerId of peer ", did, "error", err)
+				return nil, fmt.Errorf("getPeer: could not get peerId of peer %v, error : %v", did, err)
 			}
 			if strings.Contains(err.Error(), "retry") {
 				c.AddPeerDetails(*peerInfo)

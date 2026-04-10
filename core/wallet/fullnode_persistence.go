@@ -30,7 +30,6 @@ type fullNodeTokenState struct {
 	did            string
 	transactionID  string
 	tokenStateHash string
-	tokenType      int16
 	latestPosition int64
 	latestRole     int16
 	exists         bool
@@ -226,7 +225,6 @@ func deriveFullNodeTokenState(existing fullNodeTokenState, txInfo *models.Transa
 	if !state.exists {
 		state.tokenID = input.tokenInfo.TokenID
 		state.tokenStatus = int16(constants.TokenStatus_Free)
-		state.tokenType = int16(models.GetTokenTypeID(input.tokenType))
 	}
 	if input.tokenInfo.TokenValue > 0 {
 		state.tokenValue = input.tokenInfo.TokenValue
@@ -250,12 +248,12 @@ func (w *Wallet) readFullNodeTokenStateTx(ctx context.Context, tx pgx.Tx, tokenT
 		var state fullNodeTokenState
 		err := tx.QueryRow(ctx, `
 			SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
-			       token_state_hash, token_type, latest_position, latest_role
+			       token_state_hash, latest_position, latest_role
 			FROM fullnode_rbt
 			WHERE token_id = $1
 		`, tokenID).Scan(
 			&state.tokenID, &state.parentTokenID, &state.tokenValue, &state.tokenStatus, &state.did,
-			&state.transactionID, &state.tokenStateHash, &state.tokenType, &state.latestPosition, &state.latestRole,
+			&state.transactionID, &state.tokenStateHash, &state.latestPosition, &state.latestRole,
 		)
 		if err != nil {
 			if err == pgx.ErrNoRows {
@@ -269,12 +267,12 @@ func (w *Wallet) readFullNodeTokenStateTx(ctx context.Context, tx pgx.Tx, tokenT
 		var state fullNodeTokenState
 		err := tx.QueryRow(ctx, `
 			SELECT token_id, token_value, token_status, did, transaction_id,
-			       token_state_hash, token_type, latest_position, latest_role
+			       token_state_hash, latest_position, latest_role
 			FROM fullnode_ft
 			WHERE token_id = $1
 		`, tokenID).Scan(
 			&state.tokenID, &state.tokenValue, &state.tokenStatus, &state.did,
-			&state.transactionID, &state.tokenStateHash, &state.tokenType, &state.latestPosition, &state.latestRole,
+			&state.transactionID, &state.tokenStateHash, &state.latestPosition, &state.latestRole,
 		)
 		if err != nil {
 			if err == pgx.ErrNoRows {
@@ -288,12 +286,12 @@ func (w *Wallet) readFullNodeTokenStateTx(ctx context.Context, tx pgx.Tx, tokenT
 		var state fullNodeTokenState
 		err := tx.QueryRow(ctx, `
 			SELECT token_id, token_value, token_status, did, transaction_id,
-			       token_state_hash, token_type, latest_position, latest_role
+			       token_state_hash, latest_position, latest_role
 			FROM fullnode_nft
 			WHERE token_id = $1
 		`, tokenID).Scan(
 			&state.tokenID, &state.tokenValue, &state.tokenStatus, &state.did,
-			&state.transactionID, &state.tokenStateHash, &state.tokenType, &state.latestPosition, &state.latestRole,
+			&state.transactionID, &state.tokenStateHash, &state.latestPosition, &state.latestRole,
 		)
 		if err != nil {
 			if err == pgx.ErrNoRows {
@@ -307,12 +305,12 @@ func (w *Wallet) readFullNodeTokenStateTx(ctx context.Context, tx pgx.Tx, tokenT
 		var state fullNodeTokenState
 		err := tx.QueryRow(ctx, `
 			SELECT token_id, token_value, token_status, transaction_id,
-			       token_state_hash, token_type, latest_position, latest_role
+			       token_state_hash, latest_position, latest_role
 			FROM fullnode_smart_contract
 			WHERE token_id = $1
 		`, tokenID).Scan(
 			&state.tokenID, &state.tokenValue, &state.tokenStatus,
-			&state.transactionID, &state.tokenStateHash, &state.tokenType, &state.latestPosition, &state.latestRole,
+			&state.transactionID, &state.tokenStateHash, &state.latestPosition, &state.latestRole,
 		)
 		if err != nil {
 			if err == pgx.ErrNoRows {
@@ -333,8 +331,8 @@ func (w *Wallet) upsertFullNodeTokenStateTx(ctx context.Context, tx pgx.Tx, toke
 		_, err := tx.Exec(ctx, `
 			INSERT INTO fullnode_rbt (
 				token_id, parent_token_id, token_value, token_status, did, transaction_id,
-				token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())
+				token_state_hash, latest_position, latest_role, created_at, updated_at
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW())
 			ON CONFLICT (token_id) DO UPDATE SET
 				parent_token_id = EXCLUDED.parent_token_id,
 				token_value = EXCLUDED.token_value,
@@ -342,11 +340,10 @@ func (w *Wallet) upsertFullNodeTokenStateTx(ctx context.Context, tx pgx.Tx, toke
 				did = EXCLUDED.did,
 				transaction_id = EXCLUDED.transaction_id,
 				token_state_hash = EXCLUDED.token_state_hash,
-				token_type = EXCLUDED.token_type,
 				latest_position = EXCLUDED.latest_position,
 				latest_role = EXCLUDED.latest_role,
 				updated_at = NOW()
-		`, state.tokenID, state.parentTokenID, state.tokenValue, state.tokenStatus, state.did, state.transactionID, state.tokenStateHash, state.tokenType, state.latestPosition, state.latestRole)
+		`, state.tokenID, state.parentTokenID, state.tokenValue, state.tokenStatus, state.did, state.transactionID, state.tokenStateHash, state.latestPosition, state.latestRole)
 		if err != nil {
 			return fmt.Errorf("fullnode persistence: upsert fullnode_rbt token %q: %w", state.tokenID, err)
 		}
@@ -355,19 +352,18 @@ func (w *Wallet) upsertFullNodeTokenStateTx(ctx context.Context, tx pgx.Tx, toke
 		_, err := tx.Exec(ctx, `
 			INSERT INTO fullnode_ft (
 				token_id, token_value, token_status, did, transaction_id,
-				token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW())
+				token_state_hash, latest_position, latest_role, created_at, updated_at
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())
 			ON CONFLICT (token_id) DO UPDATE SET
 				token_value = EXCLUDED.token_value,
 				token_status = EXCLUDED.token_status,
 				did = EXCLUDED.did,
 				transaction_id = EXCLUDED.transaction_id,
 				token_state_hash = EXCLUDED.token_state_hash,
-				token_type = EXCLUDED.token_type,
 				latest_position = EXCLUDED.latest_position,
 				latest_role = EXCLUDED.latest_role,
 				updated_at = NOW()
-		`, state.tokenID, state.tokenValue, state.tokenStatus, state.did, state.transactionID, state.tokenStateHash, state.tokenType, state.latestPosition, state.latestRole)
+		`, state.tokenID, state.tokenValue, state.tokenStatus, state.did, state.transactionID, state.tokenStateHash, state.latestPosition, state.latestRole)
 		if err != nil {
 			return fmt.Errorf("fullnode persistence: upsert fullnode_ft token %q: %w", state.tokenID, err)
 		}
@@ -376,19 +372,18 @@ func (w *Wallet) upsertFullNodeTokenStateTx(ctx context.Context, tx pgx.Tx, toke
 		_, err := tx.Exec(ctx, `
 			INSERT INTO fullnode_nft (
 				token_id, token_value, token_status, did, transaction_id,
-				token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW())
+				token_state_hash, latest_position, latest_role, created_at, updated_at
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())
 			ON CONFLICT (token_id) DO UPDATE SET
 				token_value = EXCLUDED.token_value,
 				token_status = EXCLUDED.token_status,
 				did = EXCLUDED.did,
 				transaction_id = EXCLUDED.transaction_id,
 				token_state_hash = EXCLUDED.token_state_hash,
-				token_type = EXCLUDED.token_type,
 				latest_position = EXCLUDED.latest_position,
 				latest_role = EXCLUDED.latest_role,
 				updated_at = NOW()
-		`, state.tokenID, state.tokenValue, state.tokenStatus, state.did, state.transactionID, state.tokenStateHash, state.tokenType, state.latestPosition, state.latestRole)
+		`, state.tokenID, state.tokenValue, state.tokenStatus, state.did, state.transactionID, state.tokenStateHash, state.latestPosition, state.latestRole)
 		if err != nil {
 			return fmt.Errorf("fullnode persistence: upsert fullnode_nft token %q: %w", state.tokenID, err)
 		}
@@ -397,18 +392,17 @@ func (w *Wallet) upsertFullNodeTokenStateTx(ctx context.Context, tx pgx.Tx, toke
 		_, err := tx.Exec(ctx, `
 			INSERT INTO fullnode_smart_contract (
 				token_id, token_value, token_status, transaction_id,
-				token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())
+				token_state_hash, latest_position, latest_role, created_at, updated_at
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())
 			ON CONFLICT (token_id) DO UPDATE SET
 				token_value = EXCLUDED.token_value,
 				token_status = EXCLUDED.token_status,
 				transaction_id = EXCLUDED.transaction_id,
 				token_state_hash = EXCLUDED.token_state_hash,
-				token_type = EXCLUDED.token_type,
 				latest_position = EXCLUDED.latest_position,
 				latest_role = EXCLUDED.latest_role,
 				updated_at = NOW()
-		`, state.tokenID, state.tokenValue, state.tokenStatus, state.transactionID, state.tokenStateHash, state.tokenType, state.latestPosition, state.latestRole)
+		`, state.tokenID, state.tokenValue, state.tokenStatus, state.transactionID, state.tokenStateHash, state.latestPosition, state.latestRole)
 		if err != nil {
 			return fmt.Errorf("fullnode persistence: upsert fullnode_smart_contract token %q: %w", state.tokenID, err)
 		}

@@ -8,9 +8,9 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core/consensus"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/types/models"
-	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -179,57 +179,36 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 
 	txnInfo := consensusRequest.TransactionInfo
 
-	// Check 1: Validate transaction info fields
-	if err := consensus.ValidateTransactionInfoFields(txnInfo); err != nil {
-		c.log.Error("initiateConsensusHandler: transaction info fields validation failed", "err", err)
-		response.Message = "initiateConsensusHandler: " + err.Error()
-		return c.l.RenderJSON(request, response, http.StatusBadRequest)
-	}
-
-	// Compute txID once for logging and downstream use
-	txID, err := util.GetTransactionID(txnInfo)
+	//Need to call ValidateTransaction function here
+	initiatorDIDCrypto, err := c.InitialiseDID(txnInfo.Initiator)
 	if err != nil {
-		c.log.Error("initiateConsensusHandler: failed to compute transaction ID", "err", err)
-		response.Message = "initiateConsensusHandler: failed to compute transaction ID: " + err.Error()
+		c.log.Error("initiateConsensusHandler: failed to initialise initiator DID", "err", err)
+		response.Message = "initiateConsensusHandler: failed to setup initiator DID"
 		return c.l.RenderJSON(request, response, http.StatusBadRequest)
 	}
 
-	// Check 2: Validate new token content for each RBT token
-	if txnInfo.Tokens != nil {
-		for _, rbtToken := range txnInfo.Tokens.RBT {
-			if rbtToken == nil {
-				continue
-			}
-			if err := consensus.ValidateNewTokenContent(rbtToken.TokenID, true, c.testnet, c.mainnet, c.localnet, c.log); err != nil {
-				c.log.Error("initiateConsensusHandler: token content validation failed", "tokenID", rbtToken.TokenID, "err", err)
-				response.Message = "initiateConsensusHandler: " + err.Error()
-				return c.l.RenderJSON(request, response, http.StatusBadRequest)
-			}
-		}
-	}
-
-	// Check 3: Validate transaction value matches pledge
-	if err := consensus.ValidateTransactionValueAndPledge(txnInfo); err != nil {
-		c.log.Error("initiateConsensusHandler: transaction value/pledge validation failed", "err", err)
-		response.Message = "initiateConsensusHandler: " + err.Error()
-		return c.l.RenderJSON(request, response, http.StatusBadRequest)
-	}
-
-	// Check 4: Verify initiator signature
-	initiatorDC, err := c.SetupForienDID(txnInfo.Initiator, quorumDid)
+	txn, err := wallet.BuildTransactionRecordFromPayload(txnInfo, &models.Signature{InitiatorSignature: consensusRequest.InitiatorSignature})
 	if err != nil {
-		c.log.Error("initiateConsensusHandler: failed to setup initiator DID", "initiator", txnInfo.Initiator, "err", err)
-		response.Message = "initiateConsensusHandler: failed to setup initiator DID: " + err.Error()
+		c.log.Error("initiateConsensusHandler: failed to build transaction record", "err", err)
+		response.Message = "initiateConsensusHandler: failed to build transaction record"
+		return c.l.RenderJSON(request, response, http.StatusBadRequest)
+	}
+	peer, err := c.getPeer(txnInfo.Initiator)
+	if err != nil {
+		c.log.Error("initiateConsensusHandler: failed to get peer", "err", err)
+		response.Message = "initiateConsensusHandler: failed to get peer"
+		return c.l.RenderJSON(request, response, http.StatusBadRequest)
+	}
+	defer peer.Close()
+
+	isTransactionInfoValidated, err := consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, nil, peer, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned)
+	if err != nil || !isTransactionInfoValidated {
+		c.log.Error("initiateConsensusHandler: transaction info validation failed", "err", err)
+		response.Message = "initiateConsensusHandler: transaction info validation failed"
 		return c.l.RenderJSON(request, response, http.StatusBadRequest)
 	}
 
-	if err := util.VerifySignature(initiatorDC, txnInfo, consensusRequest.InitiatorSignature); err != nil {
-		c.log.Error("initiateConsensusHandler: initiator signature verification failed", "err", err)
-		response.Message = "initiateConsensusHandler: initiator signature verification failed"
-		return c.l.RenderJSON(request, response, http.StatusBadRequest)
-	}
-
-	c.log.Info("initiateConsensusHandler: all stateless validations passed", "txID", txID)
+	c.log.Info("initiateConsensusHandler: all stateless validations passed", "txID", txn.ID)
 
 	consensusResponse, err := consensus.InitiateConsensus(consensusRequest, quorumDc, c.log)
 	if err != nil {
@@ -246,7 +225,7 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 		if err := c.PledgeV2(
 			context.Background(),
 			pledgeTokenDetails,
-			txID,
+			txn.ID,
 			quorumDid,
 			txnInfo.Epoch,
 			txnInfo.Network,

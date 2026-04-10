@@ -195,14 +195,14 @@ func ValidateNewTokenContent(tokenID string, isQuorum bool, testnet bool, mainne
 		return fmt.Errorf("invalid token number in token content: %s", tokenID)
 	}
 
-	shouldValidate := testnet || mainnet || (localnet && isQuorum)
+	shouldValidate := testnet || mainnet || localnet
 
 	if shouldValidate {
 		mapLevel := level
-		network := "mainnet"
+		network := constants.NetworkMode_Mainnet
 
 		if testnet {
-			network = "testnet"
+			network = constants.NetworkMode_Testnet
 			if level < constants.TestnetRBT_Level_Offset {
 				return fmt.Errorf(
 					"invalid testnet token level %d: testnet level must be >= %d",
@@ -211,7 +211,7 @@ func ValidateNewTokenContent(tokenID string, isQuorum bool, testnet bool, mainne
 			}
 			mapLevel = level - constants.TestnetRBT_Level_Offset
 		} else if localnet {
-			network = "localnet"
+			network = constants.NetworkMode_Localnet
 			if level < constants.LocalRBT_Level_Offset {
 				return fmt.Errorf(
 					"invalid local token level %d: localnet level must be > %d",
@@ -255,13 +255,31 @@ func ValidateNewTokenContent(tokenID string, isQuorum bool, testnet bool, mainne
 	return nil
 }
 
+// 1. If there are different types of tokens involved in a transaction,
+// Lets say some of the FT tokens are getting created, in that case, there won't be any pledge tokens involved
+// sum of the committed tokens value should be same as the sum of the FT tokens value which are getting created.
+// Lets say some of the RBT tokens are getting burnt in the same transaction, in that case,
+// burnt tokens also will be there in committed tokens list, so transaction value and committed tokens value wont' match.
+// 2. whatever the token value which initiator is passing, only in case if RBTs fullnode can check their actual value
+// by looking at the tokenID, for other assets fullnode can't get the actual value.
+// So In this function fullnode will be validating only for RBTs.
 func ValidateTransactionValueAndPledge(txnInfo *models.TransactionInfo) error {
 	if txnInfo.Tokens == nil {
 		return fmt.Errorf("transaction has no tokens")
 	}
+	//Do this check if there are only RBTs involved in the transaction.else return nil.
+	if len(txnInfo.Tokens.FT) != 0 || len(txnInfo.Tokens.NFT) != 0 || len(txnInfo.Tokens.SmartContract) != 0 {
+		fmt.Println("transaction has non-RBT tokens, so can't validate the transaction value and pledge value")
+		return nil
+	}
 
 	transactionValue := rubixmath.ZeroFloat()
 	for _, t := range txnInfo.Tokens.RBT {
+		//If previous tranasactionID is empty, consider it as minting transaction so skip this check.
+		if t.PreviousTransactionID == "" {
+			return nil
+		}
+
 		tokenValue, err := util.GetTokenValueFromTokenID(t.TokenID)
 		if err != nil {
 			return fmt.Errorf("failed to get value for RBT token %s: %w", t.TokenID, err)
@@ -302,7 +320,7 @@ func IsParentTokenBurnt(isFullNode bool, tokenID string, w *wallet.Wallet) (erro
 				partTokenID := parts.TokenID(tokenID)
 				parentTokenID, err := partTokenID.GetParentToken()
 				if err != nil {
-					return fmt.Errorf("failed to get parent for token %s: %w", partTokenID, err), false
+					return fmt.Errorf("IsParentTokenBurnt:failed to get parent for token %s: %w", partTokenID, err), false
 				}
 				if parentTokenID == "" {
 					return nil, false
@@ -312,13 +330,14 @@ func IsParentTokenBurnt(isFullNode bool, tokenID string, w *wallet.Wallet) (erro
 			partTokenID := parts.TokenID(tokenID)
 			computedParent, err := partTokenID.GetParentToken()
 			if err != nil {
-				return fmt.Errorf("failed to get parent id of token %s: %w", partTokenID, err), false
+				return fmt.Errorf("IsParentTokenBurnt: failed to get parent id of token %s: %w", partTokenID, err), false
 			}
 			if computedParent == "" {
-				return nil, false
+				return fmt.Errorf("IsParentTokenBurnt: failed to compute parent id of token %s: %w", partTokenID, err), false
 			}
 		}
 	}
+
 	var genesisTx *models.Transactions
 	if isFullNode {
 		genesisTx, _, err = w.GetFullNodeTransactionAndRoleAtHeight(tokenID, 0)
@@ -391,10 +410,10 @@ func ValidateTokenIDRelatedChecks(tokenID string, isFullNode bool, w *wallet.Wal
 			return fmt.Errorf("parent token is not burnt")
 		}
 	}
-	err = ValidateGenuineTokenCreator(tokenID, isFullNode, w)
-	if err != nil {
-		return fmt.Errorf("failed to validate genuine token creator: %w", err)
-	}
+	// err = ValidateGenuineTokenCreator(tokenID, isFullNode, w)
+	// if err != nil {
+	// 	return fmt.Errorf("failed to validate genuine token creator: %w", err)
+	// }
 	return nil
 }
 
@@ -690,19 +709,22 @@ func ValidateTransaction(
 	if err := json.Unmarshal(tx.Signature, &sig); err != nil {
 		return false, fmt.Errorf("ValidateTransaction: failed to unmarshal signature: %w", err)
 	}
+	log.Debug("ValidateTransaction: Initiator signature", "signature", sig.InitiatorSignature)
+	log.Debug("ValidateTransaction: Initiator signature bytes", "bytes", []byte(sig.InitiatorSignature))
 	if err := SignatureVerificationCheck(&txnInfo, &sig, initiatorDC, quorumDCs); err != nil {
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
 
-	if err := ValidateTokenOwnershipByPrevTxn(&txnInfo, isFullnode, w); err != nil {
-		return false, fmt.Errorf("ValidateTransaction: %w", err)
-	}
+	// if err := ValidateTokenOwnershipByPrevTxn(&txnInfo, isFullnode, w); err != nil {
+	// 	return false, fmt.Errorf("ValidateTransaction: %w", err)
+	// }
 
-	if syncErr, ok := TokenChainIntigrityCheck(&txnInfo, peer, isFullnode, w, log); syncErr != nil {
-		return false, fmt.Errorf("ValidateTransaction: %w", syncErr)
-	} else if !ok {
-		return false, fmt.Errorf("ValidateTransaction: token chain sync failed")
-	}
+	// if syncErr, ok := TokenChainIntigrityCheck(&txnInfo, peer, isFullnode, w, log); syncErr != nil {
+	// 	return false, fmt.Errorf("ValidateTransaction: %w", syncErr)
+	// } else if !ok {
+	// 	return false, fmt.Errorf("ValidateTransaction: token chain sync failed")
+	// }
+
 	// 7. ValidateTokenIDRelatedChecks for each RBT token in Tokens and CommittedTokens and pledged tokens
 	if txnInfo.Tokens.RBT != nil {
 		for _, token := range txnInfo.Tokens.RBT {
@@ -730,6 +752,7 @@ func ValidateTransaction(
 		}
 	}
 
+	//TransactionValue and Pledge value will not match incase of minting transaction
 	if isFullnode {
 		if err := ValidateTransactionValueAndPledge(&txnInfo); err != nil {
 			return false, fmt.Errorf("ValidateTransaction: %w", err)

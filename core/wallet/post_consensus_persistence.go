@@ -141,7 +141,7 @@ func buildTransactionRecord(req *PostConsensusPersistenceRequest) (*models.Trans
 	if req.Transaction != nil {
 		record := *req.Transaction
 		if record.ID == "" || len(record.Info) == 0 || len(record.Signature) == 0 {
-			builtRecord, err := buildTransactionRecordFromPayload(req.TransactionInfo, req.Signature)
+			builtRecord, err := BuildTransactionRecordFromPayload(req.TransactionInfo, req.Signature)
 			if err != nil {
 				return nil, err
 			}
@@ -168,10 +168,10 @@ func buildTransactionRecord(req *PostConsensusPersistenceRequest) (*models.Trans
 		return &record, nil
 	}
 
-	return buildTransactionRecordFromPayload(req.TransactionInfo, req.Signature)
+	return BuildTransactionRecordFromPayload(req.TransactionInfo, req.Signature)
 }
 
-func buildTransactionRecordFromPayload(txInfo *models.TransactionInfo, signature *models.Signature) (*models.Transactions, error) {
+func BuildTransactionRecordFromPayload(txInfo *models.TransactionInfo, signature *models.Signature) (*models.Transactions, error) {
 	if txInfo == nil {
 		return nil, fmt.Errorf("post-consensus persistence: transaction info is required")
 	}

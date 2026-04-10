@@ -2,18 +2,17 @@ package wallet
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/constants"
+	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	tokenmap "github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
-	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 )
 
 // GenesisMintRecord groups the three tables' data for a single genesis token
@@ -419,7 +418,7 @@ func (w *Wallet) PersistGenesisTokenRecord(
 		Tokens: &models.TransactionTokens{
 			RBT: []*models.TokenInfo{
 				{
-					TokenID: tokenID, 
+					TokenID:               tokenID,
 					PreviousTransactionID: "",
 				},
 			},
@@ -431,11 +430,11 @@ func (w *Wallet) PersistGenesisTokenRecord(
 		return "", fmt.Errorf("generateTestTokens: failed to serialize transaction info: %w", err)
 	}
 
-	signatureBytes, err := dc.Sign(txInfoBytes)
+	initiatorSig, err := util.SignTransaction(dc, txInfo)
 	if err != nil {
 		return "", fmt.Errorf("generateTestTokens: failed to sign transaction: %w", err)
 	}
-	sigStruct := &models.Signature{InitiatorSignature: base64.StdEncoding.EncodeToString(signatureBytes)}
+	sigStruct := &models.Signature{InitiatorSignature: initiatorSig}
 
 	sigBytes, err := json.Marshal(sigStruct)
 	if err != nil {
@@ -550,11 +549,13 @@ func (w *Wallet) PersistGenesisTokenRecord(
 		return "", fmt.Errorf("PersistGenesisTokenRecord: upsert token_denom: %w", err)
 	}
 
-	if network != constants.NetworkMode_Localnet {
-		if _, err := util.PublishTransaction(ps, txInfo, sigStruct, true, ""); err != nil {
-			return "", err
-		}
+	// if network != constants.NetworkID_RBT_Local {
+	w.log.Debug("PersistGenesisTokenRecord: txInfo", txInfo)
+
+	if _, err := util.PublishTransaction(ps, txInfo, sigStruct, true, ""); err != nil {
+		return "", err
 	}
+	// }
 
 	return txID, tx.Commit(w.Ctx)
 }

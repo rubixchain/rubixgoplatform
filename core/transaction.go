@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/core/consensus"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	rubixsync "github.com/rubixchain/rubixgoplatform/core/sync"
@@ -15,7 +16,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
-	"github.com/rubixchain/rubixgoplatform/core/consensus"
 )
 
 func (c *Core) InitiateTransaction(reqID string, req *models.TransactionRequest) {
@@ -121,6 +121,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	// this will be a list of *ipfsport.Peer since we can have multiple quorums, we need to loop over them
 	p, err := c.getPeer(quorumAddresses[0])
 	if err != nil {
+		c.log.Debug("initiateTransaction: failed to get peer object", err)
 		resp.Message = err.Error()
 		return resp
 	}
@@ -200,12 +201,12 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 
 	if err != nil {
 		if _, err := util.PublishTransaction(
-			c.ps, 
-			transactionInfo, 
+			c.ps,
+			transactionInfo,
 			&models.Signature{
 				InitiatorSignature: initiatorSignature,
-			}, 
-			false, 
+			},
+			false,
 			err.Error(),
 		); err != nil {
 			c.log.Error("InitiateTransaction: Failed to publish transaction", "err", err)
@@ -217,12 +218,12 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 
 	if !consensusResponse.Status {
 		if _, err := util.PublishTransaction(
-			c.ps, 
-			transactionInfo, 
+			c.ps,
+			transactionInfo,
 			&models.Signature{
 				InitiatorSignature: initiatorSignature,
-			}, 
-			false, 
+			},
+			false,
 			consensusResponse.Message,
 		); err != nil {
 			c.log.Error("InitiateTransaction: Failed to publish transaction", "err", err)
@@ -270,7 +271,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		return resp
 	}
 	c.log.Info("InitiateTransaction: Quorum signature verified successfully", "quorumDID", quorumAddresses[0])
-	
+
 	// Persist post-consensus state to PostgreSQL.
 	// On success the selected tokens are marked Transferred; remaining locked tokens
 	// (candidates not chosen by CollectRBTTokens) are then released back to Free.

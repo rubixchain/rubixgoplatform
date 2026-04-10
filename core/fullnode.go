@@ -153,25 +153,23 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 	// All retries exhausted - handle failure
 	c.handleFailedTransaction(txnEvent, lastErr)
 }
-
-// Enhanced single transaction processing with better error handling
+//In this function, we will validate the transaction and store the details to the DB.
 func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error {
-	//1. unmarshal the transaction
-	//2. validate the transaction
-	//3. store the transaction
-
-	//1. unmarshal the transaction
-	txn := &models.Transactions{}
-	err := json.Unmarshal(newEvent.Transaction.Info, txn)
-	if err != nil {
-		c.log.Error("processSingleTransaction:failed to unmarshal transaction event", "error", err)
-		return fmt.Errorf("processSingleTransaction: failed to unmarshal transaction event: %w", err)
+	txn := newEvent.Transaction
+	if txn == nil {
+		return fmt.Errorf("processSingleTransaction: transaction payload is nil")
+	}
+	if txn.ID == "" {
+		return fmt.Errorf("processSingleTransaction: transaction id is empty")
+	}
+	if newEvent.TransactionID != "" && newEvent.TransactionID != txn.ID {
+		return fmt.Errorf("processSingleTransaction: event transaction_id %q does not match transaction.id %q", newEvent.TransactionID, txn.ID)
 	}
 
-	//2. validate the transaction
+	//validate the transaction
 	//First unMarshal the transaction info
 	transactionInfo := &models.TransactionInfo{}
-	err = json.Unmarshal(txn.Info, transactionInfo)
+	err := json.Unmarshal(txn.Info, transactionInfo)
 	if err != nil {
 		c.log.Error("processSingleTransaction:failed to unmarshal transaction info", "error", err)
 		return fmt.Errorf("processSingleTransaction: failed to unmarshal transaction info: %w", err)
@@ -214,7 +212,7 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 		return fmt.Errorf("processSingleTransaction: failed to validate transaction: %w", validationErr)
 	}
 
-	//3. store the transaction
+	//store the transaction
 	if err := c.w.PersistFullNodeTransaction(c.w.Ctx, &wallet.FullNodePersistenceRequest{
 		Transaction:     txn,
 		TransactionInfo: transactionInfo,
@@ -331,9 +329,10 @@ func (c *Core) processIncomingTransactionHistory(txns []model.FullNodeTxnHistory
 
 	c.log.Info("Stored transaction history batch", "count", len(txns))
 }
+
 func (c *Core) checkTokenStateHashPinned(tokenID string, previousTransactionID string) error {
 	if previousTransactionID == "" {
-		return nil
+		return nil 
 	}
 
 	tokenStateHash := tokenID + "." + previousTransactionID
@@ -342,7 +341,7 @@ func (c *Core) checkTokenStateHashPinned(tokenID string, previousTransactionID s
 	if err != nil {
 		return fmt.Errorf("failed to check pin status for %s: %w", tokenStateHash, err)
 	}
-	
+
 	if record != nil {
 		return fmt.Errorf("token %s is already pinned", tokenStateHash)
 	}
