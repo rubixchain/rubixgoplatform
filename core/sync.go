@@ -7,6 +7,7 @@ import (
 	"time"
 
 	rubixsync "github.com/rubixchain/rubixgoplatform/core/sync"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
@@ -239,6 +240,83 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transa
 		}
 	}
 
+	// Token-ensure: the tokenchain table has a deferred FK to tokens(token_id).
+	// If the token row does not exist, ApplyTokenChainBatch will fail at commit with SQLSTATE 23503.
+	// We derive TokenType from the first new transaction's txInfo.Tokens arrays and create
+	// the token row if it is absent.
+	var tokenForUpdate models.Token
+	var tokenEnsured bool
+	if _, getErr := c.w.GetTokenByTokenID(tokenID); getErr != nil {
+		// Token does not exist — must create it.
+		// Parse txInfo from the first new transaction to derive TokenType, owner DID, and role.
+		var firstTxInfo models.TransactionInfo
+		if unmarshalErr := json.Unmarshal(newTxs[0].tx.Info, &firstTxInfo); unmarshalErr != nil {
+			return fmt.Errorf("applyTokenChainFromSync: cannot parse first tx.Info for token ensure: %w", unmarshalErr)
+		}
+		var tokenType int16 = -1
+		var tokenValue float64
+		if firstTxInfo.Tokens != nil {
+			for _, t := range firstTxInfo.Tokens.RBT {
+				if t != nil && t.TokenID == tokenID {
+					tokenType = int16(models.GetTokenTypeID(constants.TokenType_RBT))
+					tokenValue = t.TokenValue
+					break
+				}
+			}
+			if tokenType < 0 {
+				for _, t := range firstTxInfo.Tokens.FT {
+					if t != nil && t.TokenID == tokenID {
+						tokenType = int16(models.GetTokenTypeID(constants.TokenType_FT))
+						tokenValue = t.TokenValue
+						break
+					}
+				}
+			}
+			if tokenType < 0 {
+				for _, t := range firstTxInfo.Tokens.NFT {
+					if t != nil && t.TokenID == tokenID {
+						tokenType = int16(models.GetTokenTypeID(constants.TokenType_NFT))
+						tokenValue = t.TokenValue
+						break
+					}
+				}
+			}
+			if tokenType < 0 {
+				for _, t := range firstTxInfo.Tokens.SmartContract {
+					if t != nil && t.TokenID == tokenID {
+						tokenType = int16(models.GetTokenTypeID(constants.TokenType_SmartContract))
+						tokenValue = t.TokenValue
+						break
+					}
+				}
+			}
+		}
+		if tokenType < 0 {
+			return fmt.Errorf("applyTokenChainFromSync: token %s not found in any token array in txInfo — cannot determine type", tokenID)
+		}
+		firstRole := rubixsync.FindTokenRoleInTxn(tokenID, &firstTxInfo)
+		newToken := models.Token{
+			TokenID:        tokenID,
+			DID:            firstTxInfo.Owner,
+			TransactionID:  newTxs[0].tx.ID,
+			TokenType:      tokenType,
+			TokenValue:     tokenValue,
+			TokenStatus:    constants.TokenStatus_Free,
+			LatestPosition: nextPosition,
+			LatestRole:     firstRole,
+		}
+		if createErr := c.w.CreateToken(&newToken); createErr != nil {
+			return fmt.Errorf("applyTokenChainFromSync: CreateToken for %s: %w", tokenID, createErr)
+		}
+		tokenForUpdate = newToken
+		tokenEnsured = true
+	}
+	if !tokenEnsured {
+		if existing, getErr := c.w.GetTokenByTokenID(tokenID); getErr == nil {
+			tokenForUpdate = existing
+		}
+	}
+
 	// Step 6: Build tokenchain entries and apply atomically via ApplyTokenChainBatch.
 	entries := make([]*models.TokenChain, 0, len(newTxs))
 	for i, e := range newTxs {
@@ -281,11 +359,21 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transa
 		return fmt.Errorf("applyTokenChainFromSync: ApplyTokenChainBatch: %w", err)
 	}
 
-	// NOTE: tokens table (DID, LatestPosition, LatestRole, TransactionID) is NOT updated here.
-	// This is intentional — PersistPostConsensus always runs after sync completes in SendTokens,
-	// and it updates the tokens table for the final transaction. Intermediate synced transactions
-	// would be overwritten by PersistPostConsensus anyway. Updating the tokens table here would
-	// be redundant and would add complexity without benefit.
+	// Update tokens table to reflect latest synced state.
+	// Always performed — even for pre-existing tokens — so that the tokens row accurately
+	// reflects the tail of the chain after sync, regardless of whether PersistPostConsensus runs.
+	var lastTxInfo models.TransactionInfo
+	_ = json.Unmarshal(newTxs[len(newTxs)-1].tx.Info, &lastTxInfo)
+
+	lastEntry := entries[len(entries)-1]
+	tokenForUpdate.DID = lastTxInfo.Owner
+	tokenForUpdate.TransactionID = newTxs[len(newTxs)-1].tx.ID
+	tokenForUpdate.LatestPosition = lastEntry.Position
+	tokenForUpdate.LatestRole = lastEntry.Role
+	tokenForUpdate.UpdatedAt = time.Now()
+	if updateErr := c.w.UpdateToken(tokenForUpdate); updateErr != nil {
+		return fmt.Errorf("applyTokenChainFromSync: UpdateToken for %s: %w", tokenID, updateErr)
+	}
 
 	c.log.Info("applyTokenChainFromSync: applied chain entries",
 		"tokenID", tokenID, "count", len(newTxs), "startPos", nextPosition)
