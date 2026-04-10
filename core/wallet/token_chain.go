@@ -340,6 +340,42 @@ func (w *Wallet) AddTokenChainEntry(entry *models.TokenChain) error {
 	return nil
 }
 
+// ApplyTokenChainBatch atomically inserts a batch of tokenchain entries for a
+// single token and rebuilds its tokenchain_index. All inserts happen inside a
+// single DB transaction — a partial crash rolls back every row, leaving the
+// chain consistent.
+//
+// Follows the PersistGenesisBatch pattern: BeginTx -> loop Exec -> batchUpsertTokenChainIndex -> Commit.
+func (w *Wallet) ApplyTokenChainBatch(ctx context.Context, tokenID string, entries []*models.TokenChain) error {
+	if len(entries) == 0 {
+		return nil
+	}
+
+	tx, err := w.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("ApplyTokenChainBatch: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	for i, entry := range entries {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO tokenchain (token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at)
+			 VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+			 ON CONFLICT (token_id, position) DO NOTHING`,
+			entry.TokenID, entry.TransactionID, entry.PreviousTransactionID, entry.Role, entry.Position,
+		); err != nil {
+			return fmt.Errorf("ApplyTokenChainBatch: entry[%d] txID=%s: %w", i, entry.TransactionID, err)
+		}
+	}
+
+	// Rebuild tokenchain_index for this token within the same transaction.
+	if err := w.batchUpsertTokenChainIndex(ctx, tx, []string{tokenID}); err != nil {
+		return fmt.Errorf("ApplyTokenChainBatch: upsert tokenchain_index: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}
+
 func (w *Wallet) GetTransactionAndRoleAtHeight(tokenID string, height int64) (*models.Transactions, int16, error) {
 	row := w.db.Pool().QueryRow(w.Ctx, `
 		SELECT transaction_id,role FROM tokenchain WHERE token_id = $1 AND position = $2
