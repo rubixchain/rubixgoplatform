@@ -35,7 +35,16 @@ func (s *Server) APIGetDIDChallenge(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSON(req, resp, http.StatusOK)
 }
 
-// APICreateDID will create new DID
+// CreateDID godoc
+// @Summary      Create DID
+// @Description  Creates a new DID with the provided public key, password, and mnemonic.
+// @Tags         DID
+// @Accept       json
+// @Produce      json
+// @Param        request  body      types.DIDCreate  true  "Create DID Request"
+// @Success      200      {object}  model.BasicResponse
+// @Failure      400      {object}  model.BasicResponse
+// @Router       /rubix/v1/dids/create [post]
 func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 	var didCreate types.DIDCreate
 	err := s.ParseJSON(req, &didCreate)
@@ -64,7 +73,15 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(req, true, "DID created successfully", didResp)
 }
 
-// APIGetAllDID will get all DID
+// GetAllDIDs godoc
+// @Summary      Get All DIDs
+// @Description  Retrieves a list of all DIDs.
+// @Tags         DID
+// @Accept       json
+// @Produce      json
+// @Success      200  {object}  model.BasicResponse
+// @Failure      500  {object}  model.BasicResponse
+// @Router       /rubix/v1/dids [get]
 func (s *Server) APIGetAllDID(req *ensweb.Request) *ensweb.Result {
 	ok := s.validateAccess(req)
 	if !ok {
@@ -106,6 +123,16 @@ func (s *Server) didResponse(req *ensweb.Request, reqID string) *ensweb.Result {
 	return s.RenderJSON(req, &model.BasicResponse{Status: false, Message: "Invalid response"}, http.StatusOK)
 }
 
+// RegisterDID godoc
+// @Summary      Register DID
+// @Description  Registers a DID on the network.
+// @Tags         DID
+// @Accept       json
+// @Produce      json
+// @Param        did  path      string  true  "DID to register (e.g. did:bafybmih2cqn6okxy2sepgp75jq5dkopuohnbd3pfrrylmqnrz43ttihkky)"
+// @Success      200  {object}  model.BasicResponse
+// @Failure      400  {object}  model.BasicResponse
+// @Router       /rubix/v1/dids/{did}/register [post]
 func (s *Server) APIRegisterDID(req *ensweb.Request) *ensweb.Result {
 	didStr := s.GetRouteVar(req, "did")
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(didStr)
@@ -171,7 +198,7 @@ func (s *Server) APISetupDID(req *ensweb.Request) *ensweb.Result {
 // @Param       input body model.ArbitrarySignRequest true "Arbitrary Signature Request"
 // @Success     200 {object} model.BasicResponse
 // @Failure     400 {object} model.BasicResponse
-// @Router      /api/sign [post]
+// @Router      /rubix/v1/signature/arbitrary [post]
 func (s *Server) APIArbitrarySignature(req *ensweb.Request) *ensweb.Result {
 	var signReq model.ArbitrarySignRequest
 	err := s.ParseJSON(req, &signReq)
@@ -197,7 +224,7 @@ func (s *Server) APIArbitrarySignature(req *ensweb.Request) *ensweb.Result {
 // @Param       signature  query string true "Signature to verify"
 // @Success     200 {object} model.BasicResponse
 // @Failure     400 {object} model.BasicResponse
-// @Router      /api/verify-signature [get]
+// @Router      /rubix/v1/signature/verify [get]
 func (s *Server) APISignVerification(req *ensweb.Request) *ensweb.Result {
 	var verificationReq model.SignVerificationRequest
 	verificationReq.SignerDID = s.GetQuery(req, "signer_did")
@@ -237,6 +264,16 @@ func (s *Server) APIRemoveStaleDID(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
+// GetDIDBalance godoc
+// @Summary      Get DID Balance
+// @Description  Retrieves the overall balance (RBT, FT, NFT) for a given DID.
+// @Tags         DID
+// @Accept       json
+// @Produce      json
+// @Param        did  path      string  true  "DID (e.g. did:bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)"
+// @Success      200  {object}  model.BasicResponse
+// @Failure      400  {object}  model.BasicResponse
+// @Router       /rubix/v1/dids/{did}/balances [get]
 func (s *Server) APIGetDIDBalance(req *ensweb.Request) *ensweb.Result {
 	did := s.GetRouteVar(req, "did")
 	if !s.validateDIDAccess(req, did) {
@@ -252,7 +289,7 @@ func (s *Server) APIGetDIDBalance(req *ensweb.Request) *ensweb.Result {
 		DID: did,
 	}
 	ac := model.BasicResponse{
-		Status:  true,
+		Status: true,
 	}
 	rbtInfo, err := s.c.GetRbtByDid(did)
 	if err != nil {
