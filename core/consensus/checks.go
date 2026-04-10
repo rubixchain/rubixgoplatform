@@ -234,7 +234,7 @@ func ValidateNewTokenContent(tokenID string, isQuorum bool, testnet bool, mainne
 				network, tokenNo, maxAllowed, level,
 			)
 		}
-		log.Debug("token content validated for "+network, tokenID)
+		//	log.Debug("token content validated for "+network, tokenID)
 	}
 
 	MaxPossiblePartTokenNumber := parts.MaxPossiblePartsIndexByMaxDecimalPlaces(uint(constants.MaxSupportedDecimalPlaces))
@@ -249,7 +249,7 @@ func ValidateNewTokenContent(tokenID string, isQuorum bool, testnet bool, mainne
 				partTokenNumber, MaxPossiblePartTokenNumber,
 			)
 		}
-		log.Debug("token content validated for the part token", tokenID)
+		//log.Debug("token content validated for the part token", tokenID)
 	}
 
 	return nil
