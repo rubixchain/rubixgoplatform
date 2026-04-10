@@ -1,10 +1,11 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 
+	rubixsync "github.com/rubixchain/rubixgoplatform/core/sync"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
@@ -59,9 +60,11 @@ func (c *Core) SyncTransactionChain(request *ensweb.Request) *ensweb.Result {
 }
 
 // SyncTransactionChainsFromPeer fetches transaction chains for the given token IDs
-// from the peer identified by peerDID, and inserts them into the local DB as-is.
-// Duplicate transactions are silently skipped.
-func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string) error {
+// from the peer identified by peerDID, validates and applies them locally.
+//
+// prevTxIDs maps tokenID -> PreviousTransactionID from the incoming sendTokensRequest.
+// When a token's prevTxID already exists in the local chain, sync is skipped for that token.
+func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, prevTxIDs map[string]string) error {
 	if len(tokenIDs) == 0 {
 		return nil
 	}
@@ -84,17 +87,190 @@ func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string) 
 	}
 
 	for tokenID, txs := range resp.Data {
-		for _, t := range txs {
-			tx := t
-			if err := c.w.CreateTransaction(&tx); err != nil {
-				if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "duplicate") {
-					// Already synced — skip silently
-					continue
-				}
-				c.log.Warn("SyncTransactionChainsFromPeer: insert failed", "tokenID", tokenID, "txID", tx.ID, "err", err)
+		prevTxID := prevTxIDs[tokenID] // empty string if not in map — applyTokenChainFromSync handles this
+		if err := c.applyTokenChainFromSync(tokenID, txs, prevTxID); err != nil {
+			c.log.Warn("SyncTransactionChainsFromPeer: apply failed (non-fatal)", "tokenID", tokenID, "err", err)
+			// Continue with remaining tokens — sync failures are best-effort.
+		}
+	}
+
+	return nil
+}
+
+// applyTokenChainFromSync validates and applies synced transactions for a single token.
+// It enforces: canonical order validation -> local prefix match -> hole filling -> atomic batch insert.
+//
+// Parameters:
+//   - tokenID: the token whose chain is being synced
+//   - remoteTxs: ordered transaction list from the peer (by position)
+//   - prevTxID: the PreviousTransactionID from sendTokensRequest.TransactionInfo.Tokens
+//     for this token — used to short-circuit sync when the local chain already has it
+//
+// Errors are returned but are non-fatal — callers log and continue.
+func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transactions, prevTxID string) error {
+	if len(remoteTxs) == 0 {
+		return nil
+	}
+
+	// Step 1: Get local tokenchain (ordered by position ASC) to determine what we already have.
+	localChain, err := c.w.GetTokenChainByTokenID(tokenID)
+	if err != nil {
+		// No local chain at all — treat as empty (receiver never held this token).
+		localChain = nil
+	}
+
+	// Step 1a: PrevTxID short-circuit — if the sender's previous transaction ID for this
+	// token already exists in our local chain, we already have the full history up to
+	// the current transaction. No sync needed.
+	if prevTxID != "" && len(localChain) > 0 {
+		for _, lc := range localChain {
+			if lc.TransactionID == prevTxID {
+				c.log.Debug("applyTokenChainFromSync: prevTxID already in local chain, skipping sync",
+					"tokenID", tokenID, "prevTxID", prevTxID)
+				return nil
 			}
 		}
 	}
 
+	// Step 2: Canonical order validation — verify that the incoming chain has valid
+	// PreviousTransactionID linkage. Each entry's PreviousTransactionID must match
+	// the preceding entry's transaction ID.
+	// We extract PreviousTransactionID per token from the TransactionInfo embedded in tx.Info.
+	type txWithPrev struct {
+		tx     models.Transactions
+		prevID string // PreviousTransactionID for this token within this transaction
+	}
+	enriched := make([]txWithPrev, 0, len(remoteTxs))
+	for _, tx := range remoteTxs {
+		var txInfo models.TransactionInfo
+		var prev string
+		if err := json.Unmarshal(tx.Info, &txInfo); err == nil {
+			if txInfo.Tokens != nil {
+				for _, t := range txInfo.Tokens.RBT {
+					if t != nil && t.TokenID == tokenID {
+						prev = t.PreviousTransactionID
+						break
+					}
+				}
+				if prev == "" {
+					for _, t := range txInfo.Tokens.FT {
+						if t != nil && t.TokenID == tokenID {
+							prev = t.PreviousTransactionID
+							break
+						}
+					}
+				}
+				if prev == "" {
+					for _, t := range txInfo.Tokens.NFT {
+						if t != nil && t.TokenID == tokenID {
+							prev = t.PreviousTransactionID
+							break
+						}
+					}
+				}
+			}
+		}
+		enriched = append(enriched, txWithPrev{tx: tx, prevID: prev})
+	}
+
+	// Validate canonical linkage: for i > 0, enriched[i].prevID must equal enriched[i-1].tx.ID.
+	for i := 1; i < len(enriched); i++ {
+		if enriched[i].prevID != "" && enriched[i].prevID != enriched[i-1].tx.ID {
+			c.log.Error("applyTokenChainFromSync: canonical order violation — incoming chain has broken PreviousTransactionID linkage",
+				"tokenID", tokenID,
+				"position", i,
+				"txID", enriched[i].tx.ID,
+				"expectedPrevTxID", enriched[i-1].tx.ID,
+				"actualPrevTxID", enriched[i].prevID,
+			)
+			return fmt.Errorf("applyTokenChainFromSync: canonical order violation at position %d for token %s: prevTxID %s != expected %s",
+				i, tokenID, enriched[i].prevID, enriched[i-1].tx.ID)
+		}
+	}
+
+	// Step 3: Local prefix match — verify that our local chain is a prefix of the incoming chain.
+	// If there is a mismatch, we have a FORK — log ERROR and reject.
+	for i := 0; i < len(localChain) && i < len(remoteTxs); i++ {
+		if localChain[i].TransactionID != remoteTxs[i].ID {
+			c.log.Error("applyTokenChainFromSync: FORK DETECTED — local chain diverges from remote chain",
+				"tokenID", tokenID,
+				"position", i,
+				"localTxID", localChain[i].TransactionID,
+				"remoteTxID", remoteTxs[i].ID,
+			)
+			return fmt.Errorf("applyTokenChainFromSync: fork detected for token %s at position %d: local=%s remote=%s",
+				tokenID, i, localChain[i].TransactionID, remoteTxs[i].ID)
+		}
+	}
+
+	// Step 4: Hole filling — only the entries after our local prefix are new.
+	newTxs := enriched[len(localChain):]
+	if len(newTxs) == 0 {
+		return nil // Already fully synced for this token.
+	}
+
+	// Determine the starting position for new entries.
+	var nextPosition int64
+	if len(localChain) > 0 {
+		nextPosition = localChain[len(localChain)-1].Position + 1
+	}
+
+	// Step 5: Insert transaction rows (idempotent, outside the tokenchain batch tx).
+	for _, e := range newTxs {
+		if err := c.w.CreateTransactionIfNotExists(&e.tx); err != nil {
+			return fmt.Errorf("applyTokenChainFromSync: insert tx %s: %w", e.tx.ID, err)
+		}
+	}
+
+	// Step 6: Build tokenchain entries and apply atomically via ApplyTokenChainBatch.
+	entries := make([]*models.TokenChain, 0, len(newTxs))
+	for i, e := range newTxs {
+		// Derive role from transaction info.
+		var txInfo models.TransactionInfo
+		var role int16
+		if err := json.Unmarshal(e.tx.Info, &txInfo); err != nil {
+			c.log.Warn("applyTokenChainFromSync: cannot parse tx.Info, defaulting role to 0",
+				"txID", e.tx.ID, "err", err)
+			role = 0
+		} else {
+			role = rubixsync.FindTokenRoleInTxn(tokenID, &txInfo)
+		}
+
+		// Determine previous transaction ID for the tokenchain entry.
+		var prevTxIDPtr *string
+		if i == 0 {
+			if len(localChain) > 0 {
+				tailTxID := localChain[len(localChain)-1].TransactionID
+				prevTxIDPtr = &tailTxID
+			}
+			// else nil — genesis or first appearance of this token locally
+		} else {
+			prevID := newTxs[i-1].tx.ID
+			prevTxIDPtr = &prevID
+		}
+
+		entries = append(entries, &models.TokenChain{
+			TokenID:               tokenID,
+			TransactionID:         e.tx.ID,
+			PreviousTransactionID: prevTxIDPtr,
+			Role:                  role,
+			Position:              nextPosition + int64(i),
+		})
+	}
+
+	// Atomic batch insert — all tokenchain rows + index rebuild in one DB transaction.
+	// A crash mid-loop rolls back everything, leaving the chain consistent.
+	if err := c.w.ApplyTokenChainBatch(c.Ctx, tokenID, entries); err != nil {
+		return fmt.Errorf("applyTokenChainFromSync: ApplyTokenChainBatch: %w", err)
+	}
+
+	// NOTE: tokens table (DID, LatestPosition, LatestRole, TransactionID) is NOT updated here.
+	// This is intentional — PersistPostConsensus always runs after sync completes in SendTokens,
+	// and it updates the tokens table for the final transaction. Intermediate synced transactions
+	// would be overwritten by PersistPostConsensus anyway. Updating the tokens table here would
+	// be redundant and would add complexity without benefit.
+
+	c.log.Info("applyTokenChainFromSync: applied chain entries",
+		"tokenID", tokenID, "count", len(newTxs), "startPos", nextPosition)
 	return nil
 }
