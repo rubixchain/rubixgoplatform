@@ -138,8 +138,12 @@ func (c *Core) createFTs(reqID string, req types.CreateFTReq) error {
 		})
 	}
 
-	// release all rbts before exiting
-	defer c.w.ReleaseTokens(lockedRBTs)
+	// release all rbts before exiting with error
+	defer func() {
+        if err != nil {
+            c.w.ReleaseTokens(lockedRBTs)
+        }
+    }()
 
 	// calculate value of each FT
 	ftValue, err := c.GetPreciseFractionalValue(req.TokenCount, req.FTCount)
