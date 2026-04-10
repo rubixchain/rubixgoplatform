@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/rubixchain/rubixgoplatform/core/parts"
@@ -34,7 +35,7 @@ func ReqPledgeToken(
 		return models.PledgeTokenResponse{}, fmt.Errorf("ReqPledgeToken: failed to fetch token denom array: %w", err)
 	}
 
-	pledgeTokenDetails, _, _, _, err := parts.CollectRBTTokens(
+	pledgeTokenDetails, childTokensKept, burntParentToken, mintTokensBeingBurnt, err := parts.CollectRBTTokens(
 		dc,
 		w,
 		transactionValue,
@@ -43,11 +44,34 @@ func ReqPledgeToken(
 		networkMode,
 		log,
 	)
-	// TODO(phase09): handle childRecords and parentsToBurn for pledge path
-
 	if err != nil {
 		log.Error("Failed to get tokens", "err", err)
 		return models.PledgeTokenResponse{}, err
+	}
+
+	if len(childTokensKept) > 0 && len(burntParentToken) > 0 {
+		genTX := childTokensKept[0].TxRecord
+		if errPersist := w.PersistPreConsensus(&wallet.PersistGenesisTransactionReq{
+			DID:                  dc.GetDID(),
+			GenesisTokens:        childTokensKept,
+			BurnTokens:           burntParentToken,
+			GenesisTransaction:   genTX,
+			MintTokensBeingBurnt: mintTokensBeingBurnt,
+		}); errPersist != nil {
+			return models.PledgeTokenResponse{}, fmt.Errorf("BuildTransactionInfoFromRequest: failed to persist genesis transaction, err: %v", errPersist)
+		}
+
+		var txInfo *models.TransactionInfo
+		if err := json.Unmarshal(genTX.Info, txInfo); err != nil {
+			return models.PledgeTokenResponse{}, fmt.Errorf("err")
+		}
+
+		var txSingature *models.Signature
+		if err := json.Unmarshal(genTX.Signature, txSingature); err != nil {
+			return models.PledgeTokenResponse{}, fmt.Errorf("err")
+		}
+
+		util.PublishTransaction(pubsub, txInfo, txSingature, true, "")
 	}
 
 	if len(pledgeTokenDetails) == 0 {

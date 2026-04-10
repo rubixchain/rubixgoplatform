@@ -38,9 +38,10 @@ func CollectRBTTokens(
 	tokensForTransfer []*models.TokenInfo,
 	childRecords []wallet.GenesisMintRecord,
 	parentsToBurn []string,
-	remainingDenomMap map[types.DenomValue]types.DenomCount,
+	mintedTokensBeingBurnt []string,
 	err error,
 ) {
+	mintedTokensBeingBurnt = make([]string, 0)
 	var splitOps []SplitOp = make([]SplitOp, 0)
 	tokensForTransfer = make([]*models.TokenInfo, 0)
 	childRecords = make([]wallet.GenesisMintRecord, 0)
@@ -75,7 +76,6 @@ func CollectRBTTokens(
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("CollectRBTTokens: error occured while looking to fetch non-split token denom array for transfer, err: %v", err)
 	}
-	remainingDenomMap = remainingBalanceDenomArr
 
 	if len(nonSplitDenomArr) != 0 {
 		// In-memory filter: select tokens from ownedRBTTokens whose TokenValue matches
@@ -138,13 +138,18 @@ func CollectRBTTokens(
 			return nil, nil, nil, nil, fmt.Errorf("CollectRBTTokens: could not satisfy transfer amount, remaining: %v", remainingAmount)
 		}
 
-		tokenCache := make(map[string]models.Token)
+		// tokenCache := make(map[string]models.Token)
 
 		// Execute split operations. performTokenSplit now returns childMintRecords
 		// (partial — TransactionID not set yet) and no longer persists to DB.
 		for _, splitOp := range splitOps {
+			parentTokenRecordExists :=  w.IsRBTExists(splitOp.TokenID.String())
+			if !parentTokenRecordExists {
+				mintedTokensBeingBurnt = append(mintedTokensBeingBurnt, splitOp.TokenID.String())
+			}
+
 			partTokensToTransfer, tokensToKeep, tokensBeingBurnt, splitMintRecords, err := performTokenSplit(
-				w, dc, splitOp, tokenCache, remainingBalanceDenomArr, network,
+				w, dc, splitOp, remainingBalanceDenomArr, network,
 			)
 			if err != nil {
 				return nil, nil, nil, nil, fmt.Errorf("CollectRBTTokens: could not perform split at token: %v, err: %v", splitOp.TokenID, err)
@@ -210,7 +215,7 @@ func CollectRBTTokens(
 		childRecords[i].Token.TransactionID = txID
 	}
 
-	return tokensForTransfer, childRecords, parentsToBurn, remainingDenomMap, nil
+	return tokensForTransfer, childRecords, parentsToBurn, mintedTokensBeingBurnt, nil
 }
 
 // MaxPossiblePartsIndexByMaxDecimalPlaces returns the max possible parts index by the max decimal places.

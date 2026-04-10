@@ -15,7 +15,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
-func planTokenSplit(tokenID TokenID, needed float64, log logger.Logger) ([]SplitOp, error) {
+func planTokenSplit(tokenID util.TokenID, needed float64, log logger.Logger) ([]SplitOp, error) {
 	var splits []SplitOp
 
 	currentTokenID := tokenID
@@ -26,13 +26,13 @@ func planTokenSplit(tokenID TokenID, needed float64, log logger.Logger) ([]Split
 		return nil, fmt.Errorf("planSplit: invalid token id: %v, err: %v", string(tokenID), err)
 	}
 
-	var currentLevel int
-
 	for currentNeeded > zeroFloat {
-		currentLevel = currentTokenElems.Level
-
+		currentLevel, err := util.GetTreeLevelFromPartIndex(currentTokenElems.PartIndex)
+		if err != nil {
+			return nil, fmt.Errorf("planTokenSplit: unable to fetch tree level from token index, err: %v", err)
+		}
 		if currentLevel >= GetMaxDenomTreeLevel()-1 {
-			return nil, fmt.Errorf("planSplit: invalid level for token: %v, got level: %v", string(tokenID), currentLevel)
+			return nil, fmt.Errorf("planTokenSplit: invalid level for token: %v, got level: %v", string(tokenID), currentLevel)
 		}
 
 		childLevel := currentLevel + 1
@@ -103,7 +103,7 @@ func planTokenSplit(tokenID TokenID, needed float64, log logger.Logger) ([]Split
 // stubs for the child tokens (TransactionID is NOT set yet — the caller sets it after
 // computing the genesis txID from createGenesisTransaction).
 func performTokenSplit(w *wallet.Wallet, dc types.DIDCrypto,
-	splitOp SplitOp, tokenCache map[string]models.Token,
+	splitOp SplitOp,
 	tokenDenomArr map[types.DenomValue]types.DenomCount,
 	network string,
 ) (freeTokens []models.Token, keepTokens []models.Token, burnTokens []models.Token,
@@ -113,22 +113,45 @@ func performTokenSplit(w *wallet.Wallet, dc types.DIDCrypto,
 	burnTokens = make([]models.Token, 0)
 	childMintRecords = make([]wallet.GenesisMintRecord, 0)
 
-	var parentToken models.Token
-	parentTokenID := string(splitOp.TokenID)
 
-	if cachedToken, exists := tokenCache[parentTokenID]; exists {
-		parentToken = cachedToken
+	var parentTokenIDInfo string
+	parentTokenValue, _ := util.GetTokenValueFromTokenID(splitOp.TokenID.String())
+	if parentTokenValue == rubixmath.OneFloat() {
+		parentTokenIDInfo = ""
 	} else {
-		var fetchErr error
-		parentToken, fetchErr = w.GetTokenByTokenID(parentTokenID)
-		if fetchErr != nil {
-			return nil, nil, nil, nil, fmt.Errorf("performTokenSplit: unable to get parent token: %v, err: %v", parentTokenID, fetchErr)
-		}
-
-		if lockErr := w.LockToken(parentToken); lockErr != nil {
-			return nil, nil, nil, nil, fmt.Errorf("performTokenSplit: unable to lock parent token: %v, err: %v", parentToken.TokenID, lockErr)
+		var errParentToken error
+		parentTokenIDInfo, errParentToken = splitOp.TokenID.GetParentToken()
+		if errParentToken != nil {
+			return nil, nil, nil, nil, fmt.Errorf("failed to get parent token id for %v, err: %v", splitOp.TokenID, errParentToken)
 		}
 	}
+
+	var parentToken models.Token = models.Token{
+		TokenID: splitOp.TokenID.String(),
+		ParentTokenID: pgtype.Text{
+			String: parentTokenIDInfo,
+			Valid: true,
+		},
+		TokenValue: parentTokenValue,
+		TokenStatus: constants.TokenStatus_Burnt,
+		DID: dc.GetDID(),
+		TransactionID: "",
+	}
+	parentTokenID := string(splitOp.TokenID)
+
+	// if cachedToken, exists := tokenCache[parentTokenID]; exists {
+	// 	parentToken = cachedToken
+	// } else {
+	// 	var fetchErr error
+	// 	parentToken, fetchErr = w.GetTokenByTokenID(parentTokenID)
+	// 	if fetchErr != nil {
+	// 		return nil, nil, nil, nil, fmt.Errorf("performTokenSplit: unable to get parent token: %v, err: %v", parentTokenID, fetchErr)
+	// 	}
+
+	// 	if lockErr := w.LockToken(parentToken); lockErr != nil {
+	// 		return nil, nil, nil, nil, fmt.Errorf("performTokenSplit: unable to lock parent token: %v, err: %v", parentToken.TokenID, lockErr)
+	// 	}
+	// }
 
 	// Derive child level from parent token's part index.
 	parentElems, err := util.GetRbtIDElements(parentTokenID)
@@ -159,6 +182,9 @@ func performTokenSplit(w *wallet.Wallet, dc types.DIDCrypto,
 			return nil, nil, nil, nil, fmt.Errorf("performTokenSplit: unexpected error: unable to fetch token at index: %v for parent token: %v", transferIdx, parentTokenID)
 		}
 		freeTokens = append(freeTokens, childTokenToTransfer)
+		// Token is being created for the first time and should
+		// be part of the genesis transaction
+		keepTokens = append(keepTokens, childTokenToTransfer)
 		// Build a partial GenesisMintRecord; TxRecord and TokenChain.TransactionID will be
 		// filled in by the caller once the genesis txID is computed.
 		childMintRecords = append(childMintRecords, wallet.GenesisMintRecord{
@@ -236,7 +262,7 @@ func burnParentToken(dc types.DIDCrypto, w *wallet.Wallet, parentTokenID string,
 	return nil
 }
 
-func createChildTokensAtLevel(dc types.DIDCrypto, w *wallet.Wallet, parentTokenID TokenID,
+func createChildTokensAtLevel(dc types.DIDCrypto, w *wallet.Wallet, parentTokenID util.TokenID,
 	level int, tokenDenomArr map[types.DenomValue]types.DenomCount,
 ) (map[int]models.Token, error) {
 	var childTokenIndexMap map[int]models.Token = make(map[int]models.Token)
@@ -256,8 +282,15 @@ func createChildTokensAtLevel(dc types.DIDCrypto, w *wallet.Wallet, parentTokenI
 		return nil, fmt.Errorf("createChildTokensAtLevel: failed to fetch the children index range for parent: %v, err: %v", parentTokenID, err)
 	}
 
+	// Get parent token ID elements:
+	parentTokenIDElements, err := util.GetRbtIDElements(parentTokenID.String())
+	if err != nil {
+		return nil, fmt.Errorf("createChildTokensAtLevel: failed to parent token elements for id: %v, err: %v", parentTokenID.String(), err)
+	}
+	parentTokenIDNormalised := fmt.Sprintf("%d_%d", parentTokenIDElements.TokenLevel, parentTokenIDElements.TokenNumber)
+
 	for index := childrenIndexRange.First; index <= childrenIndexRange.Last; index++ {
-		childTokenID := fmt.Sprintf("%s_%d", parentTokenID, index)
+		childTokenID := fmt.Sprintf("%s_%d", parentTokenIDNormalised, index)
 
 		childTokenIDBuffer := bytes.NewBufferString(childTokenID)
 		childTokenHash, err := w.Add(childTokenIDBuffer, did, constants.TokenProviderFunc_Add, true)

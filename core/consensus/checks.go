@@ -299,7 +299,7 @@ func IsParentTokenBurnt(isFullNode bool, tokenID string, w *wallet.Wallet) (erro
 		tokenDetails, err = w.GetFullNodeRBTToken(tokenID)
 		if err == nil {
 			if !tokenDetails.ParentTokenID.Valid || tokenDetails.ParentTokenID.String == "" {
-				partTokenID := parts.TokenID(tokenID)
+				partTokenID := util.TokenID(tokenID)
 				parentTokenID, err := partTokenID.GetParentToken()
 				if err != nil {
 					return fmt.Errorf("failed to get parent for token %s: %w", partTokenID, err), false
@@ -309,7 +309,7 @@ func IsParentTokenBurnt(isFullNode bool, tokenID string, w *wallet.Wallet) (erro
 				}
 			}
 		} else {
-			partTokenID := parts.TokenID(tokenID)
+			partTokenID := util.TokenID(tokenID)
 			computedParent, err := partTokenID.GetParentToken()
 			if err != nil {
 				return fmt.Errorf("failed to get parent id of token %s: %w", partTokenID, err), false

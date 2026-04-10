@@ -5,7 +5,7 @@ type DenomCount = int64
 
 // RbtIDElements represents a node as <level>_<tokenNumber>_<partIndex>.
 type RbtIDElements struct {
-	Level       int
+	TokenLevel  int
 	TokenNumber int
 	PartIndex   int
 }
