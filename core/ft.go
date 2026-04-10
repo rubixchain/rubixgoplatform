@@ -50,7 +50,7 @@ func (c *Core) CreateFTs(reqID string, createFTRequest types.CreateFTReq) {
 	channel.OutChan <- &br
 }
 
-func (c *Core) createFTs(reqID string, req types.CreateFTReq) error {
+func (c *Core) createFTs(reqID string, req types.CreateFTReq) (err error) {
 	// validate DID inout
 	if req.DID == "" {
 		c.log.Error("DID is empty")
@@ -151,10 +151,8 @@ func (c *Core) createFTs(reqID string, req types.CreateFTReq) error {
 		c.log.Error("core: Failed to calculate FT token value", err)
 		return err
 	}
-	c.log.Debug("***** ft value ", ftValue)
 
 	batchSizePerRBT := int(float64(1) / ftValue)
-	c.log.Debug("******* batch size ", batchSizePerRBT)
 	if batchSizePerRBT > int(math.Pow10(constants.MaxSupportedDecimalPlaces)) {
 		return fmt.Errorf("core: per RBT division is: %d, required: <= %d", batchSizePerRBT, int(math.Pow10(constants.MaxSupportedDecimalPlaces)))
 	}

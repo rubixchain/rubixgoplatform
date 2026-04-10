@@ -586,7 +586,6 @@ func (w *Wallet) FTGenesisTxn(tx pgx.Tx,
 			TokenValue:            ftValue,
 			// DID:                   did,
 		})
-		w.log.Debug("******* new FT id ", ftId)
 	}
 
 	// prepare transaction info
@@ -639,7 +638,6 @@ func (w *Wallet) FTGenesisTxn(tx pgx.Tx,
 
 	// Build FT Record
 	for _, token := range txTokensInfo {
-		w.log.Debug("******** initiating db operations for ", token.TokenID, "token value ", token.TokenValue, "did ", did, "prev txn id ", token.PreviousTransactionID)
 		err := w.InsertGenesisTokenInfo(tx, token, did, txnID, constants.TokenType_FT, constants.TokenRole_Mint)
 		if err != nil {
 			return "", fmt.Errorf("FTGenesisTxn: failed to update FT info in DB: %w", err)
@@ -710,10 +708,10 @@ func (w *Wallet) InsertGenesisTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, 
 
 	// Build Token chain entry
 	tokenChainEntry := &models.TokenChain{
-		TokenID:               tokenInfo.TokenID,
-		TransactionID:         txID,
-		Role:                  tokenRoleID,
-		Position:              0,
+		TokenID:       tokenInfo.TokenID,
+		TransactionID: txID,
+		Role:          tokenRoleID,
+		Position:      0,
 	}
 
 	if _, err = tx.Exec(w.Ctx,
@@ -780,7 +778,7 @@ func (w *Wallet) UpdateTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, did, tx
 		LatestPosition: newTokenChainHeight,
 		LatestRole:     tokenRoleID,
 	}
-
+	
 	cmdTagToken, err := tx.Exec(w.Ctx,
 		`UPDATE tokens SET
             token_status    = $1,
@@ -791,7 +789,7 @@ func (w *Wallet) UpdateTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, did, tx
             updated_at      = NOW()
          WHERE token_id = $6`,
 		token.TokenStatus, token.DID, token.TransactionID,
-		token.LatestPosition, token.LatestRole, token.TokenID, 
+		token.LatestPosition, token.LatestRole, token.TokenID,
 	)
 	if err != nil {
 		return fmt.Errorf("UpdateTokenInDB: update token: %w", err)
@@ -827,14 +825,14 @@ func (w *Wallet) UpdateTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, did, tx
 		return fmt.Errorf("UpdateTokenInDB: query tokenchain: %w", err)
 	}
 	if _, err = tx.Exec(w.Ctx,
-        `UPDATE tokenchain_index SET
+		`UPDATE tokenchain_index SET
             index      = $1,
             updated_at = NOW()
          WHERE token_id = $2`,
-        index, tokenChainEntry.TokenID,
-    ); err != nil {
-        return fmt.Errorf("UpdateTokenInfo: update tokenchain_index: %w", err)
-    }
+		index, tokenChainEntry.TokenID,
+	); err != nil {
+		return fmt.Errorf("UpdateTokenInfo: update tokenchain_index: %w", err)
+	}
 
 	// TODO : update execution_role as per token role or token status
 	// Insert transaction_units record for the genesis initiator.

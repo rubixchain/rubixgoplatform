@@ -494,7 +494,7 @@ func (c *Core) removeStaleDIDFromNetwork(reqID, staleDID string) (model.BasicRes
 		accInfo.PledgedRBT == 0 {
 
 		// DID has no tokens, safe to delete
-		c.log.Debug("*******did has no balance, safe to delete")
+		c.log.Debug("did has no balance, safe to delete", staleDID)
 	} else {
 		errMsg := fmt.Sprintf(
 			"cannot remove DID: %v, holds RBT [%f free, %f locked, %f pledged]",
