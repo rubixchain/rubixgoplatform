@@ -441,6 +441,7 @@ func (c *Core) sendTokensToReceiver(
 // Can be refactored in the future
 func (c *Core) TransactionSetup() {
 	c.l.AddRoute(APISendTokens, "POST", c.SendTokens)
+	c.l.AddRoute(APISyncTransactionChain, "POST", c.SyncTransactionChain)
 }
 
 // This function has been added here since the other corresponding sync functions has not been added yet.
