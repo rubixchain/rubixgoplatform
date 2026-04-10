@@ -1,7 +1,6 @@
 package wallet
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -24,14 +23,15 @@ const (
 )
 
 type PostConsensusPersistenceRequest struct {
-	Transaction     *models.Transactions
-	TransactionInfo *models.TransactionInfo
-	Signature       *models.Signature
-	DID             string
-	ExecutionRole   string
-	AffectedTokens  []string
-	TokenChainRows  []models.TokenChain
-	TokenStates     []models.Token
+	Transaction               *models.Transactions
+	TransactionInfo           *models.TransactionInfo
+	Signature                 *models.Signature
+	DID                       string
+	ExecutionRole             string
+	AffectedTokens            []string
+	TokenChainRows            []models.TokenChain
+	TokenStates               []models.Token
+	SkipSignatureVerification bool
 }
 
 type PostConsensusPersistenceCoordinator struct {
@@ -84,7 +84,7 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 	}
 	// Signature verification — must run BEFORE BeginTx so an invalid request
 	// never enters a transaction. Requires w.didDir set via SetDidDir().
-	if pc.wallet.didDir != "" {
+	if pc.wallet.didDir != "" && !req.SkipSignatureVerification {
 		var sig models.Signature
 		if err := json.Unmarshal(txRecord.Signature, &sig); err != nil {
 			return fmt.Errorf("transfer: invalid signature format")
@@ -121,6 +121,9 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 		return err
 	}
 	if err := pc.upsertTokenStates(ctx, tx, req.TokenStates); err != nil {
+		return err
+	}
+	if err := pc.upsertTokenDenomDeltas(ctx, tx, req.DID, req.TokenStates, req.ExecutionRole); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -379,8 +382,23 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 			return fmt.Errorf("transfer: token %q not owned by %s", row.TokenID, req.DID)
 		}
 
-		if dbStatus != int16(constants.TokenStatus_Free) {
-			return fmt.Errorf("transfer: token %q is not FREE, status=%d", row.TokenID, dbStatus)
+		// Initiator/Quorum: token must be Free or Locked (Locked by LockTokensForSplit before consensus).
+		// Receiver: token must be Free, Locked, or Transferred. Transferred covers the case where
+		// this token was previously sent out by this node and is now returning. Terminal and error
+		// states (Burnt, Orphaned, ChainSyncIssue, BeingDoubleSpent) are explicitly rejected.
+		if req.ExecutionRole != ExecutionRoleReceiver {
+			// Initiator/Quorum: token must be Free or Locked (Locked by LockTokensForSplit before consensus).
+			if dbStatus != int16(constants.TokenStatus_Free) && dbStatus != int16(constants.TokenStatus_Locked) {
+				return fmt.Errorf("transfer: token %q is not FREE or LOCKED (status=%d), cannot persist", row.TokenID, dbStatus)
+			}
+		} else {
+			// Receiver: also permit Transferred — token was sent out and is now returning to this node.
+			// Terminal and error states (Burnt, Orphaned, ChainSyncIssue, BeingDoubleSpent) are rejected.
+			if dbStatus != int16(constants.TokenStatus_Free) &&
+				dbStatus != int16(constants.TokenStatus_Locked) &&
+				dbStatus != int16(constants.TokenStatus_Transferred) {
+				return fmt.Errorf("transfer: token %q has unexpected status %d for receiver (want Free, Locked, or Transferred)", row.TokenID, dbStatus)
+			}
 		}
 
 		if row.PreviousTransactionID != nil && *row.PreviousTransactionID != dbTransactionID {
@@ -396,30 +414,21 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 }
 
 func (pc *PostConsensusPersistenceCoordinator) insertTransaction(ctx context.Context, tx pgx.Tx, record *models.Transactions) error {
-	cmdTag, err := tx.Exec(ctx, `
+	// PersistPostConsensus carries the full canonical signature (all quorum
+	// entries assembled by the initiator). PledgeV2 may have already inserted
+	// a transactions row with a partial signature (single quorum entry) on the
+	// same node. Using DO UPDATE SET ensures this function always writes the
+	// authoritative payload, silently upgrading any partial row from PledgeV2.
+	if _, err := tx.Exec(ctx, `
 		INSERT INTO transactions (id, info, signature, created_at, updated_at)
 		VALUES ($1, $2, $3, NOW(), NOW())
-		ON CONFLICT (id) DO NOTHING
-	`, record.ID, record.Info, record.Signature)
-	if err != nil {
+		ON CONFLICT (id) DO UPDATE SET
+			info = EXCLUDED.info,
+			signature = EXCLUDED.signature,
+			updated_at = NOW()
+	`, record.ID, record.Info, record.Signature); err != nil {
 		return fmt.Errorf("post-consensus persistence: insert transaction: %w", err)
 	}
-	if cmdTag.RowsAffected() > 0 {
-		return nil
-	}
-
-	var existingInfo []byte
-	var existingSignature []byte
-	if err := tx.QueryRow(ctx,
-		`SELECT info, signature FROM transactions WHERE id = $1`,
-		record.ID,
-	).Scan(&existingInfo, &existingSignature); err != nil {
-		return fmt.Errorf("post-consensus persistence: read existing transaction: %w", err)
-	}
-	if !bytes.Equal(existingInfo, record.Info) || !bytes.Equal(existingSignature, record.Signature) {
-		return fmt.Errorf("post-consensus persistence: transaction payload mismatch for id %q", record.ID)
-	}
-
 	return nil
 }
 
@@ -593,5 +602,43 @@ func (pc *PostConsensusPersistenceCoordinator) upsertTokenStates(ctx context.Con
 		}
 	}
 
+	return nil
+}
+
+// upsertTokenDenomDeltas updates the token_denom table within the same DB transaction.
+// For ExecutionRoleReceiver: increment denom count for each received token.
+// For ExecutionRoleInitiator: decrement denom count for each sent token.
+// For ExecutionRoleQuorum (pledge): no change — pledged tokens are tracked via token_status, not denom.
+func (pc *PostConsensusPersistenceCoordinator) upsertTokenDenomDeltas(ctx context.Context, tx pgx.Tx, did string, tokenStates []models.Token, executionRole string) error {
+	denomDelta := make(map[float64]int64)
+	for _, state := range tokenStates {
+		if state.TokenValue == 0 {
+			continue
+		}
+		switch executionRole {
+		case ExecutionRoleReceiver:
+			denomDelta[state.TokenValue]++
+		case ExecutionRoleInitiator:
+			denomDelta[state.TokenValue]--
+		}
+	}
+	if len(denomDelta) == 0 {
+		return nil
+	}
+	for denom, delta := range denomDelta {
+		if delta == 0 {
+			continue
+		}
+		_, err := tx.Exec(ctx, `
+			INSERT INTO token_denom (did, denom, count, created_at, updated_at)
+			VALUES ($1, $2, $3, NOW(), NOW())
+			ON CONFLICT (did, denom) DO UPDATE SET
+				count = token_denom.count + $3,
+				updated_at = NOW()
+		`, did, denom, delta)
+		if err != nil {
+			return fmt.Errorf("post-consensus persistence: upsert token_denom (did=%s denom=%v delta=%d): %w", did, denom, delta, err)
+		}
+	}
 	return nil
 }

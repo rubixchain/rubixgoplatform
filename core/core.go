@@ -112,6 +112,7 @@ type Core struct {
 	started              bool
 	ipfsApp              string
 	testnet              bool
+	networkMode          string
 	version              string
 	quorumRequest        map[string]*ConsensusStatus
 	pd                   map[string]*PledgeDetails
@@ -181,6 +182,7 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 		errMsg := fmt.Sprintf("Invalid network mode: %s", networkMode)
 		return nil, fmt.Errorf(errMsg)
 	}
+	c.networkMode = networkMode
 
 	c.log = log.Named("Core")
 	c.didDir = c.cfg.DidDir
@@ -212,6 +214,7 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 		c.log.Error("Failed to setup wallet", "err", err)
 		return nil, err
 	}
+	c.w.SetDidDir(c.didDir)
 
 	c.ipfsProviderStore = NewIPFSProviderStore(rubixDB.Pool(), c.log, func() string {
 		return c.peerID
@@ -583,7 +586,7 @@ func (c *Core) FetchDID(did string) error {
 		}
 		err = c.ipfsOps.Get(did, didDir+"/")
 		if err == nil {
-			c.log.Error("failed to perform ipfs get on input did", "err", err)
+			c.log.Error("failed to perform ipfs get on input did", "did", did, "err", err)
 			return err
 		}
 		return err

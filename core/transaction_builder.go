@@ -54,6 +54,7 @@ func BuildTransactionInfoFromRequest(
 			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: RBT collection failed: %w", err)
 		}
 		txTokens.RBT = rbtTokens
+		totalAmount += req.GetRBTAmount()
 	}
 
 	// --- FT/NFT/SC: single DB transaction for all non-RBT assets ---
@@ -159,6 +160,7 @@ func BuildTransactionInfoFromRequest(
 	}
 
 	txInfo := &models.TransactionInfo{
+		Network:         networkMode,
 		Initiator:       req.Initiator,
 		Owner:           req.Owner,
 		Epoch:           int(time.Now().Unix()),

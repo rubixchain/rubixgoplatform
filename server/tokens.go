@@ -51,6 +51,29 @@ func (s *Server) APIGenerateLocalRBT(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
+func (s *Server) APIGenerateMainnetRBT(req *ensweb.Request) *ensweb.Result {
+	var tr model.GenerateLocalRBTRequest
+	err := s.ParseJSON(req, &tr)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(tr.DID)
+	if !strings.HasPrefix(tr.DID, "bafybmi") || len(tr.DID) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID")
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
+	if tr.NumberOfTokens <= 0 {
+		s.log.Error("Invalid RBT amount, tokens generated should be a whole number and greater than 0")
+		return s.BasicResponse(req, false, "Invalid RBT amount, tokens generated should be a whole number and greater than 0", nil)
+	}
+	if !s.validateDIDAccess(req, tr.DID) {
+		return s.BasicResponse(req, false, "DID does not have an access", nil)
+	}
+	s.c.AddWebReq(req)
+	go s.c.GenerateMainnetRBT(req.ID, tr.NumberOfTokens, tr.DID, tr.StartIndex)
+	return s.didResponse(req, req.ID)
+}
+
 type RBTTransferRequestSwaggoInput struct {
 	Receiver   string  `json:"receiver"`
 	Sender     string  `json:"sender"`

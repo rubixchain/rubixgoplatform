@@ -128,7 +128,7 @@ func (cmd *Command) PublishContract() {
 		cmd.log.Error("Invalid publish type")
 		return
 	}
-	basicResponse, err := cmd.c.PublishNewEvent(cmd.smartContractToken, cmd.did, cmd.publishType, cmd.newContractBlock)
+	basicResponse, err := cmd.c.PublishNewEvent(cmd.smartContractToken, cmd.did, cmd.publishType)
 
 	if err != nil {
 		cmd.log.Error("Failed to publish new event", "err", err)

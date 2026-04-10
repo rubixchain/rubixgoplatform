@@ -29,18 +29,31 @@ mac/
 windows/
 dist/
 test_swarm_key/
+Makefile
+*.sh
 
 # used for testing purpose
 !node_registry.json
 
+# Allow the E2E test reset script to be tracked despite mac/ and *.sh being ignored
+!mac/
+!mac/reset_and_test.sh
+
 # Build artifacts
 rubixgoplatform
 test-build
+mac/
 
 # Log files
 result/
 *.log
+.planning/
 
 # Documentation artifacts
 compact-*.md
 context-*.md
+CLAUDE.md
+*.md
+docker/
+e2e*/
+core/storage/.migration

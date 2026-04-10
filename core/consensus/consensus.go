@@ -2,7 +2,6 @@ package consensus
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/rubixchain/rubixgoplatform/core/parts"
@@ -24,6 +23,7 @@ func ReqPledgeToken(
 	referenceId string,
 ) (models.PledgeTokenResponse, error) {
 
+	log.Info("ReqPledgeToken : Request received to pledge tokens for transaction", "referenceId", referenceId, "transactionValue", transactionValue, "networkMode", networkMode)
 	// Lock and fetch free RBT tokens for split/transfer.
 	lockedTokens, err := w.LockTokensForSplit(context.Background(), dc.GetDID(), transactionValue)
 	if err != nil {
@@ -62,66 +62,27 @@ func ReqPledgeToken(
 	return pledgeResponse, nil
 }
 
-func InitiateConsensus(consensusRequest models.ConsensusRequest, quorumDc types.DIDCrypto, w *wallet.Wallet, log logger.Logger) (*models.ConsensusResponse, error) {
-	quorumDid := quorumDc.GetDID()
-	// isTransactionInfoValidated, err := ValidateTransaction()
-	// if err != nil {
-	// 	log.Error("InitiateConsensus : Failed to validate transaction info", "err", err)
+// InitiateConsensus validates and signs the consensus request on behalf of the
+// quorum node. It returns the ConsensusResponse, the computed transactionId,
+// and any error.
+//
+// This function is pure: it does NOT call PledgeV2. The caller
+// (initiateConsensusHandler in core/quorum_initiator.go) is responsible for
+// calling c.PledgeV2 after this function returns successfully.
+func InitiateConsensus(consensusRequest models.ConsensusRequest, quorumDc types.DIDCrypto, log logger.Logger) (*models.ConsensusResponse, error) {
+	txnInfo := consensusRequest.TransactionInfo
 
-	// 	return &models.ConsensusResponse{}, err
-	// }
-
-	// if !isTransactionInfoValidated {
-	// 	log.Error("InitiateConsensus : Transaction info validation failed")
-	// 	return &models.ConsensusResponse{}, fmt.Errorf("transaction info validation failed")
-	// }
-	// This is the pledgeTokenInformation we need to pass to the PledgeTokens function.
-	// This needs to be convered to []Tstring basically the list of token ids which are pledged for this transaction.
-	pledgeDetails := consensusRequest.TransactionInfo.Quorums
-	// Here we are assuming there is only one quorum
-	// This will change when multple quorums are involved
+	// Validate pledge details exist.
+	pledgeDetails := txnInfo.Quorums
 	if len(pledgeDetails) == 0 {
 		log.Error("InitiateConsensus : No pledge details found")
 		return &models.ConsensusResponse{}, fmt.Errorf("no pledge details found")
 	}
-	pledgeTokenDetails := pledgeDetails[0].Tokens
-	// pledgeTokenList := util.ExtractTokenIDs(pledgeTokenDetails) // Need to ensure this function logic is not existing at th emoment
 
-	quorumSignature, err := util.SignTransaction(quorumDc, consensusRequest.TransactionInfo)
+	quorumSignature, err := util.SignTransaction(quorumDc, txnInfo)
 	if err != nil {
 		log.Error("InitiateConsensus : Failed to sign transaction info", "err", err)
 		return &models.ConsensusResponse{}, err
-	}
-	transactionId, err := util.GetTransactionID(consensusRequest.TransactionInfo)
-	if err != nil {
-		log.Error("InitiateConsensus : Failed to get transaction ID", "err", err)
-		return &models.ConsensusResponse{}, err
-	}
-	transactionInfoBytes, err := models.SerializeTransactionInfo(consensusRequest.TransactionInfo)
-	if err != nil {
-		log.Error("InitiateConsensus : Failed to serialize transaction info", "err", err)
-		return &models.ConsensusResponse{}, err
-	}
-	quorumSignatureInfo := models.QuorumSignature{
-		Did:       quorumDid,
-		Signature: quorumSignature,
-	}
-
-	signature := models.Signature{
-		InitiatorSignature: consensusRequest.InitiatorSignature,
-		Quorums:            []models.QuorumSignature{quorumSignatureInfo},
-	}
-
-	signatureBytes, err := json.Marshal(signature)
-	if err != nil {
-		log.Error("InitiateConsensus : Failed to marshal signature", "err", err)
-		return &models.ConsensusResponse{}, err
-	}
-
-	transactions := &models.Transactions{
-		ID:        transactionId,
-		Info:      transactionInfoBytes,
-		Signature: signatureBytes,
 	}
 
 	consensusResponse := models.ConsensusResponse{
@@ -129,13 +90,6 @@ func InitiateConsensus(consensusRequest models.ConsensusRequest, quorumDc types.
 		QuorumSignature: quorumSignature,
 		Message:         "Transaction Information verified succesfully. Consensus Complete.",
 		Status:          true,
-	}
-	//List of Pledge token ids
-	// The incoming TransactionInfo with the signature of both initiator and quorumSignature
-	err = w.PledgeTokens(pledgeTokenDetails, transactions, quorumDid, int64(consensusRequest.TransactionInfo.Epoch))
-	if err != nil {
-		log.Error("InitiateConsensus : Failed to pledge tokens", "err", err)
-		return &models.ConsensusResponse{}, err
 	}
 
 	return &consensusResponse, nil
