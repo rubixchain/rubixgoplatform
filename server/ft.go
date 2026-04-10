@@ -178,6 +178,5 @@ func (s *Server) APIListFTs(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, fmt.Sprintf("failed to get the list of FTs, err: %v", err), nil)
 	}
-
 	return s.BasicResponse(req, true, "FT Fetched successfully", ftList)
 }

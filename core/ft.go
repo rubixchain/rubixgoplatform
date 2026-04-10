@@ -132,8 +132,7 @@ func (c *Core) createFTs(reqID string, req types.CreateFTReq) error {
 			return fmt.Errorf("core: failed to fetch previous txn id of token: %s, err: %w", rbt.TokenID, err)
 		}
 		lockedRBTs = append(lockedRBTs, &models.TokenInfo{
-			TokenID:               rbt.TokenID,
-			// DID:                   rbt.DID,
+			TokenID: rbt.TokenID,
 			TokenValue:            rbt.TokenValue,
 			PreviousTransactionID: latestTxnID,
 		})
@@ -298,7 +297,7 @@ func (c *Core) GetFTTokenCreatorStats() (map[string]interface{}, error) {
 
 // ListFTs stubs FT listing.
 func (c *Core) ListFTs() ([]*models.FT, error) {
-	return nil, fmt.Errorf("ListFTs: not implemented")
+	return c.w.ListFTs()
 }
 
 // IsAsyncFTResponse returns whether FT responses are async.

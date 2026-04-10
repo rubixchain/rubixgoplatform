@@ -187,7 +187,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIGetTransactionByID, "GET", s.APIGetTransactionByID)
 	s.AddRoute(setup.APIGetTransactionsByDID, "GET", s.APIGetTransactionsByDID)
 
-	s.AddRoute(setup.APIListFT, "POST", s.APIListFTs)
+	s.AddRoute(setup.APIListFT, "GET", s.APIListFTs)
 	s.AddRoute(setup.APIGetDIDBalance, "GET", s.AuthHandle(s.APIGetDIDBalance, true, s.AuthError, false))
 }
 

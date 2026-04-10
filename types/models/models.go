@@ -100,8 +100,8 @@ type UnpledgeSequenceInfo struct {
 
 type FT struct {
 	FTName     string    `db:"ft_name"`
-	FTCount    int64     `db:"ft_count"`
 	CreatorDID string    `db:"creator_did"`
+	FTCount    int64     `db:"ft_count"`
 	CreatedAt  time.Time `db:"created_at"`
 	UpdatedAt  time.Time `db:"updated_at"`
 }

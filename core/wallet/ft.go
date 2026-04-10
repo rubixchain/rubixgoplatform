@@ -15,7 +15,7 @@ func (w *Wallet) ListFTs() ([]*models.FT, error) {
 	var ftList []*models.FT = make([]*models.FT, 0)
 	for rows.Next() {
 		var ftInfo *models.FT = &models.FT{}
-		if err := rows.Scan(&ftInfo.FTName, &ftInfo.FTCount, &ftInfo.CreatorDID); err != nil {
+		if err := rows.Scan(&ftInfo.FTName, &ftInfo.CreatorDID, &ftInfo.FTCount); err != nil {
 			return nil, err
 		}
 
