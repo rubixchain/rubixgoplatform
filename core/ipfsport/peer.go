@@ -157,7 +157,7 @@ func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (
 	} else {
 		if !pm.SwarmConnect(peerID) {
 			pm.log.Error("Failed to connect swarm peer", "peerID", peerID)
-			return nil, fmt.Errorf("failed to connect swarm peer")
+			return nil, fmt.Errorf("failed to connect swarm peer, peerID " + peerID)
 		}
 		portNum := pm.getPeerPort()
 		if portNum == 0 {

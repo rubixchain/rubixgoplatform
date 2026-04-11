@@ -365,15 +365,16 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transa
 	var lastTxInfo models.TransactionInfo
 	_ = json.Unmarshal(newTxs[len(newTxs)-1].tx.Info, &lastTxInfo)
 
+	//dead code. not needed
 	lastEntry := entries[len(entries)-1]
 	tokenForUpdate.DID = lastTxInfo.Owner
 	tokenForUpdate.TransactionID = newTxs[len(newTxs)-1].tx.ID
 	tokenForUpdate.LatestPosition = lastEntry.Position
 	tokenForUpdate.LatestRole = lastEntry.Role
 	tokenForUpdate.UpdatedAt = time.Now()
-	if updateErr := c.w.UpdateToken(tokenForUpdate); updateErr != nil {
-		return fmt.Errorf("applyTokenChainFromSync: UpdateToken for %s: %w", tokenID, updateErr)
-	}
+	//if updateErr := c.w.UpdateToken(tokenForUpdate); updateErr != nil {
+	//	return fmt.Errorf("applyTokenChainFromSync: UpdateToken for %s: %w", tokenID, updateErr)
+	//}
 
 	c.log.Info("applyTokenChainFromSync: applied chain entries",
 		"tokenID", tokenID, "count", len(newTxs), "startPos", nextPosition)
