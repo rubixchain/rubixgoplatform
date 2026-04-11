@@ -7,7 +7,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
-
 // APISetupDB handles the legacy setup-db endpoint.
 // TODO(phase11-upstream): wire to PostgreSQL config or retire.
 func (s *Server) APISetupDB(req *ensweb.Request) *ensweb.Result {

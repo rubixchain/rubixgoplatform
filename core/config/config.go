@@ -137,6 +137,8 @@ func CreateRubixConfigFromUserConfig(userConfig types.UserConfig, nodeDir string
 
 	rubixConfig.NetworkDir = filepath.Join(nodeDir, networkDirName)
 	rubixConfig.DidDir = filepath.Join(rubixConfig.NetworkDir, "dids")
+	rubixConfig.NFTDir = filepath.Join(rubixConfig.NetworkDir, "nfts")
+	rubixConfig.SmartContractDir = filepath.Join(rubixConfig.NetworkDir, "smart_contracts")
 	rubixConfig.TrustedNetwork = userConfig.Core.EnableTrustedNetwork
 
 	rubixConfig.PortConfig.IPFSPort = (constants.IPFSPort + uint16(userConfig.Core.NodeIndex))

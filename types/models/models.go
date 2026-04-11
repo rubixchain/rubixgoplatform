@@ -268,3 +268,12 @@ type GenesisAndLatestTransactionSyncReply struct {
 	GenesisTransaction []byte `json:"genesis_transaction"`
 	LatestTransaction  []byte `json:"latest_transaction"`
 }
+
+// IPFSContractInfo holds IPFS metadata for both NFTs and Smart Contracts.
+// This unified structure is used to store contract information in IPFS,
+// where the ArtifactHash points to a folder containing all contract files.
+type IPFSContractInfo struct {
+	DID          string `json:"did"`
+	ArtifactHash string `json:"artifactHash"`
+	PeerID       string `json:"peerID"`
+}

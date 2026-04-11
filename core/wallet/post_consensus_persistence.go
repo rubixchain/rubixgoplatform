@@ -346,6 +346,14 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 			}
 		}
 	}
+	// Include CommittedTokens (used for SC/NFT deployment pledges)
+	if req.TransactionInfo != nil && req.TransactionInfo.CommittedTokens != nil {
+		for _, t := range req.TransactionInfo.CommittedTokens {
+			if t != nil {
+				txInfoTokenSet[t.TokenID] = true
+			}
+		}
+	}
 
 	for _, row := range req.TokenChainRows {
 		if row.Position == 0 {
@@ -363,13 +371,14 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 		var dbStatus int16
 		var dbTransactionID string
 		var dbLatestPosition int64
+		var dbTokenType int16
 
 		err := tx.QueryRow(ctx, `
-			SELECT did, token_status, transaction_id, latest_position
+			SELECT did, token_status, transaction_id, latest_position, token_type
 			FROM tokens
 			WHERE token_id = $1
 			FOR UPDATE
-		`, row.TokenID).Scan(&dbDID, &dbStatus, &dbTransactionID, &dbLatestPosition)
+		`, row.TokenID).Scan(&dbDID, &dbStatus, &dbTransactionID, &dbLatestPosition, &dbTokenType)
 		if err != nil {
 			if err == pgx.ErrNoRows {
 				return fmt.Errorf("transfer: token %q does not exist", row.TokenID)
@@ -378,7 +387,14 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 		}
 
 		/*
-			if dbDID != req.DID {
+			// SC tokens and NFT tokens do not enforce did ownership — any subscriber
+			// can execute an SC, and NFT execution does not require ownership transfer.
+			// Ownership is only checked for RBT and FT transfers.
+			scTypeID := int16(models.GetTokenTypeID(constants.TokenType_SmartContract))
+			nftTypeID := int16(models.GetTokenTypeID(constants.TokenType_NFT))
+			skipOwnershipCheck := dbTokenType == scTypeID || dbTokenType == nftTypeID
+
+			if !skipOwnershipCheck && dbDID != req.DID {
 				return fmt.Errorf("transfer: token %q not owned by %s", row.TokenID, req.DID)
 			}
 		*/

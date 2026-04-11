@@ -30,6 +30,13 @@ func (c *Core) InitiateTransaction(reqID string, req *models.TransactionRequest)
 }
 
 func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequest) *model.BasicResponse {
+	c.log.Info("InitiateTransaction: Starting transaction",
+		"reqID", reqID,
+		"initiator", request.Initiator,
+		"owner", request.Owner,
+		"hasNFT", request.HasNFT(),
+		"hasSC", request.HasSmartContract(),
+	)
 
 	resp := &model.BasicResponse{
 		Status: false,
@@ -40,10 +47,14 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 
 	dc, err := c.SetupDID(reqID, initiatorDID)
 	if err != nil {
+		c.log.Error("InitiateTransaction: Failed to setup DID", "err", err, "did", initiatorDID)
 		resp.Message = "InitiateTransaction:Failed to setup DID: " + err.Error()
 		return resp
 	}
+	c.log.Debug("InitiateTransaction: DID setup complete", "did", initiatorDID)
+
 	networkMode := c.networkMode
+	c.log.Debug("InitiateTransaction: Network mode", "mode", networkMode)
 	// Build transaction info
 	//Here the c.publishTxn must be verified because the input type is *model.PubSubTxnInfo which need to be updated
 	// here the tokens which are being fetched as committed tokens in case of smartContract deployment: There we need to add the commitment block?
@@ -53,21 +64,28 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	// LockTokensForSplit (called inside BuildTransactionInfoFromRequest) commits the
 	// lock to DB immediately. If BuildTransactionInfoFromRequest itself fails (e.g.
 	// insufficient balance), the lock must still be released.
+	c.log.Debug("InitiateTransaction: Registering deferred token cleanup")
 	txSucceeded := false
 	defer func() {
 		if !txSucceeded {
+			c.log.Warn("InitiateTransaction: Transaction failed, releasing locked tokens", "did", initiatorDID)
 			if releaseErr := c.w.ReleaseAllLockedRBTTokensForDID(ctx, initiatorDID, reqID); releaseErr != nil {
-				c.log.Error("InitiateTransaction: failed to release locked tokens after failure", "err", releaseErr)
+				c.log.Error("InitiateTransaction: failed to release locked tokens after failure", "err", releaseErr, "did", initiatorDID)
 			} else {
 				c.log.Info("InitiateTransaction: released locked tokens after failed transaction", "did", initiatorDID)
 			}
+		} else {
+			c.log.Debug("InitiateTransaction: Transaction succeeded, tokens will be transferred", "did", initiatorDID)
 		}
 	}()
+
+	c.log.Info("InitiateTransaction: Building transaction info", "maxRetries", 3)
 	maxRetries := 3
 	var transactionInfo *models.TransactionInfo
 	var transactionValue float64
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
+		c.log.Debug("InitiateTransaction: Attempting to build transaction info", "attempt", attempt, "maxRetries", maxRetries)
 
 		transactionInfo, transactionValue, err = BuildTransactionInfoFromRequest(
 			ctx,
@@ -82,12 +100,20 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 
 		if err == nil {
 			// success
+			c.log.Info("InitiateTransaction: Successfully built transaction info",
+				"attempt", attempt,
+				"transactionValue", transactionValue,
+				"hasRBT", len(transactionInfo.Tokens.RBT) > 0,
+				"hasNFT", len(transactionInfo.Tokens.NFT) > 0,
+				"hasSC", len(transactionInfo.Tokens.SmartContract) > 0,
+				"hasCommittedTokens", len(transactionInfo.CommittedTokens) > 0,
+			)
 			break
 		}
 
 		// ONLY retry TOCTOU
 		if !isTOCTOUConflict(err) {
-			c.log.Error("InitiateTransaction: Failed to build transaction info (non-retryable)", "err", err)
+			c.log.Error("InitiateTransaction: Failed to build transaction info (non-retryable)", "err", err, "attempt", attempt)
 			resp.Message = err.Error()
 			return resp
 		}
@@ -104,13 +130,14 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 			return resp
 		}
 
-		/// In a high-contention scenario, we expect some transactions to hit TOCTOU conflicts due to the optimistic locking mechanism on tokens.
-		time.Sleep(retryWithRandomBackoff(attempt))
-		//time.Sleep(retryBackoff(attempt))
+		backoff := retryWithRandomBackoff(attempt)
+		c.log.Debug("InitiateTransaction: Backing off before retry", "attempt", attempt, "backoffMs", backoff.Milliseconds())
+		time.Sleep(backoff)
 	}
 
 	// Fetch the list of dids from quorum_manager table
 	//  We then loop over that list and queried from did table and pfetch the peerid
+	c.log.Debug("InitiateTransaction: Fetching quorum addresses")
 	quorumAddresses, err := c.GetAllQuorum()
 	if err != nil {
 		c.log.Error("InitiateTransaction: Failed to get quorum address", "err", err)
@@ -118,19 +145,25 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		return resp
 	}
 	if len(quorumAddresses) == 0 {
+		c.log.Error("InitiateTransaction: No quorums available")
 		resp.Message = "InitiateTransaction: No quorums available for transaction"
 		return resp
 	}
+	c.log.Info("InitiateTransaction: Quorums found", "count", len(quorumAddresses), "primaryQuorum", quorumAddresses[0])
 
 	// this will be a list of *ipfsport.Peer since we can have multiple quorums, we need to loop over them
+	c.log.Debug("InitiateTransaction: Opening peer connection to quorum", "quorumDID", quorumAddresses[0])
 	p, err := c.getPeer(quorumAddresses[0])
 	if err != nil {
+		c.log.Error("InitiateTransaction: Failed to open peer connection", "err", err, "quorumDID", quorumAddresses[0])
 		resp.Message = err.Error()
 		return resp
 	}
 	defer p.Close()
+	c.log.Debug("InitiateTransaction: Peer connection established", "quorumDID", quorumAddresses[0])
 
 	// Pledge request
+	c.log.Info("InitiateTransaction: Requesting pledge tokens from quorum", "quorumDID", quorumAddresses[0], "transactionValue", transactionValue)
 	pledgeTokenRequest := models.PledgeTokenRequest{
 		ReferenceId:      reqID,
 		TransactionValue: transactionValue,
@@ -148,9 +181,11 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	)
 
 	if err != nil {
+		c.log.Error("InitiateTransaction: Failed to get pledge tokens from quorum", "err", err, "quorumDID", quorumAddresses[0])
 		resp.Message = err.Error()
 		return resp
 	}
+	c.log.Info("InitiateTransaction: Received pledge tokens", "tokenCount", len(pledgeTokenResponse.PledgeTokens), "quorumDID", quorumAddresses[0])
 
 	pledgeTokens := pledgeTokenResponse.PledgeTokens
 
@@ -217,24 +252,27 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		resp.Message = "insufficient quorum liquidity"
 		return resp
 	}
+	c.log.Debug("InitiateTransaction: Calculating transaction ID")
 	transactionId, err := util.GetTransactionID(transactionInfo)
 	if err != nil {
 		c.log.Error("InitiateTransaction: Failed to get transaction ID", "err", err)
 		resp.Message = "InitiateTransaction: Failed to get transaction ID: " + err.Error()
 		return resp
 	}
-
-	c.log.Info("Transaction ID created", "hash", transactionId)
+	c.log.Info("InitiateTransaction: Transaction ID created", "transactionID", transactionId)
 
 	// Signature done by the initiator on the  transactionInfo
+	c.log.Debug("InitiateTransaction: Signing transaction with initiator DID", "did", initiatorDID)
 	initiatorSignature, err := util.SignTransaction(dc, transactionInfo)
 	if err != nil {
-		c.log.Error("InitiateTransaction:Failed to sign transaction", "err", err)
+		c.log.Error("InitiateTransaction: Failed to sign transaction", "err", err, "did", initiatorDID)
 		resp.Message = "InitiateTransaction: Failed to sign transaction: " + err.Error()
 		return resp
 	}
+	c.log.Debug("InitiateTransaction: Transaction signed", "signatureLength", len(initiatorSignature))
 
 	// Consensus request
+	c.log.Info("InitiateTransaction: Initiating consensus with quorum", "quorumDID", quorumAddresses[0], "transactionID", transactionId)
 	consensusRequest := models.ConsensusRequest{
 		ReferenceId:        reqID,
 		TransactionInfo:    transactionInfo,
@@ -253,6 +291,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	)
 
 	if err != nil {
+		c.log.Error("InitiateTransaction: Consensus request failed", "err", err, "quorumDID", quorumAddresses[0])
 		if _, err := util.PublishTransaction(
 			c.ps,
 			transactionInfo,
@@ -270,6 +309,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	}
 
 	if !consensusResponse.Status {
+		c.log.Error("InitiateTransaction: Consensus rejected", "message", consensusResponse.Message, "quorumDID", quorumAddresses[0])
 		if _, err := util.PublishTransaction(
 			c.ps,
 			transactionInfo,
@@ -286,7 +326,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		return resp
 	}
 
-	c.log.Info("InitiateTransaction: Consensus response received", "quorumDID", quorumAddresses[0], "quorumSignatureLength", len(consensusResponse.QuorumSignature))
+	c.log.Info("InitiateTransaction: Consensus successful", "quorumDID", quorumAddresses[0], "quorumSignatureLength", len(consensusResponse.QuorumSignature))
 
 	quorumSignature := []models.QuorumSignature{{
 		Did:       quorumAddresses[0],
@@ -330,6 +370,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	// (candidates not chosen by CollectRBTTokens) are then released back to Free.
 	// On failure we log and continue — the deferred ReleaseAllLockedRBTTokensForDID
 	// will fire because txSucceeded is still false at this point.
+	c.log.Info("InitiateTransaction: Persisting post-consensus state", "transactionID", transactionId, "did", initiatorDID, "role", wallet.ExecutionRoleInitiator)
 	persistErr := c.w.PersistPostConsensus(ctx, &wallet.PostConsensusPersistenceRequest{
 		TransactionInfo: transactionInfo,
 		Signature:       signatureTobePublished,
@@ -337,53 +378,99 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		ExecutionRole:   wallet.ExecutionRoleInitiator,
 	})
 	if persistErr != nil {
-		c.log.Error("InitiateTransaction: failed to persist post-consensus state", "err", persistErr)
+		c.log.Error("InitiateTransaction: Failed to persist post-consensus state", "err", persistErr, "transactionID", transactionId)
+		resp.Message = "Failed to persist transaction: " + persistErr.Error()
 		// txSucceeded stays false → deferred cleanup will release all locked tokens
+		return resp
 	} else {
+		c.log.Info("InitiateTransaction: Post-consensus state persisted successfully", "transactionID", transactionId)
 		// Mark success to prevent the deferred full-release from firing,
 		// then release only the non-selected locked tokens (candidates not used in the transfer).
 		// The selected tokens are now status=Transferred so they won't be touched.
 		txSucceeded = true
+		c.log.Debug("InitiateTransaction: Releasing non-selected locked tokens", "did", initiatorDID)
 		if err := c.w.ReleaseAllLockedRBTTokensForDID(ctx, initiatorDID, reqID); err != nil {
-			c.log.Error("InitiateTransaction: failed to release non-selected locked tokens", "err", err)
+			c.log.Error("InitiateTransaction: failed to release non-selected locked tokens", "err", err, "did", initiatorDID)
+		} else {
+			c.log.Debug("InitiateTransaction: Non-selected locked tokens released", "did", initiatorDID)
 		}
 		if err := c.w.ReleaseReferenceID(reqID); err != nil {
 			c.log.Error("InitiateTransaction: failed to release reference ID", "err", err)
 		}
 	}
-	/*
-		if request.HasSmartContract() {
-			c.publishSmartContractEvents(request, transactionId, initiatorDID, initiatorSignature, transactionInfo.Epoch)
-		}
 
-		if request.HasNFT() {
-			c.publishNFTEvents(request, transactionId, initiatorDID, initiatorSignature, transactionInfo.Epoch)
-		}
-	*/
+	if request.HasSmartContract() {
+		c.log.Info("InitiateTransaction: Publishing SmartContract events", "transactionID", transactionId)
+		c.publishSmartContractEvents(request, transactionId, initiatorDID, initiatorSignature, transactionInfo.Epoch)
+	}
+
+	if request.HasNFT() {
+		c.log.Info("InitiateTransaction: Publishing NFT events", "transactionID", transactionId)
+		c.publishNFTEvents(request, transactionId, initiatorDID, initiatorSignature, transactionInfo.Epoch)
+	}
+
 	//Publish transaction to the network
+	c.log.Info("InitiateTransaction: Publishing transaction to network", "transactionID", transactionId)
 	if _, err := util.PublishTransaction(c.ps, transactionInfo, signatureTobePublished, true, ""); err != nil {
 		c.log.Error("InitiateTransaction: Failed to publish transaction", "err", err)
 	}
 
-	asyncMode := false
+	// Skip receiver sync for:
+	// 1. SmartContract transactions (no owner transfer concept)
+	// 2. NFT deployment (TransferNFTOwnership = false, Owner == Initiator)
+	// 3. Self-transfers (Initiator == Owner)
+	skipReceiverSync := false
+	if request.HasSmartContract() {
+		c.log.Info("InitiateTransaction: Skipping receiver sync for SmartContract transaction", "did", initiatorDID, "transactionID", transactionId)
+		skipReceiverSync = true
+	} else if request.HasNFT() && !request.Tokens.TransferNFTOwnership {
+		c.log.Info("InitiateTransaction: Skipping receiver sync for NFT deployment", "did", initiatorDID, "transactionID", transactionId)
+		skipReceiverSync = true
+	} else if initiatorDID == nextOwnerDID {
+		c.log.Info("InitiateTransaction: Skipping receiver sync (self-transfer)", "did", initiatorDID, "transactionID", transactionId)
+		skipReceiverSync = true
+	}
 
-	if asyncMode {
+	if !skipReceiverSync {
+		c.log.Info("InitiateTransaction: Starting async receiver sync", "receiver", nextOwnerDID, "transactionID", transactionId)
 		go c.sendTokensToReceiver(nextOwnerDID, transactionId, transactionInfo, signatureTobePublished, request)
 	} else {
-		err := c.sendTokensToReceiverSync(nextOwnerDID, transactionId, transactionInfo, signatureTobePublished, request)
-		if err != nil {
-			c.log.Error("InitiateTransaction: receiver sync failed", "err", err)
-
-			resp.Status = false
-			resp.Message = "Transaction failed: receiver sync failed: " + err.Error()
-			return resp
+		// For SmartContract/NFT deployments/self-transfers, persist receiver role immediately
+		// This avoids JSON marshaling/unmarshaling mismatch issues
+		persistErr := c.w.PersistPostConsensus(ctx, &wallet.PostConsensusPersistenceRequest{
+			TransactionInfo: transactionInfo,
+			Signature:       signatureTobePublished,
+			DID:             nextOwnerDID,
+			ExecutionRole:   wallet.ExecutionRoleReceiver,
+		})
+		if persistErr != nil {
+			c.log.Error("InitiateTransaction: Failed to persist receiver state", "err", persistErr, "transactionID", transactionId, "did", nextOwnerDID)
+		} else {
+			c.log.Info("InitiateTransaction: Receiver state persisted", "transactionID", transactionId, "did", nextOwnerDID)
 		}
 	}
 
-	// Return immediately - receiver sync happens in background
+	// Return immediately - receiver sync happens in background (if needed)
+	c.log.Info("InitiateTransaction: Transaction completed successfully", "transactionID", transactionId, "initiator", initiatorDID, "receiver", nextOwnerDID)
 	resp.Status = true
 	resp.Message = "Transfer initiated successfully"
+	resp.Result = map[string]interface{}{
+		"transactionID": transactionId,
+	}
 	return resp
+}
+
+func isTOCTOUConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "TOCTOU conflict")
+}
+
+func retryBackoff(attempt int) time.Duration {
+	// 50ms → 100ms → 150ms
+	return time.Duration(attempt*50) * time.Millisecond
 }
 
 // sendTokensToReceiver sends transaction tokens to the receiver asynchronously.
@@ -677,19 +764,6 @@ func (c *Core) GetTransactionByID(txId string) (*models.TransactionInfo, error) 
 
 func (c *Core) GetAllTransactions() ([]models.Transactions, error) {
 	return c.w.GetAllTransactions()
-}
-
-func isTOCTOUConflict(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "TOCTOU conflict")
-}
-
-func retryBackoff(attempt int) time.Duration {
-	// 50ms → 100ms → 150ms
-	return time.Duration(attempt*50) * time.Millisecond
 }
 
 func retryWithRandomBackoff(attempt int) time.Duration {

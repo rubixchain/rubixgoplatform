@@ -52,8 +52,12 @@ func ValidateTransactionInfoFields(txnInfo *models.TransactionInfo) error {
 		return err
 	}
 
-	if err := validateDID(txnInfo.Owner, "owner"); err != nil {
-		return err
+	// Owner DID is optional for deployment transactions (SC/NFT deployment)
+	// It should only be validated if it's not empty
+	if txnInfo.Owner != "" {
+		if err := validateDID(txnInfo.Owner, "owner"); err != nil {
+			return err
+		}
 	}
 
 	currentEpoch := int(time.Now().Unix())
@@ -261,12 +265,36 @@ func ValidateTransactionValueAndPledge(txnInfo *models.TransactionInfo) error {
 	}
 
 	transactionValue := rubixmath.ZeroFloat()
+
+	// Count RBT tokens
 	for _, t := range txnInfo.Tokens.RBT {
 		tokenValue, err := util.GetTokenValueFromTokenID(t.TokenID)
 		if err != nil {
 			return fmt.Errorf("failed to get value for RBT token %s: %w", t.TokenID, err)
 		}
 		transactionValue = rubixmath.AddFloat(transactionValue, tokenValue)
+	}
+
+	// Count NFT token values
+	// NFT value is optional - if not set or 0, default pledge requirement is 1 RBT
+	for _, t := range txnInfo.Tokens.NFT {
+		var tokenValue float64
+		if t.TokenValue > 0 {
+			tokenValue = t.TokenValue
+		} else {
+			// NFT with no explicit value requires 1 RBT pledge
+			tokenValue = 1.0
+		}
+		transactionValue = rubixmath.AddFloat(transactionValue, tokenValue)
+	}
+
+	// Count SmartContract token values
+	// SC value is mandatory and must be present in TokenValue field
+	for _, t := range txnInfo.Tokens.SmartContract {
+		if t.TokenValue <= 0 {
+			return fmt.Errorf("SmartContract token %s has invalid value %v: value must be greater than 0", t.TokenID, t.TokenValue)
+		}
+		transactionValue = rubixmath.AddFloat(transactionValue, t.TokenValue)
 	}
 
 	totalPledgeValue := rubixmath.ZeroFloat()
@@ -542,6 +570,11 @@ func TokenChainIntigrityCheck(txnInfo *models.TransactionInfo, peer *ipfsport.Pe
 		for _, t := range tokens {
 			tokenDetails, err := w.GetTokenByTokenID(t.TokenID)
 			if err != nil {
+				// Skip sync for genesis transactions (deployment)
+				if t.PreviousTransactionID == "" {
+					log.Debug("genesis transaction detected, skipping tokenchain sync", "tokenID", t.TokenID)
+					continue
+				}
 				log.Debug("token not found locally, syncing full chain", "tokenID", t.TokenID)
 				if syncErr, _ := rubixsync.SyncTransactionChainFrom(peer, t.TokenID, tokenTypeInt, w, log); syncErr != nil {
 					return fmt.Errorf("failed to sync token chain for %s: %w", t.TokenID, syncErr), false

@@ -86,6 +86,8 @@ type RubixConfig struct {
 	// and other files such as SC and NFT
 	NetworkDir              string
 	DidDir                  string
+	NFTDir                  string
+	SmartContractDir        string
 	PortConfig              PortConfig
 	UnpledgePoolConfig      UnpledgePoolConfig
 	IPFSRecoveryConfig      IPFSRecoveryConfig

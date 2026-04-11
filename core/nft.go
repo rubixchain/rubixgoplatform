@@ -5,10 +5,15 @@ package core
 // These stubs satisfy server/ call sites until the replacement is wired.
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	rubixsync "github.com/rubixchain/rubixgoplatform/core/sync"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
@@ -21,49 +26,260 @@ type NFTReq struct {
 	NFTPath  string
 }
 
-// NFTIpfsInfo holds IPFS-related info for an NFT.
-type NFTIpfsInfo struct {
-	DID          string
-	ArtifactHash string
-}
-
 // FetchNFTRequest is the request payload for fetching an NFT.
 type FetchNFTRequest struct {
 	NFT     string
 	NFTPath string
 }
 
-// CreateNFTRequest stubs NFT creation; replaced by InitiateTransaction in Phase 09.
 func (c *Core) CreateNFTRequest(requestID string, createNFTRequest NFTReq) {
-	br := model.BasicResponse{
-		Status:  false,
-		Message: "CreateNFT not yet implemented",
+	defer os.RemoveAll(createNFTRequest.NFTPath)
+	createNFTResponse := c.createNFT(requestID, createNFTRequest)
+	didChannel := c.GetWebReq(requestID)
+	if didChannel == nil {
+		c.log.Error("failed to get web request", "requestID", requestID)
 	}
-	ch := c.GetWebReq(requestID)
-	if ch == nil {
-		c.log.Error("CreateNFTRequest: failed to get did channels")
-		return
-	}
-	ch.OutChan <- &br
+	didChannel.OutChan <- createNFTResponse
 }
 
-// DeployNFT stubs NFT deployment.
-func (c *Core) DeployNFT(reqID string, deployReq model.DeployNFTRequest) {
-	br := model.BasicResponse{
-		Status:  false,
-		Message: "DeployNFT not yet implemented",
+func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.BasicResponse {
+	basicResponse := &model.BasicResponse{
+		Status: false,
 	}
-	ch := c.GetWebReq(reqID)
-	if ch == nil {
-		c.log.Error("DeployNFT: failed to get did channels")
-		return
+	nftFolderHash, err := c.ipfsOps.AddDir(createNFTRequest.NFTPath)
+	if err != nil {
+		c.log.Error("Failed to add nft file to IPFS", "err", err)
+		return basicResponse
 	}
-	ch.OutChan <- &br
+	// This was previously NFTIpfsInfo which we have updated to IPFSContractInfo
+	// The idea was we keep this struct same for NFTs and contracts
+	nft := models.IPFSContractInfo{
+		DID:          createNFTRequest.DID,
+		ArtifactHash: nftFolderHash,
+		PeerID:       c.peerID,
+	}
+
+	nftJSON, err := json.MarshalIndent(nft, "", "  ")
+	if err != nil {
+		c.log.Error("Failed to marshal nft struct", "err", err)
+		return basicResponse
+	}
+
+	nftHash, err := IpfsAddWithBackoff(c.ipfs, bytes.NewReader(nftJSON))
+	if err != nil {
+		c.log.Error("Failed to add nft to IPFS", "err", err)
+		return basicResponse
+	}
+
+	c.log.Info("The NFT token hash generated ", nftHash)
+
+	// Set the response status and message
+	nftTokenResponse := &SmartContractTokenResponse{
+		Message: "NFT Token generated successfully",
+		Result:  nftHash,
+	}
+
+	_, err = c.RenameNFTFolder(createNFTRequest.NFTPath, nftHash)
+	if err != nil {
+		c.log.Error("Failed to rename NFT folder", "err", err)
+		return basicResponse
+	}
+
+	basicResponse.Status = true
+	basicResponse.Message = nftTokenResponse.Message
+	basicResponse.Result = nftTokenResponse.Result
+
+	return basicResponse
 }
 
-// GetAllNFT returns an empty NFT list stub.
-func (c *Core) GetAllNFT() model.NFTList {
-	return model.NFTList{}
+func (c *Core) SubscribeNFTSetup(requestID string, topic string) error {
+	reqID = requestID
+
+	// Subscribe to NFT topic
+	err := c.ps.SubscribeTopic(topic, c.NFTCallBack)
+	if err != nil {
+		c.log.Error("SubscribeNFTSetup: Failed to subscribe to NFT topic", "topic", topic, "err", err)
+		return fmt.Errorf("failed to subscribe to NFT topic %s: %w", topic, err)
+	}
+
+	// Check if NFT folder exists
+	nftFolderPath := path.Join(c.nftDir, topic)
+	if _, err := os.Stat(nftFolderPath); os.IsNotExist(err) {
+		c.log.Info("SubscribeNFTSetup: NFT not found locally, fetching from network", "nft_token", topic)
+
+		// Fetch NFT from IPFS
+		fetchRequest := &FetchNFTRequest{
+			NFT: topic,
+		}
+		response := c.FetchNFT(fetchRequest)
+		if !response.Status {
+			c.log.Error("SubscribeNFTSetup: Failed to fetch NFT", "nft_token", topic, "error", response.Message)
+			return fmt.Errorf("failed to fetch NFT %s: %s", topic, response.Message)
+		}
+
+		c.log.Info("SubscribeNFTSetup: NFT fetched successfully", "nft_token", topic)
+	} else {
+		c.log.Debug("SubscribeNFTSetup: NFT already exists locally", "nft_token", topic, "path", nftFolderPath)
+	}
+
+	c.log.Info("SubscribeNFTSetup: Successfully subscribed to NFT", "topic", topic)
+	return nil
+}
+
+func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
+	var newEvent models.EventNFTPublishInfo
+	err := json.Unmarshal(data, &newEvent)
+	if err != nil {
+		c.log.Error("NFTCallBack: Failed to unmarshal NFT event", "err", err)
+		return
+	}
+
+	nft := newEvent.NFTid
+	c.log.Info("NFTCallBack: Received update on NFT", "nft_token", nft)
+
+	// Check if NFT folder exists (log warning if missing)
+	nftFolderPath := path.Join(c.nftDir, nft)
+	if _, err := os.Stat(nftFolderPath); os.IsNotExist(err) {
+		c.log.Warn("NFTCallBack: NFT folder does not exist", "nft_token", nft)
+	}
+
+	// Construct publisher peer address
+	initiatorDid := newEvent.Initiator
+	publisherAddress := peerID + "." + initiatorDid
+	publisherPeer, err := c.getPeer(publisherAddress)
+	if err != nil {
+		c.log.Error("NFTCallBack: Failed to get peer", "address", publisherAddress, "err", err)
+		return
+	}
+
+	// Sync transaction chain from publisher
+	err, _ = rubixsync.SyncTransactionChainFrom(publisherPeer, nft, models.GetTokenTypeID(constants.TokenType_NFT), c.w, c.log)
+	if err != nil {
+		c.log.Error("NFTCallBack: Failed to sync transaction chain", "nft_token", nft, "err", err)
+		return
+	}
+
+	c.log.Info("NFTCallBack: Transaction chain synced successfully", "nft_token", nft)
+}
+
+func (c *Core) FetchNFT(fetchNFTRequest *FetchNFTRequest) *model.BasicResponse {
+	c.log.Info("FetchNFT: Starting NFT fetch", "nft_token", fetchNFTRequest.NFT)
+
+	basicResponse := &model.BasicResponse{
+		Status: false,
+	}
+
+	// Step 1: Fetch NFT metadata from IPFS using unified function
+	nft, err := c.fetchContractInfo(fetchNFTRequest.NFT)
+	if err != nil {
+		c.log.Error("FetchNFT: Failed to fetch NFT metadata", "nft_token", fetchNFTRequest.NFT, "err", err)
+		basicResponse.Message = fmt.Sprintf("Failed to fetch NFT metadata: %v", err)
+		return basicResponse
+	}
+	c.log.Info("FetchNFT: Successfully parsed NFT metadata", "nft_token", fetchNFTRequest.NFT, "did", nft.DID, "peer_id", nft.PeerID)
+
+	// Step 3: Fetch NFT artifact files from IPFS
+	err = c.GetNFTFromIpfs(fetchNFTRequest.NFT, nft.ArtifactHash)
+	if err != nil {
+		c.log.Error("FetchNFT: Failed to fetch NFT files from IPFS", "nft_token", fetchNFTRequest.NFT, "artifact_hash", nft.ArtifactHash, "err", err)
+		basicResponse.Message = "Failed to fetch NFT files from IPFS"
+		return basicResponse
+	}
+	c.log.Info("FetchNFT: Successfully fetched NFT artifact files", "nft_token", fetchNFTRequest.NFT, "artifact_hash", nft.ArtifactHash)
+
+	// Step 4: Sync transaction chain if PeerID is available
+	if nft.PeerID != "" {
+		err = c.syncNFTTransaction(fetchNFTRequest.NFT, nft)
+		if err != nil {
+			c.log.Error("FetchNFT: Failed to sync NFT transaction chain", "nft_token", fetchNFTRequest.NFT, "err", err)
+			basicResponse.Message = "Failed to sync NFT transaction chain"
+			return basicResponse
+		}
+		c.log.Info("FetchNFT: Successfully synced NFT transaction chain", "nft_token", fetchNFTRequest.NFT)
+	} else {
+		c.log.Info("FetchNFT: Skipping transaction chain sync (no PeerID in metadata)", "nft_token", fetchNFTRequest.NFT)
+	}
+
+	// Set the response values
+	basicResponse.Status = true
+	basicResponse.Message = "NFT fetched successfully"
+	basicResponse.Result = &nft
+	c.log.Info("FetchNFT: NFT fetch completed successfully", "nft_token", fetchNFTRequest.NFT)
+
+	return basicResponse
+}
+
+// syncNFTTransaction syncs the transaction chain for an NFT from the deployer peer
+func (c *Core) syncNFTTransaction(nftToken string, nft *models.IPFSContractInfo) error {
+	c.log.Info("syncNFTTransaction: Starting transaction chain sync", "nft_token", nftToken, "peer_id", nft.PeerID, "did", nft.DID)
+
+	// Construct the peer address
+	address := nft.PeerID + "." + nft.DID
+	peer, err := c.getPeer(address)
+	if err != nil {
+		c.log.Error("syncNFTTransaction: Failed to get peer", "nft_token", nftToken, "address", address, "err", err)
+		return fmt.Errorf("failed to get peer %s: %w", address, err)
+	}
+	c.log.Info("syncNFTTransaction: Successfully retrieved peer", "nft_token", nftToken, "address", address)
+
+	// Sync the transaction chain from the peer
+	err, _ = rubixsync.SyncTransactionChainFrom(peer, nftToken, models.GetTokenTypeID(constants.TokenType_NFT), c.w, c.log)
+	if err != nil {
+		c.log.Error("syncNFTTransaction: Failed to sync transaction chain", "nft_token", nftToken, "peer", address, "err", err)
+		return fmt.Errorf("failed to sync transaction chain for NFT %s: %w", nftToken, err)
+	}
+
+	c.log.Info("syncNFTTransaction: Transaction chain sync completed successfully", "nft_token", nftToken)
+	return nil
+}
+
+func (c *Core) publishNewNftEvent(newNFTEvent *models.EventNFTPublishInfo) error {
+	if c.ps == nil {
+		return nil
+	}
+
+	topic := newNFTEvent.NFTid
+
+	if err := c.ps.Publish(topic, newNFTEvent); err != nil {
+		c.log.Error("Failed to publish NFT event", "topic", topic, "err", err)
+		return err
+	}
+
+	c.log.Info("New state published on NFT ", "topic", topic)
+
+	return nil
+}
+
+func (c *Core) publishNFTEvents(
+	request *models.TransactionRequest,
+	transactionId string,
+	initiatorDID string,
+	initiatorSignature string,
+	epoch int,
+) {
+
+	nfts := request.GetAllNFTs()
+
+	baseEvent := models.EventNFTPublishInfo{
+		TransactionID:      transactionId,
+		Initiator:          initiatorDID,
+		InitiatorSignature: initiatorSignature,
+		Epoch:              epoch,
+	}
+
+	for _, nft := range nfts {
+
+		event := baseEvent
+		event.NFTid = nft.NFTId
+		event.NFTData = nft.Data
+
+		if err := c.publishNewNftEvent(&event); err != nil {
+			c.log.Error("NFT event publish failed",
+				"nft", nft.NFTId,
+				"err", err,
+			)
+		}
+	}
 }
 
 // GetNFTsByDid returns an empty NFT list stub for a given DID.
@@ -88,33 +304,6 @@ func (c *Core) GetNFTsByDid(did string) ([]types.NFTBalance, error) {
 		})
 	}
 	return nftInfo, nil
-}
-
-// ExecuteNFT stubs NFT execution.
-func (c *Core) ExecuteNFT(reqID string, executeReq *model.ExecuteNFTRequest) {
-	br := model.BasicResponse{
-		Status:  false,
-		Message: "ExecuteNFT not yet implemented",
-	}
-	ch := c.GetWebReq(reqID)
-	if ch == nil {
-		c.log.Error("ExecuteNFT: failed to get did channels")
-		return
-	}
-	ch.OutChan <- &br
-}
-
-// SubscribeNFTSetup stubs NFT subscription setup.
-func (c *Core) SubscribeNFTSetup(requestID string, topic string) error {
-	return fmt.Errorf("SubscribeNFTSetup: not implemented")
-}
-
-// FetchNFT stubs NFT fetching from IPFS.
-func (c *Core) FetchNFT(fetchNFTRequest *FetchNFTRequest) *model.BasicResponse {
-	return &model.BasicResponse{
-		Status:  false,
-		Message: "FetchNFT not yet implemented",
-	}
 }
 
 // CheckNFTFolderExists stubs NFT folder existence check.
