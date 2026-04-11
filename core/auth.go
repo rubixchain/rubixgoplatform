@@ -58,7 +58,7 @@ func (c *Core) ValidateDIDToken(token string, tt string, did string) (*setup.Bea
 }
 
 func (c *Core) generateJWTToken(claims jwt.Claims) string {
-	token := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), claims)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString([]byte(c.secret))
 	if err != nil {
 		return ""

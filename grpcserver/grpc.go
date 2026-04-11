@@ -90,7 +90,7 @@ func ValidateJWTToken(tokenString string, claims jwt.Claims, secret string) (boo
 }
 
 func GenerateJWTToken(claims jwt.Claims, secret string) string {
-	token := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), claims)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString([]byte(secret))
 	if err != nil {
 		return ""

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jinzhu/gorm"
 	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
@@ -107,7 +107,7 @@ type BasicToken struct {
 	UserName string `json:"username"`
 	UserID   string `json:"user_id"`
 	Role     string `json:"role"`
-	jwt.StandardClaims
+	jwt.RegisteredClaims
 }
 
 type LoginRequest struct {
@@ -476,13 +476,13 @@ func (s *Server) LoginUser(tenantID interface{}, req *LoginRequest) *LoginRespon
 				role = "admin"
 			}
 		}
-		expiresAt := time.Now().Add(time.Minute * 60).Unix()
+		expiresAt := time.Now().Add(time.Minute * 60)
 		claims := BasicToken{
-			u.Name,
-			u.ID.String(),
-			role,
-			jwt.StandardClaims{
-				ExpiresAt: expiresAt,
+			UserName: u.Name,
+			UserID:   u.ID.String(),
+			Role:     role,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(expiresAt),
 			},
 		}
 

@@ -3,7 +3,7 @@ package ensweb
 import (
 	"fmt"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type TokenHelper interface {
@@ -42,7 +42,7 @@ func (t TokenType) String() string {
 
 // GenerateJWTToken will generate JWT token
 func (s *Server) GenerateJWTToken(claims jwt.Claims) string {
-	token := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), claims)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	tokenString, err := token.SignedString([]byte(s.jwtSecret))
 	if err != nil {
