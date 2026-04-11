@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	rubixsync "github.com/rubixchain/rubixgoplatform/core/sync"
 	"github.com/rubixchain/rubixgoplatform/constants"
+	rubixsync "github.com/rubixchain/rubixgoplatform/core/sync"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
@@ -301,7 +301,7 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transa
 			TransactionID:  newTxs[0].tx.ID,
 			TokenType:      tokenType,
 			TokenValue:     tokenValue,
-			TokenStatus:    constants.TokenStatus_Free,
+			TokenStatus:    constants.TokenStatus_Transferred,
 			LatestPosition: nextPosition,
 			LatestRole:     firstRole,
 		}

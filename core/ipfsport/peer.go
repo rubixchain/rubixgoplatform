@@ -145,7 +145,7 @@ func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (
 			did:    did,
 		}
 		scfg := &srvcfg.Config{
-			ServerAddress: "localhost",
+			ServerAddress: "127.0.0.1",
 			ServerPort:    fmt.Sprintf("%d", pm.lport),
 		}
 		p.Client, err = ensweb.NewClient(scfg, p.log)
@@ -164,7 +164,7 @@ func (pm *PeerManager) OpenPeerConn(peerID string, did string, appname string) (
 			return nil, fmt.Errorf("all ports are busy")
 		}
 		scfg := &srvcfg.Config{
-			ServerAddress: "localhost",
+			ServerAddress: "127.0.0.1",
 			ServerPort:    fmt.Sprintf("%d", portNum),
 		}
 		p := &Peer{

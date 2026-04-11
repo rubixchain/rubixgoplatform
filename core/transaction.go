@@ -505,12 +505,19 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 
 	// --- Token chain sync: fill gaps from sender before persisting ---
 	// Collect all token IDs and their PreviousTransactionIDs from the incoming transaction.
+	currentTxID, err := util.GetTransactionID(sendTokensRequest.TransactionInfo)
+	if err != nil {
+		c.log.Error("SendTokens: unable to get trnx id from sendTokensRequest.TransactionInfo, err: ", err)
+	}
+
 	var syncTokenIDs []string
+	var excludedTrnxIDs []string
 	prevTxIDs := make(map[string]string)
 	if txns := sendTokensRequest.TransactionInfo.Tokens; txns != nil {
 		for _, t := range txns.RBT {
 			if t != nil {
 				syncTokenIDs = append(syncTokenIDs, t.TokenID)
+				excludedTrnxIDs = append(excludedTrnxIDs, currentTxID)
 				if t.PreviousTransactionID != "" {
 					prevTxIDs[t.TokenID] = t.PreviousTransactionID
 				}
@@ -519,6 +526,7 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 		for _, t := range txns.FT {
 			if t != nil {
 				syncTokenIDs = append(syncTokenIDs, t.TokenID)
+				excludedTrnxIDs = append(excludedTrnxIDs, currentTxID)
 				if t.PreviousTransactionID != "" {
 					prevTxIDs[t.TokenID] = t.PreviousTransactionID
 				}
@@ -529,6 +537,7 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 			for _, t := range txns.NFT {
 				if t != nil {
 					syncTokenIDs = append(syncTokenIDs, t.TokenID)
+					excludedTrnxIDs = append(excludedTrnxIDs, currentTxID)
 					if t.PreviousTransactionID != "" {
 						prevTxIDs[t.TokenID] = t.PreviousTransactionID
 					}
@@ -543,7 +552,7 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 	// Errors are logged but never break SendTokens — sync is best-effort.
 	if len(syncTokenIDs) > 0 {
 		initiatorDID := sendTokensRequest.TransactionInfo.Initiator
-		if err := c.SyncTransactionChainsFromPeer(initiatorDID, syncTokenIDs, prevTxIDs, nil); err != nil {
+		if err := c.SyncTransactionChainsFromPeer(initiatorDID, syncTokenIDs, prevTxIDs, excludedTrnxIDs); err != nil {
 			c.log.Warn("SendTokens: chain sync from sender failed (non-fatal)", "initiator", initiatorDID, "err", err)
 		}
 	}

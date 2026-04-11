@@ -290,6 +290,7 @@ func (c *Core) registerDID(reqID string, did string) error {
 		return fmt.Errorf("registerDID: failed to resolve did algo id, err: %w", err)
 	}
 	pm.DIDAlgo = algoID
+	c.log.Info("Register DID peer map before publish", "peerMap", pm)
 	err = c.publishPeerMap(pm)
 	if err != nil {
 		c.log.Error("Register DID, failed to publish peer did map", "err", err)
