@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
@@ -33,6 +35,7 @@ func BuildTransactionInfoFromRequest(
 	networkMode string, // The isTestNet bool changed to networkMode string to be passed to CollectRBTTokens
 	log logger.Logger,
 	pubsub *types.PubSub, // punishFn which was of type func(*model.PubSubTxnInfo)  is change to types.PubSub to be passed to CollectRBTTokens
+	referenceID string, // referenceID is added to be passed to LockTokensForSplit and CollectRBTTokens for better traceability of locked tokens
 ) (*models.TransactionInfo, float64, error) {
 
 	txTokens := &models.TransactionTokens{}
@@ -41,7 +44,7 @@ func BuildTransactionInfoFromRequest(
 	// --- RBT path (separate — CollectRBTTokens manages its own locking) ---
 	if req.HasRBT() {
 		ownerDID := dc.GetDID()
-		ownedRBTTokens, err := w.LockTokensForSplit(ctx, ownerDID, req.GetRBTAmount())
+		ownedRBTTokens, err := w.LockTokensForSplit(ctx, ownerDID, req.GetRBTAmount(), referenceID)
 		if err != nil {
 			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: lock RBT tokens for split: %w", err)
 		}
@@ -49,9 +52,42 @@ func BuildTransactionInfoFromRequest(
 		if err != nil {
 			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: get denom array: %w", err)
 		}
-		rbtTokens, _, _, _, err := parts.CollectRBTTokens(dc, w, req.GetRBTAmount(), ownedRBTTokens, denomMap, networkMode, log)
+		rbtTokens, childTokensKept, burntParentToken, mintTokensBeingBurnt, err := parts.CollectRBTTokens(dc, w, req.GetRBTAmount(), ownedRBTTokens, denomMap, networkMode, log)
 		if err != nil {
 			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: RBT collection failed: %w", err)
+		}
+
+		if len(childTokensKept) > 0 && len(burntParentToken) > 0 {
+			genTX := childTokensKept[0].TxRecord
+			if genTX == nil {
+				return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: generated transaction record is nil")
+			}
+
+			if errPersist := w.PersistGenesisTransaction(&wallet.PersistGenesisTransactionReq{
+				DID:                  ownerDID,
+				GenesisTokens:        childTokensKept,
+				BurnTokens:           burntParentToken,
+				GenesisTransaction:   genTX,
+				MintTokensBeingBurnt: mintTokensBeingBurnt,
+			}); errPersist != nil {
+				return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: failed to persist genesis transaction, err: %v", errPersist)
+			}
+
+			var txInfo models.TransactionInfo
+			if err := json.Unmarshal(genTX.Info, &txInfo); err != nil {
+				return nil, 0.0, fmt.Errorf("BuildTransactionInfoFromRequest: failed to unmarshal transaction info, err: %v", err)
+			}
+
+			var txSingature models.Signature
+			if err := json.Unmarshal(genTX.Signature, &txSingature); err != nil {
+				return nil, 0.0, fmt.Errorf("BuildTransactionInfoFromRequest: failed to unmarshal signature, err: %v", err)
+			}
+
+			if networkMode != constants.NetworkMode_Localnet {
+				if _, err := util.PublishTransaction(pubsub, &txInfo, &txSingature, true, ""); err != nil {
+					log.Error("BuildTransactionInfoFromRequest: failed to publish transaction, err: %v", err)
+				}
+			}
 		}
 		txTokens.RBT = rbtTokens
 		totalAmount += req.GetRBTAmount()

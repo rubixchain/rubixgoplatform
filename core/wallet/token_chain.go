@@ -342,6 +342,121 @@ func (w *Wallet) AddTokenChainEntry(entry *models.TokenChain) error {
 	return nil
 }
 
+// ApplyTokenChainBatch atomically inserts a batch of tokenchain entries for a
+// single token and rebuilds its tokenchain_index. All inserts happen inside a
+// single DB transaction — a partial crash rolls back every row, leaving the
+// chain consistent.
+//
+// Safety properties enforced:
+//  1. pg_advisory_xact_lock serializes concurrent callers for the same tokenID.
+//  2. SELECT FOR UPDATE on the current tail prevents concurrent appends.
+//  3. Cross-batch boundary check: entries[0].PreviousTransactionID must match DB tail txID.
+//  4. Within-batch continuity: entries[i].PreviousTransactionID must equal entries[i-1].TransactionID.
+//  5. Canonical positions are recomputed from the DB tail — caller-supplied positions are ignored.
+//  6. INSERT ON CONFLICT DO NOTHING with RowsAffected check: same txID at same position is idempotent;
+//     different txID at same position returns a fork error.
+//  7. batchUpsertTokenChainIndex is called only when at least one new row was inserted.
+//  8. Any error causes full transaction rollback with zero partial writes.
+func (w *Wallet) ApplyTokenChainBatch(ctx context.Context, tokenID string, entries []*models.TokenChain) error {
+	if len(entries) == 0 {
+		return nil
+	}
+
+	// Step 1: Begin transaction.
+	tx, err := w.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("ApplyTokenChainBatch: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	// Step 2: Acquire advisory lock to serialize concurrent callers for this token.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, tokenID); err != nil {
+		return fmt.Errorf("ApplyTokenChainBatch: advisory lock for token %s: %w", tokenID, err)
+	}
+
+	// Step 3: Row lock + read tail — get the current chain tip with FOR UPDATE.
+	var basePosition int64 = -1
+	var lastTxID string
+	hasTail := true
+	err = tx.QueryRow(ctx,
+		`SELECT position, transaction_id FROM tokenchain WHERE token_id = $1 ORDER BY position DESC LIMIT 1 FOR UPDATE`,
+		tokenID,
+	).Scan(&basePosition, &lastTxID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			hasTail = false
+			basePosition = -1
+		} else {
+			return fmt.Errorf("ApplyTokenChainBatch: fetch tail for token %s: %w", tokenID, err)
+		}
+	}
+
+	// Step 4: Cross-batch boundary check.
+	if hasTail {
+		if entries[0].PreviousTransactionID == nil {
+			return fmt.Errorf("ApplyTokenChainBatch: chain boundary mismatch for token %s: position > 0 requires a previous txID but got nil", tokenID)
+		}
+		if *entries[0].PreviousTransactionID != lastTxID {
+			return fmt.Errorf("ApplyTokenChainBatch: chain boundary mismatch for token %s: expected previous txID %s, got %s", tokenID, lastTxID, *entries[0].PreviousTransactionID)
+		}
+	}
+
+	// Step 5: Within-batch continuity check (for entries beyond the first).
+	for i := 1; i < len(entries); i++ {
+		prevTxID := "<nil>"
+		if entries[i].PreviousTransactionID != nil {
+			prevTxID = *entries[i].PreviousTransactionID
+		}
+		if entries[i].PreviousTransactionID == nil || *entries[i].PreviousTransactionID != entries[i-1].TransactionID {
+			return fmt.Errorf("ApplyTokenChainBatch: invalid chain continuity at index %d for token %s: expected %s, got %s", i, tokenID, entries[i-1].TransactionID, prevTxID)
+		}
+	}
+
+	// Step 6: Canonical position recomputation + conflict-aware INSERT loop.
+	inserted := false
+	for i, entry := range entries {
+		canonicalPos := basePosition + int64(i) + 1
+		entry.Position = canonicalPos
+
+		cmdTag, err := tx.Exec(ctx,
+			`INSERT INTO tokenchain (token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at)
+			 VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+			 ON CONFLICT (token_id, position) DO NOTHING`,
+			entry.TokenID, entry.TransactionID, entry.PreviousTransactionID, entry.Role, canonicalPos,
+		)
+		if err != nil {
+			return fmt.Errorf("ApplyTokenChainBatch: insert entry[%d] txID=%s for token %s: %w", i, entry.TransactionID, tokenID, err)
+		}
+
+		if cmdTag.RowsAffected() == 0 {
+			// Conflict: another row already exists at this position.
+			var storedTxID string
+			if err := tx.QueryRow(ctx,
+				`SELECT transaction_id FROM tokenchain WHERE token_id = $1 AND position = $2`,
+				tokenID, canonicalPos,
+			).Scan(&storedTxID); err != nil {
+				return fmt.Errorf("ApplyTokenChainBatch: resolve conflict at position %d for token %s: %w", canonicalPos, tokenID, err)
+			}
+			if storedTxID != entry.TransactionID {
+				return fmt.Errorf("ApplyTokenChainBatch: chain conflict detected at position %d for token %s: stored txID %s, incoming txID %s", canonicalPos, tokenID, storedTxID, entry.TransactionID)
+			}
+			// Idempotent: same txID already stored — skip, do not set inserted.
+		} else {
+			inserted = true
+		}
+	}
+
+	// Step 7: Conditional index rebuild — only when at least one new row was inserted.
+	if inserted {
+		if err := w.batchUpsertTokenChainIndex(ctx, tx, []string{tokenID}); err != nil {
+			return fmt.Errorf("ApplyTokenChainBatch: upsert tokenchain_index: %w", err)
+		}
+	}
+
+	// Step 8: Commit.
+	return tx.Commit(ctx)
+}
+
 func (w *Wallet) GetTransactionAndRoleAtHeight(tokenID string, height int64) (*models.Transactions, int16, error) {
 	row := w.db.Pool().QueryRow(w.Ctx, `
 		SELECT transaction_id,role FROM tokenchain WHERE token_id = $1 AND position = $2

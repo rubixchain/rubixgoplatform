@@ -9,10 +9,7 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "contact": {
-            "name": "API Support",
-            "email": "murali.c@ensurity.com"
-        },
+        "contact": {},
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
@@ -40,38 +37,6 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/server.DIDPeerMapTemp"
                         }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/check-pinned-state": {
-            "delete": {
-                "description": "This API is used to check if the token state for which the token is pledged is exhausted or not.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Account"
-                ],
-                "summary": "Check for exhausted token state hash",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Token State Hash",
-                        "name": "tokenstatehash",
-                        "in": "query",
-                        "required": true
                     }
                 ],
                 "responses": {
@@ -284,38 +249,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/get-account-info": {
-            "get": {
-                "description": "For a mentioned DID, check the account balance",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Account"
-                ],
-                "summary": "Check account balance",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "User DID",
-                        "name": "did",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/get-failed-ft-download-status": {
             "post": {
                 "description": "This API returns the status of failed FT downloads",
@@ -346,38 +279,6 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/get-ft-info-by-did": {
-            "get": {
-                "description": "This API endpoint retrieves the names and count of FTs of a given DID.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "FT"
-                ],
-                "summary": "Get FT balance information for a given DID",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "User DID",
-                        "name": "did",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.GetFTInfo"
                         }
                     }
                 }
@@ -454,56 +355,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/get-nfts-by-did": {
-            "get": {
-                "description": "This API will get all NFTs owned by the particular did",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "NFT"
-                ],
-                "summary": "Get NFTs owned by the particular did",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "name": "did",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.NFTList"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/get-pledgedtoken-details": {
-            "get": {
-                "description": "This API allows the user to get details about the tokens the quorums have pledged i.e. which token is pledged for which token state",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Account"
-                ],
-                "summary": "Get details about the pledged tokens",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.TokenStateResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/get-smart-contract-token-chain-data": {
             "post": {
                 "description": "This API will return smart contract token chain data",
@@ -526,41 +377,6 @@ const docTemplate = `{
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/server.GetSmartContractTokenChainDataSwaggoInput"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/initiate-self-transfer": {
-            "post": {
-                "description": "This API will initiate self RBT transfer for a specific DID",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Account"
-                ],
-                "summary": "Initiate Self Transfer",
-                "operationId": "initiate-self-transfer",
-                "parameters": [
-                    {
-                        "description": "Intitate Self RBT transfer",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.RBTSelfTransferRequestSwaggoInput"
                         }
                     }
                 ],
@@ -772,105 +588,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/sign": {
-            "post": {
-                "description": "Accepts a DID and message to request an arbitrary signature asynchronously.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Signature"
-                ],
-                "summary": "Request Arbitrary Signature",
-                "operationId": "arbitrary-signature",
-                "parameters": [
-                    {
-                        "description": "Arbitrary Signature Request",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.ArbitrarySignRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/signature-response": {
-            "post": {
-                "description": "This API is used to supply the password for the node along with the ID generated when Initiate RBT transfer is called.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Account"
-                ],
-                "summary": "Signature Response",
-                "operationId": "signature-response",
-                "parameters": [
-                    {
-                        "description": "Send input for requested signature",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.SignatureResponseSwaggoInput"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/start": {
-            "get": {
-                "description": "It will setup the core if not done before",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Basic"
-                ],
-                "summary": "Start Core",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/subscribe-nft": {
             "post": {
                 "description": "This API endpoint allows subscribing to a NFT.",
@@ -939,9 +656,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/verify-signature": {
+        "/rubix/v1/dids": {
             "get": {
-                "description": "Verifies a signature for a given DID and signed message.",
+                "description": "Retrieves a list of all DIDs.",
                 "consumes": [
                     "application/json"
                 ],
@@ -949,30 +666,236 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Signature"
+                    "DID"
                 ],
-                "summary": "Verify Arbitrary Signature",
-                "operationId": "verify-arbitrary-signature",
+                "summary": "Get All DIDs",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/dids/create": {
+            "post": {
+                "description": "Creates a new DID with the provided public key, password, and mnemonic.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "DID"
+                ],
+                "summary": "Create DID",
+                "parameters": [
+                    {
+                        "description": "Create DID Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.DIDCreate"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/dids/{did}/balances": {
+            "get": {
+                "description": "Retrieves the overall balance (RBT, FT, NFT) for a given DID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "DID"
+                ],
+                "summary": "Get DID Balance",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "DID of the signer",
-                        "name": "signer_did",
-                        "in": "query",
+                        "description": "DID (e.g. did:bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)",
+                        "name": "did",
+                        "in": "path",
                         "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
                     },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/dids/{did}/balances/ft": {
+            "get": {
+                "description": "Retrieves the Fungible Token (FT) balance for a given DID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "DID"
+                ],
+                "summary": "Get FT Balance",
+                "parameters": [
                     {
                         "type": "string",
-                        "description": "Signed message",
-                        "name": "signed_msg",
-                        "in": "query",
+                        "description": "DID (e.g. did:bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)",
+                        "name": "did",
+                        "in": "path",
                         "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
                     },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/dids/{did}/balances/nft": {
+            "get": {
+                "description": "Retrieves the Non-Fungible Token (NFT) balance for a given DID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "DID"
+                ],
+                "summary": "Get NFT Balance",
+                "parameters": [
                     {
                         "type": "string",
-                        "description": "Signature to verify",
-                        "name": "signature",
-                        "in": "query",
+                        "description": "DID (e.g. did:bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)",
+                        "name": "did",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/dids/{did}/balances/rbt": {
+            "get": {
+                "description": "Retrieves the RBT token balance for a given DID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "DID"
+                ],
+                "summary": "Get RBT Balance",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "DID (e.g. did:bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)",
+                        "name": "did",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/dids/{did}/register": {
+            "post": {
+                "description": "Registers a DID on the network.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "DID"
+                ],
+                "summary": "Register DID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "DID to register (e.g. did:bafybmih2cqn6okxy2sepgp75jq5dkopuohnbd3pfrrylmqnrz43ttihkky)",
+                        "name": "did",
+                        "in": "path",
                         "required": true
                     }
                 ],
@@ -1088,6 +1011,141 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/signature": {
+            "post": {
+                "description": "This API is used to supply the password for the node along with the ID generated when Initiate RBT transfer is called.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Signature"
+                ],
+                "summary": "Signature Response",
+                "operationId": "signature-response",
+                "parameters": [
+                    {
+                        "description": "Send input for requested signature",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.SignRespData"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/signature/arbitrary": {
+            "post": {
+                "description": "Accepts a DID and message to request an arbitrary signature asynchronously.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Signature"
+                ],
+                "summary": "Request Arbitrary Signature",
+                "operationId": "arbitrary-signature",
+                "parameters": [
+                    {
+                        "description": "Arbitrary Signature Request",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.ArbitrarySignRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/signature/verify": {
+            "get": {
+                "description": "Verifies a signature for a given DID and signed message.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Signature"
+                ],
+                "summary": "Verify Arbitrary Signature",
+                "operationId": "verify-arbitrary-signature",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "DID of the signer",
+                        "name": "signer_did",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Signed message",
+                        "name": "signed_msg",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Signature to verify",
+                        "name": "signature",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/model.BasicResponse"
                         }
@@ -1296,38 +1354,6 @@ const docTemplate = `{
                 }
             }
         },
-        "model.FTInfo": {
-            "type": "object",
-            "properties": {
-                "creator_did": {
-                    "type": "string"
-                },
-                "ft_count": {
-                    "type": "integer"
-                },
-                "ft_name": {
-                    "type": "string"
-                }
-            }
-        },
-        "model.GetFTInfo": {
-            "type": "object",
-            "properties": {
-                "ft_info": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.FTInfo"
-                    }
-                },
-                "message": {
-                    "type": "string"
-                },
-                "result": {},
-                "status": {
-                    "type": "boolean"
-                }
-            }
-        },
         "model.GetTokenChainResponce": {
             "type": "object",
             "properties": {
@@ -1379,38 +1405,6 @@ const docTemplate = `{
                 "result": {},
                 "status": {
                     "type": "boolean"
-                }
-            }
-        },
-        "model.PledgedTokenStateDetails": {
-            "type": "object",
-            "properties": {
-                "did": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string"
-                },
-                "token_state": {
-                    "type": "string"
-                }
-            }
-        },
-        "model.TokenStateResponse": {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string"
-                },
-                "result": {},
-                "status": {
-                    "type": "boolean"
-                },
-                "token_state_details": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.PledgedTokenStateDetails"
-                    }
                 }
             }
         },
@@ -1660,17 +1654,6 @@ const docTemplate = `{
                 }
             }
         },
-        "server.RBTSelfTransferRequestSwaggoInput": {
-            "type": "object",
-            "properties": {
-                "sender": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "integer"
-                }
-            }
-        },
         "server.RegisterCallBackURLSwaggoInput": {
             "type": "object",
             "properties": {
@@ -1690,16 +1673,37 @@ const docTemplate = `{
                 }
             }
         },
-        "server.SignatureResponseSwaggoInput": {
+        "types.DIDCreate": {
+            "type": "object",
+            "properties": {
+                "childPath": {
+                    "type": "integer"
+                },
+                "mnemonic": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "private_key": {
+                    "type": "string"
+                },
+                "public_key": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.SignRespData": {
             "type": "object",
             "properties": {
                 "id": {
                     "type": "string"
                 },
-                "mode": {
-                    "type": "integer"
-                },
                 "password": {
+                    "type": "string"
+                },
+                "signature": {
+                    "description": "signature string should be base64",
                     "type": "string"
                 }
             }
@@ -1716,7 +1720,7 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "0.9",
+	Version:          "1.0",
 	Host:             "",
 	BasePath:         "",
 	Schemes:          []string{},

@@ -27,10 +27,10 @@ db_name = "rubix"
 
 [db.config]
 max_connections = 50
-min_connections = 5
-max_connection_lifetime_seconds = 1
-max_connection_idletime_seconds = 1
-statement_timeout_seconds = 5
+min_connections = 10
+max_connection_lifetime_seconds = 60
+max_connection_idletime_seconds = 30
+statement_timeout_seconds = 20
 
 [ipfs]
 mainnet_bootstrap_nodes = [
@@ -135,7 +135,7 @@ func CreateRubixConfigFromUserConfig(userConfig types.UserConfig, nodeDir string
 		return types.RubixConfig{}, fmt.Errorf("failed while creating RubixConfig, invalid network type: %v", userConfig.Core.NetworkMode)
 	}
 
-	rubixConfig.NetworkDir = filepath.Join(nodeDir, networkDirName) 
+	rubixConfig.NetworkDir = filepath.Join(nodeDir, networkDirName)
 	rubixConfig.DidDir = filepath.Join(rubixConfig.NetworkDir, "dids")
 	rubixConfig.TrustedNetwork = userConfig.Core.EnableTrustedNetwork
 

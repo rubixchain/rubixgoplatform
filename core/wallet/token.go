@@ -65,6 +65,33 @@ func (w *Wallet) GetFreeRBTTokens(ownerDid string) ([]models.Token, []string, er
 	return freeTokens, freeTokenIDs, nil
 }
 
+// GetFreeRBTBalanceByDID returns the total token_value of all free RBT tokens
+// owned by the given DID. Returns 0.0 if no free RBT tokens exist for the DID.
+//
+// This helper MUST match the filter semantics used by LockTokensForSplit so
+// that the resulting balance reflects exactly what the locker would see:
+//   - token_type = RBT
+//   - token_status = Free
+//   - did = <arg>
+//
+// Used by requestPledgeTokenHandler as a cheap pre-check to avoid calling
+// LockTokensForSplit when the quorum clearly cannot satisfy the request.
+func (w *Wallet) GetFreeRBTBalanceByDID(did string) (float64, error) {
+	var balance float64
+	err := w.db.Pool().QueryRow(w.Ctx,
+		`SELECT COALESCE(SUM(token_value), 0)
+		 FROM tokens
+		 WHERE did = $1
+		   AND token_type = (SELECT id FROM token_type WHERE name = $2)
+		   AND token_status = $3`,
+		did, constants.TokenType_RBT, constants.TokenStatus_Free,
+	).Scan(&balance)
+	if err != nil {
+		return 0, fmt.Errorf("GetFreeRBTBalanceByDID: %w", err)
+	}
+	return balance, nil
+}
+
 func (w *Wallet) GetTokenByTokenID(tokenID string) (models.Token, error) {
 	row := w.db.Pool().QueryRow(w.Ctx,
 		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
@@ -361,49 +388,107 @@ func (w *Wallet) GetAllPinnedTokens(did string) ([]models.Token, error) {
 // ReleaseAllLockedRBTTokensForDID resets all Locked RBT tokens for a DID back to Free.
 // Called on transaction failure after LockTokensForSplit to prevent tokens from staying
 // permanently locked when the transaction does not complete.
-func (w *Wallet) ReleaseAllLockedRBTTokensForDID(ctx context.Context, ownerDID string) error {
+func (w *Wallet) ReleaseAllLockedRBTTokensForDID(ctx context.Context, ownerDID string, referenceId string) error {
 	_, err := w.db.Pool().Exec(ctx,
-		`UPDATE tokens SET token_status=$1, updated_at=$2
-		 WHERE did=$3
-		   AND token_status=$4
-		   AND token_type=(SELECT id FROM token_type WHERE name=$5)`,
-		constants.TokenStatus_Free, time.Now(), ownerDID, constants.TokenStatus_Locked, constants.TokenType_RBT,
+		`UPDATE tokens SET token_status=$1, updated_at=$2, lock_reference_id=NULL
+		 WHERE did=$4
+		   AND token_status=$5
+		   AND lock_reference_id=$3
+		   AND token_type=(SELECT id FROM token_type WHERE name=$6)`,
+		constants.TokenStatus_Free, time.Now(), referenceId, ownerDID, constants.TokenStatus_Locked, constants.TokenType_RBT,
 	)
 	return err
 }
 
 // ReleaseNonSelectedLockedRBTTokensForDID resets all Locked RBT tokens for a DID back to Free,
-// EXCLUDING the specified selectedTokenIDs. Used by the quorum pledge handler to release
-// candidate tokens that were locked by LockTokensForSplit but not chosen for the pledge,
-// while keeping the selected pledge tokens Locked so PledgeTokens can transition them to Pledged.
-func (w *Wallet) ReleaseNonSelectedLockedRBTTokensForDID(ctx context.Context, ownerDID string, selectedTokenIDs []string) error {
+// EXCLUDING the specified selectedTokenIDs, scoped to the given referenceID so that concurrent
+// pledge requests for the same DID cannot accidentally free each other's locked tokens.
+// Used by the quorum pledge handler to release candidate tokens that were locked by
+// LockTokensForSplit but not chosen for the pledge, while keeping the selected pledge
+// tokens Locked so PledgeTokens can transition them to Pledged.
+func (w *Wallet) ReleaseNonSelectedLockedRBTTokensForDID(ctx context.Context, ownerDID string, selectedTokenIDs []string, referenceID string) error {
 	_, err := w.db.Pool().Exec(ctx,
-		`UPDATE tokens SET token_status=$1, updated_at=$2
+		`UPDATE tokens SET token_status=$1, updated_at=$2, lock_reference_id=NULL
 		 WHERE did=$3
 		   AND token_status=$4
-		   AND token_type=(SELECT id FROM token_type WHERE name=$5)
-		   AND token_id != ALL($6::text[])`,
-		constants.TokenStatus_Free, time.Now(), ownerDID, constants.TokenStatus_Locked, constants.TokenType_RBT, selectedTokenIDs,
+		   AND lock_reference_id=$5
+		   AND token_type=(SELECT id FROM token_type WHERE name=$6)
+		   AND token_id != ALL($7::text[])`,
+		constants.TokenStatus_Free, time.Now(), ownerDID, constants.TokenStatus_Locked, referenceID, constants.TokenType_RBT, selectedTokenIDs,
 	)
 	return err
 }
 
-// ReleaseTokens sets the status of a slice of tokens back to Free (unlocked).
+// GetTokenLockReferenceIDs returns a map token_id -> lock_reference_id for the
+// given token IDs. A nil string pointer means the row exists but lock_reference_id
+// IS NULL. Missing keys mean the token row does not exist in the DB.
+func (w *Wallet) GetTokenLockReferenceIDs(ctx context.Context, tokenIDs []string) (map[string]*string, error) {
+	if len(tokenIDs) == 0 {
+		return map[string]*string{}, nil
+	}
+	rows, err := w.db.Pool().Query(ctx,
+		`SELECT token_id, lock_reference_id FROM tokens WHERE token_id = ANY($1::text[])`,
+		tokenIDs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetTokenLockReferenceIDs: query: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[string]*string, len(tokenIDs))
+	for rows.Next() {
+		var id string
+		var ref *string
+		if err := rows.Scan(&id, &ref); err != nil {
+			return nil, fmt.Errorf("GetTokenLockReferenceIDs: scan: %w", err)
+		}
+		out[id] = ref
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("GetTokenLockReferenceIDs: iter: %w", err)
+	}
+	return out, nil
+}
+
+// ReleaseTokens sets the status of a slice of tokens back to Free (unlocked),
+// scoped to the provided referenceID so it cannot accidentally free tokens
+// belonging to a concurrent request with a different lock_reference_id.
 // It accepts the same []*models.TokenInfo slice returned by CollectRBTTokens.
 // This is a best-effort operation: errors are logged but do not abort the loop.
-func (w *Wallet) ReleaseTokens(tokens []*models.TokenInfo) {
+// If referenceID is empty the function is a no-op to guard against unscoped calls.
+func (w *Wallet) ReleaseTokens(tokens []*models.TokenInfo, referenceID string) {
+	if referenceID == "" {
+		w.log.Warn("ReleaseTokens: called with empty referenceID; refusing to release", "tokenCount", len(tokens))
+		return
+	}
 	for _, t := range tokens {
 		if t == nil || t.TokenID == "" {
 			continue
 		}
 		if _, err := w.db.Pool().Exec(w.Ctx,
-			`UPDATE tokens SET token_status=$1 WHERE token_id=$2`,
-			constants.TokenStatus_Free, t.TokenID,
+			`UPDATE tokens SET token_status=$1, lock_reference_id=NULL
+			 WHERE token_id=$2 AND lock_reference_id=$3`,
+			constants.TokenStatus_Free, t.TokenID, referenceID,
 		); err != nil {
 			// Log but do not propagate — release is best-effort
-			_ = fmt.Errorf("ReleaseTokens: failed to release token %s: %w", t.TokenID, err)
+			w.log.Warn("ReleaseTokens: failed to release token", "tokenID", t.TokenID, "err", err)
 		}
 	}
+}
+
+// ReleaseTokens sets the status of a slice of tokens back to Free (unlocked).
+// It accepts the same []*models.TokenInfo slice returned by CollectRBTTokens.
+// This is a best-effort operation: errors are logged but do not abort the loop.
+func (w *Wallet) ReleaseReferenceID(referenceId string) error {
+
+	if _, err := w.db.Pool().Exec(w.Ctx,
+		`UPDATE tokens SET lock_reference_id=NULL WHERE lock_reference_id=$1`,
+		referenceId,
+	); err != nil {
+		// Log but do not propagate — release is best-effort
+		_ = fmt.Errorf("ReleaseReferenceID: failed to release tokens for reference ID %s: %w", referenceId, err)
+		return fmt.Errorf("ReleaseReferenceID: failed to release tokens for reference ID %s: %w", referenceId, err)
+	}
+	return nil
 }
 
 func (w *Wallet) IsDIDExist(did string) bool {
@@ -582,4 +667,14 @@ func (w *Wallet) GetWholeRBTs(numToken int, didStr string) (remainingAmount int,
 	}
 	remainingAmount = numToken - len(wholeRbtList)
 	return remainingAmount, wholeRbtList, rows.Err()
+}
+
+func (w *Wallet) IsRBTExists(id string) bool {
+	var exists bool
+	_ = w.db.Pool().QueryRow(w.Ctx,
+		`SELECT EXISTS(SELECT 1 FROM tokens WHERE token_id=$1 AND token_type=$2)`, 
+		id,
+		models.GetTokenTypeID(constants.TokenType_RBT),
+	).Scan(&exists)
+	return exists
 }

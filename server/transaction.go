@@ -5,6 +5,12 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
+type syncTransactionChainRequest struct {
+	DID                   string   `json:"did"`
+	TokenIDs              []string `json:"token_ids"`
+	ExcludeTransactionIDs []string `json:"exclude_transaction_ids,omitempty"`
+}
+
 // @Summary Initiates a transaction
 // @Description Initiate a transaction
 // @ID txInit
@@ -65,6 +71,32 @@ func (s *Server) APIGetTransactions(req *ensweb.Request) *ensweb.Result {
 	}
 
 	return s.BasicResponse(req, true, "", transactions)
+}
+
+// APISyncTransactionChain godoc
+// @Summary      Sync transaction chains for tokens
+// @Description  Returns ordered transaction chains for the requested token IDs, optionally excluding specific transaction IDs
+// @Tags         tx
+// @ID           syncTxChain
+// @Accept       json
+// @Produce      json
+// @Param        input body syncTransactionChainRequest true "sync request"
+// @Success      200  {object}  model.BasicResponse
+// @Router       /rubix/v1/sync-transaction-chain [post]
+func (s *Server) APISyncTransactionChain(req *ensweb.Request) *ensweb.Result {
+	var syncReq syncTransactionChainRequest
+	err := s.ParseJSON(req, &syncReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	if len(syncReq.TokenIDs) == 0 {
+		return s.BasicResponse(req, true, "no token_ids provided", nil)
+	}
+	data, err := s.c.GetSyncTransactionChainData(syncReq.TokenIDs, syncReq.ExcludeTransactionIDs)
+	if err != nil {
+		return s.BasicResponse(req, false, err.Error(), nil)
+	}
+	return s.BasicResponse(req, true, "ok", data)
 }
 
 // APIGetTransactionsByDID godoc

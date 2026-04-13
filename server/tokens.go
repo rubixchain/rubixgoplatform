@@ -82,15 +82,16 @@ type RBTTransferRequestSwaggoInput struct {
 	Type       int     `json:"type"`
 }
 
-// ShowAccount godoc
-// @Summary      Check account balance
-// @Description  For a mentioned DID, check the account balance
-// @Tags         Account
+// GetRBTBalance godoc
+// @Summary      Get RBT Balance
+// @Description  Retrieves the RBT token balance for a given DID.
+// @Tags         DID
 // @Accept       json
 // @Produce      json
-// @Param        did      	   query      string  true  "User DID"
-// @Success 200 {object} model.BasicResponse
-// @Router /api/get-account-info [get]
+// @Param        did  path      string  true  "DID (e.g. did:bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)"
+// @Success      200  {object}  model.BasicResponse
+// @Failure      400  {object}  model.BasicResponse
+// @Router       /rubix/v1/dids/{did}/balances/rbt [get]
 func (s *Server) APIGetRbtByDid(req *ensweb.Request) *ensweb.Result {
 	did := s.GetRouteVar(req, "did")
 	if !s.validateDIDAccess(req, did) {
@@ -107,10 +108,10 @@ func (s *Server) APIGetRbtByDid(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, err.Error(), nil)
 	}
 	ac := model.BasicResponse{
-			Status:  true,
-			Message: "Got account info successfully",
-			Result: info,
-		}
+		Status:  true,
+		Message: "Got account info successfully",
+		Result:  info,
+	}
 	return s.RenderJSON(req, ac, http.StatusOK)
 }
 
@@ -123,13 +124,14 @@ type SignatureResponseSwaggoInput struct {
 // ShowAccount godoc
 // @Summary     Signature Response
 // @Description This API is used to supply the password for the node along with the ID generated when Initiate RBT transfer is called.
-// @Tags        Account
+// @Tags        Signature
 // @ID 			signature-response
 // @Accept      json
 // @Produce     json
-// @Param 		input body SignatureResponseSwaggoInput true "Send input for requested signature"
-// @Success 	200		{object}	model.BasicResponse
-// @Router /api/signature-response [post]
+// @Param 		input body types.SignRespData true "Send input for requested signature"
+// @Success      200      {object}  model.BasicResponse
+// @Failure      400      {object}  model.BasicResponse
+// @Router /rubix/v1/signature [post]
 func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
 	var resp types.SignRespData
 	err := s.ParseJSON(req, &resp)
@@ -145,13 +147,6 @@ func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, resp.ID)
 }
 
-// APIGetPledgedTokenDetails godoc
-// @Summary     Get details about the pledged tokens
-// @Description This API allows the user to get details about the tokens the quorums have pledged i.e. which token is pledged for which token state
-// @Tags        Account
-// @Produce     json
-// @Success     200 {object} model.TokenStateResponse
-// @Router      /api/get-pledgedtoken-details [get]
 func (s *Server) APIGetPledgedTokenDetails(req *ensweb.Request) *ensweb.Result {
 	pledgedTokenInfo, err := s.c.GetPledgedInfo()
 	if err != nil {
@@ -168,15 +163,6 @@ func (s *Server) APIGetPledgedTokenDetails(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSON(req, tokenstateresponse, http.StatusOK)
 }
 
-// APICheckPinnedState godoc
-// @Summary     Check for exhausted token state hash
-// @Description This API is used to check if the token state for which the token is pledged is exhausted or not.
-// @Tags        Account
-// @Accept      json
-// @Produce     json
-// @Param       tokenstatehash	query	string	true	"Token State Hash"
-// @Success 	200		{object}	model.BasicResponse
-// @Router /api/check-pinned-state [delete]
 func (s *Server) APICheckPinnedState(req *ensweb.Request) *ensweb.Result {
 	tokenstatehash := s.GetQuery(req, "tokenstatehash")
 

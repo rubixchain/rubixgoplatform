@@ -2,8 +2,10 @@ package consensus
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/types"
@@ -25,7 +27,7 @@ func ReqPledgeToken(
 
 	log.Info("ReqPledgeToken : Request received to pledge tokens for transaction", "referenceId", referenceId, "transactionValue", transactionValue, "networkMode", networkMode)
 	// Lock and fetch free RBT tokens for split/transfer.
-	lockedTokens, err := w.LockTokensForSplit(context.Background(), dc.GetDID(), transactionValue)
+	lockedTokens, err := w.LockTokensForSplit(context.Background(), dc.GetDID(), transactionValue, referenceId)
 	if err != nil {
 		return models.PledgeTokenResponse{}, fmt.Errorf("ReqPledgeToken: failed to lock tokens for split: %w", err)
 	}
@@ -34,7 +36,7 @@ func ReqPledgeToken(
 		return models.PledgeTokenResponse{}, fmt.Errorf("ReqPledgeToken: failed to fetch token denom array: %w", err)
 	}
 
-	pledgeTokenDetails, _, _, _, err := parts.CollectRBTTokens(
+	pledgeTokenDetails, childTokensKept, burntParentToken, mintTokensBeingBurnt, err := parts.CollectRBTTokens(
 		dc,
 		w,
 		transactionValue,
@@ -43,11 +45,41 @@ func ReqPledgeToken(
 		networkMode,
 		log,
 	)
-	// TODO(phase09): handle childRecords and parentsToBurn for pledge path
-
 	if err != nil {
 		log.Error("Failed to get tokens", "err", err)
 		return models.PledgeTokenResponse{}, err
+	}
+
+	if len(childTokensKept) > 0 && len(burntParentToken) > 0 {
+		genTX := childTokensKept[0].TxRecord
+		if errPersist := w.PersistGenesisTransaction(&wallet.PersistGenesisTransactionReq{
+			DID:                  dc.GetDID(),
+			GenesisTokens:        childTokensKept,
+			BurnTokens:           burntParentToken,
+			GenesisTransaction:   genTX,
+			MintTokensBeingBurnt: mintTokensBeingBurnt,
+		}); errPersist != nil {
+			return models.PledgeTokenResponse{}, fmt.Errorf("reqPledgeToken: failed to persist genesis transaction, err: %v", errPersist)
+		}
+		if genTX.Info == nil {
+			return models.PledgeTokenResponse{}, fmt.Errorf("reqPledgeToken: generated transaction info is nil")
+		}
+
+		var txInfo models.TransactionInfo
+		if err := json.Unmarshal(genTX.Info, &txInfo); err != nil {
+			return models.PledgeTokenResponse{}, fmt.Errorf("reqPledgeToken: failed to unmarshal transaction info, err: %v", err)
+		}
+
+		var txSingature models.Signature
+		if err := json.Unmarshal(genTX.Signature, &txSingature); err != nil {
+			return models.PledgeTokenResponse{}, fmt.Errorf("reqPledgeToken: failed to unmarshal signature, err: %v", err)
+		}
+
+		if networkMode != constants.NetworkMode_Localnet {
+			if _, err := util.PublishTransaction(pubsub, &txInfo, &txSingature, true, ""); err != nil {
+				log.Error("reqPledgeToken: failed to publish transaction, err: %v", err)
+			}
+		}
 	}
 
 	if len(pledgeTokenDetails) == 0 {

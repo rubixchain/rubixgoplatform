@@ -14,27 +14,6 @@ definitions:
       status:
         type: boolean
     type: object
-  model.FTInfo:
-    properties:
-      creator_did:
-        type: string
-      ft_count:
-        type: integer
-      ft_name:
-        type: string
-    type: object
-  model.GetFTInfo:
-    properties:
-      ft_info:
-        items:
-          $ref: '#/definitions/model.FTInfo'
-        type: array
-      message:
-        type: string
-      result: {}
-      status:
-        type: boolean
-    type: object
   model.GetTokenChainResponce:
     properties:
       message:
@@ -70,27 +49,6 @@ definitions:
       result: {}
       status:
         type: boolean
-    type: object
-  model.PledgedTokenStateDetails:
-    properties:
-      did:
-        type: string
-      token:
-        type: string
-      token_state:
-        type: string
-    type: object
-  model.TokenStateResponse:
-    properties:
-      message:
-        type: string
-      result: {}
-      status:
-        type: boolean
-      token_state_details:
-        items:
-          $ref: '#/definitions/model.PledgedTokenStateDetails'
-        type: array
     type: object
   models.FTInfo:
     properties:
@@ -251,13 +209,6 @@ definitions:
       smartContractToken:
         type: string
     type: object
-  server.RBTSelfTransferRequestSwaggoInput:
-    properties:
-      sender:
-        type: string
-      type:
-        type: integer
-    type: object
   server.RegisterCallBackURLSwaggoInput:
     properties:
       CallBackURL:
@@ -270,22 +221,34 @@ definitions:
       did:
         type: string
     type: object
-  server.SignatureResponseSwaggoInput:
+  types.DIDCreate:
+    properties:
+      childPath:
+        type: integer
+      mnemonic:
+        type: string
+      password:
+        type: string
+      private_key:
+        type: string
+      public_key:
+        type: string
+    type: object
+  types.SignRespData:
     properties:
       id:
         type: string
-      mode:
-        type: integer
       password:
+        type: string
+      signature:
+        description: signature string should be base64
         type: string
     type: object
 info:
-  contact:
-    email: murali.c@ensurity.com
-    name: API Support
+  contact: {}
   description: Rubix core API to control & manage the node.
   title: Rubix Core
-  version: "0.9"
+  version: "1.0"
 paths:
   /api/add-peer-details:
     post:
@@ -307,28 +270,6 @@ paths:
           schema:
             $ref: '#/definitions/model.BasicResponse'
       summary: Add Peer
-      tags:
-      - Account
-  /api/check-pinned-state:
-    delete:
-      consumes:
-      - application/json
-      description: This API is used to check if the token state for which the token
-        is pledged is exhausted or not.
-      parameters:
-      - description: Token State Hash
-        in: query
-        name: tokenstatehash
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Check for exhausted token state hash
       tags:
       - Account
   /api/deploy-nft:
@@ -463,27 +404,6 @@ paths:
       summary: Fetch Smart Contract
       tags:
       - Smart Contract
-  /api/get-account-info:
-    get:
-      consumes:
-      - application/json
-      description: For a mentioned DID, check the account balance
-      parameters:
-      - description: User DID
-        in: query
-        name: did
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Check account balance
-      tags:
-      - Account
   /api/get-failed-ft-download-status:
     post:
       consumes:
@@ -505,28 +425,6 @@ paths:
           schema:
             $ref: '#/definitions/model.BasicResponse'
       summary: Get Failed FT Download Status
-      tags:
-      - FT
-  /api/get-ft-info-by-did:
-    get:
-      consumes:
-      - application/json
-      description: This API endpoint retrieves the names and count of FTs of a given
-        DID.
-      parameters:
-      - description: User DID
-        in: query
-        name: did
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.GetFTInfo'
-      summary: Get FT balance information for a given DID
       tags:
       - FT
   /api/get-ft-token-chain:
@@ -576,39 +474,6 @@ paths:
       summary: Get NFT Token Chain Data
       tags:
       - NFT
-  /api/get-nfts-by-did:
-    get:
-      consumes:
-      - application/json
-      description: This API will get all NFTs owned by the particular did
-      parameters:
-      - in: query
-        name: did
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.NFTList'
-      summary: Get NFTs owned by the particular did
-      tags:
-      - NFT
-  /api/get-pledgedtoken-details:
-    get:
-      description: This API allows the user to get details about the tokens the quorums
-        have pledged i.e. which token is pledged for which token state
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.TokenStateResponse'
-      summary: Get details about the pledged tokens
-      tags:
-      - Account
   /api/get-smart-contract-token-chain-data:
     post:
       consumes:
@@ -632,29 +497,6 @@ paths:
       summary: Get Smart Contract Token Chain Data
       tags:
       - Smart Contract
-  /api/initiate-self-transfer:
-    post:
-      consumes:
-      - application/json
-      description: This API will initiate self RBT transfer for a specific DID
-      operationId: initiate-self-transfer
-      parameters:
-      - description: Intitate Self RBT transfer
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.RBTSelfTransferRequestSwaggoInput'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Initiate Self Transfer
-      tags:
-      - Account
   /api/list-nfts:
     get:
       consumes:
@@ -787,72 +629,6 @@ paths:
       summary: Retry Failed FT Downloads
       tags:
       - FT
-  /api/sign:
-    post:
-      consumes:
-      - application/json
-      description: Accepts a DID and message to request an arbitrary signature asynchronously.
-      operationId: arbitrary-signature
-      parameters:
-      - description: Arbitrary Signature Request
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/model.ArbitrarySignRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Request Arbitrary Signature
-      tags:
-      - Signature
-  /api/signature-response:
-    post:
-      consumes:
-      - application/json
-      description: This API is used to supply the password for the node along with
-        the ID generated when Initiate RBT transfer is called.
-      operationId: signature-response
-      parameters:
-      - description: Send input for requested signature
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.SignatureResponseSwaggoInput'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Signature Response
-      tags:
-      - Account
-  /api/start:
-    get:
-      consumes:
-      - application/json
-      description: It will setup the core if not done before
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Start Core
-      tags:
-      - Basic
   /api/subscribe-nft:
     post:
       consumes:
@@ -897,26 +673,34 @@ paths:
       summary: Subscribe to Smart Contract
       tags:
       - Smart Contract
-  /api/verify-signature:
+  /rubix/v1/dids:
     get:
       consumes:
       - application/json
-      description: Verifies a signature for a given DID and signed message.
-      operationId: verify-arbitrary-signature
+      description: Retrieves a list of all DIDs.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get All DIDs
+      tags:
+      - DID
+  /rubix/v1/dids/{did}/balances:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the overall balance (RBT, FT, NFT) for a given DID.
       parameters:
-      - description: DID of the signer
-        in: query
-        name: signer_did
-        required: true
-        type: string
-      - description: Signed message
-        in: query
-        name: signed_msg
-        required: true
-        type: string
-      - description: Signature to verify
-        in: query
-        name: signature
+      - description: DID (e.g. did:bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)
+        in: path
+        name: did
         required: true
         type: string
       produces:
@@ -930,9 +714,135 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/model.BasicResponse'
-      summary: Verify Arbitrary Signature
+      summary: Get DID Balance
       tags:
-      - Signature
+      - DID
+  /rubix/v1/dids/{did}/balances/ft:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the Fungible Token (FT) balance for a given DID.
+      parameters:
+      - description: DID (e.g. did:bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)
+        in: path
+        name: did
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get FT Balance
+      tags:
+      - DID
+  /rubix/v1/dids/{did}/balances/nft:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the Non-Fungible Token (NFT) balance for a given DID.
+      parameters:
+      - description: DID (e.g. did:bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)
+        in: path
+        name: did
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get NFT Balance
+      tags:
+      - DID
+  /rubix/v1/dids/{did}/balances/rbt:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the RBT token balance for a given DID.
+      parameters:
+      - description: DID (e.g. did:bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)
+        in: path
+        name: did
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get RBT Balance
+      tags:
+      - DID
+  /rubix/v1/dids/{did}/register:
+    post:
+      consumes:
+      - application/json
+      description: Registers a DID on the network.
+      parameters:
+      - description: DID to register (e.g. did:bafybmih2cqn6okxy2sepgp75jq5dkopuohnbd3pfrrylmqnrz43ttihkky)
+        in: path
+        name: did
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Register DID
+      tags:
+      - DID
+  /rubix/v1/dids/create:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new DID with the provided public key, password, and mnemonic.
+      parameters:
+      - description: Create DID Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/types.DIDCreate'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Create DID
+      tags:
+      - DID
   /rubix/v1/fts:
     get:
       consumes:
@@ -1001,6 +911,97 @@ paths:
       summary: Create NFT
       tags:
       - NFT
+  /rubix/v1/signature:
+    post:
+      consumes:
+      - application/json
+      description: This API is used to supply the password for the node along with
+        the ID generated when Initiate RBT transfer is called.
+      operationId: signature-response
+      parameters:
+      - description: Send input for requested signature
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/types.SignRespData'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Signature Response
+      tags:
+      - Signature
+  /rubix/v1/signature/arbitrary:
+    post:
+      consumes:
+      - application/json
+      description: Accepts a DID and message to request an arbitrary signature asynchronously.
+      operationId: arbitrary-signature
+      parameters:
+      - description: Arbitrary Signature Request
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/model.ArbitrarySignRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Request Arbitrary Signature
+      tags:
+      - Signature
+  /rubix/v1/signature/verify:
+    get:
+      consumes:
+      - application/json
+      description: Verifies a signature for a given DID and signed message.
+      operationId: verify-arbitrary-signature
+      parameters:
+      - description: DID of the signer
+        in: query
+        name: signer_did
+        required: true
+        type: string
+      - description: Signed message
+        in: query
+        name: signed_msg
+        required: true
+        type: string
+      - description: Signature to verify
+        in: query
+        name: signature
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Verify Arbitrary Signature
+      tags:
+      - Signature
   /rubix/v1/smart_contracts/generate:
     post:
       consumes:

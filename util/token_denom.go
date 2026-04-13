@@ -138,7 +138,7 @@ func GetRbtIDElements(tokenID string) (types.RbtIDElements, error) {
 		return types.RbtIDElements{}, fmt.Errorf("invalid token id format for rbt: %s, id elements should be 2 (whole) or 3 (part)", tokenID)
 	}
 
-	rbtElems.Level, err = strconv.Atoi(idElems[0])
+	rbtElems.TokenLevel, err = strconv.Atoi(idElems[0])
 	if err != nil {
 		return types.RbtIDElements{}, fmt.Errorf("failed to convert level into int for rbt: %s, error: %v", tokenID, err)
 	}

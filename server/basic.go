@@ -20,14 +20,6 @@ func (s *Server) BasicResponse(req *ensweb.Request, status bool, msg string, res
 	return s.RenderJSON(req, &resp, http.StatusOK)
 }
 
-// ShowAccount godoc
-// @Summary      Start Core
-// @Description  It will setup the core if not done before
-// @Tags         Basic
-// @Accept       json
-// @Produce      json
-// @Success      200  {object}  model.BasicResponse
-// @Router       /api/start [get]
 func (s *Server) APIStart(req *ensweb.Request) *ensweb.Result {
 	status, msg := s.c.Start()
 	return s.BasicResponse(req, status, msg, nil)

@@ -126,6 +126,7 @@ const (
 	// Transactions endpoints
 	APITransaction          string = "/rubix/v1/tx"
 	APIGetTransactionByID   string = "/rubix/v1/tx/{tx_id}"
+	APISyncTransactionChain  string = "/rubix/v1/sync-transaction-chain"
 	APIGetTransactionsByDID string = "/rubix/v1/tx/{did}/{token_type}"
 
 	// FT endpoints

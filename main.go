@@ -8,11 +8,8 @@ import (
 )
 
 // @title Rubix Core
-// @version 0.9
+// @version 1.0
 // @description Rubix core API to control & manage the node.
-
-// @contact.name API Support
-// @contact.email murali.c@ensurity.com
 
 // @BasePath
 
