@@ -9,9 +9,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	rubixsync "github.com/rubixchain/rubixgoplatform/core/sync"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -190,16 +188,8 @@ func (c *Core) syncSmartContractTransaction(smartContractToken string, metadata 
 		return nil
 	}
 
-	// Get the deployer's peer
 	peerAddr := metadata.PeerID + "." + metadata.DID
-	peer, err := c.getPeer(peerAddr)
-	if err != nil {
-		c.log.Error("syncSmartContractTransaction: Failed to get peer", "peer_addr", peerAddr, "err", err)
-		return fmt.Errorf("syncSmartContractTransaction: failed to get peer %s: %w", peerAddr, err)
-	}
-
-	// Sync transaction chain
-	if err, _ := rubixsync.SyncTransactionChainFrom(peer, smartContractToken, models.GetTokenTypeID(constants.TokenType_SmartContract), c.w, c.log); err != nil {
+	if err := c.SyncTransactionChainsFromPeer(peerAddr, []string{smartContractToken}, nil, nil); err != nil {
 		c.log.Error("syncSmartContractTransaction: Failed to sync transaction chain", "token", smartContractToken, "err", err)
 		return fmt.Errorf("syncSmartContractTransaction: failed to sync transaction chain: %w", err)
 	}
@@ -312,14 +302,7 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 	did := newEvent.Did
 	address := publisherPeerID + "." + did
 
-	p, err := c.getPeer(address)
-	if err != nil {
-		c.log.Error("ContractCallBack: Failed to get peer", "address", address, "err", err)
-		return
-	}
-
-	err, _ = rubixsync.SyncTransactionChainFrom(p, smartContractToken, models.GetTokenTypeID(constants.TokenType_SmartContract), c.w, c.log)
-	if err != nil {
+	if err := c.SyncTransactionChainsFromPeer(address, []string{smartContractToken}, nil, nil); err != nil {
 		c.log.Error("ContractCallBack: Failed to sync transaction chain", "token", smartContractToken, "err", err)
 		return
 	}

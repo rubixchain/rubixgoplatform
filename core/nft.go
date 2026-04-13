@@ -13,7 +13,6 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
-	rubixsync "github.com/rubixchain/rubixgoplatform/core/sync"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
@@ -146,15 +145,9 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 	// Construct publisher peer address
 	initiatorDid := newEvent.Initiator
 	publisherAddress := peerID + "." + initiatorDid
-	publisherPeer, err := c.getPeer(publisherAddress)
-	if err != nil {
-		c.log.Error("NFTCallBack: Failed to get peer", "address", publisherAddress, "err", err)
-		return
-	}
 
 	// Sync transaction chain from publisher
-	err, _ = rubixsync.SyncTransactionChainFrom(publisherPeer, nft, models.GetTokenTypeID(constants.TokenType_NFT), c.w, c.log)
-	if err != nil {
+	if err := c.SyncTransactionChainsFromPeer(publisherAddress, []string{nft}, nil, nil); err != nil {
 		c.log.Error("NFTCallBack: Failed to sync transaction chain", "nft_token", nft, "err", err)
 		return
 	}
@@ -213,18 +206,8 @@ func (c *Core) FetchNFT(fetchNFTRequest *FetchNFTRequest) *model.BasicResponse {
 func (c *Core) syncNFTTransaction(nftToken string, nft *models.IPFSContractInfo) error {
 	c.log.Info("syncNFTTransaction: Starting transaction chain sync", "nft_token", nftToken, "peer_id", nft.PeerID, "did", nft.DID)
 
-	// Construct the peer address
 	address := nft.PeerID + "." + nft.DID
-	peer, err := c.getPeer(address)
-	if err != nil {
-		c.log.Error("syncNFTTransaction: Failed to get peer", "nft_token", nftToken, "address", address, "err", err)
-		return fmt.Errorf("failed to get peer %s: %w", address, err)
-	}
-	c.log.Info("syncNFTTransaction: Successfully retrieved peer", "nft_token", nftToken, "address", address)
-
-	// Sync the transaction chain from the peer
-	err, _ = rubixsync.SyncTransactionChainFrom(peer, nftToken, models.GetTokenTypeID(constants.TokenType_NFT), c.w, c.log)
-	if err != nil {
+	if err := c.SyncTransactionChainsFromPeer(address, []string{nftToken}, nil, nil); err != nil {
 		c.log.Error("syncNFTTransaction: Failed to sync transaction chain", "nft_token", nftToken, "peer", address, "err", err)
 		return fmt.Errorf("failed to sync transaction chain for NFT %s: %w", nftToken, err)
 	}

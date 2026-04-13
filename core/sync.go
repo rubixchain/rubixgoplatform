@@ -295,13 +295,43 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transa
 			return fmt.Errorf("applyTokenChainFromSync: token %s not found in any token array in txInfo — cannot determine type", tokenID)
 		}
 		firstRole := rubixsync.FindTokenRoleInTxn(tokenID, &firstTxInfo)
+		// SC tokens have no Owner — use Initiator as the deploying DID.
+		ownerDID := firstTxInfo.Owner
+		if ownerDID == "" {
+			ownerDID = firstTxInfo.Initiator
+		}
+		// Ensure the owner DID exists in the dids table before inserting
+		// the token — tokens.did has a FK to dids.did. The DID may belong
+		// to a remote peer never registered locally.
+		if ownerDID != "" {
+			algoID, algoErr := c.w.GetDidAlgoIDByName(constants.DidAlgo_SECP256K1)
+			if algoErr != nil {
+				return fmt.Errorf("applyTokenChainFromSync: resolve algo ID for DID %s: %w", ownerDID, algoErr)
+			}
+			if didErr := c.w.CreateOrUpdateDID(&models.DID{
+				DID:    ownerDID,
+				Local:  false,
+				AlgoID: algoID,
+			}); didErr != nil {
+				return fmt.Errorf("applyTokenChainFromSync: upsert DID %s: %w", ownerDID, didErr)
+			}
+		}
+		// Derive token status from the role so synced tokens match what the
+		// originating node wrote (mirrors transaction_chain.go logic).
+		tokenStatus := int16(constants.TokenStatus_Free)
+		switch firstRole {
+		case int16(models.GetTokenRoleID(constants.TokenRole_Deploy)):
+			tokenStatus = int16(constants.TokenStatus_Deployed)
+		case int16(models.GetTokenRoleID(constants.TokenRole_Execute)):
+			tokenStatus = int16(constants.TokenStatus_Executed)
+		}
 		newToken := models.Token{
 			TokenID:        tokenID,
-			DID:            firstTxInfo.Owner,
+			DID:            ownerDID,
 			TransactionID:  newTxs[0].tx.ID,
 			TokenType:      tokenType,
 			TokenValue:     tokenValue,
-			TokenStatus:    constants.TokenStatus_Transferred,
+			TokenStatus:    tokenStatus,
 			LatestPosition: nextPosition,
 			LatestRole:     firstRole,
 		}
@@ -367,14 +397,28 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transa
 
 	//dead code. not needed
 	lastEntry := entries[len(entries)-1]
-	tokenForUpdate.DID = lastTxInfo.Owner
+	lastOwnerDID := lastTxInfo.Owner
+	if lastOwnerDID == "" {
+		lastOwnerDID = lastTxInfo.Initiator
+	}
+	// Derive final token status from the last chain entry's role so the
+	// token row matches what the originating node wrote.
+	lastStatus := int16(constants.TokenStatus_Free)
+	switch lastEntry.Role {
+	case int16(models.GetTokenRoleID(constants.TokenRole_Deploy)):
+		lastStatus = int16(constants.TokenStatus_Deployed)
+	case int16(models.GetTokenRoleID(constants.TokenRole_Execute)):
+		lastStatus = int16(constants.TokenStatus_Executed)
+	}
+	tokenForUpdate.DID = lastOwnerDID
 	tokenForUpdate.TransactionID = newTxs[len(newTxs)-1].tx.ID
 	tokenForUpdate.LatestPosition = lastEntry.Position
 	tokenForUpdate.LatestRole = lastEntry.Role
+	tokenForUpdate.TokenStatus = lastStatus
 	tokenForUpdate.UpdatedAt = time.Now()
-	//if updateErr := c.w.UpdateToken(tokenForUpdate); updateErr != nil {
-	//	return fmt.Errorf("applyTokenChainFromSync: UpdateToken for %s: %w", tokenID, updateErr)
-	//}
+	if updateErr := c.w.UpdateToken(tokenForUpdate); updateErr != nil {
+		return fmt.Errorf("applyTokenChainFromSync: UpdateToken for %s: %w", tokenID, updateErr)
+	}
 
 	c.log.Info("applyTokenChainFromSync: applied chain entries",
 		"tokenID", tokenID, "count", len(newTxs), "startPos", nextPosition)
