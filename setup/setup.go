@@ -125,6 +125,7 @@ const (
 	APIGetNFTChain           string = "/rubix/v1/nfts/{nft_id}/chain"
 	APITransaction           string = "/rubix/v1/tx"
 	APIGetTransactionByID    string = "/rubix/v1/tx/{tx_id}"
+	APISyncTransactionChain  string = "/rubix/v1/sync-transaction-chain"
 
 	// New endpoints
 	APIListFT string = "/rubix/v1/fts"

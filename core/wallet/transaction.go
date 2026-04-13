@@ -21,6 +21,21 @@ func (w *Wallet) CreateTransaction(tx *models.Transactions) error {
 	return nil
 }
 
+// CreateTransactionIfNotExists inserts a transaction if it does not already exist.
+// Uses ON CONFLICT (id) DO NOTHING for idempotent sync inserts.
+func (w *Wallet) CreateTransactionIfNotExists(tx *models.Transactions) error {
+	_, err := w.db.Pool().Exec(w.Ctx,
+		`INSERT INTO transactions (id, info, signature, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5)
+		 ON CONFLICT (id) DO NOTHING`,
+		tx.ID, tx.Info, tx.Signature, time.Now(), time.Now(),
+	)
+	if err != nil {
+		return fmt.Errorf("CreateTransactionIfNotExists: %w", err)
+	}
+	return nil
+}
+
 // GetTransactionByID retrieves a single transaction by its ID.
 func (w *Wallet) GetTransactionByID(id string) (*models.Transactions, error) {
 	var tx models.Transactions

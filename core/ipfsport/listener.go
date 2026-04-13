@@ -25,7 +25,7 @@ func NewListener(cfg *Config, log logger.Logger, ipfs *ipfsnode.Shell) (*Listene
 		ipfs: ipfs,
 	}
 	scfg := &srvcfg.Config{
-		HostAddress: "localhost",
+		HostAddress: "127.0.0.1",
 		HostPort:    fmt.Sprintf("%d", cfg.Port),
 	}
 	var err error

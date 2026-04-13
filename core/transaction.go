@@ -365,8 +365,20 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		c.log.Error("InitiateTransaction: Failed to publish transaction", "err", err)
 	}
 
-	// Send tokens to receiver asynchronously in background
-	go c.sendTokensToReceiver(nextOwnerDID, transactionId, transactionInfo, signatureTobePublished, request)
+	asyncMode := false
+
+	if asyncMode {
+		go c.sendTokensToReceiver(nextOwnerDID, transactionId, transactionInfo, signatureTobePublished, request)
+	} else {
+		err := c.sendTokensToReceiverSync(nextOwnerDID, transactionId, transactionInfo, signatureTobePublished, request)
+		if err != nil {
+			c.log.Error("InitiateTransaction: receiver sync failed", "err", err)
+
+			resp.Status = false
+			resp.Message = "Transaction failed: receiver sync failed: " + err.Error()
+			return resp
+		}
+	}
 
 	// Return immediately - receiver sync happens in background
 	resp.Status = true
@@ -437,10 +449,85 @@ func (c *Core) sendTokensToReceiver(
 		"transactionID", transactionID)
 }
 
+// sendTokensToReceiver sends transaction tokens to the receiver synchronously.
+// This function is designed avoid running as a goroutine and handles all errors externally.
+// It will block or fail the main transaction flow.
+func (c *Core) sendTokensToReceiverSync(
+	receiverDID string,
+	transactionID string,
+	txInfo *models.TransactionInfo,
+	signature *models.Signature,
+	request *models.TransactionRequest,
+) error {
+	c.log.Debug("sendTokensToReceiver: Starting async receiver sync",
+		"receiver", receiverDID,
+		"transactionID", transactionID)
+
+	// Get receiver peer connection
+	receiverPeer, err := c.getPeer(receiverDID)
+	if err != nil {
+		c.log.Warn("sendTokensToReceiver: Receiver offline, will sync later",
+			"receiver", receiverDID,
+			"transactionID", transactionID,
+			"err", err)
+		return fmt.Errorf("sendTokensToReceiver: Receiver offline, will sync later ",
+			" receiver: ", receiverDID,
+			" transactionID: ", transactionID,
+			" err: ", err)
+	}
+	defer receiverPeer.Close()
+
+	// Prepare sync request
+	// For smartcontracts we need not send the token information to the receiver, we just need to publish it.
+	// For NFTs we need to check the particular boolean in the request for sending.
+	// For RBTs we need to send the entire token information.
+	var sendTokensRequest models.SendTokensRequest
+	var sendTokensResponse model.BasicResponse
+	sendTokensRequest.Tokens = txInfo.Tokens
+	sendTokensRequest.TransactionInfo = txInfo
+	sendTokensRequest.Signature = signature
+	if request.HasNFT() {
+		sendTokensRequest.NFTOwnershipTransfer = request.Tokens.TransferNFTOwnership
+	}
+
+	// Send tokens to receiver with 2-minute timeout
+	// SendJSONRequest has built-in retry logic (3 attempts with exponential backoff)
+	err = receiverPeer.SendJSONRequest(
+		"POST",
+		APISendTokens,
+		nil,
+		&sendTokensRequest,
+		&sendTokensResponse,
+		true,
+		2*time.Minute, // Timeout for the entire operation
+	)
+
+	if err != nil {
+		c.log.Warn("sendTokensToReceiver: Failed to sync tokens to receiver (will retry later)",
+			"receiver", receiverDID,
+			"transactionID", transactionID,
+			"err", err)
+		return fmt.Errorf("sendTokensToReceiver: Failed to sync tokens to receiver (will retry later)",
+			" receiver: ", receiverDID,
+			" transactionID: ", transactionID,
+			" err: ", err)
+	}
+	if !sendTokensResponse.Status {
+		return fmt.Errorf("receiver rejected: %s", sendTokensResponse.Message)
+	}
+
+	c.log.Info("sendTokensToReceiver: Receiver sync completed successfully",
+		"receiver", receiverDID,
+		"transactionID", transactionID)
+
+	return nil
+}
+
 // This has been added here since this is part of the transaction flow.
 // Can be refactored in the future
 func (c *Core) TransactionSetup() {
 	c.l.AddRoute(APISendTokens, "POST", c.SendTokens)
+	c.l.AddRoute(APISyncTransactionChain, "POST", c.SyncTransactionChain)
 }
 
 // This function has been added here since the other corresponding sync functions has not been added yet.
@@ -500,6 +587,60 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 		c.log.Error("SendTokens: Missing owner DID in transaction info")
 		crep.Message = "SendTokens: Missing owner DID in transaction info"
 		return c.l.RenderJSON(request, &crep, http.StatusBadRequest)
+	}
+
+	// --- Token chain sync: fill gaps from sender before persisting ---
+	// Collect all token IDs and their PreviousTransactionIDs from the incoming transaction.
+	currentTxID, err := util.GetTransactionID(sendTokensRequest.TransactionInfo)
+	if err != nil {
+		c.log.Error("SendTokens: unable to get trnx id from sendTokensRequest.TransactionInfo, err: ", err)
+	}
+
+	var syncTokenIDs []string
+	//var excludedTrnxIDs []string
+	prevTxIDs := make(map[string]string)
+	if txns := sendTokensRequest.TransactionInfo.Tokens; txns != nil {
+		for _, t := range txns.RBT {
+			if t != nil {
+				syncTokenIDs = append(syncTokenIDs, t.TokenID)
+				//excludedTrnxIDs = append(excludedTrnxIDs, currentTxID)
+				if t.PreviousTransactionID != "" {
+					prevTxIDs[t.TokenID] = t.PreviousTransactionID
+				}
+			}
+		}
+		for _, t := range txns.FT {
+			if t != nil {
+				syncTokenIDs = append(syncTokenIDs, t.TokenID)
+				//excludedTrnxIDs = append(excludedTrnxIDs, currentTxID)
+				if t.PreviousTransactionID != "" {
+					prevTxIDs[t.TokenID] = t.PreviousTransactionID
+				}
+			}
+		}
+		// NFT: only sync if this is an ownership transfer
+		if sendTokensRequest.NFTOwnershipTransfer {
+			for _, t := range txns.NFT {
+				if t != nil {
+					syncTokenIDs = append(syncTokenIDs, t.TokenID)
+					//excludedTrnxIDs = append(excludedTrnxIDs, currentTxID)
+					if t.PreviousTransactionID != "" {
+						prevTxIDs[t.TokenID] = t.PreviousTransactionID
+					}
+				}
+			}
+		}
+	}
+
+	// Synchronous/blocking sync from sender (initiator) before we persist.
+	// prevTxIDs allows applyTokenChainFromSync to skip tokens whose chain
+	// tail already matches — avoiding redundant network + DB work.
+	// Errors are logged but never break SendTokens — sync is best-effort.
+	if len(syncTokenIDs) > 0 {
+		initiatorDID := sendTokensRequest.TransactionInfo.Initiator
+		if err := c.SyncTransactionChainsFromPeer(initiatorDID, syncTokenIDs, prevTxIDs, []string{currentTxID}); err != nil {
+			c.log.Warn("SendTokens: chain sync from sender failed (non-fatal)", "initiator", initiatorDID, "err", err)
+		}
 	}
 
 	persistErr := c.w.PersistPostConsensus(c.Ctx, &wallet.PostConsensusPersistenceRequest{
