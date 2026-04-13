@@ -3,6 +3,9 @@ package core
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/constants"
@@ -49,14 +52,33 @@ func (c *Core) UnpledgeV2(
 	var pledgeTokens []string
 	var epoch int
 	err := c.w.Pool().QueryRow(ctx,
-		`SELECT pledge_tokens, epoch FROM unpledge_sequence_info WHERE tx_id = $1`,
-		mainTxID,
+		`SELECT pledge_tokens, epoch FROM unpledge_sequence_info WHERE tx_id = $1 AND quorum_did = $2`,
+		mainTxID, quorumDID,
 	).Scan(&pledgeTokens, &epoch)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			// Already unpledged or never pledged via V2 — idempotent success.
-			c.log.Info("UnpledgeV2: no unpledge_sequence_info row — skip (already unpledged or not pledged via V2)",
-				"mainTxID", mainTxID)
+			// Either no row exists (idempotent success — already unpledged or
+			// never pledged via V2), OR a row exists but is owned by a different
+			// quorum DID (mismatch — audit and hard skip). Distinguish the two
+			// cases with a second query so the mismatch is not swallowed silently.
+			var owner string
+			qerr := c.w.Pool().QueryRow(ctx,
+				`SELECT quorum_did FROM unpledge_sequence_info WHERE tx_id = $1`,
+				mainTxID,
+			).Scan(&owner)
+			if qerr == pgx.ErrNoRows {
+				c.log.Info("UnpledgeV2: no unpledge_sequence_info row — skip (already unpledged or not pledged via V2)",
+					"mainTxID", mainTxID)
+				return nil
+			}
+			if qerr != nil {
+				return fmt.Errorf("UnpledgeV2: ownership-check query unpledge_sequence_info for mainTxID %q: %w", mainTxID, qerr)
+			}
+			// Row exists but belongs to a different quorum — defense-in-depth catch.
+			msg := fmt.Sprintf("UnpledgeV2: quorum ownership mismatch — skip mainTxID=%s caller_did=%s row_owner=%s",
+				mainTxID, quorumDID, owner)
+			c.log.Warn(msg)
+			c.writeUnpledgeMismatch(msg)
 			return nil
 		}
 		return fmt.Errorf("UnpledgeV2: query unpledge_sequence_info for mainTxID %q: %w", mainTxID, err)
@@ -257,4 +279,33 @@ func (c *Core) unpledgeSingleTokenV2(
 	}
 
 	return nil
+}
+
+// writeUnpledgeMismatch appends a single-line audit record to
+// unpledge_mismatch.log in the node config directory. Lazy-initialized on
+// first call via sync.Once — most nodes will never hit a mismatch, so we
+// avoid opening the file at startup. Writes are serialized via a mutex
+// because os.File.Write is not safe for concurrent callers.
+//
+// This function never returns an error and never panics: audit logging must
+// not crash the node. On open failure, the event is still visible via c.log.
+func (c *Core) writeUnpledgeMismatch(line string) {
+	c.unpledgeAuditLogOnce.Do(func() {
+		path := filepath.Join(c.cfg.NodeConfigDir, "unpledge_mismatch.log")
+		fp, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			c.log.Error("writeUnpledgeMismatch: failed to open audit log",
+				"path", path, "err", err)
+			return
+		}
+		c.unpledgeAuditLog = fp
+	})
+	if c.unpledgeAuditLog == nil {
+		return
+	}
+	c.unpledgeAuditLogMu.Lock()
+	defer c.unpledgeAuditLogMu.Unlock()
+	_, _ = c.unpledgeAuditLog.WriteString(
+		time.Now().UTC().Format(time.RFC3339Nano) + " " + line + "\n",
+	)
 }

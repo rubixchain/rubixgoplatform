@@ -16,24 +16,26 @@ import (
 //
 // Steps performed atomically inside pledgeTx:
 //
-//	0. INSERT transactions row (id = mainTxID, info = serialized txnInfo,
-//	   signature = combined initiator+quorum) so that tokenchain rows
-//	   (transaction_id = mainTxID) have a backing transactions.id.
-//	1. INSERT tokenchain rows (one per token, transaction_id = mainTxID, role = 8)
-//	2. UPDATE tokens (status = PLEDGED, latest_position, latest_role = 8)
-//	3. Rebuild tokenchain_index for affected tokens
+//  0. SELECT FOR UPDATE on tokens (locks rows in ORDER BY token_id order,
+//     verifies all tokens are Free, reads latest_position and transaction_id)
+//  1. INSERT transactions row (id = mainTxID, info = serialized txnInfo,
+//     signature = combined initiator+quorum) so that tokenchain rows
+//     (transaction_id = mainTxID) have a backing transactions.id.
+//  2. INSERT tokenchain rows (one per token, transaction_id = mainTxID, role = 8)
+//  3. UPDATE tokens (status = PLEDGED, latest_position, latest_role = 8)
+//  4. Rebuild tokenchain_index for affected tokens
 //
 // Post-commit (separate postTx):
 //   - Decrement token_denom for quorumDID
 //   - INSERT unpledge_sequence_info keyed by mainTxID
 //
 // Preconditions:
-//   - Every token in tokenInfos must already exist in the tokenchain table
-//     (i.e. the token has been issued/transferred to this quorum node before)
+//   - Every token in tokenInfos must already exist in the tokens table with
+//     token_status = Free (checked via SELECT FOR UPDATE inside pledgeTx)
 //
 // Errors are wrapped with context but callers should treat them as fatal for
-// the pledge attempt. ON CONFLICT (token_id, position) DO NOTHING makes the
-// operation idempotent.
+// the pledge attempt. tokenchain INSERT fails hard on position conflict —
+// conflicts are logic bugs that must surface as errors, not be silently dropped.
 func (c *Core) PledgeV2(
 	ctx context.Context,
 	tokenInfos []*models.TokenInfo,
@@ -44,6 +46,7 @@ func (c *Core) PledgeV2(
 	txnInfo *models.TransactionInfo,
 	initiatorSignature string,
 	quorumSignature string,
+	referenceID string,
 ) error {
 	// --- Validation ----------------------------------------------------------
 	if len(tokenInfos) == 0 {
@@ -68,20 +71,10 @@ func (c *Core) PledgeV2(
 		seen[ti.TokenID] = struct{}{}
 	}
 
-	// --- Fetch per-token previous transaction IDs ----------------------------
+	// --- Build token ID list for batch operations ---
 	tokenIDs := make([]string, 0, len(tokenInfos))
 	for _, ti := range tokenInfos {
 		tokenIDs = append(tokenIDs, ti.TokenID)
-	}
-
-	latestRows, err := c.w.ReadLatestTokenChainRows(ctx, tokenIDs)
-	if err != nil {
-		return fmt.Errorf("PledgeV2: read latest tokenchain rows: %w", err)
-	}
-	for _, tokenID := range tokenIDs {
-		if latestRows[tokenID] == nil {
-			return fmt.Errorf("PledgeV2: token %q has no tokenchain entry — must exist before pledge", tokenID)
-		}
 	}
 
 	// --- Inline pledge persistence (no txID, no signature, no transaction record) ---
@@ -92,6 +85,50 @@ func (c *Core) PledgeV2(
 		return fmt.Errorf("PledgeV2: begin pledge tx: %w", err)
 	}
 	defer pledgeTx.Rollback(ctx) //nolint:errcheck
+
+	// Lock all token rows in deterministic order before any write.
+	// ORDER BY token_id prevents deadlock across concurrent callers.
+	// token_status = Free ensures we do not re-pledge locked or already-pledged tokens.
+	type lockedTokenRow struct {
+		latestPosition int64
+		transactionID  string
+	}
+	lockedRows := make(map[string]lockedTokenRow, len(tokenIDs))
+
+	lockQueryRows, err := pledgeTx.Query(ctx, `
+		SELECT token_id, latest_position, transaction_id
+		FROM tokens
+		WHERE token_id = ANY($1::text[])
+		  AND token_status = $2
+		  AND lock_reference_id = $3
+		ORDER BY token_id
+		FOR UPDATE
+	`, tokenIDs, int16(constants.TokenStatus_Locked), referenceID)
+	if err != nil {
+		return fmt.Errorf("PledgeV2: SELECT FOR UPDATE on tokens: %w", err)
+	}
+	for lockQueryRows.Next() {
+		var tokenID string
+		var row lockedTokenRow
+		if err = lockQueryRows.Scan(&tokenID, &row.latestPosition, &row.transactionID); err != nil {
+			lockQueryRows.Close()
+			return fmt.Errorf("PledgeV2: scan FOR UPDATE rows: %w", err)
+		}
+		lockedRows[tokenID] = row
+	}
+	lockQueryRows.Close()
+	if err = lockQueryRows.Err(); err != nil {
+		return fmt.Errorf("PledgeV2: iterate FOR UPDATE rows: %w", err)
+	}
+	if len(lockedRows) != len(tokenIDs) {
+		missing := make([]string, 0)
+		for _, id := range tokenIDs {
+			if _, ok := lockedRows[id]; !ok {
+				missing = append(missing, id)
+			}
+		}
+		return fmt.Errorf("PledgeV2: %d token(s) not locked by this referenceID %q: | %v", len(tokenIDs)-len(lockedRows), referenceID, missing)
+	}
 
 	// Step 0: INSERT transactions row for mainTxID so that tokenchain rows
 	// (transaction_id = mainTxID) have a backing transactions.id. Both info
@@ -119,13 +156,11 @@ func (c *Core) PledgeV2(
 
 	// Step 1: INSERT tokenchain rows (one per token, keyed by mainTxID)
 	for _, ti := range tokenInfos {
-		latestRow := latestRows[ti.TokenID]
-		prevTxID := latestRow.TransactionID
+		locked := lockedRows[ti.TokenID]
 		if _, err := pledgeTx.Exec(ctx, `
 			INSERT INTO tokenchain (token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at)
 			VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-			ON CONFLICT (token_id, position) DO NOTHING
-		`, ti.TokenID, mainTxID, &prevTxID, pledgeRoleID, latestRow.Position+1); err != nil {
+		`, ti.TokenID, mainTxID, locked.transactionID, pledgeRoleID, locked.latestPosition+1); err != nil {
 			return fmt.Errorf("PledgeV2: insert tokenchain for token %q: %w", ti.TokenID, err)
 		}
 	}
@@ -136,12 +171,15 @@ func (c *Core) PledgeV2(
 	// is satisfied because Step 0 already inserted the transactions row
 	// within this same pledgeTx.
 	for _, ti := range tokenInfos {
-		latestRow := latestRows[ti.TokenID]
+		locked := lockedRows[ti.TokenID]
 		if _, err := pledgeTx.Exec(ctx, `
 			UPDATE tokens
 			SET token_status = $2, latest_position = $3, latest_role = $4, transaction_id = $5, updated_at = NOW()
 			WHERE token_id = $1
-		`, ti.TokenID, int16(constants.TokenStatus_Pledged), latestRow.Position+1, pledgeRoleID, mainTxID); err != nil {
+				AND token_status = $6
+      			AND lock_reference_id = $7
+		`, ti.TokenID, int16(constants.TokenStatus_Pledged), locked.latestPosition+1, pledgeRoleID, mainTxID, int16(constants.TokenStatus_Locked),
+			referenceID); err != nil {
 			return fmt.Errorf("PledgeV2: update tokens for token %q: %w", ti.TokenID, err)
 		}
 	}

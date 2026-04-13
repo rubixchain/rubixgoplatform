@@ -142,6 +142,12 @@ type Core struct {
 	Ctx                  context.Context
 	qm                   *QuorumManager
 	srv                  *service.Service
+
+	// Unpledge mismatch audit log — lazy-init on first mismatch event.
+	// See core/unpledge_v2.go:writeUnpledgeMismatch.
+	unpledgeAuditLog     *os.File
+	unpledgeAuditLogOnce sync.Once
+	unpledgeAuditLogMu   sync.Mutex
 }
 
 func newRubixContext() context.Context {

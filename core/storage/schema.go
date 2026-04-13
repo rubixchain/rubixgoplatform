@@ -73,6 +73,7 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             token_type       SMALLINT NOT NULL,
             latest_position BIGINT NOT NULL DEFAULT 0,
             latest_role SMALLINT,
+            lock_reference_id TEXT DEFAULT NULL,
             created_at       TIMESTAMPTZ DEFAULT NOW(),
             updated_at       TIMESTAMPTZ DEFAULT NOW(),
             CONSTRAINT tokens_did_fk 
@@ -87,6 +88,9 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             REFERENCES token_type(id)
         );
         CREATE INDEX IF NOT EXISTS idx_tokens_did_status ON tokens(did, token_status);
+        CREATE INDEX IF NOT EXISTS idx_tokens_did_status_value ON tokens(did, token_status, token_value);
+        ALTER TABLE tokens ADD COLUMN IF NOT EXISTS lock_reference_id TEXT;
+        CREATE INDEX IF NOT EXISTS idx_tokens_lock_reference_id ON tokens(lock_reference_id) WHERE lock_reference_id IS NOT NULL;
 
 
         -- moving tokenchain below so that all referenced tables are defined before it. tokenchain has FKs to transactions, token_role, and tokens.
@@ -213,7 +217,6 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             count BIGINT NOT NULL,
             created_at TIMESTAMPTZ DEFAULT NOW(),
             updated_at TIMESTAMPTZ DEFAULT NOW(),
-
             CONSTRAINT unique_did_denom UNIQUE (did, denom)
         );
 

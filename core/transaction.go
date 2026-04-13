@@ -3,11 +3,13 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/core/consensus"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	rubixsync "github.com/rubixchain/rubixgoplatform/core/sync"
@@ -15,7 +17,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
-	"github.com/rubixchain/rubixgoplatform/core/consensus"
 )
 
 func (c *Core) InitiateTransaction(reqID string, req *models.TransactionRequest) {
@@ -55,7 +56,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	txSucceeded := false
 	defer func() {
 		if !txSucceeded {
-			if releaseErr := c.w.ReleaseAllLockedRBTTokensForDID(ctx, initiatorDID); releaseErr != nil {
+			if releaseErr := c.w.ReleaseAllLockedRBTTokensForDID(ctx, initiatorDID, reqID); releaseErr != nil {
 				c.log.Error("InitiateTransaction: failed to release locked tokens after failure", "err", releaseErr)
 			} else {
 				c.log.Info("InitiateTransaction: released locked tokens after failed transaction", "did", initiatorDID)
@@ -76,6 +77,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 			networkMode,
 			c.log,
 			c.ps,
+			reqID,
 		)
 
 		if err == nil {
@@ -102,7 +104,9 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 			return resp
 		}
 
-		time.Sleep(retryBackoff(attempt))
+		/// In a high-contention scenario, we expect some transactions to hit TOCTOU conflicts due to the optimistic locking mechanism on tokens.
+		time.Sleep(retryWithRandomBackoff(attempt))
+		//time.Sleep(retryBackoff(attempt))
 	}
 
 	// Fetch the list of dids from quorum_manager table
@@ -149,6 +153,51 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	}
 
 	pledgeTokens := pledgeTokenResponse.PledgeTokens
+
+	// --- PRE-CONSENSUS GUARD ------------------------------------
+
+	if len(pledgeTokens) == 0 {
+		c.log.Debug("InitiateTransaction: no pledge tokens received",
+			"referenceID", reqID,
+			"requiredAmount", transactionValue,
+		)
+
+		resp.Message = "insufficient quorum liquidity"
+		return resp
+	}
+
+	// compute total pledged value
+	var totalPledged float64
+	/* 	for _, t := range pledgeTokens {
+		totalPledged += t.TokenValue
+	} */
+
+	// compute total pledged value (TRUSTLESS — derive from TokenID)
+	for _, t := range pledgeTokens {
+		val, err := util.GetTokenValueFromTokenID(t.TokenID)
+		if err != nil {
+			c.log.Error("InitiateTransaction: invalid token value",
+				"tokenID", t.TokenID,
+				"err", err,
+			)
+			resp.Message = "invalid quorum token"
+			return resp
+		}
+		totalPledged += val
+	}
+
+	if totalPledged < transactionValue {
+		c.log.Debug("InitiateTransaction: insufficient pledged value",
+			"referenceID", reqID,
+			"requiredAmount", transactionValue,
+			"pledgedAmount", totalPledged,
+		)
+
+		resp.Message = "insufficient quorum liquidity"
+		return resp
+	}
+	// ------------------------------------------------------------
+
 	for _, token := range pledgeTokens {
 		err = consensus.ValidateNewTokenContent(token.TokenID, true, c.testnet, c.mainnet, c.localnet, c.log)
 		if err != nil {
@@ -157,12 +206,17 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 			return resp
 		}
 	}
-
-	pledegTokenInfo := &models.QuorumInfo{
-		Did:    quorumAddresses[0],
-		Tokens: pledgeTokens,
+	//Harden quorum assignment
+	if len(pledgeTokens) > 0 {
+		pledegTokenInfo := &models.QuorumInfo{
+			Did:    quorumAddresses[0],
+			Tokens: pledgeTokens,
+		}
+		transactionInfo.Quorums = []*models.QuorumInfo{pledegTokenInfo}
+	} else {
+		resp.Message = "insufficient quorum liquidity"
+		return resp
 	}
-	transactionInfo.Quorums = []*models.QuorumInfo{pledegTokenInfo}
 	transactionId, err := util.GetTransactionID(transactionInfo)
 	if err != nil {
 		c.log.Error("InitiateTransaction: Failed to get transaction ID", "err", err)
@@ -200,12 +254,12 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 
 	if err != nil {
 		if _, err := util.PublishTransaction(
-			c.ps, 
-			transactionInfo, 
+			c.ps,
+			transactionInfo,
 			&models.Signature{
 				InitiatorSignature: initiatorSignature,
-			}, 
-			false, 
+			},
+			false,
 			err.Error(),
 		); err != nil {
 			c.log.Error("InitiateTransaction: Failed to publish transaction", "err", err)
@@ -217,12 +271,12 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 
 	if !consensusResponse.Status {
 		if _, err := util.PublishTransaction(
-			c.ps, 
-			transactionInfo, 
+			c.ps,
+			transactionInfo,
 			&models.Signature{
 				InitiatorSignature: initiatorSignature,
-			}, 
-			false, 
+			},
+			false,
 			consensusResponse.Message,
 		); err != nil {
 			c.log.Error("InitiateTransaction: Failed to publish transaction", "err", err)
@@ -270,7 +324,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		return resp
 	}
 	c.log.Info("InitiateTransaction: Quorum signature verified successfully", "quorumDID", quorumAddresses[0])
-	
+
 	// Persist post-consensus state to PostgreSQL.
 	// On success the selected tokens are marked Transferred; remaining locked tokens
 	// (candidates not chosen by CollectRBTTokens) are then released back to Free.
@@ -290,8 +344,11 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		// then release only the non-selected locked tokens (candidates not used in the transfer).
 		// The selected tokens are now status=Transferred so they won't be touched.
 		txSucceeded = true
-		if err := c.w.ReleaseAllLockedRBTTokensForDID(ctx, initiatorDID); err != nil {
+		if err := c.w.ReleaseAllLockedRBTTokensForDID(ctx, initiatorDID, reqID); err != nil {
 			c.log.Error("InitiateTransaction: failed to release non-selected locked tokens", "err", err)
+		}
+		if err := c.w.ReleaseReferenceID(reqID); err != nil {
+			c.log.Error("InitiateTransaction: failed to release reference ID", "err", err)
 		}
 	}
 	/*
@@ -492,4 +549,8 @@ func isTOCTOUConflict(err error) bool {
 func retryBackoff(attempt int) time.Duration {
 	// 50ms → 100ms → 150ms
 	return time.Duration(attempt*50) * time.Millisecond
+}
+
+func retryWithRandomBackoff(attempt int) time.Duration {
+	return time.Duration(attempt*50+rand.Intn(1000)) * time.Millisecond
 }
