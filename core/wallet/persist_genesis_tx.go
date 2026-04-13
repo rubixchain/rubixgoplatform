@@ -20,10 +20,12 @@ type PersistGenesisTransactionReq struct {
 	MintTokensBeingBurnt []string
 }
 
-func (w *Wallet) PersistPreConsensus(req *PersistGenesisTransactionReq) error {
+// PersistGenesisTransaction handles the database persistence of the genesis transaction 
+// and its associated token state changes (burns and mints).
+func (w *Wallet) PersistGenesisTransaction(req *PersistGenesisTransactionReq) error {
 	tx, err := w.db.BeginTx(w.Ctx)
 	if err != nil {
-		return fmt.Errorf("PersistPreConsensus: failed to begin transaction, err: %v", err)
+		return fmt.Errorf("PersistGenesisTransaction: failed to begin transaction, err: %v", err)
 	}
 	defer tx.Rollback(w.Ctx) //nolint:errcheck
 
@@ -35,7 +37,7 @@ func (w *Wallet) PersistPreConsensus(req *PersistGenesisTransactionReq) error {
 	for _, mintThenBurntToken := range req.MintTokensBeingBurnt {
 		tokenValue, err := util.GetTokenValueFromTokenID(mintThenBurntToken)
 		if err != nil {
-			return fmt.Errorf("PersistPreConsensus: failed to get token value from token ID %s (mintThenBurntToken), err: %v", mintThenBurntToken, err)
+			return fmt.Errorf("PersistGenesisTransaction: failed to get token value from token ID %s (mintThenBurntToken), err: %v", mintThenBurntToken, err)
 		}
 
 		denomArrayDelta[tokenValue] += 1
@@ -44,7 +46,7 @@ func (w *Wallet) PersistPreConsensus(req *PersistGenesisTransactionReq) error {
 	for _, burnTokenID := range req.BurnTokens {
 		tokenValue, err := util.GetTokenValueFromTokenID(burnTokenID)
 		if err != nil {
-			return fmt.Errorf("PersistPreConsensus: failed to get token value from token ID %s, err: %v", burnTokenID, err)
+			return fmt.Errorf("PersistGenesisTransaction: failed to get token value from token ID %s, err: %v", burnTokenID, err)
 		}
 		denomArrayDelta[tokenValue] -= 1
 	}
@@ -69,7 +71,7 @@ func (w *Wallet) PersistPreConsensus(req *PersistGenesisTransactionReq) error {
 		`INSERT INTO transactions (id, info, signature) VALUES ($1, $2, $3)`,
 		req.GenesisTransaction.ID, req.GenesisTransaction.Info, req.GenesisTransaction.Signature,
 	); err != nil {
-		return fmt.Errorf("PersistPreConsensus: failed to insert genesis transaction, err: %v", err)
+		return fmt.Errorf("PersistGenesisTransaction: failed to insert genesis transaction, err: %v", err)
 	}
 
 	for _, burntToken := range req.BurnTokens {
@@ -78,7 +80,7 @@ func (w *Wallet) PersistPreConsensus(req *PersistGenesisTransactionReq) error {
 		if tokenIDValue != rubixmath.OneFloat() {
 			parentTokenID, err = util.TokenID(burntToken).GetParentToken()
 			if err != nil {
-				return fmt.Errorf("PersistPreConsensus: failed to get parent token for token %v, err: %v", burntToken, err)
+				return fmt.Errorf("PersistGenesisTransaction: failed to get parent token for token %v, err: %v", burntToken, err)
 			}
 		}
 
@@ -88,7 +90,7 @@ func (w *Wallet) PersistPreConsensus(req *PersistGenesisTransactionReq) error {
 		ON CONFLICT (token_id) DO UPDATE SET token_status = EXCLUDED.token_status, latest_position = tokens.latest_position + 1, latest_role = EXCLUDED.latest_role, updated_at = EXCLUDED.updated_at
 		`, burntToken, parentTokenID, tokenIDValue, constants.TokenStatus_Burnt,
 			req.DID, req.GenesisTransaction.ID, "", models.GetTokenTypeID(constants.TokenType_RBT), models.GetTokenRoleID(constants.TokenRole_Burn), 0, time.Now(), time.Now()); err != nil {
-			return fmt.Errorf("PersistPreConsensus: failed to insert burnt token record in 'tokens' table, err: %v", err)
+			return fmt.Errorf("PersistGenesisTransaction: failed to insert burnt token record in 'tokens' table, err: %v", err)
 		}
 	}
 

@@ -58,7 +58,11 @@ func BuildTransactionInfoFromRequest(
 
 		if len(childTokensKept) > 0 && len(burntParentToken) > 0 {
 			genTX := childTokensKept[0].TxRecord
-			if errPersist := w.PersistPreConsensus(&wallet.PersistGenesisTransactionReq{
+			if genTX == nil {
+				return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: generated transaction record is nil")
+			}
+
+			if errPersist := w.PersistGenesisTransaction(&wallet.PersistGenesisTransactionReq{
 				DID:                  ownerDID,
 				GenesisTokens:        childTokensKept,
 				BurnTokens:           burntParentToken,
@@ -68,17 +72,19 @@ func BuildTransactionInfoFromRequest(
 				return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: failed to persist genesis transaction, err: %v", errPersist)
 			}
 
-			var txInfo *models.TransactionInfo
-			if err := json.Unmarshal(genTX.Info, txInfo); err != nil {
-				return nil, 0.0, fmt.Errorf("failed to unmarshal transaction info, err: %v", err)
+			var txInfo models.TransactionInfo
+			if err := json.Unmarshal(genTX.Info, &txInfo); err != nil {
+				return nil, 0.0, fmt.Errorf("BuildTransactionInfoFromRequest: failed to unmarshal transaction info, err: %v", err)
 			}
 
-			var txSingature *models.Signature
-			if err := json.Unmarshal(genTX.Signature, txSingature); err != nil {
-				return nil, 0.0, fmt.Errorf("failed to unmarshal signature, err: %v", err)
+			var txSingature models.Signature
+			if err := json.Unmarshal(genTX.Signature, &txSingature); err != nil {
+				return nil, 0.0, fmt.Errorf("BuildTransactionInfoFromRequest: failed to unmarshal signature, err: %v", err)
 			}
 
-			util.PublishTransaction(pubsub, txInfo, txSingature, true, "")
+			if _, err := util.PublishTransaction(pubsub, &txInfo, &txSingature, true, ""); err != nil {
+				return nil, 0.0, fmt.Errorf("BuildTransactionInfoFromRequest: failed to publish transaction, err: %v", err)
+			}
 		}
 		txTokens.RBT = rbtTokens
 		totalAmount += req.GetRBTAmount()

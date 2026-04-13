@@ -51,27 +51,32 @@ func ReqPledgeToken(
 
 	if len(childTokensKept) > 0 && len(burntParentToken) > 0 {
 		genTX := childTokensKept[0].TxRecord
-		if errPersist := w.PersistPreConsensus(&wallet.PersistGenesisTransactionReq{
+		if errPersist := w.PersistGenesisTransaction(&wallet.PersistGenesisTransactionReq{
 			DID:                  dc.GetDID(),
 			GenesisTokens:        childTokensKept,
 			BurnTokens:           burntParentToken,
 			GenesisTransaction:   genTX,
 			MintTokensBeingBurnt: mintTokensBeingBurnt,
 		}); errPersist != nil {
-			return models.PledgeTokenResponse{}, fmt.Errorf("BuildTransactionInfoFromRequest: failed to persist genesis transaction, err: %v", errPersist)
+			return models.PledgeTokenResponse{}, fmt.Errorf("reqPledgeToken: failed to persist genesis transaction, err: %v", errPersist)
+		}
+		if genTX.Info == nil {
+			return models.PledgeTokenResponse{}, fmt.Errorf("reqPledgeToken: generated transaction info is nil")
 		}
 
-		var txInfo *models.TransactionInfo
-		if err := json.Unmarshal(genTX.Info, txInfo); err != nil {
-			return models.PledgeTokenResponse{}, fmt.Errorf("err")
+		var txInfo models.TransactionInfo
+		if err := json.Unmarshal(genTX.Info, &txInfo); err != nil {
+			return models.PledgeTokenResponse{}, fmt.Errorf("reqPledgeToken: failed to unmarshal transaction info, err: %v", err)
 		}
 
-		var txSingature *models.Signature
-		if err := json.Unmarshal(genTX.Signature, txSingature); err != nil {
-			return models.PledgeTokenResponse{}, fmt.Errorf("err")
+		var txSingature models.Signature
+		if err := json.Unmarshal(genTX.Signature, &txSingature); err != nil {
+			return models.PledgeTokenResponse{}, fmt.Errorf("reqPledgeToken: failed to unmarshal signature, err: %v", err)
 		}
 
-		util.PublishTransaction(pubsub, txInfo, txSingature, true, "")
+		if _, err := util.PublishTransaction(pubsub, &txInfo, &txSingature, true, ""); err != nil {
+			return models.PledgeTokenResponse{}, fmt.Errorf("reqPledgeToken: failed to publish transaction, err: %v", err)
+		}
 	}
 
 	if len(pledgeTokenDetails) == 0 {
