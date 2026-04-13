@@ -815,10 +815,10 @@ func (w *Wallet) InsertGenesisTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, 
 		token.LatestPosition, token.LatestRole,
 	)
 	if err != nil {
-		return fmt.Errorf("UpdateTokenInDB: insert token: %w", err)
+		return fmt.Errorf("InsertGenesisTokenInfo: insert token: %w", err)
 	}
 	if cmdTagToken.RowsAffected() == 0 {
-		return fmt.Errorf("UpdateTokenInDB: token %q already exists — duplicate genesis call rejected", token.TokenID)
+		return fmt.Errorf("InsertGenesisTokenInfo: token %s already exists — duplicate genesis call rejected", token.TokenID)
 	}
 
 	// Build Token chain entry
@@ -835,7 +835,7 @@ func (w *Wallet) InsertGenesisTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, 
 		 ON CONFLICT (token_id, position) DO NOTHING`,
 		tokenChainEntry.TokenID, tokenChainEntry.TransactionID, tokenChainEntry.PreviousTransactionID, tokenChainEntry.Role, tokenChainEntry.Position,
 	); err != nil {
-		return fmt.Errorf("UpdateTokenInDB: insert tokenchain: %w", err)
+		return fmt.Errorf("InsertGenesisTokenInfo: insert tokenchain: %w", err)
 	}
 
 	// Update token chain index
@@ -844,7 +844,7 @@ func (w *Wallet) InsertGenesisTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, 
 		`SELECT array_agg(id ORDER BY position) FROM tokenchain WHERE token_id = $1`,
 		tokenChainEntry.TokenID,
 	).Scan(&index); err != nil {
-		return fmt.Errorf("UpdateTokenInDB: query tokenchain: %w", err)
+		return fmt.Errorf("InsertGenesisTokenInfo: query tokenchain: %w", err)
 	}
 	if _, err = tx.Exec(w.Ctx, `
 		INSERT INTO tokenchain_index (token_id, index, created_at, updated_at)
@@ -853,7 +853,7 @@ func (w *Wallet) InsertGenesisTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, 
 		  index = EXCLUDED.index,
 		  updated_at = NOW()
 	`, tokenChainEntry.TokenID, index); err != nil {
-		return fmt.Errorf("UpdateTokenInDB: upsert tokenchain_index: %w", err)
+		return fmt.Errorf("InsertGenesisTokenInfo: upsert tokenchain_index: %w", err)
 	}
 
 	// Insert transaction_units record for the genesis initiator.
@@ -862,7 +862,7 @@ func (w *Wallet) InsertGenesisTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, 
 		VALUES ($1, $2, $3, $4, NOW(), NOW())
 		ON CONFLICT (transaction_id, did) DO NOTHING
 	`, txID, token.DID, ExecutionRoleInitiator, transactionUnitStatusCommitted); err != nil {
-		return fmt.Errorf("UpdateTokenInDB: insert transaction_units: %w", err)
+		return fmt.Errorf("InsertGenesisTokenInfo: insert transaction_units: %w", err)
 	}
 
 	// Update token_denom table for RBTs
@@ -874,7 +874,7 @@ func (w *Wallet) InsertGenesisTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, 
 			  count = token_denom.count + 1,
 			  updated_at = NOW()
 		`, token.DID, token.TokenValue, 1); err != nil {
-			return fmt.Errorf("UpdateTokenInDB: upsert token_denom: %w", err)
+			return fmt.Errorf("InsertGenesisTokenInfo: upsert token_denom: %w", err)
 		}
 	}
 
@@ -907,10 +907,10 @@ func (w *Wallet) UpdateTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, did, tx
 		token.LatestPosition, token.LatestRole, token.TokenID,
 	)
 	if err != nil {
-		return fmt.Errorf("UpdateTokenInDB: update token: %w", err)
+		return fmt.Errorf("UpdateTokenInfo: update token: %w", err)
 	}
 	if cmdTagToken.RowsAffected() == 0 {
-		return fmt.Errorf("UpdateTokenInDB: token %q not found", token.TokenID)
+		return fmt.Errorf("UpdateTokenInfo: token %q not found", token.TokenID)
 	}
 
 	// Build Token chain entry
@@ -928,7 +928,7 @@ func (w *Wallet) UpdateTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, did, tx
 		 ON CONFLICT (token_id, position) DO NOTHING`,
 		tokenChainEntry.TokenID, tokenChainEntry.TransactionID, tokenChainEntry.PreviousTransactionID, tokenChainEntry.Role, tokenChainEntry.Position,
 	); err != nil {
-		return fmt.Errorf("UpdateTokenInDB: insert tokenchain: %w", err)
+		return fmt.Errorf("UpdateTokenInfo: insert tokenchain: %w", err)
 	}
 
 	// Update token chain index
@@ -937,7 +937,7 @@ func (w *Wallet) UpdateTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, did, tx
 		`SELECT array_agg(id ORDER BY position) FROM tokenchain WHERE token_id = $1`,
 		tokenChainEntry.TokenID,
 	).Scan(&index); err != nil {
-		return fmt.Errorf("UpdateTokenInDB: query tokenchain: %w", err)
+		return fmt.Errorf("UpdateTokenInfo: query tokenchain: %w", err)
 	}
 	if _, err = tx.Exec(w.Ctx,
 		`UPDATE tokenchain_index SET
@@ -956,7 +956,7 @@ func (w *Wallet) UpdateTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, did, tx
 		VALUES ($1, $2, $3, $4, NOW(), NOW())
 		ON CONFLICT (transaction_id, did) DO NOTHING
 	`, txID, token.DID, txnExecutionRole, transactionUnitStatusCommitted); err != nil {
-		return fmt.Errorf("UpdateTokenInDB: insert transaction_units: %w", err)
+		return fmt.Errorf("UpdateTokenInfo: insert transaction_units: %w", err)
 	}
 
 	// Update token_denom table for RBTs
@@ -968,7 +968,7 @@ func (w *Wallet) UpdateTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, did, tx
 			  count = token_denom.count + 1,
 			  updated_at = NOW()
 		`, token.DID, token.TokenValue, 1); err != nil {
-			return fmt.Errorf("UpdateTokenInDB: upsert token_denom: %w", err)
+			return fmt.Errorf("UpdateTokenInfo: upsert token_denom: %w", err)
 		}
 	}
 
