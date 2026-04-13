@@ -84,34 +84,61 @@ func (c *Core) SyncTransactionChain(request *ensweb.Request) *ensweb.Result {
 // When a token's prevTxID already exists in the local chain, sync is skipped for that token.
 func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error {
 	if len(tokenIDs) == 0 {
+		c.log.Debug("SyncTransactionChainsFromPeer: No token IDs to sync, returning")
 		return nil
 	}
+
+	c.log.Info("SyncTransactionChainsFromPeer: Starting sync",
+		"peerDID", peerDID,
+		"tokenIDs", tokenIDs,
+		"tokenCount", len(tokenIDs),
+		"excludeTxIDCount", len(excludeTxIDs),
+		"prevTxIDCount", len(prevTxIDs),
+	)
 
 	req := syncTxChainRequest{DID: peerDID, TokenIDs: tokenIDs, ExcludeTransactionIDs: excludeTxIDs}
 
 	p, err := c.getPeer(peerDID)
 	if err != nil {
+		c.log.Error("SyncTransactionChainsFromPeer: getPeer failed", "peerDID", peerDID, "err", err)
 		return fmt.Errorf("SyncTransactionChainsFromPeer: getPeer failed: %w", err)
 	}
 	defer p.Close()
 
+	c.log.Debug("SyncTransactionChainsFromPeer: Peer connection established, sending sync request", "peerDID", peerDID)
+
 	var resp syncTxChainResponse
 	if err = p.SendJSONRequest("POST", APISyncTransactionChain, nil, &req, &resp, false, 30*time.Second); err != nil {
+		c.log.Error("SyncTransactionChainsFromPeer: Request failed", "peerDID", peerDID, "err", err)
 		return fmt.Errorf("SyncTransactionChainsFromPeer: request failed: %w", err)
 	}
 
 	if !resp.Status {
+		c.log.Error("SyncTransactionChainsFromPeer: Peer returned error", "peerDID", peerDID, "message", resp.Message)
 		return fmt.Errorf("SyncTransactionChainsFromPeer: peer returned error: %s", resp.Message)
 	}
 
+	c.log.Info("SyncTransactionChainsFromPeer: Received response from peer",
+		"peerDID", peerDID,
+		"tokenCount", len(resp.Data),
+		"message", resp.Message,
+	)
+
 	for tokenID, txs := range resp.Data {
+		c.log.Info("SyncTransactionChainsFromPeer: Applying chain for token",
+			"tokenID", tokenID,
+			"txCount", len(txs),
+		)
 		prevTxID := prevTxIDs[tokenID] // empty string if not in map — applyTokenChainFromSync handles this
 		if err := c.applyTokenChainFromSync(tokenID, txs, prevTxID); err != nil {
 			c.log.Warn("SyncTransactionChainsFromPeer: apply failed (non-fatal)", "tokenID", tokenID, "err", err)
 			// Continue with remaining tokens — sync failures are best-effort.
+		} else {
+			c.log.Info("SyncTransactionChainsFromPeer: Chain applied successfully", "tokenID", tokenID, "txCount", len(txs))
 		}
 	}
 
+	c.log.Info("SyncTransactionChainsFromPeer: Sync completed", "peerDID", peerDID, "tokenCount", len(tokenIDs))
 	return nil
 }
 

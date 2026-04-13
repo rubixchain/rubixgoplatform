@@ -126,29 +126,64 @@ func (c *Core) SubscribeNFTSetup(requestID string, topic string) error {
 }
 
 func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
+	c.log.Info("NFTCallBack: Received pubsub message",
+		"peerID", peerID,
+		"topic", topic,
+		"dataLen", len(data),
+		"rawData", string(data),
+	)
+
 	var newEvent models.EventNFTPublishInfo
 	err := json.Unmarshal(data, &newEvent)
 	if err != nil {
-		c.log.Error("NFTCallBack: Failed to unmarshal NFT event", "err", err)
+		c.log.Error("NFTCallBack: Failed to unmarshal NFT event", "err", err, "rawData", string(data))
 		return
 	}
 
 	nft := newEvent.NFTid
-	c.log.Info("NFTCallBack: Received update on NFT", "nft_token", nft)
+	c.log.Info("NFTCallBack: Parsed NFT event",
+		"nftID", nft,
+		"transactionID", newEvent.TransactionID,
+		"initiator", newEvent.Initiator,
+		"epoch", newEvent.Epoch,
+		"hasData", newEvent.NFTData != "",
+	)
+
+	if nft == "" {
+		c.log.Error("NFTCallBack: NFTid is empty after unmarshal — cannot proceed",
+			"topic", topic, "peerID", peerID, "rawData", string(data))
+		return
+	}
 
 	// Check if NFT folder exists (log warning if missing)
 	nftFolderPath := path.Join(c.nftDir, nft)
 	if _, err := os.Stat(nftFolderPath); os.IsNotExist(err) {
-		c.log.Warn("NFTCallBack: NFT folder does not exist", "nft_token", nft)
+		c.log.Warn("NFTCallBack: NFT folder does not exist", "nft_token", nft, "path", nftFolderPath)
+	} else {
+		c.log.Debug("NFTCallBack: NFT folder exists", "nft_token", nft, "path", nftFolderPath)
 	}
 
 	// Construct publisher peer address
 	initiatorDid := newEvent.Initiator
+	if initiatorDid == "" {
+		c.log.Error("NFTCallBack: Initiator DID is empty — cannot construct peer address",
+			"topic", topic, "peerID", peerID)
+		return
+	}
+
 	publisherAddress := peerID + "." + initiatorDid
+	c.log.Info("NFTCallBack: Syncing transaction chain from publisher",
+		"nft_token", nft,
+		"peerAddress", publisherAddress,
+	)
 
 	// Sync transaction chain from publisher
 	if err := c.SyncTransactionChainsFromPeer(publisherAddress, []string{nft}, nil, nil); err != nil {
-		c.log.Error("NFTCallBack: Failed to sync transaction chain", "nft_token", nft, "err", err)
+		c.log.Error("NFTCallBack: Failed to sync transaction chain",
+			"nft_token", nft,
+			"peerAddress", publisherAddress,
+			"err", err,
+		)
 		return
 	}
 
@@ -242,6 +277,12 @@ func (c *Core) publishNFTEvents(
 ) {
 
 	nfts := request.GetAllNFTs()
+	c.log.Info("publishNFTEvents: Publishing events for NFTs",
+		"transactionID", transactionId,
+		"initiator", initiatorDID,
+		"epoch", epoch,
+		"nftCount", len(nfts),
+	)
 
 	baseEvent := models.EventNFTPublishInfo{
 		TransactionID:      transactionId,
@@ -250,16 +291,28 @@ func (c *Core) publishNFTEvents(
 		Epoch:              epoch,
 	}
 
-	for _, nft := range nfts {
+	for i, nft := range nfts {
 
 		event := baseEvent
 		event.NFTid = nft.NFTId
 		event.NFTData = nft.Data
 
+		c.log.Info("publishNFTEvents: Publishing event",
+			"index", i,
+			"nftID", nft.NFTId,
+			"hasData", nft.Data != "",
+			"transactionID", transactionId,
+		)
+
 		if err := c.publishNewNftEvent(&event); err != nil {
-			c.log.Error("NFT event publish failed",
+			c.log.Error("publishNFTEvents: NFT event publish failed",
 				"nft", nft.NFTId,
 				"err", err,
+			)
+		} else {
+			c.log.Info("publishNFTEvents: Event published successfully",
+				"nftID", nft.NFTId,
+				"topic", nft.NFTId,
 			)
 		}
 	}

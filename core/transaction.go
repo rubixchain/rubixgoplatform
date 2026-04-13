@@ -399,11 +399,37 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	if request.HasSmartContract() {
 		c.log.Info("InitiateTransaction: Publishing SmartContract events", "transactionID", transactionId)
 		c.publishSmartContractEvents(request, transactionId, initiatorDID, initiatorSignature, transactionInfo.Epoch)
+		// Auto-subscribe the deploying node to each SC topic so it receives
+		// future execution notifications without a separate subscribe call.
+		for _, sc := range request.GetAllSmartContracts() {
+			if err := c.ps.SubscribeTopic(sc.SmartContractId, c.ContractCallBack); err != nil {
+				if err.Error() == "topic already subscribed" {
+					c.log.Debug("InitiateTransaction: already subscribed to SC topic", "topic", sc.SmartContractId)
+				} else {
+					c.log.Error("InitiateTransaction: failed to subscribe to SC topic", "topic", sc.SmartContractId, "err", err)
+				}
+			} else {
+				c.log.Info("InitiateTransaction: subscribed to SC topic after deployment", "topic", sc.SmartContractId)
+			}
+		}
 	}
 
 	if request.HasNFT() {
 		c.log.Info("InitiateTransaction: Publishing NFT events", "transactionID", transactionId)
 		c.publishNFTEvents(request, transactionId, initiatorDID, initiatorSignature, transactionInfo.Epoch)
+		// Auto-subscribe the deploying node to each NFT topic so it receives
+		// future execution/transfer notifications without a separate subscribe call.
+		for _, nft := range request.GetAllNFTs() {
+			if err := c.ps.SubscribeTopic(nft.NFTId, c.NFTCallBack); err != nil {
+				if err.Error() == "topic already subscribed" {
+					c.log.Debug("InitiateTransaction: already subscribed to NFT topic", "topic", nft.NFTId)
+				} else {
+					c.log.Error("InitiateTransaction: failed to subscribe to NFT topic", "topic", nft.NFTId, "err", err)
+				}
+			} else {
+				c.log.Info("InitiateTransaction: subscribed to NFT topic after deployment", "topic", nft.NFTId)
+			}
+		}
 	}
 
 	//Publish transaction to the network

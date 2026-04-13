@@ -225,6 +225,12 @@ func (c *Core) publishSmartContractEvents(
 ) {
 
 	smartContracts := request.GetAllSmartContracts()
+	c.log.Info("publishSmartContractEvents: Publishing events for smart contracts",
+		"transactionID", transactionId,
+		"initiator", initiatorDID,
+		"epoch", epoch,
+		"smartContractCount", len(smartContracts),
+	)
 
 	baseEvent := models.EventSmartContractPublishInfo{
 		TransactionID:      transactionId,
@@ -233,16 +239,28 @@ func (c *Core) publishSmartContractEvents(
 		Epoch:              epoch,
 	}
 
-	for _, sc := range smartContracts {
+	for i, sc := range smartContracts {
 
 		event := baseEvent
 		event.SmartContractID = sc.SmartContractId
 		event.SmartContractData = sc.Data
 
+		c.log.Info("publishSmartContractEvents: Publishing event",
+			"index", i,
+			"smartContractID", sc.SmartContractId,
+			"hasData", sc.Data != "",
+			"transactionID", transactionId,
+		)
+
 		if err := c.publishNewSmartContractEvent(&event); err != nil {
-			c.log.Error("Smart contract event publish failed",
+			c.log.Error("publishSmartContractEvents: Smart contract event publish failed",
 				"smartcontract", sc.SmartContractId,
 				"err", err,
+			)
+		} else {
+			c.log.Info("publishSmartContractEvents: Event published successfully",
+				"smartContractID", sc.SmartContractId,
+				"topic", sc.SmartContractId,
 			)
 		}
 	}
@@ -279,31 +297,69 @@ func (c *Core) SubsribeContractSetup(requestID string, topic string) error {
 	return nil
 }
 
-// ContractCallback updated with the syncTransactionChainFrom function
+// ContractCallBack handles pubsub notifications for smart contract events.
+// IMPORTANT: The publisher sends models.EventSmartContractPublishInfo — we must
+// deserialize into the SAME struct. Previously this used model.NewContractEvent
+// whose JSON tags did not match, causing all fields to unmarshal as zero values
+// and silently breaking the sync flow.
 func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
-	var newEvent model.NewContractEvent
+	c.log.Info("ContractCallBack: Received pubsub message",
+		"peerID", peerID,
+		"topic", topic,
+		"dataLen", len(data),
+		"rawData", string(data),
+	)
+
+	var newEvent models.EventSmartContractPublishInfo
 
 	err := json.Unmarshal(data, &newEvent)
 	if err != nil {
-		c.log.Error("ContractCallBack: Failed to unmarshal contract event", "err", err)
+		c.log.Error("ContractCallBack: Failed to unmarshal contract event", "err", err, "rawData", string(data))
 		return
 	}
 
-	c.log.Info("ContractCallBack: Received update on smart contract", "token", newEvent.SmartContractToken)
+	c.log.Info("ContractCallBack: Parsed smart contract event",
+		"smartContractID", newEvent.SmartContractID,
+		"transactionID", newEvent.TransactionID,
+		"initiator", newEvent.Initiator,
+		"epoch", newEvent.Epoch,
+		"hasData", newEvent.SmartContractData != "",
+	)
 
-	smartContractToken := newEvent.SmartContractToken
+	smartContractToken := newEvent.SmartContractID
+	if smartContractToken == "" {
+		c.log.Error("ContractCallBack: SmartContractID is empty after unmarshal — cannot proceed",
+			"topic", topic, "peerID", peerID, "rawData", string(data))
+		return
+	}
+
 	scFolderPath := path.Join(c.smartContractDir, smartContractToken)
 
 	if _, err := os.Stat(scFolderPath); os.IsNotExist(err) {
-		c.log.Warn("ContractCallBack: Smart contract folder does not exist", "token", smartContractToken)
+		c.log.Warn("ContractCallBack: Smart contract folder does not exist", "token", smartContractToken, "path", scFolderPath)
+	} else {
+		c.log.Debug("ContractCallBack: Smart contract folder exists", "token", smartContractToken, "path", scFolderPath)
 	}
 
-	publisherPeerID := peerID
-	did := newEvent.Did
-	address := publisherPeerID + "." + did
+	initiatorDID := newEvent.Initiator
+	if initiatorDID == "" {
+		c.log.Error("ContractCallBack: Initiator DID is empty — cannot construct peer address",
+			"topic", topic, "peerID", peerID)
+		return
+	}
+
+	address := peerID + "." + initiatorDID
+	c.log.Info("ContractCallBack: Syncing transaction chain from publisher",
+		"token", smartContractToken,
+		"peerAddress", address,
+	)
 
 	if err := c.SyncTransactionChainsFromPeer(address, []string{smartContractToken}, nil, nil); err != nil {
-		c.log.Error("ContractCallBack: Failed to sync transaction chain", "token", smartContractToken, "err", err)
+		c.log.Error("ContractCallBack: Failed to sync transaction chain",
+			"token", smartContractToken,
+			"peerAddress", address,
+			"err", err,
+		)
 		return
 	}
 
@@ -315,11 +371,13 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		return
 	}
 
+	c.log.Debug("ContractCallBack: Sending callback HTTP request", "url", curlUrl, "token", smartContractToken)
+
 	payload := map[string]interface{}{
-		"smart_contract_hash": newEvent.SmartContractToken,
+		"smart_contract_hash": smartContractToken,
 		"port":                c.cfg.NodePort,
 		"smart_contract_data": newEvent.SmartContractData,
-		"initiator_did":       newEvent.Did,
+		"initiator_did":       initiatorDID,
 	}
 
 	payLoadBytes, err := json.Marshal(payload)
@@ -351,23 +409,23 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 
 	responseBodyBytes, err := io.ReadAll(response.Body)
 	if err != nil {
-		fmt.Printf("Error reading response body: %s\n", err)
+		c.log.Error("ContractCallBack: Error reading response body", "err", err)
 		return
 	}
 
 	var responseData map[string]interface{}
 	if err := json.Unmarshal(responseBodyBytes, &responseData); err != nil {
-		c.log.Error("Error parsing JSON:", err)
+		c.log.Error("ContractCallBack: Error parsing callback response JSON", "err", err)
 		return
 	}
 
 	message, ok := responseData["message"].(string)
 	if !ok {
-		c.log.Error("Error: 'message' field not found or not a string")
+		c.log.Error("ContractCallBack: 'message' field not found or not a string in callback response")
 		return
 	}
 
-	c.log.Debug(message)
+	c.log.Info("ContractCallBack: Callback response received", "message", message, "token", smartContractToken)
 }
 
 // RegisterCallBackURL registers a callback URL for smart contract events.

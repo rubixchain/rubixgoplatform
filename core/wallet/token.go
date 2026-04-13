@@ -563,10 +563,10 @@ func (w *Wallet) CreateToken(t *models.Token) error {
 	if _, err := w.db.Pool().Exec(w.Ctx,
 		`INSERT INTO tokens(token_id, parent_token_id, token_value, token_status, did, transaction_id,
 		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())`,
 		t.TokenID, t.ParentTokenID, t.TokenValue, t.TokenStatus,
 		t.DID, t.TransactionID, t.TokenStateHash, t.TokenType,
-		t.LatestPosition, t.LatestRole, t.CreatedAt, t.UpdatedAt,
+		t.LatestPosition, t.LatestRole,
 	); err != nil {
 		return fmt.Errorf("CreateToken: %w", err)
 	}
@@ -577,10 +577,10 @@ func (w *Wallet) CreateRBTToken(token models.Token) error {
 	if _, err := w.db.Pool().Exec(w.Ctx,
 		`INSERT INTO tokens(token_id, parent_token_id, token_value, token_status, did, transaction_id,
 		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())`,
 		token.TokenID, token.ParentTokenID, token.TokenValue, token.TokenStatus,
 		token.DID, token.TransactionID, token.TokenStateHash, token.TokenType,
-		token.LatestPosition, token.LatestRole, token.CreatedAt, token.UpdatedAt,
+		token.LatestPosition, token.LatestRole,
 	); err != nil {
 		return fmt.Errorf("failed to create token with id: %v, err: %v", token.TokenID, err)
 	}
