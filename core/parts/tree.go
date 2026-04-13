@@ -4,10 +4,11 @@ import (
 	"sort"
 
 	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 type DenomTreeNode struct {
-	TokenID TokenID
+	TokenID util.TokenID
 	Token   models.Token
 	IsLeaf  bool
 }
@@ -24,7 +25,7 @@ func BuildDenomTree(tokens []models.Token, ownerDID string) (*DenomTree, error) 
 
 	for i := range tokens {
 		node := &DenomTreeNode{
-			TokenID: TokenID(tokens[i].TokenID),
+			TokenID: util.TokenID(tokens[i].TokenID),
 			Token:   tokens[i],
 			IsLeaf:  true,
 		}

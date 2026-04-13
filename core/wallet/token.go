@@ -555,3 +555,13 @@ func (w *Wallet) GetTokenByDIDAndTokenType(didStr string, tokenType int16) ([]mo
 	}
 	return tokens, rows.Err()
 }
+
+func (w *Wallet) IsRBTExists(id string) bool {
+	var exists bool
+	_ = w.db.Pool().QueryRow(w.Ctx,
+		`SELECT EXISTS(SELECT 1 FROM tokens WHERE token_id=$1 AND token_type=$2)`, 
+		id,
+		models.GetTokenTypeID(constants.TokenType_RBT),
+	).Scan(&exists)
+	return exists
+}

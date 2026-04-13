@@ -4,12 +4,13 @@ import (
 	"testing"
 
 	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 func TestGetChildrenIndex(t *testing.T) {
 	tests := []struct {
 		name        string
-		parent      TokenID
+		parent      util.TokenID
 		expected    types.ChildrenRange
 		expectError bool
 	}{
@@ -112,7 +113,7 @@ func TestGetChildrenIndex(t *testing.T) {
 func TestGetParentToken(t *testing.T) {
 	tests := []struct {
 		name        string
-		child       TokenID
+		child       util.TokenID
 		expected    string
 		expectError bool
 	}{
