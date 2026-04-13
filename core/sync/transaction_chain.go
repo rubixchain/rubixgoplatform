@@ -55,6 +55,15 @@ func FindTokenRoleInTxn(tokenID string, txInfo *models.TransactionInfo) int16 {
 		}
 		for _, t := range txInfo.Tokens.NFT {
 			if t.TokenID == tokenID {
+				// Genesis (empty PreviousTransactionID) = Deploy
+				// Owner == Initiator (or empty) = Execute (self-execution)
+				// Owner != Initiator = Transfer (ownership change)
+				if t.PreviousTransactionID == "" {
+					return int16(models.GetTokenRoleID(constants.TokenRole_Deploy))
+				}
+				if txInfo.Owner == "" || txInfo.Owner == txInfo.Initiator {
+					return int16(models.GetTokenRoleID(constants.TokenRole_Execute))
+				}
 				return int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
 			}
 		}
