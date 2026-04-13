@@ -313,7 +313,7 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 					"count", dupCount,
 					"tokenID", ti.TokenID,
 					"quorumDID", quorumDid,
-					"txID", txID,
+					"txID", txn.ID,
 					"referenceID", consensusRequest.ReferenceId,
 				)
 				continue
@@ -342,33 +342,33 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 			ref, found := lockRefs[id]
 			if !found {
 				c.log.Error("initiateConsensusHandler: pledge token not found in tokens table",
-					"tokenID", id, "quorumDID", quorumDid, "txID", txID)
+					"tokenID", id, "quorumDID", quorumDid, "txID", txn.ID)
 				response.Message = fmt.Sprintf("initiateConsensusHandler: token %q not found in tokens table", id)
 				return c.l.RenderJSON(request, response, http.StatusBadRequest)
 			}
 			if ref == nil {
 				c.log.Error("initiateConsensusHandler: pledge token has no lock_reference_id",
-					"tokenID", id, "quorumDID", quorumDid, "txID", txID)
+					"tokenID", id, "quorumDID", quorumDid, "txID", txn.ID)
 				response.Message = fmt.Sprintf("initiateConsensusHandler: token %q has no lock_reference_id (was never locked by this flow)", id)
 				return c.l.RenderJSON(request, response, http.StatusBadRequest)
 			}
 			if *ref != consensusRequest.ReferenceId {
 				c.log.Error("initiateConsensusHandler: pledge token lock_reference_id mismatch",
 					"tokenID", id, "expected", consensusRequest.ReferenceId, "got", *ref,
-					"quorumDID", quorumDid, "txID", txID)
+					"quorumDID", quorumDid, "txID", txn.ID)
 				response.Message = fmt.Sprintf("initiateConsensusHandler: token %q lock_reference_id mismatch: expected %q, got %q",
 					id, consensusRequest.ReferenceId, *ref)
 				return c.l.RenderJSON(request, response, http.StatusBadRequest)
 			}
 		}
 		c.log.Info("initiateConsensusHandler: lock_reference_id validation passed",
-			"txID", txID, "tokens", len(tokenInfos), "referenceID", consensusRequest.ReferenceId)
+			"txID", txn.ID, "tokens", len(tokenInfos), "referenceID", consensusRequest.ReferenceId)
 	}
 
 	if err := c.PledgeV2(
 		context.Background(),
 		tokenInfos,
-		txID,
+		txn.ID,
 		quorumDid,
 		txnInfo.Epoch,
 		txnInfo.Network,
