@@ -302,7 +302,7 @@ func (rm *IPFSRecoveryManager) reinitializeIPFS() error {
 	rm.log.Info("Reinitializing IPFS shell and operations")
 
 	// Create new IPFS shell
-	newShell := ipfsnode.NewShell(fmt.Sprintf("localhost:%d", rm.cfg.CfgData.Ports.IPFSPort))
+	newShell := ipfsnode.NewShell(fmt.Sprintf("127.0.0.1:%d", rm.cfg.CfgData.Ports.IPFSPort))
 	if newShell == nil {
 		return fmt.Errorf("failed to create new IPFS shell")
 	}

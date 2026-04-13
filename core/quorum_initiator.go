@@ -104,12 +104,35 @@ func (c *Core) requestPledgeTokenHandler(request *ensweb.Request) *ensweb.Result
 		return c.l.RenderJSON(request, &response, http.StatusNotFound)
 	}
 	dc := c.pqc[did]
+	// Strict minimal liquidity guard (260409-0ko):
+	// Cheap pre-check to short-circuit pledge requests when the quorum clearly
+	// does not have enough free RBT balance. This avoids entering
+	// LockTokensForSplit under load for trivially-rejectable requests. Note
+	// that this check is advisory — concurrent requests between here and
+	// LockTokensForSplit are still handled by the existing SKIP LOCKED /
+	// retry logic in LockTokensForSplit. Uses strict "<" comparison: equal
+	// balance is allowed through.
+	freeBalance, balErr := c.w.GetFreeRBTBalanceByDID(did)
+	if balErr != nil {
+		c.log.Error("requestPledgeTokenHandler : failed to fetch free balance", "did", did, "err", balErr)
+		response.Message = "requestPledgeTokenHandler : failed to fetch free balance"
+		return c.l.RenderJSON(request, &response, http.StatusInternalServerError)
+	}
+	if freeBalance < pledgeTokenRequest.TransactionValue {
+		c.log.Debug("requestPledgeTokenHandler : insufficient quorum liquidity",
+			"did", did,
+			"freeBalance", freeBalance,
+			"required", pledgeTokenRequest.TransactionValue,
+		)
+		response.Message = "insufficient quorum liquidity"
+		return c.l.RenderJSON(request, &response, http.StatusOK)
+	}
 	pledgeTokenResponse, err := consensus.ReqPledgeToken(dc, c.w, pledgeTokenRequest.TransactionValue, c.networkMode, c.log, c.ps, pledgeTokenRequest.ReferenceId)
 	if err != nil {
 		c.log.Error("requestPledgeTokenHandler : Failed to process pledge token request", "err", err)
 		// Release ALL locked tokens since pledge selection failed — LockTokensForSplit locked them
 		// but no subset was successfully selected, so all must be returned to Free.
-		if releaseErr := c.w.ReleaseAllLockedRBTTokensForDID(c.w.Ctx, did); releaseErr != nil {
+		if releaseErr := c.w.ReleaseAllLockedRBTTokensForDID(c.w.Ctx, did, pledgeTokenRequest.ReferenceId); releaseErr != nil {
 			c.log.Error("requestPledgeTokenHandler: failed to release locked tokens after pledge failure", "err", releaseErr)
 		}
 		response.Message = "requestPledgeTokenHandler : " + err.Error()
@@ -125,7 +148,7 @@ func (c *Core) requestPledgeTokenHandler(request *ensweb.Request) *ensweb.Result
 			selectedTokenIDs = append(selectedTokenIDs, t.TokenID)
 		}
 	}
-	if releaseErr := c.w.ReleaseNonSelectedLockedRBTTokensForDID(c.w.Ctx, did, selectedTokenIDs); releaseErr != nil {
+	if releaseErr := c.w.ReleaseNonSelectedLockedRBTTokensForDID(c.w.Ctx, did, selectedTokenIDs, pledgeTokenRequest.ReferenceId); releaseErr != nil {
 		c.log.Error("requestPledgeTokenHandler: failed to release non-selected locked tokens", "err", releaseErr)
 	} else {
 		c.log.Info("requestPledgeTokenHandler: released non-selected locked tokens", "did", did, "selectedCount", len(selectedTokenIDs))
@@ -217,28 +240,148 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 		return c.l.RenderJSON(request, &response, http.StatusInternalServerError)
 	}
 
-	// Pledge tokens after consensus succeeds. The transactionId is already
-	// computed above (txID); InitiateConsensus returns the same value.
-	pledgeDetails := txnInfo.Quorums
-	if len(pledgeDetails) > 0 {
-		pledgeTokenDetails := pledgeDetails[0].Tokens
-		if err := c.PledgeV2(
-			context.Background(),
-			pledgeTokenDetails,
-			txn.ID,
-			quorumDid,
-			txnInfo.Epoch,
-			txnInfo.Network,
-			txnInfo,
-			consensusRequest.InitiatorSignature,
-			consensusResponse.QuorumSignature,
-		); err != nil {
-			c.log.Error("initiateConsensusHandler: PledgeV2 failed", "err", err)
-			response.Message = "initiateConsensusHandler: PledgeV2 failed: " + err.Error()
-			// ### Note: consensus succeeded but pledge failed, which is a critical state.
-			// Alerting is needed to investigate and resolve the underlying issue.
+	// Locate this quorum's pledge token entry by DID match, not by slice index.
+	// txnInfo.Quorums may list multiple quorums; the entry for THIS quorum may
+	// not be at index 0.
+	var pledgeTokenDetails []*models.TokenInfo
+	for _, q := range txnInfo.Quorums {
+		if q.Did == quorumDid {
+			pledgeTokenDetails = q.Tokens
+			break
+		}
+	}
+	if len(pledgeTokenDetails) == 0 {
+		c.log.Error("initiateConsensusHandler: no quorum tokens found for DID", "quorumDID", quorumDid)
+		response.Message = fmt.Errorf("no quorum tokens found for DID %s", quorumDid).Error()
+		return c.l.RenderJSON(request, response, http.StatusInternalServerError)
+	}
+
+	// Token consistency validation BEFORE PledgeV2.
+	// Extract token IDs from both views of the pledge set and confirm they
+	// agree on count and membership. In the current single-source code path
+	// these are the same slice, so this is a defensive check that will fire
+	// only if a future refactor introduces a second token list out of band.
+	pledgeTokenIDsFromTxnInfo := make(map[string]struct{}, len(pledgeTokenDetails))
+	for _, ti := range pledgeTokenDetails {
+		if ti == nil {
+			c.log.Error("initiateConsensusHandler: nil TokenInfo in pledgeTokenDetails")
+			response.Message = "initiateConsensusHandler: nil TokenInfo in pledgeTokenDetails"
 			return c.l.RenderJSON(request, response, http.StatusInternalServerError)
 		}
+		pledgeTokenIDsFromTxnInfo[ti.TokenID] = struct{}{}
+	}
+	// tokenInfos is the slice that will actually be passed to PledgeV2.
+	// In the current flow this is the same as pledgeTokenDetails; the
+	// consistency check here ensures the two views remain in sync.
+	tokenInfos := pledgeTokenDetails
+	if len(tokenInfos) != len(pledgeTokenDetails) {
+		c.log.Error("initiateConsensusHandler: pledge token count mismatch",
+			"fromTxnInfo", len(pledgeTokenDetails),
+			"actual", len(tokenInfos))
+		response.Message = "initiateConsensusHandler: pledge token count mismatch"
+		return c.l.RenderJSON(request, response, http.StatusInternalServerError)
+	}
+	for _, ti := range tokenInfos {
+		if ti == nil {
+			c.log.Error("initiateConsensusHandler: nil TokenInfo in tokenInfos")
+			response.Message = "initiateConsensusHandler: nil TokenInfo in tokenInfos"
+			return c.l.RenderJSON(request, response, http.StatusInternalServerError)
+		}
+		if _, ok := pledgeTokenIDsFromTxnInfo[ti.TokenID]; !ok {
+			c.log.Error("initiateConsensusHandler: pledge token ID set mismatch",
+				"unexpectedTokenID", ti.TokenID)
+			response.Message = "initiateConsensusHandler: pledge token ID set mismatch"
+			return c.l.RenderJSON(request, response, http.StatusInternalServerError)
+		}
+	}
+
+	// Soft dedup guard (F-2): log + dedupe + metric, continue on duplicates.
+	// Hard guard in PledgeV2 remains the last line of defense; this guard
+	// exists so a duplicate under load is visible without cascading failure.
+	{
+		seenDedup := make(map[string]struct{}, len(tokenInfos))
+		deduped := make([]*models.TokenInfo, 0, len(tokenInfos))
+		dupCount := 0
+		for _, ti := range tokenInfos {
+			if ti == nil {
+				continue
+			}
+			if _, dup := seenDedup[ti.TokenID]; dup {
+				dupCount++
+				c.log.Warn("initiateConsensusHandler: duplicate token in pledge tokenInfos (soft-deduped)",
+					"metric", "pledge_v2_duplicate_token_total",
+					"count", dupCount,
+					"tokenID", ti.TokenID,
+					"quorumDID", quorumDid,
+					"txID", txID,
+					"referenceID", consensusRequest.ReferenceId,
+				)
+				continue
+			}
+			seenDedup[ti.TokenID] = struct{}{}
+			deduped = append(deduped, ti)
+		}
+		tokenInfos = deduped
+	}
+
+	// VULN-4: validate lock_reference_id matches the incoming consensus ReferenceId
+	// BEFORE pledging. Prevents replayed/interleaved requests from pledging tokens
+	// that belong to a different reference_id.
+	{
+		tokenIDsForLockCheck := make([]string, 0, len(tokenInfos))
+		for _, ti := range tokenInfos {
+			tokenIDsForLockCheck = append(tokenIDsForLockCheck, ti.TokenID)
+		}
+		lockRefs, err := c.w.GetTokenLockReferenceIDs(context.Background(), tokenIDsForLockCheck)
+		if err != nil {
+			c.log.Error("initiateConsensusHandler: failed to read lock_reference_id for pledge tokens", "err", err)
+			response.Message = "initiateConsensusHandler: failed to validate token locks: " + err.Error()
+			return c.l.RenderJSON(request, response, http.StatusInternalServerError)
+		}
+		for _, id := range tokenIDsForLockCheck {
+			ref, found := lockRefs[id]
+			if !found {
+				c.log.Error("initiateConsensusHandler: pledge token not found in tokens table",
+					"tokenID", id, "quorumDID", quorumDid, "txID", txID)
+				response.Message = fmt.Sprintf("initiateConsensusHandler: token %q not found in tokens table", id)
+				return c.l.RenderJSON(request, response, http.StatusBadRequest)
+			}
+			if ref == nil {
+				c.log.Error("initiateConsensusHandler: pledge token has no lock_reference_id",
+					"tokenID", id, "quorumDID", quorumDid, "txID", txID)
+				response.Message = fmt.Sprintf("initiateConsensusHandler: token %q has no lock_reference_id (was never locked by this flow)", id)
+				return c.l.RenderJSON(request, response, http.StatusBadRequest)
+			}
+			if *ref != consensusRequest.ReferenceId {
+				c.log.Error("initiateConsensusHandler: pledge token lock_reference_id mismatch",
+					"tokenID", id, "expected", consensusRequest.ReferenceId, "got", *ref,
+					"quorumDID", quorumDid, "txID", txID)
+				response.Message = fmt.Sprintf("initiateConsensusHandler: token %q lock_reference_id mismatch: expected %q, got %q",
+					id, consensusRequest.ReferenceId, *ref)
+				return c.l.RenderJSON(request, response, http.StatusBadRequest)
+			}
+		}
+		c.log.Info("initiateConsensusHandler: lock_reference_id validation passed",
+			"txID", txID, "tokens", len(tokenInfos), "referenceID", consensusRequest.ReferenceId)
+	}
+
+	if err := c.PledgeV2(
+		context.Background(),
+		tokenInfos,
+		txID,
+		quorumDid,
+		txnInfo.Epoch,
+		txnInfo.Network,
+		txnInfo,
+		consensusRequest.InitiatorSignature,
+		consensusResponse.QuorumSignature,
+		consensusRequest.ReferenceId,
+	); err != nil {
+		c.log.Error("initiateConsensusHandler: PledgeV2 failed", "err", err)
+		response.Message = "initiateConsensusHandler: PledgeV2 failed: " + err.Error()
+		// ### Note: consensus succeeded but pledge failed, which is a critical state.
+		// Alerting is needed to investigate and resolve the underlying issue.
+		return c.l.RenderJSON(request, response, http.StatusInternalServerError)
 	}
 
 	return c.l.RenderJSON(request, &consensusResponse, http.StatusOK)

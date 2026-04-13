@@ -10,15 +10,6 @@ type RBTSelfTransferRequestSwaggoInput struct {
 	Type       int     `json:"type"`
 }
 
-// @Summary     Initiate Self Transfer
-// @Description This API will initiate self RBT transfer for a specific DID
-// @Tags        Account
-// @ID 			initiate-self-transfer
-// @Accept      json
-// @Produce     json
-// @Param 		input body RBTSelfTransferRequestSwaggoInput true "Intitate Self RBT transfer"
-// @Success 200 {object} model.BasicResponse
-// @Router /api/initiate-self-transfer [post]
 func (s *Server) SelfTransferHandle(req *ensweb.Request) *ensweb.Result {
 	var selfTransferReq model.RBTTransferRequest
 	err := s.ParseJSON(req, &selfTransferReq)

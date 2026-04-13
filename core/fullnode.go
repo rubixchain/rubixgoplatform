@@ -90,7 +90,8 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	// INCREMENT COUNTER when new transaction is processed
 	atomic.AddInt64(&c.txnProcessor.processedTxnCount, 1)
 
-	c.log.Info("Received transaction", "txnID", newEvent.TransactionID, "mode", newEvent.AssetType)
+	// ### commented: high-volume pub-sub noise (fires per transaction per node)
+	// c.log.Info("Received transaction", "txnID", newEvent.TransactionID, "mode", newEvent.AssetType)
 
 	// Update queue length metric for dynamic scaling
 	currentQueueLen := int64(len(c.txnProcessor.txnQueue))
@@ -136,9 +137,10 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 
 		err := c.processSingleTransaction(txnEvent)
 		if err == nil {
-			c.log.Info("Transaction processed successfully",
-				"txnID", txnEvent.TransactionID,
-				"workerID", workerID)
+			// ### commented: high-volume pub-sub noise (fires per transaction per node)
+			// c.log.Info("Transaction processed successfully",
+			// 	"txnID", txnEvent.TransactionID,
+			// 	"workerID", workerID)
 			return
 		}
 

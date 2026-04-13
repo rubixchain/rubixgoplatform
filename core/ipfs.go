@@ -19,10 +19,10 @@ import (
 )
 
 const (
-	IPFSConfigFilename string = "config"
-	MainnetSwarmKeyFilename   string = "swarm.key"
-	TestnetSwarmKeyFilename string = "testnetswarm.key"
-	LocalnetSwarmKeyFilename string  = "localnetswarm.key"
+	IPFSConfigFilename       string = "config"
+	MainnetSwarmKeyFilename  string = "swarm.key"
+	TestnetSwarmKeyFilename  string = "testnetswarm.key"
+	LocalnetSwarmKeyFilename string = "localnetswarm.key"
 )
 
 type DHTAddr struct {
@@ -68,7 +68,7 @@ func (c *Core) initIPFS(ipfsdir string) error {
 
 		gatewayPort := fmt.Sprintf("%d", c.cfg.PortConfig.IPFSAPIPort)
 		configData = []byte(strings.Replace(string(configData), "/tcp/8080", "/tcp/"+gatewayPort, -1))
-		
+
 		f, err := os.OpenFile(ipfsConfigFile,
 			os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
@@ -97,7 +97,7 @@ func (c *Core) initIPFS(ipfsdir string) error {
 
 		time.Sleep(1 * time.Second)
 		c.runIPFS()
-		c.ipfs = ipfsnode.NewShell(fmt.Sprintf("localhost:%d", c.cfg.PortConfig.IPFSPort))
+		c.ipfs = ipfsnode.NewShell(fmt.Sprintf("127.0.0.1:%d", c.cfg.PortConfig.IPFSPort))
 		if c.ipfs == nil {
 			c.log.Error("failed create ipfs shell")
 			return fmt.Errorf("failed create ipfs shell")
@@ -321,7 +321,7 @@ func (c *Core) RunIPFS() error {
 	// Wait for IPFS daemon to be ready
 	time.Sleep(5 * time.Second)
 
-	c.ipfs = ipfsnode.NewShell(fmt.Sprintf("localhost:%d", c.cfg.PortConfig.IPFSPort))
+	c.ipfs = ipfsnode.NewShell(fmt.Sprintf("127.0.0.1:%d", c.cfg.PortConfig.IPFSPort))
 
 	if c.ipfs == nil {
 		c.log.Error("failed create ipfs shell")
@@ -427,7 +427,6 @@ func (c *Core) AddBootStrap(peers []string) error {
 		}
 	}
 
-
 	if c.testnet {
 		for _, p := range peers {
 			alreadyExists := false
@@ -441,7 +440,7 @@ func (c *Core) AddBootStrap(peers []string) error {
 				c.cfg.TestnetBootstrap = append(c.cfg.TestnetBootstrap, p)
 			}
 		}
-	} 
+	}
 
 	if c.localnet {
 		for _, p := range peers {
@@ -457,7 +456,7 @@ func (c *Core) AddBootStrap(peers []string) error {
 			}
 		}
 	}
-	
+
 	_, err := c.ipfsOps.BootstrapAdd(peers)
 	return err
 }

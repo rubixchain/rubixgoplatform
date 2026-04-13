@@ -95,7 +95,7 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 				tokenTypeID = models.GetTokenTypeID(constants.TokenType_RBT)
 			}
 			currentToken = models.Token{
-				TokenID:   input.TokenID,
+				TokenID:    input.TokenID,
 				TokenValue: tokenValue,
 				TokenType:  int16(tokenTypeID),
 			}
@@ -116,6 +116,21 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 		}
 
 		state := currentToken
+		if state.TokenValue == 0 {
+			tokenValue := input.TokenValue
+
+			if tokenValue == 0 {
+				if derived, err := util.GetTokenValueFromTokenID(input.TokenID); err == nil && derived > 0 {
+					tokenValue = derived
+				}
+			}
+
+			if tokenValue == 0 {
+				return nil, nil, nil, fmt.Errorf("post-consensus persistence: cannot determine token value for token %q", input.TokenID)
+			}
+
+			state.TokenValue = tokenValue
+		}
 		state.TransactionID = transactionID
 		state.LatestPosition = position
 		state.LatestRole = int16(roleID)

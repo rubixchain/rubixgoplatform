@@ -54,9 +54,25 @@ func (c *Core) CallBackQuorumUnpledge(tx *models.Transactions, did string) error
 		prevTransactionList = append(prevTransactionList, prevTransaction)
 	}
 
-	transactionToUnpledge, err := c.w.CheckTxnsPresentInUnpledgeSequenceInfo(prevTransactionList)
+	transactionToUnpledge, err := c.w.CheckTxnsPresentInUnpledgeSequenceInfo(prevTransactionList, did)
 	if err != nil {
-		return fmt.Errorf("CallBackQuorumUnpledge: failed to get transactions from `unpledge_sequence_info` table, err: %v", err)
+		return fmt.Errorf("CallBackQuorumUnpledge: failed to get transactions from `unpledge_sequence_info` table for did %q, err: %v", did, err)
+	}
+
+	// Emit a debug log for prevTxIDs that are NOT present in unpledge_sequence_info
+	// for this quorum — this quorum never pledged for those txs, so there is nothing
+	// to unpledge. Logging here preserves observability for the no-match case.
+	matchedSet := make(map[string]struct{}, len(transactionToUnpledge))
+	for _, txID := range transactionToUnpledge {
+		matchedSet[txID] = struct{}{}
+	}
+	for _, prevTxID := range prevTransactionList {
+		if _, ok := matchedSet[prevTxID]; !ok {
+			c.log.Debug("CallBackQuorumUnpledge: prevTxID not in unpledge_sequence_info — skip (not pledged by this quorum)",
+				"prevTxID", prevTxID,
+				"did", did,
+			)
+		}
 	}
 
 	for _, txToUnpledge := range transactionToUnpledge {

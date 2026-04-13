@@ -460,17 +460,20 @@ func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Tr
 	return nil
 }
 
-// CheckTxnsPresentInUnpledgeSequenceInfo checks if the provided transactions are
-// present in the `unpledge_sequence_info` table or not. If they are, they are returned back
-func (w *Wallet) CheckTxnsPresentInUnpledgeSequenceInfo(txs []string) ([]string, error) {
+// CheckTxnsPresentInUnpledgeSequenceInfo checks if the provided transactions
+// are present in the `unpledge_sequence_info` table AND are owned by the
+// given quorum DID (outer ownership gate — defense-in-depth with UnpledgeV2's
+// inner gate). Returns only tx_ids whose quorum_did column matches.
+func (w *Wallet) CheckTxnsPresentInUnpledgeSequenceInfo(txs []string, quorumDID string) ([]string, error) {
 	rows, err := w.db.Pool().Query(
 		w.Ctx,
 		`
         SELECT tx_id
         FROM unpledge_sequence_info
         WHERE tx_id = ANY($1::TEXT[])
+          AND quorum_did = $2
         `,
-		txs,
+		txs, quorumDID,
 	)
 	if err != nil {
 		return nil, err

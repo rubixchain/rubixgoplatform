@@ -57,7 +57,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 		networkStr = "testnet"
 	}
 	// Lock and fetch free RBT tokens for split/transfer.
-	lockedTokens, err := c.w.LockTokensForSplit(c.w.Ctx, didCryptoLib.GetDID(), deployReq.RBTAmount)
+	lockedTokens, err := c.w.LockTokensForSplit(c.w.Ctx, didCryptoLib.GetDID(), deployReq.RBTAmount, reqID)
 	if err != nil {
 		c.log.Error("Failed to lock tokens for split", "err", err)
 		resp.Message = "DeploySmartContract: failed to lock tokens for split, err: " + err.Error()
@@ -86,7 +86,7 @@ func (c *Core) deploySmartContractToken(reqID string, deployReq *model.DeploySma
 	}
 
 	rbtTokensToCommit := make([]string, 0)
-	defer c.w.ReleaseTokens(rbtTokensToCommitDetails)
+	defer c.w.ReleaseTokens(rbtTokensToCommitDetails, reqID)
 
 	for i := range rbtTokensToCommitDetails {
 		commitedTokenIdBuffer := bytes.NewBufferString(rbtTokensToCommitDetails[i].TokenID)

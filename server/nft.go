@@ -173,15 +173,16 @@ type GetNFTSwaggoInput struct {
 	Did string `json:"did"`
 }
 
-// ShowAccount godoc
-// @Summary      Get NFTs owned by the particular did
-// @Description  This API will get all NFTs owned by the particular did
-// @Tags         NFT
+// GetNFTBalance godoc
+// @Summary      Get NFT Balance
+// @Description  Retrieves the Non-Fungible Token (NFT) balance for a given DID.
+// @Tags         DID
 // @Accept       json
 // @Produce      json
-// @Param        input query GetNFTSwaggoInput true "Get nfts by did"
-// @Success      200  {object}  model.NFTList
-// @Router       /api/get-nfts-by-did [get]
+// @Param        did  path      string  true  "DID (e.g. did:bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)"
+// @Success      200  {object}  model.BasicResponse
+// @Failure      400  {object}  model.BasicResponse
+// @Router       /rubix/v1/dids/{did}/balances/nft [get]
 func (s *Server) APIGetNFTsByDid(req *ensweb.Request) *ensweb.Result {
 	did := s.GetQuery(req, "did")
 	resp, err := s.c.GetNFTsByDid(did)
