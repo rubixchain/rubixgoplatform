@@ -73,7 +73,6 @@ const (
 	APIAddUserAPIKey                    string = "/api/add-user-api-key"
 	APIDumpNFTTokenChain                string = "/api/dump-nft-token-chain"
 	APIGetNFTTokenChainData             string = "/api/get-nft-token-chain-data"
-	APIFetchNft                         string = "/api/fetch-nft"
 	APIGetFTTokenchain                  string = "/api/get-ft-token-chain"
 	APISendJWTFromWallet                string = "/api/send-jwt-from-wallet"
 	APIAddPeerDetailsFromExplorer       string = "/api/add-peer-details-from-explorer"
@@ -118,10 +117,11 @@ const (
 	APIGetNFTChain           string = "/rubix/v1/nfts/{nft_id}/chain"
 	APITransaction           string = "/rubix/v1/tx"
 	APIGetTransactionByID    string = "/rubix/v1/tx/{tx_id}"
-	APISyncTransactionChain string = "/rubix/v1/sync-transaction-chain"
-	APISubscribecontract    string = "/rubix/v1/smart_contracts/subscribe"
-	APISubscribeNFT         string = "/rubix/v1/nfts/subscribe"
-	APIRegisterCallBackURL  string = "/rubix/v1/smart_contracts/register_callback"
+	APISyncTransactionChain  string = "/rubix/v1/sync-transaction-chain"
+	APISubscribecontract     string = "/rubix/v1/smart_contracts/subscribe"
+	APISubscribeNFT          string = "/rubix/v1/nfts/subscribe"
+	APIFetchNft              string = "/rubix/v1/fetch-nft"
+	APIRegisterCallBackURL   string = "/rubix/v1/smart_contracts/register_callback"
 
 	// New endpoints
 	APIListFT string = "/rubix/v1/fts"

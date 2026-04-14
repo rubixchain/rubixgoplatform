@@ -369,10 +369,11 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	// will fire because txSucceeded is still false at this point.
 	c.log.Info("InitiateTransaction: Persisting post-consensus state", "transactionID", transactionId, "did", initiatorDID, "role", wallet.ExecutionRoleInitiator)
 	persistErr := c.w.PersistPostConsensus(ctx, &wallet.PostConsensusPersistenceRequest{
-		TransactionInfo: transactionInfo,
-		Signature:       signatureTobePublished,
-		DID:             initiatorDID,
-		ExecutionRole:   wallet.ExecutionRoleInitiator,
+		TransactionInfo:      transactionInfo,
+		Signature:            signatureTobePublished,
+		DID:                  initiatorDID,
+		ExecutionRole:        wallet.ExecutionRoleInitiator,
+		TransferNFTOwnership: request.Tokens.TransferNFTOwnership,
 	})
 	if persistErr != nil {
 		c.log.Error("InitiateTransaction: Failed to persist post-consensus state", "err", persistErr, "transactionID", transactionId)
@@ -439,15 +440,18 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	}
 
 	// Skip receiver sync for:
-	// 1. SmartContract transactions (no owner transfer concept)
-	// 2. NFT deployment (TransferNFTOwnership = false, Owner == Initiator)
+	// 1. SmartContract-only transactions (no owner transfer concept)
+	// 2. NFT-only execution without ownership transfer (no receiver to notify)
 	// 3. Self-transfers (Initiator == Owner)
+	// NOTE: Mixed transactions (e.g., RBT + NFT) must NOT skip — the RBT receiver needs sync.
 	skipReceiverSync := false
-	if request.HasSmartContract() {
+	hasRBT := request.Tokens.RBT > 0
+	hasFT := len(request.Tokens.FT) > 0
+	if request.HasSmartContract() && !hasRBT && !hasFT && !request.Tokens.TransferNFTOwnership {
 		c.log.Info("InitiateTransaction: Skipping receiver sync for SmartContract transaction", "did", initiatorDID, "transactionID", transactionId)
 		skipReceiverSync = true
-	} else if request.HasNFT() && !request.Tokens.TransferNFTOwnership {
-		c.log.Info("InitiateTransaction: Skipping receiver sync for NFT deployment", "did", initiatorDID, "transactionID", transactionId)
+	} else if request.HasNFT() && !request.Tokens.TransferNFTOwnership && !hasRBT && !hasFT {
+		c.log.Info("InitiateTransaction: Skipping receiver sync for NFT execution (no ownership transfer)", "did", initiatorDID, "transactionID", transactionId)
 		skipReceiverSync = true
 	} else if initiatorDID == nextOwnerDID {
 		c.log.Info("InitiateTransaction: Skipping receiver sync (self-transfer)", "did", initiatorDID, "transactionID", transactionId)
@@ -461,10 +465,11 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		// For SmartContract/NFT deployments/self-transfers, persist receiver role immediately
 		// This avoids JSON marshaling/unmarshaling mismatch issues
 		persistErr := c.w.PersistPostConsensus(ctx, &wallet.PostConsensusPersistenceRequest{
-			TransactionInfo: transactionInfo,
-			Signature:       signatureTobePublished,
-			DID:             nextOwnerDID,
-			ExecutionRole:   wallet.ExecutionRoleReceiver,
+			TransactionInfo:      transactionInfo,
+			Signature:            signatureTobePublished,
+			DID:                  nextOwnerDID,
+			ExecutionRole:        wallet.ExecutionRoleReceiver,
+			TransferNFTOwnership: request.Tokens.TransferNFTOwnership,
 		})
 		if persistErr != nil {
 			c.log.Error("InitiateTransaction: Failed to persist receiver state", "err", persistErr, "transactionID", transactionId, "did", nextOwnerDID)
@@ -713,7 +718,7 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 	// Errors are logged but never break SendTokens — sync is best-effort.
 	if len(syncTokenIDs) > 0 {
 		initiatorDID := sendTokensRequest.TransactionInfo.Initiator
-		if err := c.SyncTransactionChainsFromPeer(initiatorDID, syncTokenIDs, prevTxIDs, []string{currentTxID}); err != nil {
+		if err := c.SyncTransactionChainsFromPeer(initiatorDID, syncTokenIDs, prevTxIDs, []string{currentTxID}, sendTokensRequest.NFTOwnershipTransfer); err != nil {
 			c.log.Warn("SendTokens: chain sync from sender failed (non-fatal)", "initiator", initiatorDID, "err", err)
 		}
 	}
@@ -724,6 +729,7 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 		DID:                       receiverDID,
 		ExecutionRole:             wallet.ExecutionRoleReceiver,
 		SkipSignatureVerification: true,
+		TransferNFTOwnership:      sendTokensRequest.NFTOwnershipTransfer,
 	})
 	if persistErr != nil {
 		c.log.Error("SendTokens: Failed to persist receiver token state", "err", persistErr)

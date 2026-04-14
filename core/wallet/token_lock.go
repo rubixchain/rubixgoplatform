@@ -248,6 +248,8 @@ func (w *Wallet) QueryAndLockByIDs(ctx context.Context, tx pgx.Tx, ownerDID stri
 
 // QueryAndLockForExecution locks NFT or SmartContract tokens for execution.
 // Accepts tokens in Deployed or Executed status (after previous deployment/execution).
+// For NFTs, tokens in Free status are also accepted to support execution after
+// ownership transfer (where the receiver's NFT lands in Free status).
 // tokenIDs must be pre-sorted by the caller for deadlock prevention.
 // checkOwnership controls whether tokens.did must match ownerDID:
 //   - true  for NFT with TransferNFTOwnership=true: only the current owner may execute
@@ -273,10 +275,11 @@ func (w *Wallet) QueryAndLockForExecution(ctx context.Context, tx pgx.Tx, ownerD
 			WHERE t.token_id = ANY($1::text[])
 			  AND t.did = $2
 			  AND t.token_type = (SELECT id FROM token_type WHERE name = $3)
-			  AND (t.token_status = $4 OR t.token_status = $5)
+			  AND (t.token_status = $4 OR t.token_status = $5
+			       OR ($3 = 'NFT' AND t.token_status = $6))
 			ORDER BY t.token_id
 			FOR UPDATE OF t
-		`, tokenIDs, ownerDID, tokenTypeName, constants.TokenStatus_Deployed, constants.TokenStatus_Executed)
+		`, tokenIDs, ownerDID, tokenTypeName, constants.TokenStatus_Deployed, constants.TokenStatus_Executed, constants.TokenStatus_Free)
 	} else {
 		// SC execution or NFT without ownership transfer: any subscriber can execute.
 		rows, err = tx.Query(ctx, `
@@ -286,10 +289,11 @@ func (w *Wallet) QueryAndLockForExecution(ctx context.Context, tx pgx.Tx, ownerD
 			FROM tokens t
 			WHERE t.token_id = ANY($1::text[])
 			  AND t.token_type = (SELECT id FROM token_type WHERE name = $2)
-			  AND (t.token_status = $3 OR t.token_status = $4)
+			  AND (t.token_status = $3 OR t.token_status = $4
+			       OR ($2 = 'NFT' AND t.token_status = $5))
 			ORDER BY t.token_id
 			FOR UPDATE OF t
-		`, tokenIDs, tokenTypeName, constants.TokenStatus_Deployed, constants.TokenStatus_Executed)
+		`, tokenIDs, tokenTypeName, constants.TokenStatus_Deployed, constants.TokenStatus_Executed, constants.TokenStatus_Free)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("QueryAndLockForExecution(%s): query: %w", tokenTypeName, err)
@@ -311,7 +315,7 @@ func (w *Wallet) QueryAndLockForExecution(ctx context.Context, tx pgx.Tx, ownerD
 				missing = append(missing, id)
 			}
 		}
-		return nil, fmt.Errorf("QueryAndLockForExecution(%s): tokens not found or not in executable status (Deployed/Executed): %v",
+		return nil, fmt.Errorf("QueryAndLockForExecution(%s): tokens not found or not in executable status (Deployed/Executed, or Free for NFT): %v",
 			tokenTypeName, missing)
 	}
 

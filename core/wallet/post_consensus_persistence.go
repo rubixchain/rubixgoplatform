@@ -32,6 +32,7 @@ type PostConsensusPersistenceRequest struct {
 	TokenChainRows            []models.TokenChain
 	TokenStates               []models.Token
 	SkipSignatureVerification bool
+	TransferNFTOwnership      bool
 }
 
 type PostConsensusPersistenceCoordinator struct {
@@ -63,7 +64,7 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 		return err
 	}
 	if len(req.TokenChainRows) == 0 || len(req.TokenStates) == 0 {
-		derivedTokenChains, derivedTokenStates, derivedAffectedTokens, err := pc.wallet.BuildPersistencePayload(ctx, txRecord.ID, req.TransactionInfo, req.DID, req.ExecutionRole)
+		derivedTokenChains, derivedTokenStates, derivedAffectedTokens, err := pc.wallet.BuildPersistencePayload(ctx, txRecord.ID, req.TransactionInfo, req.DID, req.ExecutionRole, req.TransferNFTOwnership)
 		if err != nil {
 			return err
 		}

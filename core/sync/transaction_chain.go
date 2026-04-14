@@ -46,7 +46,10 @@ func SyncTransactionChain(req *ensweb.Request, l *ipfsport.Listener, w *wallet.W
 }
 
 // FindTokenRoleInTxn determines the role a token played in a given transaction.
-func FindTokenRoleInTxn(tokenID string, txInfo *models.TransactionInfo) int16 {
+// transferNFTOwnership controls NFT role: false=Execute, true=Transfer.
+// This replaces the old Owner==Initiator heuristic which was incorrect in
+// mixed transactions where Owner is the RBT receiver, not the NFT owner.
+func FindTokenRoleInTxn(tokenID string, txInfo *models.TransactionInfo, transferNFTOwnership bool) int16 {
 	if txInfo.Tokens != nil {
 		for _, t := range txInfo.Tokens.RBT {
 			if t.TokenID == tokenID {
@@ -55,13 +58,10 @@ func FindTokenRoleInTxn(tokenID string, txInfo *models.TransactionInfo) int16 {
 		}
 		for _, t := range txInfo.Tokens.NFT {
 			if t.TokenID == tokenID {
-				// Genesis (empty PreviousTransactionID) = Deploy
-				// Owner == Initiator (or empty) = Execute (self-execution)
-				// Owner != Initiator = Transfer (ownership change)
 				if t.PreviousTransactionID == "" {
 					return int16(models.GetTokenRoleID(constants.TokenRole_Deploy))
 				}
-				if txInfo.Owner == "" || txInfo.Owner == txInfo.Initiator {
+				if !transferNFTOwnership {
 					return int16(models.GetTokenRoleID(constants.TokenRole_Execute))
 				}
 				return int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
@@ -188,7 +188,7 @@ func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, tokenType int, w
 					return fmt.Errorf("failed to unmarshal transaction info: %w", err), nil
 				}
 
-				role := FindTokenRoleInTxn(tokenID, &txInfo)
+				role := FindTokenRoleInTxn(tokenID, &txInfo, false)
 
 				// Derive the correct token status from the role, mirroring
 				// post_consensus_payload_builder.go so the synced record matches

@@ -426,37 +426,6 @@ func ValidateTokenIDRelatedChecks(tokenID string, isFullNode bool, w *wallet.Wal
 	return nil
 }
 
-func FindTokenRoleInTxn(tokenID string, txInfo *models.TransactionInfo) int16 {
-	if txInfo.Tokens != nil {
-		for _, lists := range [][]*models.TokenInfo{
-			txInfo.Tokens.RBT, txInfo.Tokens.NFT,
-			txInfo.Tokens.FT, txInfo.Tokens.SmartContract,
-		} {
-			for _, t := range lists {
-				if t.TokenID == tokenID {
-					return int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
-				}
-			}
-		}
-	}
-
-	for _, t := range txInfo.CommittedTokens {
-		if t.TokenID == tokenID {
-			return int16(models.GetTokenRoleID(constants.TokenRole_Commit))
-		}
-	}
-
-	for _, q := range txInfo.Quorums {
-		for _, t := range q.Tokens {
-			if t.TokenID == tokenID {
-				return int16(models.GetTokenRoleID(constants.TokenRole_Pledge))
-			}
-		}
-	}
-
-	return int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
-}
-
 // func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, w *wallet.Wallet, log logger.Logger) (error, *models.TransactionChainSyncReply) {
 // 	var err error
 
@@ -604,7 +573,7 @@ func TokenChainIntigrityCheck(txnInfo *models.TransactionInfo, peer *ipfsport.Pe
 			if err := json.Unmarshal(previousTransaction.Info, &previousTransactionInfo); err != nil {
 				return fmt.Errorf("failed to unmarshal previous transaction info for token %s: %w", t.TokenID, err), false
 			}
-			role := rubixsync.FindTokenRoleInTxn(t.TokenID, &previousTransactionInfo)
+			role := rubixsync.FindTokenRoleInTxn(t.TokenID, &previousTransactionInfo, false)
 			if role == int16(models.GetTokenRoleID(constants.TokenRole_Pledge)) ||
 				role == int16(models.GetTokenRoleID(constants.TokenRole_Burn)) ||
 				role == int16(models.GetTokenRoleID(constants.TokenRole_Commit)) {

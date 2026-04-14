@@ -189,7 +189,7 @@ func (c *Core) syncSmartContractTransaction(smartContractToken string, metadata 
 	}
 
 	peerAddr := metadata.PeerID + "." + metadata.DID
-	if err := c.SyncTransactionChainsFromPeer(peerAddr, []string{smartContractToken}, nil, nil); err != nil {
+	if err := c.SyncTransactionChainsFromPeer(peerAddr, []string{smartContractToken}, nil, nil, false); err != nil {
 		c.log.Error("syncSmartContractTransaction: Failed to sync transaction chain", "token", smartContractToken, "err", err)
 		return fmt.Errorf("syncSmartContractTransaction: failed to sync transaction chain: %w", err)
 	}
@@ -354,7 +354,7 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		"peerAddress", address,
 	)
 
-	if err := c.SyncTransactionChainsFromPeer(address, []string{smartContractToken}, nil, nil); err != nil {
+	if err := c.SyncTransactionChainsFromPeer(address, []string{smartContractToken}, nil, nil, false); err != nil {
 		c.log.Error("ContractCallBack: Failed to sync transaction chain",
 			"token", smartContractToken,
 			"peerAddress", address,

@@ -178,7 +178,7 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 	)
 
 	// Sync transaction chain from publisher
-	if err := c.SyncTransactionChainsFromPeer(publisherAddress, []string{nft}, nil, nil); err != nil {
+	if err := c.SyncTransactionChainsFromPeer(publisherAddress, []string{nft}, nil, nil, newEvent.NFTOwnershipTransfer); err != nil {
 		c.log.Error("NFTCallBack: Failed to sync transaction chain",
 			"nft_token", nft,
 			"peerAddress", publisherAddress,
@@ -242,7 +242,7 @@ func (c *Core) syncNFTTransaction(nftToken string, nft *models.IPFSContractInfo)
 	c.log.Info("syncNFTTransaction: Starting transaction chain sync", "nft_token", nftToken, "peer_id", nft.PeerID, "did", nft.DID)
 
 	address := nft.PeerID + "." + nft.DID
-	if err := c.SyncTransactionChainsFromPeer(address, []string{nftToken}, nil, nil); err != nil {
+	if err := c.SyncTransactionChainsFromPeer(address, []string{nftToken}, nil, nil, false); err != nil {
 		c.log.Error("syncNFTTransaction: Failed to sync transaction chain", "nft_token", nftToken, "peer", address, "err", err)
 		return fmt.Errorf("failed to sync transaction chain for NFT %s: %w", nftToken, err)
 	}
@@ -296,6 +296,7 @@ func (c *Core) publishNFTEvents(
 		event := baseEvent
 		event.NFTid = nft.NFTId
 		event.NFTData = nft.Data
+		event.NFTOwnershipTransfer = request.Tokens.TransferNFTOwnership
 
 		c.log.Info("publishNFTEvents: Publishing event",
 			"index", i,
@@ -342,19 +343,36 @@ func (c *Core) GetNFTsByDid(did string) ([]types.NFTBalance, error) {
 	return nftInfo, nil
 }
 
-// CheckNFTFolderExists stubs NFT folder existence check.
+// CheckNFTFolderExists checks if the NFT folder exists on disk.
+// Returns the folder path if it exists, empty string if not.
 func (c *Core) CheckNFTFolderExists(nft string) (string, error) {
-	return "", fmt.Errorf("CheckNFTFolderExists: not implemented")
+	dirPath := path.Join(c.nftDir, nft)
+	_, err := os.Stat(dirPath)
+	if err == nil {
+		return dirPath, nil
+	}
+	if os.IsNotExist(err) {
+		return "", nil
+	}
+	return "", err
 }
 
-// GetAllNFTs stubs listing all NFTs.
-func (c *Core) GetAllNFTs() ([]models.FullNodeNFT, error) {
-	return nil, fmt.Errorf("GetAllNFTs: not implemented")
+// GetAllNFTs returns all NFT tokens from the database.
+func (c *Core) GetAllNFTs() ([]models.Token, error) {
+	nfts, err := c.w.GetNFTTokens()
+	if err != nil {
+		return nil, err
+	}
+	return nfts, nil
 }
 
-// GetNFTChain stubs retrieval of NFT token chain data.
+// GetNFTChain returns the token chain for a given NFT token ID.
 func (c *Core) GetNFTChain(nftID string) ([]models.TokenChainResponse, error) {
-	return nil, fmt.Errorf("GetNFTChain: not implemented")
+	nftTokenChain, err := c.w.GetNFTChainByTokenID(nftID)
+	if err != nil {
+		return nil, err
+	}
+	return nftTokenChain, nil
 }
 
 // DumpTokenChain stubs a token chain dump operation.

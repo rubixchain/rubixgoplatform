@@ -18,10 +18,11 @@ type EventSmartContractPublishInfo struct {
 }
 
 type EventNFTPublishInfo struct {
-	NFTid              string `json:"nft_id"`
-	TransactionID      string `json:"transaction_id"`
-	Initiator          string `json:"initiator"`
-	InitiatorSignature string `json:"initiator_signature"`
-	Epoch              int    `json:"epoch"`
-	NFTData            string `json:"nft_data"`
+	NFTid                string `json:"nft_id"`
+	TransactionID        string `json:"transaction_id"`
+	Initiator            string `json:"initiator"`
+	InitiatorSignature   string `json:"initiator_signature"`
+	Epoch                int    `json:"epoch"`
+	NFTData              string `json:"nft_data"`
+	NFTOwnershipTransfer bool   `json:"nft_ownership_transfer,omitempty"`
 }

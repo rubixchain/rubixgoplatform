@@ -82,7 +82,7 @@ func (c *Core) SyncTransactionChain(request *ensweb.Request) *ensweb.Result {
 //
 // prevTxIDs maps tokenID -> PreviousTransactionID from the incoming sendTokensRequest.
 // When a token's prevTxID already exists in the local chain, sync is skipped for that token.
-func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error {
+func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string, transferNFTOwnership bool) error {
 	if len(tokenIDs) == 0 {
 		c.log.Debug("SyncTransactionChainsFromPeer: No token IDs to sync, returning")
 		return nil
@@ -130,7 +130,7 @@ func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, 
 			"txCount", len(txs),
 		)
 		prevTxID := prevTxIDs[tokenID] // empty string if not in map — applyTokenChainFromSync handles this
-		if err := c.applyTokenChainFromSync(tokenID, txs, prevTxID); err != nil {
+		if err := c.applyTokenChainFromSync(tokenID, txs, prevTxID, transferNFTOwnership); err != nil {
 			c.log.Warn("SyncTransactionChainsFromPeer: apply failed (non-fatal)", "tokenID", tokenID, "err", err)
 			// Continue with remaining tokens — sync failures are best-effort.
 		} else {
@@ -152,7 +152,7 @@ func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, 
 //     for this token — used to short-circuit sync when the local chain already has it
 //
 // Errors are returned but are non-fatal — callers log and continue.
-func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transactions, prevTxID string) error {
+func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transactions, prevTxID string, transferNFTOwnership bool) error {
 	if len(remoteTxs) == 0 {
 		return nil
 	}
@@ -321,7 +321,7 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transa
 		if tokenType < 0 {
 			return fmt.Errorf("applyTokenChainFromSync: token %s not found in any token array in txInfo — cannot determine type", tokenID)
 		}
-		firstRole := rubixsync.FindTokenRoleInTxn(tokenID, &firstTxInfo)
+		firstRole := rubixsync.FindTokenRoleInTxn(tokenID, &firstTxInfo, transferNFTOwnership)
 		// SC tokens have no Owner — use Initiator as the deploying DID.
 		ownerDID := firstTxInfo.Owner
 		if ownerDID == "" {
@@ -385,7 +385,7 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transa
 				"txID", e.tx.ID, "err", err)
 			role = 0
 		} else {
-			role = rubixsync.FindTokenRoleInTxn(tokenID, &txInfo)
+			role = rubixsync.FindTokenRoleInTxn(tokenID, &txInfo, transferNFTOwnership)
 		}
 
 		// Determine previous transaction ID for the tokenchain entry.

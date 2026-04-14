@@ -32,7 +32,7 @@ type persistenceTokenInput struct {
 //
 // It preserves current token_status from the tokens table and updates only the
 // fields needed for post-consensus persistence.
-func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID string, txInfo *models.TransactionInfo, did, executionRole string) ([]models.TokenChain, []models.Token, []string, error) {
+func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID string, txInfo *models.TransactionInfo, did, executionRole string, transferNFTOwnership bool) ([]models.TokenChain, []models.Token, []string, error) {
 	if w == nil {
 		return nil, nil, nil, fmt.Errorf("post-consensus persistence: wallet is nil")
 	}
@@ -52,7 +52,7 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 		return nil, nil, nil, fmt.Errorf("post-consensus persistence: invalid execution role %q", executionRole)
 	}
 
-	inputs, affectedTokens, err := collectPersistenceTokenInputs(txInfo)
+	inputs, affectedTokens, err := collectPersistenceTokenInputs(txInfo, transferNFTOwnership)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -204,7 +204,7 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 	return tokenChains, tokenStates, affectedTokens, nil
 }
 
-func collectPersistenceTokenInputs(txInfo *models.TransactionInfo) ([]persistenceTokenInput, []string, error) {
+func collectPersistenceTokenInputs(txInfo *models.TransactionInfo, transferNFTOwnership bool) ([]persistenceTokenInput, []string, error) {
 	seen := make(map[string]struct{})
 	inputs := make([]persistenceTokenInput, 0)
 	affected := make([]string, 0)
@@ -246,8 +246,8 @@ func collectPersistenceTokenInputs(txInfo *models.TransactionInfo) ([]persistenc
 
 		// NFT tokens: Check if genesis (deployment), execution, or transfer
 		// - If PreviousTransactionID is empty → Deploy (genesis)
-		// - If Owner == Initiator (or empty) → Execute (self-execution, no ownership change)
-		// - If Owner != Initiator → Transfer (ownership change)
+		// - If transferNFTOwnership is false → Execute (no ownership change)
+		// - If transferNFTOwnership is true → Transfer (ownership change)
 		for _, nft := range txInfo.Tokens.NFT {
 			if nft == nil {
 				return nil, nil, fmt.Errorf("post-consensus persistence: transaction token is nil")
@@ -261,16 +261,18 @@ func collectPersistenceTokenInputs(txInfo *models.TransactionInfo) ([]persistenc
 			seen[nft.TokenID] = struct{}{}
 			affected = append(affected, nft.TokenID)
 
-			// Determine role based on PreviousTransactionID and ownership
+			// Determine role based on PreviousTransactionID and transferNFTOwnership flag.
+			// The flag is authoritative: false=Execute (no ownership change), true=Transfer.
+			// This replaces the old Owner==Initiator heuristic which was incorrect in
+			// mixed transactions (e.g., RBT transfer + NFT execution) where Owner is
+			// the RBT receiver, not the NFT owner.
 			var roleName string
 			if nft.PreviousTransactionID == "" {
 				roleName = constants.TokenRole_Deploy // Genesis - NFT deployment
-			} else if txInfo.Owner == "" || txInfo.Owner == txInfo.Initiator {
-				// Self-execution: Owner is same as Initiator or not specified
-				roleName = constants.TokenRole_Execute
+			} else if !transferNFTOwnership {
+				roleName = constants.TokenRole_Execute // NFT execution without ownership change
 			} else {
-				// Transfer: Ownership is changing to a different DID
-				roleName = constants.TokenRole_Transfer
+				roleName = constants.TokenRole_Transfer // NFT ownership transfer
 			}
 
 			inputs = append(inputs, persistenceTokenInput{
