@@ -273,7 +273,7 @@ func (w *Wallet) GetLatestTransactionAndRoleByTokenID(tokenID string) (*models.T
 		return nil, -1, fmt.Errorf("GetLatestTransactionByTokenID scan: %w", err)
 	}
 
-	tx, err := w.GetTransactionByID(txID)
+	tx, err := w.GetTransactionByID(txID, false)
 	if err != nil {
 		return nil, -1, fmt.Errorf("GetLatestTransactionByTokenID GetTransactionByID: %w", err)
 	}
@@ -468,7 +468,7 @@ func (w *Wallet) GetTransactionAndRoleAtHeight(tokenID string, height int64) (*m
 		return nil, -1, fmt.Errorf("GetTransactionAtHeight scan: %w", err)
 	}
 
-	tx, err := w.GetTransactionByID(txID)
+	tx, err := w.GetTransactionByID(txID, false)
 	if err != nil {
 		return nil, -1, fmt.Errorf("GetTransactionAtHeight transaction details not found for transaction_id: %v, err %w", txID, err)
 	}
@@ -490,7 +490,7 @@ func (w *Wallet) GetFullNodeTransactionAndRoleAtHeight(tokenID string, height in
 		return nil, -1, fmt.Errorf("GetFullNodeTransactionAndRoleAtHeight scan: %w", err)
 	}
 
-	tx, err := w.GetTransactionByID(txID)
+	tx, err := w.GetTransactionByID(txID, true)
 	if err != nil {
 		return nil, -1, fmt.Errorf("GetFullNodeTransactionAndRoleAtHeight transaction details not found for transaction_id: %v, err %w", txID, err)
 	}
@@ -768,7 +768,7 @@ func (w *Wallet) GetAllTransactionInfoByTokenId(tokenID string, txnId string) ([
 	// process each txn in the chain in a loop
 	for _, txnInfo := range tokenChain {
 		// fetch the txn by txnId
-		txn, err := w.GetTransactionByID(txnInfo.TransactionID)
+		txn, err := w.GetTransactionByID(txnInfo.TransactionID, false)
 		if err != nil {
 			return nil, "", fmt.Errorf("GetAllTransactionsInBytesByTokenId: failed to get transaction by id; error: %v ", err)
 		}

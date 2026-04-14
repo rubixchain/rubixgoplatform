@@ -120,3 +120,25 @@ func (w *Wallet) StoreInvalidTransaction(transaction *models.Transactions, reaso
 
 	return nil
 }
+
+func (w *Wallet) GetLatestFullNodeTransactionAndRoleByTokenID(tokenID string) (*models.Transactions, int16, error) {
+	row := w.db.Pool().QueryRow(w.Ctx,
+		`SELECT transaction_id, role FROM fullnode_tokenchain WHERE token_id = $1 ORDER BY position DESC LIMIT 1`, tokenID,
+	)
+
+	var txID string
+	var tokenRoleInTx int16
+	if err := row.Scan(&txID, &tokenRoleInTx); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, -1, nil
+		}
+		return nil, -1, fmt.Errorf("GetLatestFullNodeTransactionByTokenID scan: %w", err)
+	}
+
+	tx, err := w.GetTransactionByID(txID, true)
+	if err != nil {
+		return nil, -1, fmt.Errorf("GetLatestFullNodeTransactionByTokenID GetTransactionByID: %w", err)
+	}
+
+	return tx, tokenRoleInTx, nil
+}

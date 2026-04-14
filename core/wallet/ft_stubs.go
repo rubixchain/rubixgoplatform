@@ -292,7 +292,14 @@ func (w *Wallet) UpdateFullNodeTransactionHistoryTable(t *model.FullNodeTxnHisto
 // GetLatestTransactionID returns the latest transaction ID for a given token.
 // Delegates to GetLatestTransactionAndRoleByTokenID which queries tokenchain
 // ordered by position DESC LIMIT 1. Returns "" if the token has no chain entries.
-func (w *Wallet) GetLatestTransactionID(tokenID string) string {
+func (w *Wallet) GetLatestTransactionID(tokenID string,isFullNode bool) string {
+	if isFullNode {
+		tx, _, err := w.GetLatestFullNodeTransactionAndRoleByTokenID(tokenID)
+		if err != nil || tx == nil {
+			return ""
+		}
+		return tx.ID
+	}
 	tx, _, err := w.GetLatestTransactionAndRoleByTokenID(tokenID)
 	if err != nil || tx == nil {
 		return ""

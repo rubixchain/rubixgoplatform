@@ -137,10 +137,9 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 
 		err := c.processSingleTransaction(txnEvent)
 		if err == nil {
-			// ### commented: high-volume pub-sub noise (fires per transaction per node)
-			// c.log.Info("Transaction processed successfully",
-			// 	"txnID", txnEvent.TransactionID,
-			// 	"workerID", workerID)
+			c.log.Info("Transaction processed successfully",
+				"txnID", txnEvent.TransactionID,
+				"workerID", workerID)
 			return
 		}
 
@@ -155,7 +154,8 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 	// All retries exhausted - handle failure
 	c.handleFailedTransaction(txnEvent, lastErr)
 }
-//In this function, we will validate the transaction and store the details to the DB.
+
+// In this function, we will validate the transaction and store the details to the DB.
 func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error {
 	txn := newEvent.Transaction
 	if txn == nil {
@@ -191,14 +191,10 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 		quorumDCs[quorum.Did] = quorumDIDCrypto
 	}
 
-	peer, err := c.getPeer(transactionInfo.Initiator)
-	if err != nil {
-		c.log.Error("processSingleTransaction:failed to get peer", "error", err)
-		return fmt.Errorf("processSingleTransaction: failed to get peer: %w", err)
+	syncTxChains := func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error {
+		return c.SyncTransactionChainsFromPeer(peerDID, tokenIDs, prevTxIDs, excludeTxIDs, c.fullNode)
 	}
-	defer peer.Close()
-
-	isTransactionInfoValidated, err := consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, quorumDCs, peer, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned)
+	isTransactionInfoValidated, err := consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, quorumDCs, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains)
 	if err != nil {
 		c.log.Error("processSingleTransaction:failed to validate transaction", "error", err)
 		return fmt.Errorf("processSingleTransaction: failed to validate transaction: %w", err)
@@ -334,7 +330,7 @@ func (c *Core) processIncomingTransactionHistory(txns []model.FullNodeTxnHistory
 
 func (c *Core) checkTokenStateHashPinned(tokenID string, previousTransactionID string) error {
 	if previousTransactionID == "" {
-		return nil 
+		return nil
 	}
 
 	tokenStateHash := tokenID + "." + previousTransactionID

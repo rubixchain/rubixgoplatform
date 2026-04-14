@@ -9,9 +9,7 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
-	rubixsync "github.com/rubixchain/rubixgoplatform/core/sync"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/token"
@@ -126,7 +124,7 @@ func ValidateTokenOwnershipByPrevTxn(txnInfo *models.TransactionInfo, isFullnode
 	for _, tokens := range tokenLists {
 		for _, t := range tokens {
 			if t.PreviousTransactionID == "" {
-				continue
+				continue //skip the check for minting transactions
 			}
 			prevTxnTokensMap[t.PreviousTransactionID] = append(
 				prevTxnTokensMap[t.PreviousTransactionID], t.TokenID,
@@ -135,10 +133,12 @@ func ValidateTokenOwnershipByPrevTxn(txnInfo *models.TransactionInfo, isFullnode
 	}
 
 	for prevTxnID, tokenIDs := range prevTxnTokensMap {
-		prevTx, err := w.GetTransactionByID(prevTxnID)
+		prevTx, err := w.GetTransactionByID(prevTxnID, isFullnode)
 		if err != nil {
 			return fmt.Errorf("failed to fetch previous transaction %s: %w", prevTxnID, err)
 		}
+		//If previous txn details are not there in the fullnode side, sync those transaction details from the initiator.
+		//In general, Previous transaction won't be nil, because we are calling this function after the sync in the  TokenChainIntigretyCheck function.
 		if prevTx == nil {
 			return fmt.Errorf("previous transaction %s not found for tokens %v", prevTxnID, tokenIDs)
 		}
@@ -163,7 +163,9 @@ func ValidateTokenOwnershipByPrevTxn(txnInfo *models.TransactionInfo, isFullnode
 				tokenDetails, err := w.GetFullNodeRBTToken(t.TokenID)
 				if err != nil {
 					return fmt.Errorf("failed to get fullnode RBT token %s: %w", t.TokenID, err)
-				} //TODO: Handle the case where there is no RBT token in the fullnode rbt tokens table
+				} //TODO: Handle the case where there is no RBT token in the fullnode rbt tokens table,
+				//If we call, ValidateTokenOwnershipByPrevTxn function after calling the TokenChainIntigrityCheck function,
+				//There is no need to sync the transaction chain from the peer, because the TokenChainIntigrityCheck function will sync the transaction chain from the peer.
 				previousTransactionOwner := tokenDetails.DID
 				if previousTransactionOwner != quorum.Did {
 					return fmt.Errorf("ValidateTokenOwnershipByPrevTxn: ownership mismatch, quorum %s does not match owner %s of previous transaction %s", quorum.Did, tokenDetails.DID, t.TokenID)
@@ -255,10 +257,8 @@ func ValidateNewTokenContent(tokenID string, isQuorum bool, testnet bool, mainne
 	return nil
 }
 
-// 1. If there are different types of tokens involved in a transaction,
-// Lets say some of the FT tokens are getting created, in that case, there won't be any pledge tokens involved
-// sum of the committed tokens value should be same as the sum of the FT tokens value which are getting created.
-// Lets say some of the RBT tokens are getting burnt in the same transaction, in that case,
+// 1. First check whether quorum is involved in the transaction or not, if quorum is not involved don't do this check.
+// If quorum is involved, then check whether RBTs are getting transferred or not, if RBTs are getting transferred, then check the transaction value should be less than or equal to the pledge value.
 // burnt tokens also will be there in committed tokens list, so transaction value and committed tokens value wont' match.
 // 2. whatever the token value which initiator is passing, only in case if RBTs fullnode can check their actual value
 // by looking at the tokenID, for other assets fullnode can't get the actual value.
@@ -267,42 +267,39 @@ func ValidateTransactionValueAndPledge(txnInfo *models.TransactionInfo) error {
 	if txnInfo.Tokens == nil {
 		return fmt.Errorf("transaction has no tokens")
 	}
-	//Do this check if there are only RBTs involved in the transaction.else return nil.
-	if len(txnInfo.Tokens.FT) != 0 || len(txnInfo.Tokens.NFT) != 0 || len(txnInfo.Tokens.SmartContract) != 0 {
-		fmt.Println("transaction has non-RBT tokens, so can't validate the transaction value and pledge value")
+
+	//First check whether quorum is involved in the transaction or not, if quorum is not involved don't do this check.
+	if len(txnInfo.Quorums) == 0 {
 		return nil
 	}
 
-	transactionValue := rubixmath.ZeroFloat()
-	for _, t := range txnInfo.Tokens.RBT {
-		//If previous tranasactionID is empty, consider it as minting transaction so skip this check.
-		if t.PreviousTransactionID == "" {
-			return nil
-		}
-
-		tokenValue, err := util.GetTokenValueFromTokenID(t.TokenID)
-		if err != nil {
-			return fmt.Errorf("failed to get value for RBT token %s: %w", t.TokenID, err)
-		}
-		transactionValue = rubixmath.AddFloat(transactionValue, tokenValue)
-	}
-
-	totalPledgeValue := rubixmath.ZeroFloat()
-	for _, quorum := range txnInfo.Quorums {
-		for _, t := range quorum.Tokens {
+	if len(txnInfo.Tokens.RBT) != 0 {
+		transactionValue := rubixmath.ZeroFloat()
+		for _, t := range txnInfo.Tokens.RBT {
 			tokenValue, err := util.GetTokenValueFromTokenID(t.TokenID)
 			if err != nil {
-				return fmt.Errorf("failed to get value for pledge token %s from quorum %s: %w", t.TokenID, quorum.Did, err)
+				return fmt.Errorf("failed to get value for RBT token %s: %w", t.TokenID, err)
 			}
-			totalPledgeValue = rubixmath.AddFloat(totalPledgeValue, tokenValue)
+			transactionValue = rubixmath.AddFloat(transactionValue, tokenValue)
 		}
-	}
 
-	if transactionValue != totalPledgeValue {
-		return fmt.Errorf(
-			"transaction value (%v) does not match total pledge amount (%v)",
-			transactionValue, totalPledgeValue,
-		)
+		totalPledgeValue := rubixmath.ZeroFloat()
+		for _, quorum := range txnInfo.Quorums {
+			for _, t := range quorum.Tokens {
+				tokenValue, err := util.GetTokenValueFromTokenID(t.TokenID)
+				if err != nil {
+					return fmt.Errorf("failed to get value for pledge token %s from quorum %s: %w", t.TokenID, quorum.Did, err)
+				}
+				totalPledgeValue = rubixmath.AddFloat(totalPledgeValue, tokenValue)
+			}
+		}
+
+		if transactionValue > totalPledgeValue {
+			return fmt.Errorf(
+				"transaction value (%v) does not match total pledge amount (%v)",
+				transactionValue, totalPledgeValue,
+			)
+		}
 	}
 
 	return nil
@@ -380,7 +377,7 @@ func ValidateGenuineTokenCreator(tokenID string, isFullNode bool, w *wallet.Wall
 		if err != nil {
 			return fmt.Errorf("failed to get genesis transaction for token %s: %w", tokenID, err)
 		}
-		genesisTxInfo, err := w.GetTransactionByID(genesisTx)
+		genesisTxInfo, err := w.GetTransactionByID(genesisTx, isFullNode)
 		if err != nil {
 			return fmt.Errorf("failed to get genesis transaction info for token %s: %w", tokenID, err)
 		}
@@ -542,12 +539,30 @@ func FindTokenRoleInTxn(tokenID string, txInfo *models.TransactionInfo) int16 {
 // 	return nil, nil
 // }
 
-// TokenChainIntigrityCheck verifies each token's chain integrity.
-// peer is the pre-resolved peer for the initiator (caller obtains via getPeer).
-func TokenChainIntigrityCheck(txnInfo *models.TransactionInfo, peer *ipfsport.Peer, isFullnode bool, w *wallet.Wallet, log logger.Logger) (error, bool) {
+// TokenChainIntegrityCheck verifies that every token's local chain tip matches
+// the incoming transaction's PreviousTransactionID. When a mismatch or missing
+// token is found, it triggers a sync via syncTxChains (injected from core to
+// avoid cyclic imports) and then re-verifies. If even a single token still
+// doesn't match after sync, the check fails.
+func TokenChainIntegrityCheck(
+	txnInfo *models.TransactionInfo,
+	currentTxID string,
+	isFullnode bool,
+	w *wallet.Wallet,
+	log logger.Logger,
+	syncTxChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error,
+) error {
 	if txnInfo.Tokens == nil {
-		return nil, false
+		return nil
 	}
+
+	// Collect all tokens that need checking: transfer tokens + pledged tokens (fullnode only).
+	type tokenCheck struct {
+		tokenID               string
+		previousTransactionID string
+		label                 string // for log messages
+	}
+	var allTokens []tokenCheck
 
 	tokenLists := map[string][]*models.TokenInfo{
 		constants.TokenType_RBT:           txnInfo.Tokens.RBT,
@@ -555,76 +570,87 @@ func TokenChainIntigrityCheck(txnInfo *models.TransactionInfo, peer *ipfsport.Pe
 		constants.TokenType_NFT:           txnInfo.Tokens.NFT,
 		constants.TokenType_SmartContract: txnInfo.Tokens.SmartContract,
 	}
-
 	for tokenType, tokens := range tokenLists {
-		tokenTypeInt := models.GetTokenTypeID(tokenType)
 		for _, t := range tokens {
-			tokenDetails, err := w.GetTokenByTokenID(t.TokenID)
-			if err != nil {
-				log.Debug("token not found locally, syncing full chain", "tokenID", t.TokenID)
-				if syncErr, _ := rubixsync.SyncTransactionChainFrom(peer, t.TokenID, tokenTypeInt, w, log); syncErr != nil {
-					return fmt.Errorf("failed to sync token chain for %s: %w", t.TokenID, syncErr), false
-				}
+			if t.PreviousTransactionID == "" {
 				continue
 			}
-
-			if tokenDetails.TransactionID != t.PreviousTransactionID {
-				log.Debug("transaction ID mismatch, syncing chain",
-					"tokenID", t.TokenID,
-					"existingTransactionID", tokenDetails.TransactionID,
-					"incomingTransactionID", t.PreviousTransactionID,
-				)
-			}
-			if tokenDetails.TransactionID != t.PreviousTransactionID {
-				return fmt.Errorf("transaction ID mismatch for token %s: %s != %s", t.TokenID, tokenDetails.TransactionID, t.PreviousTransactionID), false
-			}
-			previousTransaction, err := w.GetTransactionByID(t.PreviousTransactionID)
-			if err != nil {
-				return fmt.Errorf("failed to get previous transaction for token %s: %w", t.TokenID, err), false
-			}
-			if tokenDetails.TransactionID != t.PreviousTransactionID {
-				return fmt.Errorf("transaction ID mismatch for token %s: %s != %s", t.TokenID, tokenDetails.TransactionID, t.PreviousTransactionID), false
-			}
-
-			var previousTransactionInfo models.TransactionInfo
-			if err := json.Unmarshal(previousTransaction.Info, &previousTransactionInfo); err != nil {
-				return fmt.Errorf("failed to unmarshal previous transaction info for token %s: %w", t.TokenID, err), false
-			}
-			role := rubixsync.FindTokenRoleInTxn(t.TokenID, &previousTransactionInfo)
-			if role == int16(models.GetTokenRoleID(constants.TokenRole_Pledge)) ||
-				role == int16(models.GetTokenRoleID(constants.TokenRole_Burn)) ||
-				role == int16(models.GetTokenRoleID(constants.TokenRole_Commit)) {
-				return nil, false
-			}
+			allTokens = append(allTokens, tokenCheck{
+				tokenID:               t.TokenID,
+				previousTransactionID: t.PreviousTransactionID,
+				label:                 tokenType,
+			})
 		}
+	}
 
-		//add the same check for pledged tokens also, For pledge tokens fullnode will sync it from the quorum
-		if isFullnode {
-			for _, quorum := range txnInfo.Quorums {
-				for _, t := range quorum.Tokens {
-					tokenDetails, err := w.GetFullNodeRBTToken(t.TokenID)
-					if err != nil {
-						log.Debug("token not found locally, syncing full chain", "tokenID", t.TokenID)
-
-						if syncErr, _ := rubixsync.SyncTransactionChainFrom(peer, t.TokenID, tokenTypeInt, w, log); syncErr != nil {
-							return fmt.Errorf("failed to sync token chain for %s: %w", t.TokenID, syncErr), false
-						}
-
-					}
-					tokenDetails, err = w.GetFullNodeRBTToken(t.TokenID)
-					if err != nil {
-						return fmt.Errorf("failed to get token details for %s: %w", t.TokenID, err), false
-					}
-					if tokenDetails.TransactionID != t.PreviousTransactionID {
-						return fmt.Errorf("transaction ID mismatch for token %s: %s != %s", t.TokenID, tokenDetails.TransactionID, t.PreviousTransactionID), false
-					}
-
+	if isFullnode {
+		for _, quorum := range txnInfo.Quorums {
+			for _, t := range quorum.Tokens {
+				if t.PreviousTransactionID == "" {
+					continue
 				}
+				allTokens = append(allTokens, tokenCheck{
+					tokenID:               t.TokenID,
+					previousTransactionID: t.PreviousTransactionID,
+					label:                 "pledge:" + quorum.Did,
+				})
 			}
 		}
 	}
 
-	return nil, true
+	if len(allTokens) == 0 {
+		return nil
+	}
+
+	// Phase 1: identify tokens whose local chain tip doesn't match.
+	tokensToSync := make([]string, 0)
+	tokenIDPrevTxIDMap := make(map[string]string)
+
+	for _, tc := range allTokens {
+		localTxID, err := w.GetLatestTransactionIdByTokenId(tc.tokenID, isFullnode)
+		if err != nil {
+			log.Debug("TokenChainIntigrityCheck: token not found locally, marking for sync",
+				"tokenID", tc.tokenID, "label", tc.label)
+			tokensToSync = append(tokensToSync, tc.tokenID)
+			tokenIDPrevTxIDMap[tc.tokenID] = tc.previousTransactionID
+			continue
+		}
+		if localTxID != tc.previousTransactionID {
+			log.Debug("TokenChainIntigrityCheck: transaction ID mismatch, marking for sync",
+				"tokenID", tc.tokenID,
+				"localTxID", localTxID,
+				"expectedPrevTxID", tc.previousTransactionID,
+				"label", tc.label,
+			)
+			tokensToSync = append(tokensToSync, tc.tokenID)
+			tokenIDPrevTxIDMap[tc.tokenID] = tc.previousTransactionID
+		}
+	}
+
+	// Phase 2: sync tokens that are out of date.
+	if len(tokensToSync) > 0 && syncTxChains != nil {
+		if err := syncTxChains(txnInfo.Initiator, tokensToSync, tokenIDPrevTxIDMap, []string{currentTxID}); err != nil {
+			return fmt.Errorf("TokenChainIntigrityCheck: sync failed: %w", err)
+		}
+	}
+
+	// Phase 3: re-verify every token that was synced.
+	for _, tc := range allTokens {
+		if _, needsSync := tokenIDPrevTxIDMap[tc.tokenID]; !needsSync {
+			continue // already matched in phase 1
+		}
+
+		localTxID, err := w.GetLatestTransactionIdByTokenId(tc.tokenID, isFullnode)
+		if err != nil {
+			return fmt.Errorf("TokenChainIntigrityCheck: token %s (%s) still not found locally after sync", tc.tokenID, tc.label)
+		}
+		if localTxID != tc.previousTransactionID {
+			return fmt.Errorf("TokenChainIntigrityCheck: token %s (%s) chain mismatch after sync: local latest %s != expected %s",
+				tc.tokenID, tc.label, localTxID, tc.previousTransactionID)
+		}
+	}
+
+	return nil
 }
 
 // ValidateIPFSPinChecks validates IPFS pin status for all tokens.
@@ -676,9 +702,9 @@ func ValidateIPFSPinChecks(txnInfo *models.TransactionInfo, isFullnode bool, che
 //   - log: logger
 //   - initiatorDC: pre-initialised DIDCrypto for the transaction initiator
 //   - quorumDCs: map of quorum DID → pre-initialised DIDCrypto
-//   - peer: pre-resolved peer for the initiator (for chain syncing)
 //   - testnet, mainnet, localnet: network mode flags
 //   - checkPinned: function to check IPFS pin status (tokenID, prevTxnID) → error
+//   - syncTxChains: callback to sync transaction chains from peer (injected from core to avoid cyclic import)
 func ValidateTransaction(
 	tx *models.Transactions,
 	isFullnode bool,
@@ -686,11 +712,11 @@ func ValidateTransaction(
 	log logger.Logger,
 	initiatorDC types.DIDCrypto,
 	quorumDCs map[string]types.DIDCrypto,
-	peer *ipfsport.Peer,
 	testnet bool,
 	mainnet bool,
 	localnet bool,
 	checkPinned func(tokenID, previousTxnID string) error,
+	syncTxChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error,
 ) (bool, error) {
 	var txnInfo models.TransactionInfo
 	if err := json.Unmarshal(tx.Info, &txnInfo); err != nil {
@@ -709,21 +735,18 @@ func ValidateTransaction(
 	if err := json.Unmarshal(tx.Signature, &sig); err != nil {
 		return false, fmt.Errorf("ValidateTransaction: failed to unmarshal signature: %w", err)
 	}
-	log.Debug("ValidateTransaction: Initiator signature", "signature", sig.InitiatorSignature)
-	log.Debug("ValidateTransaction: Initiator signature bytes", "bytes", []byte(sig.InitiatorSignature))
+
 	if err := SignatureVerificationCheck(&txnInfo, &sig, initiatorDC, quorumDCs); err != nil {
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
 
-	// if err := ValidateTokenOwnershipByPrevTxn(&txnInfo, isFullnode, w); err != nil {
-	// 	return false, fmt.Errorf("ValidateTransaction: %w", err)
-	// }
+	if err := TokenChainIntegrityCheck(&txnInfo, tx.ID, isFullnode, w, log, syncTxChains); err != nil {
+		return false, fmt.Errorf("ValidateTransaction: %w", err)
+	}
 
-	// if syncErr, ok := TokenChainIntigrityCheck(&txnInfo, peer, isFullnode, w, log); syncErr != nil {
-	// 	return false, fmt.Errorf("ValidateTransaction: %w", syncErr)
-	// } else if !ok {
-	// 	return false, fmt.Errorf("ValidateTransaction: token chain sync failed")
-	// }
+	if err := ValidateTokenOwnershipByPrevTxn(&txnInfo, isFullnode, w); err != nil {
+		return false, fmt.Errorf("ValidateTransaction: %w", err)
+	}
 
 	// 7. ValidateTokenIDRelatedChecks for each RBT token in Tokens and CommittedTokens and pledged tokens
 	if txnInfo.Tokens.RBT != nil {

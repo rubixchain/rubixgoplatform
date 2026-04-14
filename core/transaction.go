@@ -639,7 +639,7 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 	// Errors are logged but never break SendTokens — sync is best-effort.
 	if len(syncTokenIDs) > 0 {
 		initiatorDID := sendTokensRequest.TransactionInfo.Initiator
-		if err := c.SyncTransactionChainsFromPeer(initiatorDID, syncTokenIDs, prevTxIDs, []string{currentTxID}); err != nil {
+		if err := c.SyncTransactionChainsFromPeer(initiatorDID, syncTokenIDs, prevTxIDs, []string{currentTxID}, false); err != nil {
 			c.log.Warn("SendTokens: chain sync from sender failed (non-fatal)", "initiator", initiatorDID, "err", err)
 		}
 	}
@@ -663,7 +663,7 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) GetTransactionByID(txId string) (*models.TransactionInfo, error) {
-	transactionDetail, err := c.w.GetTransactionByID(txId)
+	transactionDetail, err := c.w.GetTransactionByID(txId, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get transactions details for tx: %v, err: %v", txId, err)
 	}

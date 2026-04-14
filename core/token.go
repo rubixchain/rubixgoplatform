@@ -304,10 +304,10 @@ func (c *Core) generateLocalRBT(reqID string, num int, did string, startIndex in
 			}
 			tokenID := fmt.Sprintf("%d_%d", tokenLevel, numInLevel)
 
-			if _, err = c.w.PersistGenesisTokenRecord(tx, dc, c.ps, tokenID, did, constants.NetworkID_RBT_Local, currentTime); err != nil {
+			if _, err = c.w.PersistGenesisTokenRecord(tx, dc, c.ps, tokenID, did, constants.NetworkMode_Localnet, currentTime); err != nil {
 				c.log.Error("Failed to persist genesis token record", "err", err)
 				return err
-			}	
+			}
 		}
 	}
 

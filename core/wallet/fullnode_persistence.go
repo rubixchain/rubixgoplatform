@@ -53,6 +53,7 @@ func (w *Wallet) PersistFullNodeTransaction(ctx context.Context, req *FullNodePe
 	if err != nil {
 		return err
 	}
+	w.log.Debug("PersistFullNodeTransaction: inputs", inputs, "affectedTokenIDs", affectedTokenIDs)
 	if len(inputs) == 0 {
 		return fmt.Errorf("fullnode persistence: no tokens found in transaction payload")
 	}
@@ -170,6 +171,7 @@ func (w *Wallet) insertFullNodeTransaction(ctx context.Context, tx pgx.Tx, trans
 	if err != nil {
 		return fmt.Errorf("fullnode persistence: insert fullnode transaction: %w", err)
 	}
+	w.log.Debug("insertFullNodeTransaction: Transactions inserted successfully")
 	return nil
 }
 
@@ -479,6 +481,139 @@ func (w *Wallet) syncFullNodeTokenChainIndex(ctx context.Context, tx pgx.Tx, tok
 	`
 	if _, err := tx.Exec(ctx, query, args...); err != nil {
 		return fmt.Errorf("fullnode persistence: upsert fullnode tokenchain index: %w", err)
+	}
+	return nil
+}
+
+// func (w *Wallet) GetFullNodeTransactionByID(ctx context.Context, tx pgx.Tx, transactionID string) (*models.Transactions, error) {
+// 	var transaction models.Transactions
+// 	err := tx.QueryRow(ctx, `
+// 		SELECT id, info, signature, created_at, updated_at
+// 		FROM fullnode_transactions
+// 		WHERE id = $1
+// 	`, transactionID).Scan(&transaction.ID, &transaction.Info, &transaction.Signature, &transaction.CreatedAt, &transaction.UpdatedAt)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("fullnode persistence: read fullnode transaction %q: %w", transactionID, err)
+// 	}
+// 	return &transaction, nil
+// }
+
+func (w *Wallet) GetFullNodeTokenChainByTokenID(tokenID string) ([]models.TokenChain, error) {
+	rows, err := w.db.Pool().Query(w.Ctx,
+		`SELECT id, token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at
+		 FROM fullnode_tokenchain WHERE token_id = $1 ORDER BY position ASC`, tokenID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetFullNodeTokenChainByTokenID: %w", err)
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByName[models.TokenChain])
+}
+
+// PersistFullNodeSyncedTokenChain atomically writes synced transactions and
+// tokenchain entries for a single token into fullnode tables, then updates
+// the token state and tokenchain index. This is the fullnode counterpart of
+// ApplyTokenChainBatch + CreateTransactionIfNotExists used in the normal path.
+func (w *Wallet) PersistFullNodeSyncedTokenChain(
+	ctx context.Context,
+	tokenID string,
+	newTxs []models.Transactions,
+	entries []models.TokenChain,
+	lastTxInfo *models.TransactionInfo,
+	tokenType string,
+	lastRole int16,
+) error {
+	if len(newTxs) == 0 {
+		return nil
+	}
+
+	tx, err := w.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("fullnode sync persistence: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	for i := range newTxs {
+		if err := w.insertFullNodeTransaction(ctx, tx, &newTxs[i]); err != nil {
+			return err
+		}
+	}
+
+	if err := w.insertFullNodeTokenChainRows(ctx, tx, entries); err != nil {
+		return err
+	}
+
+	if err := w.syncFullNodeTokenChainIndex(ctx, tx, []string{tokenID}); err != nil {
+		return err
+	}
+
+	lastEntry := entries[len(entries)-1]
+	var tokenValue float64
+	var tokenStateHash string
+	if lastTxInfo != nil && lastTxInfo.Tokens != nil {
+		for _, t := range lastTxInfo.Tokens.RBT {
+			if t != nil && t.TokenID == tokenID {
+				tokenValue = t.TokenValue
+				tokenStateHash = t.Data
+				break
+			}
+		}
+		if tokenValue == 0 {
+			for _, t := range lastTxInfo.Tokens.FT {
+				if t != nil && t.TokenID == tokenID {
+					tokenValue = t.TokenValue
+					tokenStateHash = t.Data
+					break
+				}
+			}
+		}
+		if tokenValue == 0 {
+			for _, t := range lastTxInfo.Tokens.NFT {
+				if t != nil && t.TokenID == tokenID {
+					tokenValue = t.TokenValue
+					tokenStateHash = t.Data
+					break
+				}
+			}
+		}
+		if tokenValue == 0 {
+			for _, t := range lastTxInfo.Tokens.SmartContract {
+				if t != nil && t.TokenID == tokenID {
+					tokenValue = t.TokenValue
+					tokenStateHash = t.Data
+					break
+				}
+			}
+		}
+	}
+
+	tokenState, err := w.readFullNodeTokenStateTx(ctx, tx, tokenType, tokenID)
+	if err != nil {
+		return err
+	}
+	if !tokenState.exists {
+		tokenState.tokenID = tokenID
+		tokenState.tokenStatus = int16(constants.TokenStatus_Free)
+	}
+	if tokenValue > 0 {
+		tokenState.tokenValue = tokenValue
+	}
+	if tokenStateHash != "" {
+		tokenState.tokenStateHash = tokenStateHash
+	}
+	if lastTxInfo != nil && lastTxInfo.Owner != "" {
+		tokenState.did = lastTxInfo.Owner
+	}
+	tokenState.transactionID = lastEntry.TransactionID
+	tokenState.latestPosition = lastEntry.Position
+	tokenState.latestRole = lastRole
+	tokenState.exists = true
+
+	if err := w.upsertFullNodeTokenStateTx(ctx, tx, tokenType, tokenState); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("fullnode sync persistence: commit: %w", err)
 	}
 	return nil
 }

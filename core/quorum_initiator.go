@@ -216,15 +216,10 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 		response.Message = "initiateConsensusHandler: failed to build transaction record"
 		return c.l.RenderJSON(request, response, http.StatusBadRequest)
 	}
-	peer, err := c.getPeer(txnInfo.Initiator)
-	if err != nil {
-		c.log.Error("initiateConsensusHandler: failed to get peer", "err", err)
-		response.Message = "initiateConsensusHandler: failed to get peer"
-		return c.l.RenderJSON(request, response, http.StatusBadRequest)
+	syncTxChains := func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error {
+		return c.SyncTransactionChainsFromPeer(peerDID, tokenIDs, prevTxIDs, excludeTxIDs, c.fullNode)
 	}
-	defer peer.Close()
-
-	isTransactionInfoValidated, err := consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, nil, peer, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned)
+	isTransactionInfoValidated, err := consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, nil, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains)
 	if err != nil || !isTransactionInfoValidated {
 		c.log.Error("initiateConsensusHandler: transaction info validation failed", "err", err)
 		response.Message = "initiateConsensusHandler: transaction info validation failed"
@@ -414,7 +409,7 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 	c.pqc[didStr] = dc
 
 	// Subscribe to "rubix_txns" event
-	c.SubscribeTxnSetup()
+	// c.SubscribeTxnSetup()
 
 	return nil
 }
