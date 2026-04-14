@@ -687,7 +687,8 @@ func (w *Wallet) FTGenesisTxn(tx pgx.Tx,
 	ftName string,
 	startIndex, batchSize int,
 	ftValue float64,
-	parentToken *models.TokenInfo,
+	ftRefID int32,
+	parentTokens []*models.TokenInfo,
 ) (txnID string, err error) {
 
 	// prepare FTIDs and details
@@ -712,7 +713,7 @@ func (w *Wallet) FTGenesisTxn(tx pgx.Tx,
 		Tokens: &models.TransactionTokens{
 			FT: txTokensInfo,
 		},
-		CommittedTokens: []*models.TokenInfo{parentToken},
+		CommittedTokens: parentTokens,
 	}
 
 	txInfoBytes, err := models.SerializeTransactionInfo(txnInfo)
@@ -751,33 +752,45 @@ func (w *Wallet) FTGenesisTxn(tx pgx.Tx,
 		return "", fmt.Errorf("FTGenesisTxn: insert transaction: %w", err)
 	}
 
+	// TODO : update execution_role as per token role or token status
+	// Insert transaction_units record for the genesis initiator.
+	if _, err = tx.Exec(w.Ctx, `
+		INSERT INTO transaction_units (transaction_id, did, execution_role, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, NOW(), NOW())
+		ON CONFLICT (transaction_id, did) DO NOTHING
+	`, txnID, did, ExecutionRoleInitiator, transactionUnitStatusCommitted); err != nil {
+		return "", fmt.Errorf("FTGenesisTxn: insert transaction_units: %w", err)
+	}
+
 	// Build FT Record
 	for _, token := range txTokensInfo {
-		err := w.InsertGenesisTokenInfo(tx, token, did, txnID, constants.TokenType_FT, constants.TokenRole_Mint)
+		err := w.InsertGenesisTokenInfo(tx, token, ftRefID, did, txnID, constants.TokenType_FT, constants.TokenRole_Mint)
 		if err != nil {
 			return "", fmt.Errorf("FTGenesisTxn: failed to update FT info in DB: %w", err)
 		}
 	}
 
-	// fetch parent token chain indices to get chain height
-	// Note: current token chain height = len(tokenChainIndices) - 1 => new height = len(tokenChainIndices)
-	var indexLength int
-	if err = tx.QueryRow(w.Ctx,
-		`SELECT array_length(index, 1)
-     FROM tokenchain_index
-     WHERE token_id = $1`, parentToken.TokenID,
-	).Scan(&indexLength); err != nil {
-		// This should NOT return pgx.ErrNoRows because of COALESCE,
-		// but handle defensively anyway.
-		if errors.Is(err, pgx.ErrNoRows) {
-			indexLength = 0
+	for _, parentRBT := range parentTokens {
+		// fetch parent token chain indices to get chain height
+		// Note: current token chain height = len(tokenChainIndices) - 1 => new height = len(tokenChainIndices)
+		var indexLength int
+		if err = tx.QueryRow(w.Ctx,
+			`SELECT array_length(index, 1)
+		 FROM tokenchain_index
+		 WHERE token_id = $1`, parentRBT.TokenID,
+		).Scan(&indexLength); err != nil {
+			// This should NOT return pgx.ErrNoRows because of COALESCE,
+			// but handle defensively anyway.
+			if errors.Is(err, pgx.ErrNoRows) {
+				indexLength = 0
+			}
+			return "", fmt.Errorf("FTGenesisTxn: query tokenchain_index %w", err)
 		}
-		return "", fmt.Errorf("FTGenesisTxn: query tokenchain_index %w", err)
-	}
-	// Build Parent Token record
-	err = w.UpdateTokenInfo(tx, parentToken, did, txnID, ExecutionRoleInitiator, int64(indexLength), constants.TokenStatus_BurntForFT, constants.TokenType_RBT, constants.TokenRole_Commit)
-	if err != nil {
-		return "", fmt.Errorf("FTGenesisTxn: failed to update parent RBT %s info in DB: %w", parentToken.TokenID, err)
+		// Build Parent Token record
+		err = w.UpdateTokenInfo(tx, parentRBT, did, txnID, int64(indexLength), constants.TokenStatus_BurntForFT, constants.TokenType_RBT, constants.TokenRole_Commit)
+		if err != nil {
+			return "", fmt.Errorf("FTGenesisTxn: failed to update parent RBT %s info in DB: %w", parentRBT.TokenID, err)
+		}
 	}
 
 	// publish txn
@@ -788,7 +801,8 @@ func (w *Wallet) FTGenesisTxn(tx pgx.Tx,
 	return txnID, nil
 }
 
-func (w *Wallet) InsertGenesisTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, did, txID string, tokenType, tokenRole string) error {
+// Genesis token info insertion for all token types
+func (w *Wallet) InsertGenesisTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, ftsRefID int32, did, txID, tokenType, tokenRole string) error {
 	tokenRoleID := int16(models.GetTokenRoleID(tokenRole))
 	tokenTypeID := int16(models.GetTokenTypeID(tokenType))
 
@@ -796,7 +810,7 @@ func (w *Wallet) InsertGenesisTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, 
 	token := &models.Token{
 		TokenID:        tokenInfo.TokenID, // assigned by PersistGenesisTokenRecord
 		DID:            did,
-		TokenValue:     rubixmath.OneFloat(),
+		TokenValue:     tokenInfo.TokenValue,
 		TokenStatus:    int16(constants.TokenStatus_Free),
 		TransactionID:  txID,
 		TokenStateHash: "",
@@ -815,10 +829,31 @@ func (w *Wallet) InsertGenesisTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, 
 		token.LatestPosition, token.LatestRole,
 	)
 	if err != nil {
-		return fmt.Errorf("InsertGenesisTokenInfo: insert token: %w", err)
+		return fmt.Errorf("InsertGenesisTokenInfo: insert token into tokens table: %w", err)
 	}
 	if cmdTagToken.RowsAffected() == 0 {
-		return fmt.Errorf("InsertGenesisTokenInfo: token %s already exists — duplicate genesis call rejected", token.TokenID)
+		return fmt.Errorf("InsertGenesisTokenInfo: token %s already exists in tokens table - duplicate genesis call rejected", token.TokenID)
+	}
+
+	// updated ft_tokens table with token ID 
+	if tokenType == constants.TokenType_FT {
+		ftToken := &models.FTTokens{
+			TokenID: token.TokenID,
+			FTID: ftsRefID,
+		}
+
+		cmdTagFTToken, err := tx.Exec(w.Ctx,
+			`INSERT INTO ft_tokens (token_id, ft_id, created_at, updated_at)
+			 VALUES ($1, $2, NOW(), NOW())
+			 ON CONFLICT (token_id) DO NOTHING`,
+			ftToken.TokenID, ftToken.FTID,
+		)
+		if err != nil {
+			return fmt.Errorf("InsertGenesisTokenInfo: insert token into ft_tokens table: %w", err)
+		}
+		if cmdTagFTToken.RowsAffected() == 0 {
+			return fmt.Errorf("InsertGenesisTokenInfo: token %s already exists in ft_tokens table - duplicate genesis call rejected", token.TokenID)
+		}
 	}
 
 	// Build Token chain entry
@@ -881,7 +916,7 @@ func (w *Wallet) InsertGenesisTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, 
 	return nil
 }
 
-func (w *Wallet) UpdateTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, did, txID, txnExecutionRole string, newTokenChainHeight int64, tokenStatus int, tokenType, tokenRole string) error {
+func (w *Wallet) UpdateTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, did, txID string, newTokenChainHeight int64, tokenStatus int, tokenType, tokenRole string) error {
 	tokenRoleID := int16(models.GetTokenRoleID(tokenRole))
 
 	// TODO: insert parent token ID for new FTs
@@ -947,16 +982,6 @@ func (w *Wallet) UpdateTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, did, tx
 		index, tokenChainEntry.TokenID,
 	); err != nil {
 		return fmt.Errorf("UpdateTokenInfo: update tokenchain_index: %w", err)
-	}
-
-	// TODO : update execution_role as per token role or token status
-	// Insert transaction_units record for the genesis initiator.
-	if _, err = tx.Exec(w.Ctx, `
-		INSERT INTO transaction_units (transaction_id, did, execution_role, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, NOW(), NOW())
-		ON CONFLICT (transaction_id, did) DO NOTHING
-	`, txID, token.DID, txnExecutionRole, transactionUnitStatusCommitted); err != nil {
-		return fmt.Errorf("UpdateTokenInfo: insert transaction_units: %w", err)
 	}
 
 	// Update token_denom table for RBTs

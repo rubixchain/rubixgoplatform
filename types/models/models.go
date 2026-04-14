@@ -99,11 +99,19 @@ type UnpledgeSequenceInfo struct {
 }
 
 type FT struct {
+	ID         int32     `db:"id"`
 	FTName     string    `db:"ft_name"`
 	CreatorDID string    `db:"creator_did"`
 	FTCount    int64     `db:"ft_count"`
 	CreatedAt  time.Time `db:"created_at"`
 	UpdatedAt  time.Time `db:"updated_at"`
+}
+
+type FTTokens struct {
+	TokenID   string    `db:"token_id"`
+	FTID      int32     `db:"ft_id"`
+	CreatedAt time.Time `db:"created_at"`
+	UpdatedAt time.Time `db:"updated_at"`
 }
 
 type TokenRecovery struct {

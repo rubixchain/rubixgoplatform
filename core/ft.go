@@ -20,6 +20,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
+	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 )
 
 // FTMigrationStatus describes the state of a legacy FT migration run.
@@ -41,6 +42,7 @@ func (c *Core) CreateFTs(reqID string, createFTRequest types.CreateFTReq) {
 	}
 	if err := c.createFTs(reqID, createFTRequest); err != nil {
 		br.Message = err.Error()
+		c.log.Error(err.Error())
 	} else {
 		br.Message = "FT created successfully"
 		br.Status = true
@@ -100,7 +102,7 @@ func (c *Core) createFTs(reqID string, req types.CreateFTReq) (err error) {
 	if err != nil {
 		err = fmt.Errorf("createFTs: Failed to fetch token denom array, err: %v", err)
 		c.log.Error(err.Error())
-		return 
+		return
 	}
 	rbtTokens, childTokensKept, burntParentToken, mintTokensBeingBurnt, err := parts.CollectRBTTokens(
 		didCrypto,
@@ -165,6 +167,12 @@ func (c *Core) createFTs(reqID string, req types.CreateFTReq) (err error) {
 		}
 	}
 
+	if len(rbtTokens) == 0 {
+		err = fmt.Errorf("createFTs: empty list of RBT tokens: %w", err)
+		c.log.Error(err.Error())
+		return
+	}
+
 	// calculate value of each FT
 	ftValue, err := c.GetPreciseFractionalValue(req.TokenCount, req.FTCount)
 	if err != nil {
@@ -188,29 +196,43 @@ func (c *Core) createFTs(reqID string, req types.CreateFTReq) (err error) {
 	}
 	defer tx.Rollback(c.w.Ctx) //nolint:errcheck
 
-	var parentTokenIDsArray []string
-	for _, token := range rbtTokens {
-		parentTokenIDsArray = append(parentTokenIDsArray, token.TokenID)
-	}
-
-	type ftJob struct {
-		Index int
-	}
-	type ftResult struct {
-		FTToken wallet.FTToken
-		FTID    string
-		Err     error
-	}
-
 	c.log.Info("core: Initializing FT creation: progress logging")
 	currentTime := int(time.Now().Unix())
 
-	// batch 100 FTs per transaction, and list of parent tokens is same for all transactions
-	startIndex := req.FTNumStartIndex
-	for i, parentRBT := range rbtTokens {
-		c.log.Debug("batch ", i)
+	// update FT info in FT table
+	var ftsID int32
+	err = tx.QueryRow(c.w.Ctx,
+		`INSERT INTO fts (ft_name, creator_did, ft_count, created_at, updated_at)
+		VALUES ($1, $2, $3, NOW(), NOW())
+		ON CONFLICT (ft_name, creator_did) DO UPDATE SET
+			ft_count   = fts.ft_count + $3,
+			updated_at = NOW()
+		RETURNING id`,
+		req.FTName, req.DID, req.FTCount,
+	).Scan(&ftsID)
+	if err != nil {
+		err = fmt.Errorf("CreateFTs: upsert fts: %w", err)
+		c.log.Error(err.Error())
+		return
+	}
 
-		txnId, gterr := c.w.FTGenesisTxn(tx, didCrypto, c.ps, req.DID, networkMode, currentTime, req.FTName, req.FTNumStartIndex, batchSizePerRBT, ftValue, parentRBT)
+	// batch RBTs such that each batch has sum of TokenValue == 1.0
+	rbtBatches, err := c.BatchRBTs(rbtTokens)
+	if err != nil {
+		err = fmt.Errorf("CreateFTs: failed to create rbt batches, err : %v", err)
+		c.log.Error(err.Error())
+		return
+	}
+	if rbtBatches == nil {
+		err = fmt.Errorf("CreateFTs: empty rbt batches ")
+		c.log.Error(err.Error())
+		return
+	}
+	// batch FTs by one transaction per RBT
+	startIndex := req.FTNumStartIndex
+	for i, parentRBTs := range rbtBatches {
+
+		txnId, gterr := c.w.FTGenesisTxn(tx, didCrypto, c.ps, req.DID, networkMode, currentTime, req.FTName, startIndex, batchSizePerRBT, ftValue, ftsID, parentRBTs)
 		if gterr != nil {
 			err = fmt.Errorf("CreateFTs: failed to create genesis transaction for batch: %d, err : %w ", i, gterr)
 			c.log.Error(err.Error())
@@ -224,19 +246,6 @@ func (c *Core) createFTs(reqID string, req types.CreateFTReq) (err error) {
 		startIndex += batchSizePerRBT
 	}
 
-	// update FT count in FT table
-	if _, err = tx.Exec(c.w.Ctx, `
-			INSERT INTO fts (ft_name, creator_did, ft_count, created_at, updated_at)
-			VALUES ($1, $2, $3, NOW(), NOW())
-			ON CONFLICT (ft_name, creator_did) DO UPDATE SET
-			  ft_count = fts.ft_count + $3,
-			  updated_at = NOW()
-		`, req.FTName, req.DID, req.FTCount); err != nil {
-		err = fmt.Errorf("CreateFTs: upsert fts: %w", err)
-		c.log.Error(err.Error())
-		return
-	}
-
 	err = tx.Commit(c.w.Ctx)
 	if err != nil {
 		err = fmt.Errorf("core: failed persistant DB transaction, err: %w", err)
@@ -245,6 +254,31 @@ func (c *Core) createFTs(reqID string, req types.CreateFTReq) (err error) {
 	}
 
 	return nil
+}
+
+// Group rbtTokens into batches where sum of TokenValue == 1.0
+func (c *Core) BatchRBTs(rbtTokens []*models.TokenInfo) (rbtBatches [][]*models.TokenInfo, err error) {
+	var currentBatch []*models.TokenInfo
+	currentSum := 0.0
+
+	for _, token := range rbtTokens {
+		currentBatch = append(currentBatch, token)
+		currentSum = rubixmath.AddFloat(currentSum, token.TokenValue)
+		if currentSum == 1.0 { // sum reached 1.0
+			rbtBatches = append(rbtBatches, currentBatch)
+			currentBatch = nil
+			currentSum = 0.0
+		}
+	}
+
+	// handle leftover tokens that don't sum to 1.0
+	if len(currentBatch) > 0 {
+		err = fmt.Errorf("CreateFTs: tokens do not sum to whole RBT, leftover sum: %v", currentSum)
+		c.log.Error(err.Error())
+		return
+	}
+
+	return
 }
 
 // InitiateFTTransfer stubs FT transfer; replaced by InitiateTransaction in Phase 09.
