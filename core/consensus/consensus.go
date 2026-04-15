@@ -86,6 +86,23 @@ func ReqPledgeToken(
 		return models.PledgeTokenResponse{}, fmt.Errorf("no tokens left to pledge")
 	}
 
+	tx, err := w.BeginTx(w.Ctx)
+	if err != nil {
+		return models.PledgeTokenResponse{}, fmt.Errorf("BuildTransactionInfoFromRequest: begin tx for adding lock reference: %w", err)
+	}
+	defer tx.Rollback(w.Ctx) //nolint:errcheck
+
+	var tokenIDs []models.Token = make([]models.Token, 0)
+	for _, rbtToken := range pledgeTokenDetails {
+		tokenIDs = append(tokenIDs, models.Token{
+			TokenID: rbtToken.TokenID,
+		})
+	}
+
+	if _, err := w.AddLockReferenceForToken(w.Ctx, tx, tokenIDs, referenceId); err != nil {
+		return models.PledgeTokenResponse{}, fmt.Errorf("BuildTransactionInfoFromRequest: failed to add lock reference for tokens %v: %w", tokenIDs, err)
+	}
+
 	pledgeResponse := models.PledgeTokenResponse{
 		ReferenceId:  referenceId,
 		PledgeTokens: pledgeTokenDetails,

@@ -367,7 +367,6 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	}
 
 	asyncMode := false
-
 	if asyncMode {
 		go c.sendTokensToReceiver(nextOwnerDID, transactionId, transactionInfo, signatureTobePublished, request)
 	} else {
