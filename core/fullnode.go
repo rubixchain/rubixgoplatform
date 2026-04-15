@@ -81,31 +81,29 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 		c.log.Error("failed to add publisher info to DB", "err", err)
 	}
 
-	// Check for duplicate transactions
-	if _, exists := c.txnProcessor.processedTxns.LoadOrStore(newEvent.TransactionID, time.Now()); exists {
+	// Check for duplicate transactions — only mark as seen AFTER successful queue.
+	// Using Load first to cheaply reject known duplicates without blocking.
+	if _, exists := c.txnProcessor.processedTxns.Load(newEvent.TransactionID); exists {
 		c.log.Info("Duplicate transaction ignored", "txnID", newEvent.TransactionID)
 		return
 	}
 
-	// INCREMENT COUNTER when new transaction is processed
-	atomic.AddInt64(&c.txnProcessor.processedTxnCount, 1)
-
-	// ### commented: high-volume pub-sub noise (fires per transaction per node)
-	// c.log.Info("Received transaction", "txnID", newEvent.TransactionID, "mode", newEvent.AssetType)
-
 	// Update queue length metric for dynamic scaling
 	currentQueueLen := int64(len(c.txnProcessor.txnQueue))
-	c.txnProcessor.queueLength = currentQueueLen
+	atomic.StoreInt64(&c.txnProcessor.queueLength, currentQueueLen)
 
 	// Queue transaction for processing with enhanced timeout handling
 	select {
 	case c.txnProcessor.txnQueue <- &newEvent:
+		// Mark as seen only AFTER successful enqueue to prevent silent loss
+		c.txnProcessor.processedTxns.Store(newEvent.TransactionID, time.Now())
+		atomic.AddInt64(&c.txnProcessor.processedTxnCount, 1)
 		c.log.Debug("Transaction queued successfully",
 			"txnID", newEvent.TransactionID,
 			"queueLength", currentQueueLen)
 
 	case <-time.After(5 * time.Second):
-		c.log.Error("Failed to queue transaction - queue full",
+		c.log.Error("Failed to queue transaction - queue full, will retry on next delivery",
 			"txnID", newEvent.TransactionID,
 			"queueLength", len(c.txnProcessor.txnQueue))
 
@@ -124,6 +122,11 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 
 // Process transaction with retry mechanism
 func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID int) {
+	if txnEvent == nil {
+		c.log.Debug("processTxnWithRetry: txn event is nil")
+		return
+	}
+
 	var lastErr error
 
 	for attempt := 0; attempt < c.txnProcessor.maxRetries; attempt++ {
@@ -151,7 +154,11 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 			"workerID", workerID)
 	}
 
-	// All retries exhausted - handle failure
+	// All retries exhausted — remove from dedup map so future pubsub
+	// re-deliveries can attempt processing again (conditions may change,
+	// e.g. peer becomes reachable for chain sync).
+	c.txnProcessor.processedTxns.Delete(txnEvent.TransactionID)
+
 	c.handleFailedTransaction(txnEvent, lastErr)
 }
 
@@ -211,6 +218,7 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 	}
 
 	//store the transaction
+	c.log.Debug("processSingleTransaction: about to persist fullnode transaction", txn, "TransactionInfo", transactionInfo)
 	if err := c.w.PersistFullNodeTransaction(c.w.Ctx, &wallet.FullNodePersistenceRequest{
 		Transaction:     txn,
 		TransactionInfo: transactionInfo,

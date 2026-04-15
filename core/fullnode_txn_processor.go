@@ -80,6 +80,9 @@ func (c *Core) initDynamicTxnProcessor() {
 
 	// Start system monitor
 	go c.systemMonitor()
+
+	// Periodically evict stale entries from the dedup map to bound memory
+	go c.dedupMapCleaner()
 }
 
 // Monitor system resources and adjust worker count
@@ -239,18 +242,20 @@ func (c *Core) dynamicWorker(workerID int, stopChan chan struct{}) {
 
 	for {
 		select {
-		case txnEvent := <-c.txnProcessor.txnQueue: // PROCESS TRANSACTION
+		case txnEvent, ok := <-c.txnProcessor.txnQueue:
+			if !ok || txnEvent == nil {
+				return
+			}
 			startTime := time.Now()
 			c.processTxnWithRetry(txnEvent, workerID)
 			processingTime := time.Since(startTime)
 
-			// Update metrics
-			c.updateProcessingMetrics(processingTime) // UPDATE METRICS
+			c.updateProcessingMetrics(processingTime)
 
-		case <-stopChan: // INDIVIDUAL STOP SIGNAL
+		case <-stopChan:
 			return
 
-		case <-c.txnProcessor.ctx.Done(): // GLOBAL SHUTDOWN
+		case <-c.txnProcessor.ctx.Done():
 			return
 		}
 	}
@@ -313,4 +318,28 @@ func (c *Core) GetDynamicWorkerPoolStats() map[string]interface{} {
 	}
 
 	return stats
+}
+
+const dedupTTL = 10 * time.Minute
+
+// dedupMapCleaner periodically removes entries older than dedupTTL from the
+// processedTxns sync.Map so memory doesn't grow unboundedly on long-running nodes.
+func (c *Core) dedupMapCleaner() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			now := time.Now()
+			c.txnProcessor.processedTxns.Range(func(key, value interface{}) bool {
+				if ts, ok := value.(time.Time); ok && now.Sub(ts) > dedupTTL {
+					c.txnProcessor.processedTxns.Delete(key)
+				}
+				return true
+			})
+		case <-c.txnProcessor.ctx.Done():
+			return
+		}
+	}
 }
