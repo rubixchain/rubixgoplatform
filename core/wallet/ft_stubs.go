@@ -289,3 +289,5 @@ func (w *Wallet) UpdateFullNodeTransactionHistoryTable(t *model.FullNodeTxnHisto
 	return nil
 }
 
+// GetTransactions is now implemented in token_chain.go with the real
+// PostgreSQL-backed logic. The stub that was here has been removed.

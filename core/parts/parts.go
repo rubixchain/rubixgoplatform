@@ -38,11 +38,11 @@ func CollectRBTTokens(
 	tokensForTransfer []*models.TokenInfo,
 	childRecords []wallet.GenesisMintRecord,
 	parentsToBurn []string,
-	remainingDenomMap map[types.DenomValue]types.DenomCount,
+	mintedTokensBeingBurnt []string,
 	err error,
 ) {
 	log.Info("CollectRBTTokens: Starting", "transferAmount", transferAmount, "ownedTokensCount", len(ownedRBTTokens))
-
+	mintedTokensBeingBurnt = make([]string, 0)
 	var splitOps []SplitOp = make([]SplitOp, 0)
 	tokensForTransfer = make([]*models.TokenInfo, 0)
 	childRecords = make([]wallet.GenesisMintRecord, 0)
@@ -58,9 +58,15 @@ func CollectRBTTokens(
 		return nil, nil, nil, nil, fmt.Errorf("transaction amount exceeds %v decimal places", constants.MaxSupportedDecimalPlaces)
 	}
 
+	// Make an internal denom map using input models.Token
+	var internalDenomMap map[types.DenomValue]types.DenomCount = make(map[types.DenomValue]types.DenomCount)
+	for _, tok := range ownedRBTTokens {
+		internalDenomMap[tok.TokenValue] += 1
+	}
+
 	// In-memory balance check from the caller-provided denomMap (no DB read).
 	var totalBalance float64
-	for denom, count := range denomMap {
+	for denom, count := range internalDenomMap {
 		totalBalance += float64(denom) * float64(count)
 	}
 	log.Info("CollectRBTTokens: Balance check", "totalBalance", totalBalance, "transferAmount", transferAmount)
@@ -76,12 +82,11 @@ func CollectRBTTokens(
 	// by looking at the caller-provided denom map.
 	var nonSplitTokenTransfer []models.Token = make([]models.Token, 0)
 
-	nonSplitDenomArr, remainingBalanceDenomArr, remainingAmount, err := GetSplitAndNonsplitTokenDenom(denomMap, transferAmount)
+	nonSplitDenomArr, remainingBalanceDenomArr, remainingAmount, err := GetSplitAndNonsplitTokenDenom(internalDenomMap, transferAmount)
 	if err != nil {
 		log.Error("CollectRBTTokens: Failed to get split/nonsplit denom", "err", err)
 		return nil, nil, nil, nil, fmt.Errorf("CollectRBTTokens: error occured while looking to fetch non-split token denom array for transfer, err: %v", err)
 	}
-	remainingDenomMap = remainingBalanceDenomArr
 	log.Info("CollectRBTTokens: Denom arrays calculated", "nonSplitDenomCount", len(nonSplitDenomArr), "remainingAmount", remainingAmount)
 
 	if len(nonSplitDenomArr) != 0 {
@@ -152,14 +157,18 @@ func CollectRBTTokens(
 		}
 		log.Info("CollectRBTTokens: Split planning complete", "splitOpsCount", len(splitOps))
 
-		tokenCache := make(map[string]models.Token)
+		// tokenCache := make(map[string]models.Token)
 
 		// Execute split operations. performTokenSplit now returns childMintRecords
 		// (partial — TransactionID not set yet) and no longer persists to DB.
 		for i, splitOp := range splitOps {
 			log.Debug("CollectRBTTokens: Performing split operation", "index", i, "tokenID", splitOp.TokenID)
+			parentTokenRecordExists := w.IsRBTExists(splitOp.TokenID.String())
+			if !parentTokenRecordExists {
+				mintedTokensBeingBurnt = append(mintedTokensBeingBurnt, splitOp.TokenID.String())
+			}
 			partTokensToTransfer, tokensToKeep, tokensBeingBurnt, splitMintRecords, err := performTokenSplit(
-				w, dc, splitOp, tokenCache, remainingBalanceDenomArr, network,
+				w, dc, splitOp, remainingBalanceDenomArr, network,
 			)
 			if err != nil {
 				log.Error("CollectRBTTokens: Split operation failed", "tokenID", splitOp.TokenID, "err", err)
@@ -235,13 +244,11 @@ func CollectRBTTokens(
 		"childRecordsCount", len(childRecords),
 		"parentsToBurnCount", len(parentsToBurn))
 
-	// Debug: print each token being transferred
-	for i, token := range tokensForTransfer {
-		log.Debug("CollectRBTTokens: Token for transfer", "index", i, "tokenID", token.TokenID, "prevTxID", token.PreviousTransactionID)
+	if len(tokensForTransfer) == 0 {
+		return nil, nil, nil, nil, fmt.Errorf("CollectRBTTokens: unexpected error: no tokens collected for transfer")
 	}
 
-	fmt.Println("The tokens forTransfer in collectRBTTokens :", tokensForTransfer)
-	return tokensForTransfer, childRecords, parentsToBurn, remainingDenomMap, nil
+	return tokensForTransfer, childRecords, parentsToBurn, mintedTokensBeingBurnt, nil
 }
 
 // MaxPossiblePartsIndexByMaxDecimalPlaces returns the max possible parts index by the max decimal places.

@@ -57,3 +57,19 @@ func Min(a, b int) int {
 	}
 	return b
 }
+
+func SplitFloat(f float64, decimals int) (int64, float64) {
+	// Exact base-10 scale
+	scale := float64(math.Pow10(decimals))
+
+	// Normalize to fixed precision
+	normalized := math.Round(f*scale) / scale
+
+	// Integer part
+	ipart := int64(normalized)
+
+	// Fractional part, clamped to same precision
+	fpart := math.Round((normalized-float64(ipart))*scale) / scale
+
+	return ipart, fpart
+}

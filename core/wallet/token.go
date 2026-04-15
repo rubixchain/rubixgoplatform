@@ -114,16 +114,23 @@ func (w *Wallet) GetTokenByTokenID(tokenID string) (models.Token, error) {
 	return token, nil
 }
 
-// GetLatestTransactionID returns the latest transaction ID for a given token
-// by reading tokens.transaction_id. Returns "" if the token does not exist
-// locally yet — callers treat "" as "sync from genesis".
-func (w *Wallet) GetLatestTransactionID(tokenID string) string {
-	token, err := w.GetTokenByTokenID(tokenID)
-	if err != nil {
-		// Token not found locally — "" signals the caller to sync from genesis.
+// GetLatestTransactionID returns the latest transaction ID for a given token.
+// Delegates to GetLatestTransactionAndRoleByTokenID which queries tokenchain
+// ordered by position DESC LIMIT 1. Returns "" if the token has no chain entries.
+// When isFullNode is true, queries the fullnode tables instead.
+func (w *Wallet) GetLatestTransactionID(tokenID string, isFullNode bool) string {
+	if isFullNode {
+		tx, _, err := w.GetLatestFullNodeTransactionAndRoleByTokenID(tokenID)
+		if err != nil || tx == nil {
+			return ""
+		}
+		return tx.ID
+	}
+	tx, _, err := w.GetLatestTransactionAndRoleByTokenID(tokenID)
+	if err != nil || tx == nil {
 		return ""
 	}
-	return token.TransactionID
+	return tx.ID
 }
 
 func (w *Wallet) GetRBTTokenByStatus(tokenID string, tokenStatus int) (models.Token, error) {
@@ -651,4 +658,14 @@ func (w *Wallet) GetTokenByDIDAndTokenType(didStr string, tokenType int16) ([]mo
 		tokens = append(tokens, t)
 	}
 	return tokens, rows.Err()
+}
+
+func (w *Wallet) IsRBTExists(id string) bool {
+	var exists bool
+	_ = w.db.Pool().QueryRow(w.Ctx,
+		`SELECT EXISTS(SELECT 1 FROM tokens WHERE token_id=$1 AND token_type=$2)`, 
+		id,
+		models.GetTokenTypeID(constants.TokenType_RBT),
+	).Scan(&exists)
+	return exists
 }

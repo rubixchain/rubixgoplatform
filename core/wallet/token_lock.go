@@ -462,49 +462,125 @@ func (w *Wallet) LockTokensForSplit(ctx context.Context, ownerDID string, amount
 	return nil, fmt.Errorf("LockTokensForSplit: retries exhausted without a concrete error")
 }
 
-func (w *Wallet) lockTokensForSplitOnce(ctx context.Context, ownerDID string, amount float64, referenceID string) ([]models.Token, error) {
+func (w *Wallet) lockTokensForSplitOnce(
+	ctx context.Context,
+	ownerDID string,
+	amount float64,
+	referenceID string,
+) ([]models.Token, error) {
+
 	tx, err := w.db.BeginTx(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("LockTokensForSplit: begin tx: %w", err)
+		return nil, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
 	if _, err := tx.Exec(ctx, "SET LOCAL lock_timeout = '1500ms'"); err != nil {
-		return nil, fmt.Errorf("LockTokensForSplit: set lock_timeout: %w", err)
+		return nil, fmt.Errorf("set lock_timeout: %w", err)
 	}
 
-	var candidates []models.Token
-	var accumulated float64
+	precAmount := rubixmath.FloatPrecision(amount)
+
+	// ─────────────────────────────────────────────
+	// STEP 1: token_denom planner
+	// ─────────────────────────────────────────────
+	rows, err := tx.Query(ctx, `
+		SELECT denom, count
+		FROM token_denom
+		WHERE did = $1
+	`, ownerDID)
+	if err != nil {
+		return nil, fmt.Errorf("token_denom query: %w", err)
+	}
+	defer rows.Close()
+
+	var canUseSmall bool
+	var bestLargeDenom float64
+
+	for rows.Next() {
+		var denom float64
+		var count int
+
+		if err := rows.Scan(&denom, &count); err != nil {
+			return nil, fmt.Errorf("token_denom scan: %w", err)
+		}
+
+		if count == 0 {
+			continue
+		}
+
+		if rubixmath.FloatPrecision(denom) <= precAmount {
+			canUseSmall = true
+		}
+
+		if rubixmath.FloatPrecision(denom) > precAmount {
+			if bestLargeDenom == 0 || denom < bestLargeDenom {
+				bestLargeDenom = denom
+			}
+		}
+	}
+
+	// ─────────────────────────────────────────────
+	// STEP 2: Fast path (no small tokens exist)
+	// ─────────────────────────────────────────────
+	if !canUseSmall && bestLargeDenom > 0 {
+
+		var tok models.Token
+
+		err := tx.QueryRow(ctx, `
+			SELECT token_id, parent_token_id, token_value, token_status, did,
+			       transaction_id, token_state_hash, token_type,
+			       latest_position, latest_role, created_at, updated_at
+			FROM tokens
+			WHERE did=$1
+			  AND token_type=(SELECT id FROM token_type WHERE name=$2)
+			  AND token_status=$3
+			  AND token_value >= $4
+			ORDER BY token_value ASC
+			LIMIT 1
+			FOR UPDATE SKIP LOCKED
+		`, ownerDID, constants.TokenType_RBT, constants.TokenStatus_Free, amount).Scan(
+			&tok.TokenID, &tok.ParentTokenID, &tok.TokenValue, &tok.TokenStatus,
+			&tok.DID, &tok.TransactionID, &tok.TokenStateHash, &tok.TokenType,
+			&tok.LatestPosition, &tok.LatestRole, &tok.CreatedAt, &tok.UpdatedAt,
+		)
+
+		if err != nil {
+			return nil, fmt.Errorf("fast-path token fetch: %w", err)
+		}
+
+		return w.lockSelectedTokens(ctx, tx, []models.Token{tok}, referenceID)
+	}
+
+	// ─────────────────────────────────────────────
+	// STEP 3: Scan with correct early termination
+	// ─────────────────────────────────────────────
+
+	var smallTokens []models.Token
+	var smallSum float64
+
+	var bestLarge *models.Token
 
 	batchSize := 100
-
-	// Cursor-based batching is required because SKIP LOCKED only skips rows held
-	// by OTHER transactions — it does NOT skip rows held by this same transaction.
-	// Without a cursor, each loop iteration re-scans the same rows and pushes them
-	// into candidates multiple times, producing duplicate token_id entries.
-	// Using WHERE token_id > $lastSeenID ORDER BY token_id ASC advances the scan
-	// window past all rows already seen in prior batches.
-	// Reference: RESEARCH.md section 1.
-	var lastSeenID string // cursor: "" means "no lower bound"
-	// Note: the empty string comparison is correct even for the first batch because
-	// token_id values are hex-encoded hashes and are never the empty string.
+	var lastSeenID string
 
 	for {
 		rows, err := tx.Query(ctx, `
-			SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
-			       token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+			SELECT token_id, parent_token_id, token_value, token_status, did,
+			       transaction_id, token_state_hash, token_type,
+			       latest_position, latest_role, created_at, updated_at
 			FROM tokens
 			WHERE did=$1
 			  AND token_type=(SELECT id FROM token_type WHERE name=$2)
 			  AND token_status=$3
 			  AND token_id > $5
-			ORDER BY token_id ASC
+			ORDER BY token_value DESC, token_id ASC
 			LIMIT $4
 			FOR UPDATE SKIP LOCKED
 		`, ownerDID, constants.TokenType_RBT, constants.TokenStatus_Free, batchSize, lastSeenID)
 
 		if err != nil {
-			return nil, fmt.Errorf("LockTokensForSplit: candidate query: %w", err)
+			return nil, fmt.Errorf("scan query: %w", err)
 		}
 
 		count := 0
@@ -519,68 +595,103 @@ func (w *Wallet) lockTokensForSplitOnce(ctx context.Context, ownerDID string, am
 				&tok.LatestPosition, &tok.LatestRole, &tok.CreatedAt, &tok.UpdatedAt,
 			); err != nil {
 				rows.Close()
-				return nil, fmt.Errorf("LockTokensForSplit: scan: %w", err)
+				return nil, fmt.Errorf("scan: %w", err)
 			}
 
-			candidates = append(candidates, tok)
-			accumulated = rubixmath.AddFloat(accumulated, tok.TokenValue)
-			// Advance the cursor: rows arrive in token_id ASC order, so the last
-			// row processed in this batch is always the highest token_id seen so far.
 			lastSeenID = tok.TokenID
+			precVal := rubixmath.FloatPrecision(tok.TokenValue)
 
-			if rubixmath.FloatPrecision(accumulated) >= rubixmath.FloatPrecision(amount) {
-				break
+			if precVal <= precAmount {
+				smallTokens = append(smallTokens, tok)
+				smallSum = rubixmath.AddFloat(smallSum, precVal)
+
+				if rubixmath.FloatPrecision(smallSum) >= precAmount {
+					rows.Close()
+					return w.lockSelectedTokens(ctx, tx, smallTokens, referenceID)
+				}
+			} else {
+				// track smallest large token
+				if bestLarge == nil || precVal < rubixmath.FloatPrecision(bestLarge.TokenValue) {
+					t := tok
+					bestLarge = &t
+				}
 			}
 		}
 
 		if err := rows.Err(); err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("LockTokensForSplit: scan iter: %w", err)
+			return nil, fmt.Errorf("rows err: %w", err)
 		}
 
 		rows.Close()
 
-		// stop if enough tokens
-		if rubixmath.FloatPrecision(accumulated) >= rubixmath.FloatPrecision(amount) {
-			break
-		}
-
-		// stop if no more tokens available
 		if count < batchSize {
 			break
 		}
 	}
 
-	if len(candidates) == 0 {
-		return nil, fmt.Errorf("LockTokensForSplit: no candidates")
+	// ─────────────────────────────────────────────
+	// STEP 4: Final decision
+	// ─────────────────────────────────────────────
+
+	if rubixmath.FloatPrecision(smallSum) >= precAmount {
+		return w.lockSelectedTokens(ctx, tx, smallTokens, referenceID)
 	}
 
-	// ── Selection ─────────────────────────────
-	selected, err := selectTokensForAmount(candidates, amount)
-	if err != nil {
-		return nil, fmt.Errorf("LockTokensForSplit: selection: %w", err)
+	if bestLarge != nil {
+		return w.lockSelectedTokens(ctx, tx, []models.Token{*bestLarge}, referenceID)
 	}
 
+	return nil, fmt.Errorf("insufficient balance")
+}
+
+func (w *Wallet) AddLockReferenceForToken(ctx context.Context,
+	tx pgx.Tx,
+	selected []models.Token,
+	referenceID string) ([]models.Token, error) {
+	return w.lockSelectedTokens(ctx, tx, selected, referenceID)
+}
+
+func (w *Wallet) lockSelectedTokens(
+	ctx context.Context,
+	tx pgx.Tx,
+	selected []models.Token,
+	referenceID string,
+) ([]models.Token, error) {
+
+	if len(selected) == 0 {
+		return nil, fmt.Errorf("lockSelectedTokens: no tokens provided")
+	}
+
+	// Extract token IDs
 	selectedIDs := make([]string, len(selected))
 	for i, tok := range selected {
 		selectedIDs[i] = tok.TokenID
 	}
 
-	sort.Strings(selectedIDs)
+	if referenceID == "" {
+		return nil, fmt.Errorf("lockSelectedTokens: referenceID is required")
+	}
 
-	// ── Lock selected tokens ─────────────────
-	_, err = tx.Exec(ctx, `
+	_, err := tx.Exec(ctx, `
 		UPDATE tokens
-		SET token_status = $1, updated_at = NOW(), lock_reference_id = $3
+		SET token_status = $1,
+		    updated_at = NOW(),
+		    lock_reference_id = $3
 		WHERE token_id = ANY($2::text[])
-	`, constants.TokenStatus_Locked, selectedIDs, referenceID)
-
+		  AND token_status = $4
+	`,
+		constants.TokenStatus_Locked,
+		selectedIDs,
+		referenceID,
+		constants.TokenStatus_Free,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("LockTokensForSplit: update selected: %w", err)
+		return nil, fmt.Errorf("lockSelectedTokens: update failed: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("LockTokensForSplit: commit: %w", err)
+		return nil, fmt.Errorf("lockSelectedTokens: commit failed: %w", err)
 	}
 
 	return selected, nil

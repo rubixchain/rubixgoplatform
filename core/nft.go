@@ -178,7 +178,7 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 	)
 
 	// Sync transaction chain from publisher
-	if err := c.SyncTransactionChainsFromPeer(publisherAddress, []string{nft}, nil, nil, newEvent.NFTOwnershipTransfer); err != nil {
+	if err := c.SyncTransactionChainsFromPeer(publisherAddress, []string{nft}, nil, nil, newEvent.NFTOwnershipTransfer, false); err != nil {
 		c.log.Error("NFTCallBack: Failed to sync transaction chain",
 			"nft_token", nft,
 			"peerAddress", publisherAddress,
@@ -242,7 +242,7 @@ func (c *Core) syncNFTTransaction(nftToken string, nft *models.IPFSContractInfo)
 	c.log.Info("syncNFTTransaction: Starting transaction chain sync", "nft_token", nftToken, "peer_id", nft.PeerID, "did", nft.DID)
 
 	address := nft.PeerID + "." + nft.DID
-	if err := c.SyncTransactionChainsFromPeer(address, []string{nftToken}, nil, nil, false); err != nil {
+	if err := c.SyncTransactionChainsFromPeer(address, []string{nftToken}, nil, nil, false, false); err != nil {
 		c.log.Error("syncNFTTransaction: Failed to sync transaction chain", "nft_token", nftToken, "peer", address, "err", err)
 		return fmt.Errorf("failed to sync transaction chain for NFT %s: %w", nftToken, err)
 	}

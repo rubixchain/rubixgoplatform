@@ -54,15 +54,6 @@ func (s *Server) APICreateFT(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
-// ShowAccount godoc
-// @Summary      Initiate an FT transfer
-// @Description  This API endpoint will initiate transfer of FTs.
-// @Tags         FT
-// @Accept       json
-// @Produce      json
-// @Param        input body TransferFTReqSwaggoInput true "Transfer FT"
-// @Success      200  {object}  model.BasicResponse
-// @Router       /api/initiate-ft-transfer [post]
 func (s *Server) APIInitiateFTTransfer(req *ensweb.Request) *ensweb.Result {
 	var rbtReq model.TransferFTReq
 	err := s.ParseJSON(req, &rbtReq)
@@ -81,15 +72,16 @@ func (s *Server) APIInitiateFTTransfer(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
-// ShowAccount godoc
-// @Summary      Get FT balance information for a given DID
-// @Description  This API endpoint retrieves the names and count of FTs of a given DID.
-// @Tags         FT
+// GetFTBalance godoc
+// @Summary      Get FT Balance
+// @Description  Retrieves the Fungible Token (FT) balance for a given DID.
+// @Tags         DID
 // @Accept       json
 // @Produce      json
-// @Param        did      	   query      string  true  "User DID"
-// @Success      200  {object}  model.GetFTInfo
-// @Router       /api/get-ft-info-by-did [get]
+// @Param        did  path      string  true  "DID (e.g. did:bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)"
+// @Success      200  {object}  model.BasicResponse
+// @Failure      400  {object}  model.BasicResponse
+// @Router       /rubix/v1/dids/{did}/balances/ft [get]
 func (s *Server) APIGetFTInfo(req *ensweb.Request) *ensweb.Result {
 	did := s.GetRouteVar(req, "did")
 	if !s.validateDIDAccess(req, did) {
@@ -168,7 +160,7 @@ func (s *Server) APIGetFTCreatorStats(req *ensweb.Request) *ensweb.Result {
 // ShowAccount godoc
 // @Summary      List FTs
 // @Description  This API endpoint will list FTs.
-// @Tags         fts
+// @Tags         FT
 // @Accept       json
 // @Produce      json
 // @Success      200  {object}  model.BasicResponse

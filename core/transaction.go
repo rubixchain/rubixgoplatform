@@ -459,11 +459,11 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	}
 
 	if !skipReceiverSync {
-		c.log.Info("InitiateTransaction: Starting async receiver sync", "receiver", nextOwnerDID, "transactionID", transactionId)
-		go c.sendTokensToReceiver(nextOwnerDID, transactionId, transactionInfo, signatureTobePublished, request)
+		c.log.Info("InitiateTransaction: Sending tokens to receiver (synchronous)", "receiver", nextOwnerDID, "transactionID", transactionId)
+		c.sendTokensToReceiver(nextOwnerDID, transactionId, transactionInfo, signatureTobePublished, request)
 	} else {
-		// For SmartContract/NFT deployments/self-transfers, persist receiver role immediately
-		// This avoids JSON marshaling/unmarshaling mismatch issues
+		// For SmartContract/NFT deployments/self-transfers, persist receiver role directly
+		// without going through sendTokensToReceiver (no remote peer to notify)
 		persistErr := c.w.PersistPostConsensus(ctx, &wallet.PostConsensusPersistenceRequest{
 			TransactionInfo:      transactionInfo,
 			Signature:            signatureTobePublished,
@@ -718,7 +718,7 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 	// Errors are logged but never break SendTokens — sync is best-effort.
 	if len(syncTokenIDs) > 0 {
 		initiatorDID := sendTokensRequest.TransactionInfo.Initiator
-		if err := c.SyncTransactionChainsFromPeer(initiatorDID, syncTokenIDs, prevTxIDs, []string{currentTxID}, sendTokensRequest.NFTOwnershipTransfer); err != nil {
+		if err := c.SyncTransactionChainsFromPeer(initiatorDID, syncTokenIDs, prevTxIDs, []string{currentTxID}, sendTokensRequest.NFTOwnershipTransfer, false); err != nil {
 			c.log.Warn("SendTokens: chain sync from sender failed (non-fatal)", "initiator", initiatorDID, "err", err)
 		}
 	}
@@ -743,7 +743,7 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) GetTransactionByID(txId string) (*models.TransactionInfo, error) {
-	transactionDetail, err := c.w.GetTransactionByID(txId)
+	transactionDetail, err := c.w.GetTransactionByID(txId, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get transactions details for tx: %v, err: %v", txId, err)
 	}

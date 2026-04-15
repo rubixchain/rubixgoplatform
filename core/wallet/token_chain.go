@@ -2,18 +2,17 @@ package wallet
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/constants"
+	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	tokenmap "github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
-	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 )
 
 // GenesisMintRecord groups the three tables' data for a single genesis token
@@ -295,7 +294,7 @@ func (w *Wallet) GetLatestTransactionAndRoleByTokenID(tokenID string) (*models.T
 		return nil, -1, fmt.Errorf("GetLatestTransactionByTokenID scan: %w", err)
 	}
 
-	tx, err := w.GetTransactionByID(txID)
+	tx, err := w.GetTransactionByID(txID, false)
 	if err != nil {
 		return nil, -1, fmt.Errorf("GetLatestTransactionByTokenID GetTransactionByID: %w", err)
 	}
@@ -490,7 +489,7 @@ func (w *Wallet) GetTransactionAndRoleAtHeight(tokenID string, height int64) (*m
 		return nil, -1, fmt.Errorf("GetTransactionAtHeight scan: %w", err)
 	}
 
-	tx, err := w.GetTransactionByID(txID)
+	tx, err := w.GetTransactionByID(txID, false)
 	if err != nil {
 		return nil, -1, fmt.Errorf("GetTransactionAtHeight transaction details not found for transaction_id: %v, err %w", txID, err)
 	}
@@ -512,7 +511,7 @@ func (w *Wallet) GetFullNodeTransactionAndRoleAtHeight(tokenID string, height in
 		return nil, -1, fmt.Errorf("GetFullNodeTransactionAndRoleAtHeight scan: %w", err)
 	}
 
-	tx, err := w.GetTransactionByID(txID)
+	tx, err := w.GetTransactionByID(txID, true)
 	if err != nil {
 		return nil, -1, fmt.Errorf("GetFullNodeTransactionAndRoleAtHeight transaction details not found for transaction_id: %v, err %w", txID, err)
 	}
@@ -555,7 +554,7 @@ func (w *Wallet) PersistGenesisTokenRecord(
 		Tokens: &models.TransactionTokens{
 			RBT: []*models.TokenInfo{
 				{
-					TokenID: tokenID, 
+					TokenID:               tokenID,
 					PreviousTransactionID: "",
 				},
 			},
@@ -567,11 +566,11 @@ func (w *Wallet) PersistGenesisTokenRecord(
 		return "", fmt.Errorf("generateTestTokens: failed to serialize transaction info: %w", err)
 	}
 
-	signatureBytes, err := dc.Sign(txInfoBytes)
+	initiatorSig, err := util.SignTransaction(dc, txInfo)
 	if err != nil {
 		return "", fmt.Errorf("generateTestTokens: failed to sign transaction: %w", err)
 	}
-	sigStruct := &models.Signature{InitiatorSignature: base64.StdEncoding.EncodeToString(signatureBytes)}
+	sigStruct := &models.Signature{InitiatorSignature: initiatorSig}
 
 	sigBytes, err := json.Marshal(sigStruct)
 	if err != nil {
@@ -686,11 +685,13 @@ func (w *Wallet) PersistGenesisTokenRecord(
 		return "", fmt.Errorf("PersistGenesisTokenRecord: upsert token_denom: %w", err)
 	}
 
-	if network != constants.NetworkMode_Localnet {
-		if _, err := util.PublishTransaction(ps, txInfo, sigStruct, true, ""); err != nil {
-			return "", err
-		}
+	// if network != constants.NetworkID_RBT_Local {
+	w.log.Debug("PersistGenesisTokenRecord: txInfo", txInfo)
+
+	if _, err := util.PublishTransaction(ps, txInfo, sigStruct, true, ""); err != nil {
+		return "", err
 	}
+	// }
 
 	return txID, tx.Commit(w.Ctx)
 }
@@ -792,7 +793,7 @@ func (w *Wallet) GetAllTransactionInfoByTokenId(tokenID string, txnId string) ([
 	// process each txn in the chain in a loop
 	for _, txnInfo := range tokenChain {
 		// fetch the txn by txnId
-		txn, err := w.GetTransactionByID(txnInfo.TransactionID)
+		txn, err := w.GetTransactionByID(txnInfo.TransactionID, false)
 		if err != nil {
 			return nil, "", fmt.Errorf("GetAllTransactionsInBytesByTokenId: failed to get transaction by id; error: %v ", err)
 		}

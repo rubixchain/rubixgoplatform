@@ -82,7 +82,7 @@ func (c *Core) SyncTransactionChain(request *ensweb.Request) *ensweb.Result {
 //
 // prevTxIDs maps tokenID -> PreviousTransactionID from the incoming sendTokensRequest.
 // When a token's prevTxID already exists in the local chain, sync is skipped for that token.
-func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string, transferNFTOwnership bool) error {
+func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string, transferNFTOwnership bool, isFullnode bool) error {
 	if len(tokenIDs) == 0 {
 		c.log.Debug("SyncTransactionChainsFromPeer: No token IDs to sync, returning")
 		return nil
@@ -130,11 +130,18 @@ func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, 
 			"txCount", len(txs),
 		)
 		prevTxID := prevTxIDs[tokenID] // empty string if not in map — applyTokenChainFromSync handles this
-		if err := c.applyTokenChainFromSync(tokenID, txs, prevTxID, transferNFTOwnership); err != nil {
-			c.log.Warn("SyncTransactionChainsFromPeer: apply failed (non-fatal)", "tokenID", tokenID, "err", err)
-			// Continue with remaining tokens — sync failures are best-effort.
+		if isFullnode {
+			if err := c.applyTokenChainFromSyncForFullNode(tokenID, txs, prevTxID); err != nil {
+				c.log.Warn("SyncTransactionChainsFromPeer: fullnode apply failed (non-fatal)", "tokenID", tokenID, "err", err)
+			} else {
+				c.log.Info("SyncTransactionChainsFromPeer: Chain applied successfully (fullnode)", "tokenID", tokenID, "txCount", len(txs))
+			}
 		} else {
-			c.log.Info("SyncTransactionChainsFromPeer: Chain applied successfully", "tokenID", tokenID, "txCount", len(txs))
+			if err := c.applyTokenChainFromSync(tokenID, txs, prevTxID, transferNFTOwnership); err != nil {
+				c.log.Warn("SyncTransactionChainsFromPeer: apply failed (non-fatal)", "tokenID", tokenID, "err", err)
+			} else {
+				c.log.Info("SyncTransactionChainsFromPeer: Chain applied successfully", "tokenID", tokenID, "txCount", len(txs))
+			}
 		}
 	}
 
@@ -448,6 +455,183 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transa
 	}
 
 	c.log.Info("applyTokenChainFromSync: applied chain entries",
+		"tokenID", tokenID, "count", len(newTxs), "startPos", nextPosition)
+	return nil
+}
+
+// applyTokenChainFromSyncForFullNode mirrors applyTokenChainFromSync but
+// persists into fullnode tables (fullnode_transactions, fullnode_tokenchain,
+// fullnode_rbt/ft/nft/smart_contract) instead of the normal tables.
+func (c *Core) applyTokenChainFromSyncForFullNode(tokenID string, remoteTxs []models.Transactions, prevTxID string) error {
+	if len(remoteTxs) == 0 {
+		return nil
+	}
+
+	localChain, err := c.w.GetFullNodeTokenChainByTokenID(tokenID)
+	if err != nil {
+		localChain = nil
+	}
+
+	if prevTxID != "" && len(localChain) > 0 {
+		for _, lc := range localChain {
+			if lc.TransactionID == prevTxID {
+				c.log.Debug("applyTokenChainFromSyncForFullNode: prevTxID already in local chain, skipping sync",
+					"tokenID", tokenID, "prevTxID", prevTxID)
+				return nil
+			}
+		}
+	}
+
+	type txWithPrev struct {
+		tx     models.Transactions
+		prevID string
+	}
+	enriched := make([]txWithPrev, 0, len(remoteTxs))
+	for _, tx := range remoteTxs {
+		var txInfo models.TransactionInfo
+		var prev string
+		if err := json.Unmarshal(tx.Info, &txInfo); err == nil {
+			if txInfo.Tokens != nil {
+				for _, t := range txInfo.Tokens.RBT {
+					if t != nil && t.TokenID == tokenID {
+						prev = t.PreviousTransactionID
+						break
+					}
+				}
+				if prev == "" {
+					for _, t := range txInfo.Tokens.FT {
+						if t != nil && t.TokenID == tokenID {
+							prev = t.PreviousTransactionID
+							break
+						}
+					}
+				}
+				if prev == "" {
+					for _, t := range txInfo.Tokens.NFT {
+						if t != nil && t.TokenID == tokenID {
+							prev = t.PreviousTransactionID
+							break
+						}
+					}
+				}
+			}
+		}
+		enriched = append(enriched, txWithPrev{tx: tx, prevID: prev})
+	}
+
+	for i := 1; i < len(enriched); i++ {
+		if enriched[i].prevID != "" && enriched[i].prevID != enriched[i-1].tx.ID {
+			return fmt.Errorf("applyTokenChainFromSyncForFullNode: canonical order violation at position %d for token %s: prevTxID %s != expected %s",
+				i, tokenID, enriched[i].prevID, enriched[i-1].tx.ID)
+		}
+	}
+
+	for i := 0; i < len(localChain) && i < len(remoteTxs); i++ {
+		if localChain[i].TransactionID != remoteTxs[i].ID {
+			return fmt.Errorf("applyTokenChainFromSyncForFullNode: fork detected for token %s at position %d: local=%s remote=%s",
+				tokenID, i, localChain[i].TransactionID, remoteTxs[i].ID)
+		}
+	}
+
+	newTxs := enriched[len(localChain):]
+	if len(newTxs) == 0 {
+		return nil
+	}
+
+	var nextPosition int64
+	if len(localChain) > 0 {
+		nextPosition = localChain[len(localChain)-1].Position + 1
+	}
+
+	// Determine token type from the first new transaction.
+	var tokenType string
+	var firstTxInfo models.TransactionInfo
+	if err := json.Unmarshal(newTxs[0].tx.Info, &firstTxInfo); err != nil {
+		return fmt.Errorf("applyTokenChainFromSyncForFullNode: cannot parse first tx.Info: %w", err)
+	}
+	if firstTxInfo.Tokens != nil {
+		for _, t := range firstTxInfo.Tokens.RBT {
+			if t != nil && t.TokenID == tokenID {
+				tokenType = constants.TokenType_RBT
+				break
+			}
+		}
+		if tokenType == "" {
+			for _, t := range firstTxInfo.Tokens.FT {
+				if t != nil && t.TokenID == tokenID {
+					tokenType = constants.TokenType_FT
+					break
+				}
+			}
+		}
+		if tokenType == "" {
+			for _, t := range firstTxInfo.Tokens.NFT {
+				if t != nil && t.TokenID == tokenID {
+					tokenType = constants.TokenType_NFT
+					break
+				}
+			}
+		}
+		if tokenType == "" {
+			for _, t := range firstTxInfo.Tokens.SmartContract {
+				if t != nil && t.TokenID == tokenID {
+					tokenType = constants.TokenType_SmartContract
+					break
+				}
+			}
+		}
+	}
+	if tokenType == "" {
+		return fmt.Errorf("applyTokenChainFromSyncForFullNode: token %s not found in any token array — cannot determine type", tokenID)
+	}
+
+	// Build tokenchain entries.
+	entries := make([]models.TokenChain, 0, len(newTxs))
+	var lastRole int16
+	for i, e := range newTxs {
+		var txInfo models.TransactionInfo
+		var role int16
+		if err := json.Unmarshal(e.tx.Info, &txInfo); err != nil {
+			role = 0
+		} else {
+			role = rubixsync.FindTokenRoleInTxn(tokenID, &txInfo, false)
+		}
+
+		var prevTxIDPtr *string
+		if i == 0 {
+			if len(localChain) > 0 {
+				tailTxID := localChain[len(localChain)-1].TransactionID
+				prevTxIDPtr = &tailTxID
+			}
+		} else {
+			prevID := newTxs[i-1].tx.ID
+			prevTxIDPtr = &prevID
+		}
+
+		entries = append(entries, models.TokenChain{
+			TokenID:               tokenID,
+			TransactionID:         e.tx.ID,
+			PreviousTransactionID: prevTxIDPtr,
+			Role:                  role,
+			Position:              nextPosition + int64(i),
+		})
+		lastRole = role
+	}
+
+	// Extract raw transactions for the wallet method.
+	rawTxs := make([]models.Transactions, 0, len(newTxs))
+	for _, e := range newTxs {
+		rawTxs = append(rawTxs, e.tx)
+	}
+
+	var lastTxInfo models.TransactionInfo
+	_ = json.Unmarshal(newTxs[len(newTxs)-1].tx.Info, &lastTxInfo)
+
+	if err := c.w.PersistFullNodeSyncedTokenChain(c.Ctx, tokenID, rawTxs, entries, &lastTxInfo, tokenType, lastRole); err != nil {
+		return fmt.Errorf("applyTokenChainFromSyncForFullNode: %w", err)
+	}
+
+	c.log.Info("applyTokenChainFromSyncForFullNode: applied chain entries",
 		"tokenID", tokenID, "count", len(newTxs), "startPos", nextPosition)
 	return nil
 }

@@ -157,7 +157,7 @@ func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, tokenType int, w
 	var err error
 
 	// "" means token not in local DB yet — server interprets "" as "send from genesis".
-	latestTransactionID := w.GetLatestTransactionID(tokenID)
+	latestTransactionID := w.GetLatestTransactionID(tokenID, false)
 
 	syncReq := models.TransactionChainSyncRequest{
 		TokenID:       tokenID,

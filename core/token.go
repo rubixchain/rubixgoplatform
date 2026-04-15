@@ -226,7 +226,7 @@ func (c *Core) generateMainnetRBT(reqID string, num int, did string, startIndex 
 		}
 		tokenID := fmt.Sprintf("%d_%d", mapLevel, numInLevel)
 
-		if _, err = c.w.PersistGenesisTokenRecord(tx, dc, c.ps, tokenID, did, constants.NetworkID_RBT_Mainnet, currentTime); err != nil {
+		if _, err = c.w.PersistGenesisTokenRecord(tx, dc, c.ps, tokenID, did, constants.NetworkMode_Mainnet, currentTime); err != nil {
 			if strings.Contains(err.Error(), "already exists") {
 				c.log.Warn("Mainnet token already exists, skipping", "tokenID", tokenID)
 				tx.Rollback(c.w.Ctx) //nolint:errcheck
@@ -258,31 +258,56 @@ func (c *Core) generateLocalRBT(reqID string, num int, did string, startIndex in
 	}
 
 	// TokenID is assigned atomically inside PersistGenesisTokenRecord using the
-	// global DB counter (GetNextTokenNumber). startIndex is retained in the
-	// signature for API compatibility but is no longer used.
-	for i := 0; i < num; i++ {
-		currentTime := int(time.Now().Unix())
+	// global DB counter (GetNextTokenNumber).
+	if startIndex == 0 {
+		for i := 0; i < num; i++ {
+			currentTime := int(time.Now().Unix())
 
-		tx, err := c.w.BeginTx(c.w.Ctx)
-		if err != nil {
-			return fmt.Errorf("PersistGenesisTokenRecord: begin tx: %w", err)
-		}
-		defer tx.Rollback(c.w.Ctx) //nolint:errcheck
+			tx, err := c.w.BeginTx(c.w.Ctx)
+			if err != nil {
+				return fmt.Errorf("PersistGenesisTokenRecord: begin tx: %w", err)
+			}
+			defer tx.Rollback(c.w.Ctx) //nolint:errcheck
 
-		// Get the tokenID based on a canonical index
-		globalIndex, err := c.w.GetNextTokenNumber(c.w.Ctx, tx)
-		if err != nil {
-			return fmt.Errorf("PersistGenesisTokenRecord: GetNextTokenNumber: %w", err)
-		}
-		tokenLevel, numInLevel, err := tokenmap.GetTokenLevelAndNumberForGlobalIndex(globalIndex)
-		if err != nil {
-			return fmt.Errorf("PersistGenesisTokenRecord: GetTokenLevelAndNumberForGlobalIndex(%d): %w", globalIndex, err)
-		}
-		tokenID := fmt.Sprintf("%d_%d", tokenLevel, numInLevel)
+			// Get the tokenID based on a canonical index
+			globalIndex, err := c.w.GetNextTokenNumber(c.w.Ctx, tx)
+			if err != nil {
+				return fmt.Errorf("PersistGenesisTokenRecord: GetNextTokenNumber: %w", err)
+			}
+			tokenLevel, numInLevel, err := tokenmap.GetTokenLevelAndNumberForGlobalIndex(globalIndex)
+			if err != nil {
+				return fmt.Errorf("PersistGenesisTokenRecord: GetTokenLevelAndNumberForGlobalIndex(%d): %w", globalIndex, err)
+			}
+			tokenID := fmt.Sprintf("%d_%d", tokenLevel, numInLevel)
 
-		if _, err = c.w.PersistGenesisTokenRecord(tx, dc, c.ps, tokenID, did, constants.NetworkID_RBT_Local, currentTime); err != nil {
-			c.log.Error("Failed to persist genesis token record", "err", err)
-			return err
+			if _, err = c.w.PersistGenesisTokenRecord(tx, dc, c.ps, tokenID, did, constants.NetworkMode_Localnet, currentTime); err != nil {
+				c.log.Error("Failed to persist genesis token record", "err", err)
+				return err
+			}
+		}
+	} else {
+		startTokenNumber := startIndex
+		finalTokenNumber := startTokenNumber + num
+
+		for globalIndex := startTokenNumber; globalIndex < finalTokenNumber; globalIndex++ {
+			currentTime := int(time.Now().Unix())
+
+			tx, err := c.w.BeginTx(c.w.Ctx)
+			if err != nil {
+				return fmt.Errorf("PersistGenesisTokenRecord: begin tx: %w", err)
+			}
+			defer tx.Rollback(c.w.Ctx) //nolint:errcheck
+
+			tokenLevel, numInLevel, err := tokenmap.GetTokenLevelAndNumberForGlobalIndex(globalIndex)
+			if err != nil {
+				return fmt.Errorf("PersistGenesisTokenRecord: GetTokenLevelAndNumberForGlobalIndex(%d): %w", globalIndex, err)
+			}
+			tokenID := fmt.Sprintf("%d_%d", tokenLevel, numInLevel)
+
+			if _, err = c.w.PersistGenesisTokenRecord(tx, dc, c.ps, tokenID, did, constants.NetworkMode_Localnet, currentTime); err != nil {
+				c.log.Error("Failed to persist genesis token record", "err", err)
+				return err
+			}
 		}
 	}
 
