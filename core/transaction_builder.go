@@ -89,6 +89,25 @@ func BuildTransactionInfoFromRequest(
 				}
 			}
 		}
+
+		// Add reference lock for RBT tokens being transferred
+		tx, err := w.BeginTx(ctx)
+		if err != nil {
+			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: begin tx for adding lock reference: %w", err)
+		}
+		defer tx.Rollback(ctx) //nolint:errcheck
+		
+		var tokenIDs []models.Token = make([]models.Token, 0)
+		for _, rbtToken := range rbtTokens {
+			tokenIDs = append(tokenIDs, models.Token{
+				TokenID: rbtToken.TokenID,
+			})
+		}
+
+		if _, err := w.AddLockReferenceForToken(ctx, tx, tokenIDs, referenceID); err != nil {
+			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: failed to add lock reference for token %v: %w", rbtTokens, err)
+		}
+
 		txTokens.RBT = rbtTokens
 		totalAmount += req.GetRBTAmount()
 	}

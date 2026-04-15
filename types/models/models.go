@@ -203,7 +203,6 @@ type FullNodeRBT struct {
 	DID            string      `db:"did"`
 	TransactionID  string      `db:"transaction_id"`
 	TokenStateHash string      `db:"token_state_hash"`
-	TokenType      int16       `db:"token_type"`
 	LatestPosition int64       `db:"latest_position"`
 	LatestRole     int16       `db:"latest_role"`
 	CreatedAt      time.Time   `db:"created_at"`
@@ -217,7 +216,6 @@ type FullNodeFT struct {
 	DID            string    `db:"did"`
 	TransactionID  string    `db:"transaction_id"`
 	TokenStateHash string    `db:"token_state_hash"`
-	TokenType      int16     `db:"token_type"`
 	LatestPosition int64     `db:"latest_position"`
 	LatestRole     int16     `db:"latest_role"`
 	CreatedAt      time.Time `db:"created_at"`
@@ -231,7 +229,6 @@ type FullNodeNFT struct {
 	DID            string    `db:"did"`
 	TransactionID  string    `db:"transaction_id"`
 	TokenStateHash string    `db:"token_state_hash"`
-	TokenType      int16     `db:"token_type"`
 	LatestPosition int64     `db:"latest_position"`
 	LatestRole     int16     `db:"latest_role"`
 	CreatedAt      time.Time `db:"created_at"`
@@ -244,7 +241,6 @@ type FullNodeSmartContract struct {
 	TokenStatus    int16     `db:"token_status"`
 	TransactionID  string    `db:"transaction_id"`
 	TokenStateHash string    `db:"token_state_hash"`
-	TokenType      int16     `db:"token_type"`
 	LatestPosition int64     `db:"latest_position"`
 	LatestRole     int16     `db:"latest_role"`
 	CreatedAt      time.Time `db:"created_at"`

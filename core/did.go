@@ -34,7 +34,7 @@ type DIDInfo struct {
 }
 
 func (c *Core) GetPeerFromExplorer(didStr string) (*models.DID, error) {
-	c.log.Debug("Fetching peer from explorer", "did", didStr)
+	c.log.Debug("GetPeerFromExplorer: Fetching peer from explorer", "did", didStr)
 
 	url := "https://rexplorer.azurewebsites.net/api/user/get-did-info/" + didStr
 	resp, err := http.Get(url)
@@ -304,7 +304,7 @@ func (c *Core) registerDID(reqID string, did string) error {
 // It returns a models.DID containing the peer's DID, Peer ID, and DID type,
 // or an error if the information cannot be found.
 func (c *Core) GetPeerDIDInfo(didStr string) (*models.DID, error) {
-	c.log.Debug("Resolving peer info", "did", didStr)
+	c.log.Debug("GetPeerDIDInfo: Resolving peer info", "did", didStr)
 
 	var peerID string
 

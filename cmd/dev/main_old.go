@@ -303,7 +303,7 @@ func main_old() {
 	fmt.Printf("tokenchain_index for QmTestToken001: %v\n", transferIdx.Index)
 
 	// F7: Verify -- transfer transaction exists in transactions table
-	txRecord, err := w.GetTransactionByID(transferTxID)
+	txRecord, err := w.GetTransactionByID(transferTxID, false)
 	if err != nil {
 		log.Fatalf("GetTransactionByID(%s) failed: %v", transferTxID, err)
 	}
