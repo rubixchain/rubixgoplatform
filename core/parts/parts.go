@@ -56,9 +56,15 @@ func CollectRBTTokens(
 		return nil, nil, nil, nil, fmt.Errorf("transaction amount exceeds %v decimal places", constants.MaxSupportedDecimalPlaces)
 	}
 
+	// Make an internal denom map using input models.Token
+	var internalDenomMap map[types.DenomValue]types.DenomCount = make(map[types.DenomValue]types.DenomCount)
+	for _, tok := range ownedRBTTokens {
+		internalDenomMap[tok.TokenValue] += 1
+	}
+
 	// In-memory balance check from the caller-provided denomMap (no DB read).
 	var totalBalance float64
-	for denom, count := range denomMap {
+	for denom, count := range internalDenomMap {
 		totalBalance += float64(denom) * float64(count)
 	}
 	if totalBalance < transferAmount {
@@ -72,7 +78,7 @@ func CollectRBTTokens(
 	// by looking at the caller-provided denom map.
 	var nonSplitTokenTransfer []models.Token = make([]models.Token, 0)
 
-	nonSplitDenomArr, remainingBalanceDenomArr, remainingAmount, err := GetSplitAndNonsplitTokenDenom(denomMap, transferAmount)
+	nonSplitDenomArr, remainingBalanceDenomArr, remainingAmount, err := GetSplitAndNonsplitTokenDenom(internalDenomMap, transferAmount)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("CollectRBTTokens: error occured while looking to fetch non-split token denom array for transfer, err: %v", err)
 	}
@@ -213,6 +219,10 @@ func CollectRBTTokens(
 		childRecords[i].TxRecord = txRecord
 		childRecords[i].TokenChain.TransactionID = txID
 		childRecords[i].Token.TransactionID = txID
+	}
+
+	if len(tokensForTransfer) == 0 {
+		return nil, nil, nil, nil, fmt.Errorf("CollectRBTTokens: unexpected error: no tokens collected for transfer")
 	}
 
 	return tokensForTransfer, childRecords, parentsToBurn, mintedTokensBeingBurnt, nil
