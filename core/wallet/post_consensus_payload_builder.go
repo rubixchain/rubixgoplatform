@@ -32,7 +32,7 @@ type persistenceTokenInput struct {
 //
 // It preserves current token_status from the tokens table and updates only the
 // fields needed for post-consensus persistence.
-func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID string, txInfo *models.TransactionInfo, did, executionRole string) ([]models.TokenChain, []models.Token, []string, error) {
+func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID string, txInfo *models.TransactionInfo, did, executionRole string, isLocalTransfer bool) ([]models.TokenChain, []models.Token, []string, error) {
 	if w == nil {
 		return nil, nil, nil, fmt.Errorf("post-consensus persistence: wallet is nil")
 	}
@@ -141,13 +141,13 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 			}
 			state.TokenStatus = int16(constants.TokenStatus_Free)
 		case ExecutionRoleInitiator:
-			if txInfo.Initiator != "" {
+			if isLocalTransfer {
+				state.DID = txInfo.Owner
+				state.TokenStatus = int16(constants.TokenStatus_Free)
+			} else {
 				state.DID = txInfo.Initiator
+				state.TokenStatus = int16(constants.TokenStatus_Transferred)
 			}
-			// Tokens are leaving the initiator — mark as Transferred so they are no
-			// longer counted as available balance. Non-selected locked tokens will be
-			// released separately by ReleaseAllLockedRBTTokensForDID.
-			state.TokenStatus = int16(constants.TokenStatus_Transferred)
 		}
 
 		tokenChains = append(tokenChains, row)
