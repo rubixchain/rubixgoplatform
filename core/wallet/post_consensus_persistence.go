@@ -64,14 +64,27 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 		return err
 	}
 
-	// // Check if the transaction is local
-	// isLocalTransfer, err := pc.wallet.IsLocalDID(req.TransactionInfo.Owner)
-	// if err != nil {
-	// 	return fmt.Errorf("post-consensus persistence: failed to check if owner DID is local: %w", err)
-	// }
+	if req.TransactionInfo == nil {
+		return fmt.Errorf("post-consensus persistence: transaction info is required for transaction id binding")
+	}
+	if req.TransactionInfo.Owner == "" {
+		return fmt.Errorf("post-consensus persistence: transaction owner is required")
+	}
+
+	// Check if the transaction is local
+	isLocalTransfer, err := pc.wallet.IsLocalDID(req.TransactionInfo.Owner)
+	if err != nil {
+		return fmt.Errorf("post-consensus persistence: failed to check if owner DID is local: %w", err)
+	}
+
+	// Ideally local transfer will only happen on the initiator side.
+	// The following prevents any invariant state where a non-initiator node mistakenly
+	// treats a transfer as local and thus fails to update token status to Transferred, 
+	// which would cause balance inconsistencies and other issues.
+	isLocalTransfer = isLocalTransfer && (req.ExecutionRole == ExecutionRoleInitiator)
 
 	if len(req.TokenChainRows) == 0 || len(req.TokenStates) == 0 {
-		derivedTokenChains, derivedTokenStates, derivedAffectedTokens, err := pc.wallet.BuildPersistencePayload(ctx, txRecord.ID, req.TransactionInfo, req.DID, req.ExecutionRole)
+		derivedTokenChains, derivedTokenStates, derivedAffectedTokens, err := pc.wallet.BuildPersistencePayload(ctx, txRecord.ID, req.TransactionInfo, req.DID, req.ExecutionRole, isLocalTransfer)
 		if err != nil {
 			return err
 		}
@@ -132,7 +145,7 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 		return err
 	}
 	if len(req.TransactionInfo.Tokens.RBT) != 0 {
-		if err := pc.upsertTokenDenomDeltas(ctx, tx, req.DID, req.TokenStates, req.ExecutionRole); err != nil {
+		if err := pc.upsertTokenDenomDeltas(ctx, tx, req.DID, req.TokenStates, req.ExecutionRole, isLocalTransfer, req.TransactionInfo.Owner); err != nil {
 			return err
 		}
 	}
@@ -630,7 +643,7 @@ func (pc *PostConsensusPersistenceCoordinator) upsertTokenStates(ctx context.Con
 // For ExecutionRoleReceiver: increment denom count for each received token.
 // For ExecutionRoleInitiator: decrement denom count for each sent token.
 // For ExecutionRoleQuorum (pledge): no change — pledged tokens are tracked via token_status, not denom.
-func (pc *PostConsensusPersistenceCoordinator) upsertTokenDenomDeltas(ctx context.Context, tx pgx.Tx, did string, tokenStates []models.Token, executionRole string) error {
+func (pc *PostConsensusPersistenceCoordinator) upsertTokenDenomDeltas(ctx context.Context, tx pgx.Tx, did string, tokenStates []models.Token, executionRole string, isLocalTransfer bool, ownerDID string) error {
 	denomDelta := make(map[float64]int64)
 	for _, state := range tokenStates {
 		if state.TokenValue == 0 {
@@ -661,6 +674,37 @@ func (pc *PostConsensusPersistenceCoordinator) upsertTokenDenomDeltas(ctx contex
 			return fmt.Errorf("post-consensus persistence: upsert token_denom (did=%s denom=%v delta=%d): %w", did, denom, delta, err)
 		}
 	}
+
+	// TODO: refactor to avoid redudant code
+	if isLocalTransfer {
+		ownerDenomDelta := make(map[float64]int64)
+
+		for _, state := range tokenStates {
+			if state.TokenValue == 0 {
+				continue
+			}
+
+			ownerDenomDelta[state.TokenValue]++
+		}
+
+		for denom, delta := range ownerDenomDelta {
+			if delta == 0 {
+				continue
+			}
+
+			_, err := tx.Exec(ctx, `
+				INSERT INTO token_denom (did, denom, count, created_at, updated_at)
+				VALUES ($1, $2, $3, NOW(), NOW())
+				ON CONFLICT (did, denom) DO UPDATE SET
+					count = token_denom.count + $3,
+					updated_at = NOW()
+			`, ownerDID, denom, delta)
+			if err != nil {
+				return fmt.Errorf("post-consensus persistence: upsert token_denom (did=%s denom=%v delta=%d): %w", ownerDID, denom, delta, err)
+			}
+		}
+	}
+
 	return nil
 }
 
