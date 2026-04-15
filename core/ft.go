@@ -17,10 +17,10 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
-	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 )
 
 // FTMigrationStatus describes the state of a legacy FT migration run.
@@ -168,7 +168,7 @@ func (c *Core) createFTs(reqID string, req types.CreateFTReq) (err error) {
 	}
 
 	if len(rbtTokens) == 0 {
-		err = fmt.Errorf("createFTs: empty list of RBT tokens: %w", err)
+		err = fmt.Errorf("createFTs: empty list of RBT tokens")
 		c.log.Error(err.Error())
 		return
 	}
@@ -306,14 +306,7 @@ func (c *Core) GetFTInfoByDID(did string) ([]types.FTBalance, error) {
 	}
 
 	// map FT name and creator DID with each FT id and value
-	type FTMap struct {
-		FTName   string
-		Creator  string
-		FTValue  float64
-		FTIdList []string
-	}
-
-	ftNamesMap := make(map[string]FTMap)
+	ftNamesMap := make(map[string]types.FTMap)
 	for _, ft := range ftInfoList {
 		// consider free FTs only
 		if ft.TokenStatus != constants.TokenStatus_Free {
@@ -330,9 +323,9 @@ func (c *Core) GetFTInfoByDID(did string) ([]types.FTBalance, error) {
 			ftNameAndCreatorMap.FTValue = ft.TokenValue
 		}
 		// store FT name and creator did if not stored already
-		if ftNameAndCreatorMap.FTName == "" || ftNameAndCreatorMap.Creator == "" {
-			ftNameAndCreatorMap.FTName = ftParts[0]
-			ftNameAndCreatorMap.Creator = ftParts[1]
+		if ftNameAndCreatorMap.FTInfo.FTName == "" || ftNameAndCreatorMap.FTInfo.CreatorDID == "" {
+			ftNameAndCreatorMap.FTInfo.FTName = ftParts[0]
+			ftNameAndCreatorMap.FTInfo.CreatorDID = ftParts[1]
 		}
 		// append ft id to the lust in the map
 		ftNameAndCreatorMap.FTIdList = append(ftNameAndCreatorMap.FTIdList, ft.TokenID)
@@ -342,8 +335,8 @@ func (c *Core) GetFTInfoByDID(did string) ([]types.FTBalance, error) {
 	ftBalnce := []types.FTBalance{}
 	for _, ftMap := range ftNamesMap {
 		ftBalanceInstance := types.FTBalance{
-			FTName:     ftMap.FTName,
-			CreatorDID: ftMap.Creator,
+			FTName:     ftMap.FTInfo.FTName,
+			CreatorDID: ftMap.FTInfo.CreatorDID,
 			FTValue:    ftMap.FTValue,
 			FTCount:    len(ftMap.FTIdList),
 		}
