@@ -305,33 +305,44 @@ func ValidateTransactionValueAndPledge(txnInfo *models.TransactionInfo) error {
 	return nil
 }
 
-func IsParentTokenBurnt(isFullNode bool, tokenID string, w *wallet.Wallet) (error, bool) {
+func IsParentTokenBurnt(
+	isFullNode bool,
+	tokenID string,
+	currentTokenOwner string,
+	w *wallet.Wallet,
+	syncTxChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error,
+) (error, bool) {
 	var parentTokenID string
 	var err error
 	var tokenDetails models.FullNodeRBT
 
 	if isFullNode {
 		tokenDetails, err = w.GetFullNodeRBTToken(tokenID)
-		if err == nil {
-			if !tokenDetails.ParentTokenID.Valid || tokenDetails.ParentTokenID.String == "" {
-				partTokenID := util.TokenID(tokenID)
-				parentTokenID, err := partTokenID.GetParentToken()
-				if err != nil {
-					return fmt.Errorf("IsParentTokenBurnt:failed to get parent for token %s: %w", partTokenID, err), false
-				}
-				if parentTokenID == "" {
-					return nil, false
-				}
+		if err != nil {
+			return fmt.Errorf("IsParentTokenBurnt:failed to get fullnode RBT token info %s: %w", tokenID, err), false
+		}
+
+		if !tokenDetails.ParentTokenID.Valid || tokenDetails.ParentTokenID.String == "" {
+			partTokenID := util.TokenID(tokenID)
+			parentTokenID, err = partTokenID.GetParentToken()
+			if err != nil {
+				return fmt.Errorf("IsParentTokenBurnt:failed to get parent for token %s: %w", partTokenID, err), false
+			}
+			if parentTokenID == "" {
+				return nil, false
 			}
 		} else {
-			partTokenID := util.TokenID(tokenID)
-			computedParent, err := partTokenID.GetParentToken()
-			if err != nil {
-				return fmt.Errorf("IsParentTokenBurnt: failed to get parent id of token %s: %w", partTokenID, err), false
-			}
-			if computedParent == "" {
-				return fmt.Errorf("IsParentTokenBurnt: failed to compute parent id of token %s: %w", partTokenID, err), false
-			}
+			parentTokenID = tokenDetails.ParentTokenID.String
+		}
+
+	} else {
+		partTokenID := util.TokenID(tokenID)
+		parentTokenID, err = partTokenID.GetParentToken()
+		if err != nil {
+			return fmt.Errorf("IsParentTokenBurnt: failed to get parent id of token %s: %w", partTokenID, err), false
+		}
+		if parentTokenID == "" {
+			return fmt.Errorf("IsParentTokenBurnt: failed to compute parent id of token %s: %w", partTokenID, err), false
 		}
 	}
 
@@ -342,7 +353,17 @@ func IsParentTokenBurnt(isFullNode bool, tokenID string, w *wallet.Wallet) (erro
 		genesisTx, _, err = w.GetTransactionAndRoleAtHeight(tokenID, 0)
 	}
 	if err != nil {
-		return fmt.Errorf("failed to get genesis transaction for token %s: %w", tokenID, err), false
+		// sync token chain from initiator
+		err = syncTxChains(currentTokenOwner, []string{tokenID}, map[string]string{tokenID: ""}, []string{})
+		if err != nil {
+			return fmt.Errorf("failed to get genesis transaction for token %s: %w", tokenID, err), false
+		} else {
+			if isFullNode {
+				genesisTx, _, err = w.GetFullNodeTransactionAndRoleAtHeight(tokenID, 0)
+			} else {
+				genesisTx, _, err = w.GetTransactionAndRoleAtHeight(tokenID, 0)
+			}
+		}
 	}
 	if genesisTx == nil {
 		return fmt.Errorf("genesis transaction not found for token %s", tokenID), false
@@ -390,7 +411,17 @@ func ValidateGenuineTokenCreator(tokenID string, isFullNode bool, w *wallet.Wall
 	return nil
 }
 
-func ValidateTokenIDRelatedChecks(tokenID string, isFullNode bool, w *wallet.Wallet, testnet bool, mainnet bool, localnet bool, log logger.Logger) error {
+func ValidateTokenIDRelatedChecks(
+	tokenID string,
+	currentTokenOwner string,
+	isFullNode bool,
+	w *wallet.Wallet,
+	testnet bool,
+	mainnet bool,
+	localnet bool,
+	log logger.Logger,
+	syncTxChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error,
+) error {
 	err := ValidateNewTokenContent(tokenID, isFullNode, testnet, mainnet, localnet, log)
 	if err != nil {
 		return fmt.Errorf("failed to validate token content: %w", err)
@@ -399,7 +430,7 @@ func ValidateTokenIDRelatedChecks(tokenID string, isFullNode bool, w *wallet.Wal
 	//First check whether the token is a part token or not. If it is a part token, then check whether the parent token is burnt.
 	devidedParts := strings.Split(tokenID, "_")
 	if len(devidedParts) == 3 {
-		err, isParentTokenBurnt := IsParentTokenBurnt(isFullNode, tokenID, w)
+		err, isParentTokenBurnt := IsParentTokenBurnt(isFullNode, tokenID, currentTokenOwner, w, syncTxChains)
 		if err != nil {
 			return fmt.Errorf("failed to validate parent token burnt: %w", err)
 		}
@@ -751,7 +782,7 @@ func ValidateTransaction(
 	// 7. ValidateTokenIDRelatedChecks for each RBT token in Tokens and CommittedTokens and pledged tokens
 	if txnInfo.Tokens.RBT != nil {
 		for _, token := range txnInfo.Tokens.RBT {
-			if err := ValidateTokenIDRelatedChecks(token.TokenID, isFullnode, w, testnet, mainnet, localnet, log); err != nil {
+			if err := ValidateTokenIDRelatedChecks(token.TokenID, txnInfo.Initiator, isFullnode, w, testnet, mainnet, localnet, log, syncTxChains); err != nil {
 				return false, fmt.Errorf("ValidateTransaction: token %s: %w", token.TokenID, err)
 
 			}
@@ -759,7 +790,7 @@ func ValidateTransaction(
 	}
 
 	for _, t := range txnInfo.CommittedTokens {
-		if err := ValidateTokenIDRelatedChecks(t.TokenID, isFullnode, w, testnet, mainnet, localnet, log); err != nil {
+		if err := ValidateTokenIDRelatedChecks(t.TokenID, txnInfo.Initiator, isFullnode, w, testnet, mainnet, localnet, log, syncTxChains); err != nil {
 			return false, fmt.Errorf("ValidateTransaction: committed token %s: %w", t.TokenID, err)
 		}
 	}
@@ -768,7 +799,7 @@ func ValidateTransaction(
 
 	for _, quorum := range txnInfo.Quorums {
 		for _, t := range quorum.Tokens {
-			if err := ValidateTokenIDRelatedChecks(t.TokenID, isFullnode, w, testnet, mainnet, localnet, log); err != nil {
+			if err := ValidateTokenIDRelatedChecks(t.TokenID, quorum.Did, isFullnode, w, testnet, mainnet, localnet, log, syncTxChains); err != nil {
 				return false, fmt.Errorf("ValidateTransaction: quorum %s token %s: %w", quorum.Did, t.TokenID, err)
 
 			}
