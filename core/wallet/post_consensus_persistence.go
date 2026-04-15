@@ -149,13 +149,8 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 			return err
 		}
 	}
-	// if len(req.TransactionInfo.Tokens.FT) != 0 {
-	// 	if err := pc.upsertFTInfo(ctx, tx, req.TokenStates, req.ExecutionRole, isLocalTransfer); err != nil {
-	// 		return err
-	// 	}
-	// }
 	if len(req.TransactionInfo.Tokens.FT) != 0 {
-		if err := pc.upsertFTInfo(ctx, tx, req.TokenStates, req.ExecutionRole); err != nil {
+		if err := pc.upsertFTInfo(ctx, tx, req.TokenStates, req.ExecutionRole, isLocalTransfer); err != nil {
 			return err
 		}
 	}
@@ -713,19 +708,12 @@ func (pc *PostConsensusPersistenceCoordinator) upsertFTInfo(
 	tx pgx.Tx, 
 	tokenStates []models.Token, 
 	executionRole string, 
-	// isReceiverLocal bool,
+	isReceiverLocal bool,
 	) error {
 	// there won't be any changes in the tables fts, and ft_tokens is receiver belongs to the same table
-	// if isReceiverLocal && executionRole == ExecutionRoleReceiver {
-	// 	pc.wallet.log.Debug("******* receiver is local")
-	// 	return nil
-	// }
-	// initiatorFTCount := make(map[])
-	type FTGroup struct {
-		FTName     string
-		CreatorDID string
-		FTCount    int32
-		TokenIDs   []string
+	if isReceiverLocal {
+		pc.wallet.log.Debug("******* receiver is local")
+		return nil
 	}
 
 	// Step 1: Group tokens by ftName + creatorDID

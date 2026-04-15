@@ -300,7 +300,10 @@ func (c *Core) GetFTInfoByDID(did string) ([]types.FTBalance, error) {
 	ftTokenType := int16(models.GetTokenTypeID(constants.TokenType_FT))
 	// get list of FT ids
 	ftInfoList, err := c.w.GetTokenByDIDAndTokenType(did, ftTokenType)
-	if err != nil && err.Error() != "no records found" {
+	if err != nil {
+		if err.Error() == "no records found" {
+			return []types.FTBalance{}, nil
+		}
 		c.log.Error("Failed to get fts", "err", err)
 		return []types.FTBalance{}, fmt.Errorf("failed to get fts, error: %w", err)
 	}
@@ -329,6 +332,7 @@ func (c *Core) GetFTInfoByDID(did string) ([]types.FTBalance, error) {
 		}
 		// append ft id to the lust in the map
 		ftNameAndCreatorMap.FTIdList = append(ftNameAndCreatorMap.FTIdList, ft.TokenID)
+		ftNamesMap[ftNameAndCreator] = ftNameAndCreatorMap
 	}
 
 	// for each unique FT name and creator, calculate the number of FT Ids and to the final array to be sent back in response
