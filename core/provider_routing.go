@@ -37,6 +37,10 @@ func (c *Core) checkProviderStatus(req *ensweb.Request) *ensweb.Result {
 		c.log.Error("error getting provider info for token hash ", reqObj.TokenHash, "error", err)
 		return c.l.RenderJSON(req, &res, http.StatusOK)
 	}
+	if record == nil {
+		c.log.Error("There are no providers for token hash", reqObj.TokenHash)
+		return c.l.RenderJSON(req, &res, http.StatusOK)
+	}
 	res.Status = true
 	res.TokenHash = record.CID
 	res.DID = record.DID
