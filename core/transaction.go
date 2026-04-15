@@ -365,17 +365,28 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		c.log.Error("InitiateTransaction: Failed to publish transaction", "err", err)
 	}
 
-	asyncMode := false
-	if asyncMode {
-		go c.sendTokensToReceiver(nextOwnerDID, transactionId, transactionInfo, signatureTobePublished, request)
-	} else {
-		err := c.sendTokensToReceiverSync(nextOwnerDID, transactionId, transactionInfo, signatureTobePublished, request)
-		if err != nil {
-			c.log.Error("InitiateTransaction: receiver sync failed", "err", err)
 
-			resp.Status = false
-			resp.Message = "Transaction failed: receiver sync failed: " + err.Error()
-			return resp
+	var isOwnerDIDLocal bool
+	isOwnerDIDLocal, err = c.w.IsLocalDID(nextOwnerDID)
+	if err != nil {
+		c.log.Error("InitiateTransaction: Failed to check if owner DID is local", "ownerDID", nextOwnerDID, "err", err)
+		resp.Message = "InitiateTransaction: Failed to check if owner DID is local: " + err.Error()
+		return resp
+	}
+
+	if !isOwnerDIDLocal {
+		asyncMode := false
+		if asyncMode {
+			go c.sendTokensToReceiver(nextOwnerDID, transactionId, transactionInfo, signatureTobePublished, request)
+		} else {
+			err := c.sendTokensToReceiverSync(nextOwnerDID, transactionId, transactionInfo, signatureTobePublished, request)
+			if err != nil {
+				c.log.Error("InitiateTransaction: receiver sync failed", "err", err)
+
+				resp.Status = false
+				resp.Message = "Transaction failed: receiver sync failed: " + err.Error()
+				return resp
+			}
 		}
 	}
 

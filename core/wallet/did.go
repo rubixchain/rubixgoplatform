@@ -101,3 +101,20 @@ func (w *Wallet) IsDIDExists(did string) (bool, error) {
 
 	return exists, nil
 }
+
+
+func (w *Wallet) IsLocalDID(did string) (bool, error) {
+	var local bool
+
+	err := w.db.Pool().QueryRow(
+		w.Ctx,
+		`SELECT local FROM dids WHERE did = $1`,
+		did,
+	).Scan(&local)
+	if err != nil {
+		return false, fmt.Errorf("IsLocalDID: query failed: %w", err)
+	}
+
+	return local, nil
+
+}
