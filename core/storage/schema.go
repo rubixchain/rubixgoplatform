@@ -152,12 +152,25 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
         );
 
         CREATE TABLE IF NOT EXISTS fts (
-            id          TEXT PRIMARY KEY,
-            ft_name     TEXT,
+            id          INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            ft_name     TEXT NOT NULL,
+            creator_did TEXT NOT NULL,
             ft_count    INTEGER,
-            creator_did TEXT,
             created_at  TIMESTAMPTZ DEFAULT NOW(),
-            updated_at  TIMESTAMPTZ DEFAULT NOW()
+            updated_at  TIMESTAMPTZ DEFAULT NOW(),
+
+            CONSTRAINT fts_name_did_unique UNIQUE (ft_name, creator_did)
+        );
+
+        CREATE TABLE IF NOT EXISTS ft_tokens (
+            token_id    TEXT PRIMARY KEY,
+            ft_id       INT,
+            created_at  TIMESTAMPTZ DEFAULT NOW(),
+            updated_at  TIMESTAMPTZ DEFAULT NOW(),
+
+            CONSTRAINT ft_id_fk
+            FOREIGN KEY (ft_id) 
+            REFERENCES fts(id)
         );
 
         CREATE TABLE IF NOT EXISTS token_recovery (

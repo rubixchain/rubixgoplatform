@@ -1048,7 +1048,7 @@ paths:
             $ref: '#/definitions/model.BasicResponse'
       summary: List transactions
       tags:
-      - tx
+      - Transactions
     post:
       consumes:
       - application/json
@@ -1070,7 +1070,34 @@ paths:
             $ref: '#/definitions/model.BasicResponse'
       summary: Initiates a transaction
       tags:
-      - tx
+      - Transactions
+  /rubix/v1/tx/{did}/{token_type}:
+    get:
+      consumes:
+      - application/json
+      description: Get Transactions by DID
+      operationId: getTxnsByDID
+      parameters:
+      - description: DID
+        in: path
+        name: did
+        required: true
+        type: string
+      - description: Token Type (rbt, nft, ft, smartContract)
+        in: path
+        name: token_type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get Transactions by DID
+      tags:
+      - Transactions
   /rubix/v1/tx/{tx_id}:
     get:
       consumes:
@@ -1092,7 +1119,7 @@ paths:
             $ref: '#/definitions/model.BasicResponse'
       summary: Get Transactions by ID
       tags:
-      - tx
+      - Transactions
 securityDefinitions:
   SessionToken:
     in: header

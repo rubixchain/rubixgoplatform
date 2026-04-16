@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -143,8 +144,15 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 	if err := pc.upsertTokenStates(ctx, tx, req.TokenStates); err != nil {
 		return err
 	}
-	if err := pc.upsertTokenDenomDeltas(ctx, tx, req.DID, req.TokenStates, req.ExecutionRole, isLocalTransfer, req.TransactionInfo.Owner); err != nil {
-		return err
+	if len(req.TransactionInfo.Tokens.RBT) != 0 {
+		if err := pc.upsertTokenDenomDeltas(ctx, tx, req.DID, req.TokenStates, req.ExecutionRole, isLocalTransfer, req.TransactionInfo.Owner); err != nil {
+			return err
+		}
+	}
+	if len(req.TransactionInfo.Tokens.FT) != 0 {
+		if err := pc.upsertFTInfo(ctx, tx, req.TokenStates, req.ExecutionRole, isLocalTransfer); err != nil {
+			return err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("post-consensus persistence: commit: %w", err)
@@ -688,6 +696,89 @@ func (pc *PostConsensusPersistenceCoordinator) upsertTokenDenomDeltas(ctx contex
 			`, ownerDID, denom, delta)
 			if err != nil {
 				return fmt.Errorf("post-consensus persistence: upsert token_denom (did=%s denom=%v delta=%d): %w", ownerDID, denom, delta, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (pc *PostConsensusPersistenceCoordinator) upsertFTInfo(
+	ctx context.Context, 
+	tx pgx.Tx, 
+	tokenStates []models.Token, 
+	executionRole string, 
+	isReceiverLocal bool,
+	) error {
+	// there won't be any changes in the tables fts, and ft_tokens is receiver belongs to the same table
+	if isReceiverLocal {
+		pc.wallet.log.Debug("******* receiver is local")
+		return nil
+	}
+
+	// Step 1: Group tokens by ftName + creatorDID
+	groups := make(map[string]*types.FTMap)
+	for _, ftInfo := range tokenStates {
+		tokenID := ftInfo.TokenID
+		// Split only into 3 parts (ftName might contain underscores)
+		parts := strings.SplitN(tokenID, "_", 3)
+		if len(parts) != 3 {
+			return fmt.Errorf("upsertFTInfo: invalid FT token ID format: %s", tokenID)
+		}
+
+		// Group key is ftName + creatorDID combination
+		key := parts[0] + "_" + parts[1]
+
+		if _, exists := groups[key]; !exists {
+			groups[key] = &types.FTMap{
+				FTInfo: models.FTInfo{
+					FTName:     parts[0],
+					CreatorDID: parts[1],
+					NumberOfFts:    0,
+				},
+				FTIdList:   []string{},
+			}
+		}
+
+		switch ftInfo.TokenStatus {
+		case constants.TokenStatus_Transferred:
+			groups[key].FTInfo.NumberOfFts--
+		case constants.TokenStatus_Free:
+			groups[key].FTInfo.NumberOfFts++
+		}
+
+		groups[key].FTIdList = append(groups[key].FTIdList, tokenID)
+	}
+
+
+	for _, group := range groups {
+		// Step 2: Upsert into fts table and get ftsID
+		var ftsID int32
+		err := tx.QueryRow(ctx,
+			`INSERT INTO fts (ft_name, creator_did, ft_count, created_at, updated_at)
+             VALUES ($1, $2, $3, NOW(), NOW())
+             ON CONFLICT (ft_name, creator_did) DO UPDATE SET
+                 ft_count   = fts.ft_count + $3,
+                 updated_at = NOW()
+             RETURNING id`,
+			group.FTInfo.FTName, group.FTInfo.CreatorDID, group.FTInfo.NumberOfFts,
+		).Scan(&ftsID)
+		if err != nil {
+			return fmt.Errorf("CreateFTs: upsert fts: %w", err)
+		}
+
+		// Step 3: Upsert each token into ft_tokens table in case the executor is receiver
+		if executionRole == ExecutionRoleReceiver {
+			for _, tokenID := range group.FTIdList {
+				_, err = tx.Exec(ctx,
+					`INSERT INTO ft_tokens (token_id, ft_id, created_at, updated_at)
+					 VALUES ($1, $2, NOW(), NOW())
+					 ON CONFLICT (token_id) DO NOTHING`,
+					tokenID, ftsID,
+				)
+				if err != nil {
+					return fmt.Errorf("CreateFTs: insert ft_token %s: %w", tokenID, err)
+				}
 			}
 		}
 	}
