@@ -122,7 +122,11 @@ func (c *Core) createFTs(reqID string, req types.CreateFTReq) (err error) {
 	// release all rbts before exiting with error
 	defer func() {
 		if err != nil {
-			c.w.ReleaseTokens(rbtTokens, reqID)
+			if releaseErr := c.w.ReleaseAllLockedRBTTokensForDID(c.w.Ctx, req.DID, reqID); releaseErr != nil {
+				c.log.Error("createFTs: failed to release locked tokens after failure", "err", releaseErr)
+			} else {
+				c.log.Info("createFTs: released locked tokens after failed transaction", "did", req.DID)
+			}
 		}
 	}()
 
@@ -239,7 +243,7 @@ func (c *Core) createFTs(reqID string, req types.CreateFTReq) (err error) {
 			return
 		}
 
-		logg := fmt.Sprintf("%d. txn id = %s", i, txnId)
+		logg := fmt.Sprintf("batch-%d. txn id = %s", i+1, txnId)
 		c.log.Debug(logg)
 
 		// start index of next batch
