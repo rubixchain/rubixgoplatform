@@ -464,11 +464,11 @@ func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Tr
 // are present in the `unpledge_sequence_info` table AND are owned by the
 // given quorum DID (outer ownership gate — defense-in-depth with UnpledgeV2's
 // inner gate). Returns only tx_ids whose quorum_did column matches.
-func (w *Wallet) CheckTxnsPresentInUnpledgeSequenceInfo(txs []string, quorumDID string) ([]string, error) {
+func (w *Wallet) CheckTxnsPresentInUnpledgeSequenceInfo(txs []string, quorumDID string, transactionTokensFromIncomingTx []string) ([]string, error) {
 	rows, err := w.db.Pool().Query(
 		w.Ctx,
 		`
-        SELECT tx_id
+        SELECT tx_id, transaction_tokens
         FROM unpledge_sequence_info
         WHERE tx_id = ANY($1::TEXT[])
           AND quorum_did = $2
@@ -484,10 +484,28 @@ func (w *Wallet) CheckTxnsPresentInUnpledgeSequenceInfo(txs []string, quorumDID 
 
 	for rows.Next() {
 		var txID string
-		if err := rows.Scan(&txID); err != nil {
+		var storedTransactionTokens []string
+		if err := rows.Scan(&txID, &storedTransactionTokens); err != nil {
 			return nil, err
 		}
-		result = append(result, txID)
+
+
+		// Check if the unpledging is being done for the correct transaction tokens
+		commonTokens := util.FindCommonElementsInList(transactionTokensFromIncomingTx, storedTransactionTokens)
+		if len(commonTokens) == 0 {
+			w.log.Warn("CheckTxnsPresentInUnpledgeSequenceInfo: transaction tokens from incoming unpledge transaction do not match with transaction tokens in unpledge_sequence_info — skip (not the correct transaction to unpledge for)",
+				"txID", txID)
+		} else {
+			result = append(result, txID)
+		}
+	}
+
+	if len(result) == 0 {
+		w.log.Warn("CheckTxnsPresentInUnpledgeSequenceInfo: no matching transactions found in unpledge_sequence_info for the provided txs and quorumDID",
+			"txs", txs,
+			"quorumDID", quorumDID,
+			"transactionTokensFromIncomingTx", transactionTokensFromIncomingTx,
+		)
 	}
 
 	return result, rows.Err()

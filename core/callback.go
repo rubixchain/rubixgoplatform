@@ -22,6 +22,7 @@ func (c *Core) CallBackQuorumUnpledge(tx *models.Transactions, did string) error
 	// Loop through all the tokens and gather previous transactionID and
 	// pledge Token ID map
 	var prevTransactionsSet map[string]struct{} = make(map[string]struct{})
+	var transactionTokens []string = make([]string, 0)
 
 	addToSet := func(id string) {
 		if id != "" {
@@ -31,18 +32,22 @@ func (c *Core) CallBackQuorumUnpledge(tx *models.Transactions, did string) error
 
 	for _, rbtToken := range txInfo.Tokens.RBT {
 		addToSet(rbtToken.PreviousTransactionID)
+		transactionTokens = append(transactionTokens, rbtToken.TokenID)
 	}
 
 	for _, ftToken := range txInfo.Tokens.FT {
 		addToSet(ftToken.PreviousTransactionID)
+		transactionTokens = append(transactionTokens, ftToken.TokenID)
 	}
 
 	for _, nftToken := range txInfo.Tokens.NFT {
 		addToSet(nftToken.PreviousTransactionID)
+		transactionTokens = append(transactionTokens, nftToken.TokenID)
 	}
 
 	for _, smartContractToken := range txInfo.Tokens.SmartContract {
 		addToSet(smartContractToken.PreviousTransactionID)
+		transactionTokens = append(transactionTokens, smartContractToken.TokenID)
 	}
 
 	if len(prevTransactionsSet) == 0 {
@@ -54,7 +59,7 @@ func (c *Core) CallBackQuorumUnpledge(tx *models.Transactions, did string) error
 		prevTransactionList = append(prevTransactionList, prevTransaction)
 	}
 
-	transactionToUnpledge, err := c.w.CheckTxnsPresentInUnpledgeSequenceInfo(prevTransactionList, did)
+	transactionToUnpledge, err := c.w.CheckTxnsPresentInUnpledgeSequenceInfo(prevTransactionList, did, transactionTokens)
 	if err != nil {
 		return fmt.Errorf("CallBackQuorumUnpledge: failed to get transactions from `unpledge_sequence_info` table for did %q, err: %v", did, err)
 	}
@@ -80,7 +85,7 @@ func (c *Core) CallBackQuorumUnpledge(tx *models.Transactions, did string) error
 		if !ok {
 			return fmt.Errorf("CallBackQuorumUnpledge: quorum DID not setup: %s", did)
 		}
-		if err := c.UnpledgeV2(context.Background(), txToUnpledge, did); err != nil {
+		if err := c.UnpledgeV2(context.Background(), txToUnpledge, did, tx); err != nil {
 			c.log.Error("CallBackQuorumUnpledge: UnpledgeV2 failed",
 				"prevTxID", txToUnpledge,
 				"did", did,

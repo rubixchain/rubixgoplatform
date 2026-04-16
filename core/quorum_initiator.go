@@ -201,6 +201,25 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 	}
 
 	txnInfo := consensusRequest.TransactionInfo
+	var transactionTokens []string
+	if txnInfo.Tokens != nil {
+		for _, rbt := range txnInfo.Tokens.RBT {
+			transactionTokens = append(transactionTokens, rbt.TokenID)
+		}
+
+		for _, ft := range txnInfo.Tokens.FT {
+			transactionTokens = append(transactionTokens, ft.TokenID)
+		}
+
+		for _, nft := range txnInfo.Tokens.NFT {
+			transactionTokens = append(transactionTokens, nft.TokenID)
+		}
+
+		for _, sc := range txnInfo.Tokens.SmartContract {
+			transactionTokens = append(transactionTokens, sc.TokenID)
+		}
+	}
+
 
 	// Check 1: Validate transaction info fields
 	if err := consensus.ValidateTransactionInfoFields(txnInfo); err != nil {
@@ -291,18 +310,18 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 		}
 		pledgeTokenIDsFromTxnInfo[ti.TokenID] = struct{}{}
 	}
-	// tokenInfos is the slice that will actually be passed to PledgeV2.
+	// pledgeTokenInfos is the slice that will actually be passed to PledgeV2.
 	// In the current flow this is the same as pledgeTokenDetails; the
 	// consistency check here ensures the two views remain in sync.
-	tokenInfos := pledgeTokenDetails
-	if len(tokenInfos) != len(pledgeTokenDetails) {
+	pledgeTokenInfos := pledgeTokenDetails
+	if len(pledgeTokenInfos) != len(pledgeTokenDetails) {
 		c.log.Error("initiateConsensusHandler: pledge token count mismatch",
 			"fromTxnInfo", len(pledgeTokenDetails),
-			"actual", len(tokenInfos))
+			"actual", len(pledgeTokenInfos))
 		response.Message = "initiateConsensusHandler: pledge token count mismatch"
 		return c.l.RenderJSON(request, response, http.StatusInternalServerError)
 	}
-	for _, ti := range tokenInfos {
+	for _, ti := range pledgeTokenInfos {
 		if ti == nil {
 			c.log.Error("initiateConsensusHandler: nil TokenInfo in tokenInfos")
 			response.Message = "initiateConsensusHandler: nil TokenInfo in tokenInfos"
@@ -320,10 +339,10 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 	// Hard guard in PledgeV2 remains the last line of defense; this guard
 	// exists so a duplicate under load is visible without cascading failure.
 	{
-		seenDedup := make(map[string]struct{}, len(tokenInfos))
-		deduped := make([]*models.TokenInfo, 0, len(tokenInfos))
+		seenDedup := make(map[string]struct{}, len(pledgeTokenInfos))
+		deduped := make([]*models.TokenInfo, 0, len(pledgeTokenInfos))
 		dupCount := 0
-		for _, ti := range tokenInfos {
+		for _, ti := range pledgeTokenInfos {
 			if ti == nil {
 				continue
 			}
@@ -342,15 +361,15 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 			seenDedup[ti.TokenID] = struct{}{}
 			deduped = append(deduped, ti)
 		}
-		tokenInfos = deduped
+		pledgeTokenInfos = deduped
 	}
 
 	// VULN-4: validate lock_reference_id matches the incoming consensus ReferenceId
 	// BEFORE pledging. Prevents replayed/interleaved requests from pledging tokens
 	// that belong to a different reference_id.
 	{
-		tokenIDsForLockCheck := make([]string, 0, len(tokenInfos))
-		for _, ti := range tokenInfos {
+		tokenIDsForLockCheck := make([]string, 0, len(pledgeTokenInfos))
+		for _, ti := range pledgeTokenInfos {
 			tokenIDsForLockCheck = append(tokenIDsForLockCheck, ti.TokenID)
 		}
 		lockRefs, err := c.w.GetTokenLockReferenceIDs(context.Background(), tokenIDsForLockCheck)
@@ -383,12 +402,12 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 			}
 		}
 		c.log.Info("initiateConsensusHandler: lock_reference_id validation passed",
-			"txID", txID, "tokens", len(tokenInfos), "referenceID", consensusRequest.ReferenceId)
+			"txID", txID, "tokens", len(pledgeTokenInfos), "referenceID", consensusRequest.ReferenceId)
 	}
 
 	if err := c.PledgeV2(
 		context.Background(),
-		tokenInfos,
+		pledgeTokenInfos,
 		txID,
 		quorumDid,
 		txnInfo.Epoch,
@@ -397,6 +416,7 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 		consensusRequest.InitiatorSignature,
 		consensusResponse.QuorumSignature,
 		consensusRequest.ReferenceId,
+		transactionTokens,
 	); err != nil {
 		c.log.Error("initiateConsensusHandler: PledgeV2 failed", "err", err)
 		response.Message = "initiateConsensusHandler: PledgeV2 failed: " + err.Error()

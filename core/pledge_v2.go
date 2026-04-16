@@ -38,7 +38,7 @@ import (
 // conflicts are logic bugs that must surface as errors, not be silently dropped.
 func (c *Core) PledgeV2(
 	ctx context.Context,
-	tokenInfos []*models.TokenInfo,
+	pledgeTokenInfos []*models.TokenInfo,
 	mainTxID string,
 	quorumDID string,
 	epoch int,
@@ -47,11 +47,16 @@ func (c *Core) PledgeV2(
 	initiatorSignature string,
 	quorumSignature string,
 	referenceID string,
+	transactionTokens []string,
 ) error {
 	// --- Validation ----------------------------------------------------------
-	if len(tokenInfos) == 0 {
-		return fmt.Errorf("PledgeV2: no tokens provided")
+	if len(pledgeTokenInfos) == 0 {
+		return fmt.Errorf("PledgeV2: no pledge tokens provided")
 	}
+	if len(transactionTokens) == 0 {
+		return fmt.Errorf("PledgeV2: no transaction tokens provided")
+	}
+
 	if mainTxID == "" {
 		return fmt.Errorf("PledgeV2: mainTxID is required")
 	}
@@ -60,8 +65,8 @@ func (c *Core) PledgeV2(
 	}
 
 	// Reject duplicate token IDs.
-	seen := make(map[string]struct{}, len(tokenInfos))
-	for _, ti := range tokenInfos {
+	seen := make(map[string]struct{}, len(pledgeTokenInfos))
+	for _, ti := range pledgeTokenInfos {
 		if ti == nil {
 			return fmt.Errorf("PledgeV2: nil TokenInfo in tokenInfos")
 		}
@@ -72,8 +77,8 @@ func (c *Core) PledgeV2(
 	}
 
 	// --- Build token ID list for batch operations ---
-	tokenIDs := make([]string, 0, len(tokenInfos))
-	for _, ti := range tokenInfos {
+	tokenIDs := make([]string, 0, len(pledgeTokenInfos))
+	for _, ti := range pledgeTokenInfos {
 		tokenIDs = append(tokenIDs, ti.TokenID)
 	}
 
@@ -155,7 +160,7 @@ func (c *Core) PledgeV2(
 	}
 
 	// Step 1: INSERT tokenchain rows (one per token, keyed by mainTxID)
-	for _, ti := range tokenInfos {
+	for _, ti := range pledgeTokenInfos {
 		locked := lockedRows[ti.TokenID]
 		if _, err := pledgeTx.Exec(ctx, `
 			INSERT INTO tokenchain (token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at)
@@ -170,7 +175,7 @@ func (c *Core) PledgeV2(
 	// (transaction_id_fk -> transactions.id, DEFERRABLE INITIALLY DEFERRED)
 	// is satisfied because Step 0 already inserted the transactions row
 	// within this same pledgeTx.
-	for _, ti := range tokenInfos {
+	for _, ti := range pledgeTokenInfos {
 		locked := lockedRows[ti.TokenID]
 		if _, err := pledgeTx.Exec(ctx, `
 			UPDATE tokens
@@ -268,11 +273,13 @@ func (c *Core) PledgeV2(
 	}
 
 	// Insert unpledge_sequence_info keyed by mainTxID so that
-	// CallBackQuorumUnpledge can look it up by the broadcast transaction ID.
+	// CallBackQuorumUnpledge can look it up by the broadcast transaction ID
+	
+
 	if _, err := postTx.Exec(ctx, `
-		INSERT INTO unpledge_sequence_info(tx_id, pledge_tokens, epoch, quorum_did)
-		VALUES ($1, $2, $3, $4)
-	`, mainTxID, tokenIDs, epoch, quorumDID); err != nil {
+		INSERT INTO unpledge_sequence_info(tx_id, pledge_tokens, epoch, quorum_did, transaction_tokens)
+		VALUES ($1, $2, $3, $4, $5)
+	`, mainTxID, tokenIDs, epoch, quorumDID, transactionTokens); err != nil {
 		return fmt.Errorf("PledgeV2: insert unpledge_sequence_info for mainTxID %q: %w", mainTxID, err)
 	}
 
@@ -282,7 +289,7 @@ func (c *Core) PledgeV2(
 
 	c.log.Info("PledgeV2 complete",
 		"mainTxID", mainTxID,
-		"tokens", len(tokenInfos),
+		"tokens", len(pledgeTokenInfos),
 	)
 
 	return nil
