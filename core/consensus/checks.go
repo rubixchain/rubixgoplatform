@@ -119,9 +119,17 @@ func ValidateTokenOwnershipByPrevTxn(txnInfo *models.TransactionInfo, isFullnode
 
 	prevTxnTokensMap := make(map[string][]string)
 
+	// Only RBT and FT tokens are checked for ownership by previous transaction.
+	// NFT and SmartContract tokens are excluded because the Owner field in
+	// TransactionInfo represents the RBT counterparty/receiver, not the NFT/SC
+	// token owner. For NFT/SC execution (non-ownership-transfer), any DID with
+	// access can execute — the initiator does not need to match the previous
+	// transaction's Owner. Ownership enforcement for NFT transfers is handled
+	// at the initiator node via QueryAndLockForExecution's checkOwnership flag.
+	// So the onwership validation for NFTs will only be a matter when the
+	// Transfer ownership flag is true. Which we are not passing in here. Which needs to be passed inorder to validate the ownership transfer.
 	tokenLists := [][]*models.TokenInfo{
 		txnInfo.Tokens.RBT,
-		txnInfo.Tokens.NFT,
 		txnInfo.Tokens.FT,
 	}
 

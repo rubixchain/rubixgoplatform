@@ -411,10 +411,19 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 			}
 		} else {
 			// Receiver: also permit Transferred — token was sent out and is now returning to this node.
+			// For NFT/SC tokens, additionally permit Deployed and Executed — these tokens stay with
+			// the initiator after deploy/execute and may be encountered by a receiver persistence
+			// path in edge cases (e.g., mixed-asset transactions where the receiver node syncs
+			// the full transaction chain including NFT/SC tokens it doesn't own).
 			// Terminal and error states (Burnt, Orphaned, ChainSyncIssue, BeingDoubleSpent) are rejected.
+			scTypeID := int16(models.GetTokenTypeID(constants.TokenType_SmartContract))
+			nftTypeID := int16(models.GetTokenTypeID(constants.TokenType_NFT))
+			isNFTorSC := dbTokenType == scTypeID || dbTokenType == nftTypeID
+
 			if dbStatus != int16(constants.TokenStatus_Free) &&
 				dbStatus != int16(constants.TokenStatus_Locked) &&
-				dbStatus != int16(constants.TokenStatus_Transferred) {
+				dbStatus != int16(constants.TokenStatus_Transferred) &&
+				!(isNFTorSC && (dbStatus == int16(constants.TokenStatus_Deployed) || dbStatus == int16(constants.TokenStatus_Executed))) {
 				return fmt.Errorf("transfer: token %q has unexpected status %d for receiver (want Free, Locked, or Transferred)", row.TokenID, dbStatus)
 			}
 		}

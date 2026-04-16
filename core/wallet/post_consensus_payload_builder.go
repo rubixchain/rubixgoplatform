@@ -52,7 +52,7 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 		return nil, nil, nil, fmt.Errorf("post-consensus persistence: invalid execution role %q", executionRole)
 	}
 
-	inputs, affectedTokens, err := collectPersistenceTokenInputs(txInfo, transferNFTOwnership)
+	inputs, affectedTokens, err := collectPersistenceTokenInputs(txInfo, transferNFTOwnership, executionRole)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -204,7 +204,7 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 	return tokenChains, tokenStates, affectedTokens, nil
 }
 
-func collectPersistenceTokenInputs(txInfo *models.TransactionInfo, transferNFTOwnership bool) ([]persistenceTokenInput, []string, error) {
+func collectPersistenceTokenInputs(txInfo *models.TransactionInfo, transferNFTOwnership bool, executionRole string) ([]persistenceTokenInput, []string, error) {
 	seen := make(map[string]struct{})
 	inputs := make([]persistenceTokenInput, 0)
 	affected := make([]string, 0)
@@ -248,6 +248,11 @@ func collectPersistenceTokenInputs(txInfo *models.TransactionInfo, transferNFTOw
 		// - If PreviousTransactionID is empty → Deploy (genesis)
 		// - If transferNFTOwnership is false → Execute (no ownership change)
 		// - If transferNFTOwnership is true → Transfer (ownership change)
+		//
+		// For receiver role: only include NFT tokens when ownership is being transferred.
+		// Deploy and Execute operations are initiator-only — the NFT stays with the
+		// initiator. Including them for the receiver in mixed-asset transactions
+		// (e.g., RBT + NFT execute) would create phantom NFT records on the receiver node.
 		for _, nft := range txInfo.Tokens.NFT {
 			if nft == nil {
 				return nil, nil, fmt.Errorf("post-consensus persistence: transaction token is nil")
@@ -255,6 +260,13 @@ func collectPersistenceTokenInputs(txInfo *models.TransactionInfo, transferNFTOw
 			if nft.TokenID == "" {
 				return nil, nil, fmt.Errorf("post-consensus persistence: transaction token id is empty")
 			}
+
+			// Receiver should only persist NFT tokens when ownership is being transferred.
+			// Deploy and Execute are initiator-only operations — skip for receiver.
+			if executionRole == ExecutionRoleReceiver && !transferNFTOwnership {
+				continue
+			}
+
 			if _, exists := seen[nft.TokenID]; exists {
 				return nil, nil, fmt.Errorf("post-consensus persistence: duplicate token %q in transaction payload", nft.TokenID)
 			}
@@ -292,32 +304,39 @@ func collectPersistenceTokenInputs(txInfo *models.TransactionInfo, transferNFTOw
 		// SmartContract tokens: Check if genesis (deployment) or execution
 		// - If PreviousTransactionID is empty → Deploy (genesis)
 		// - Otherwise → Execute (existing SC)
-		for _, sc := range txInfo.Tokens.SmartContract {
-			if sc == nil {
-				return nil, nil, fmt.Errorf("post-consensus persistence: transaction token is nil")
-			}
-			if sc.TokenID == "" {
-				return nil, nil, fmt.Errorf("post-consensus persistence: transaction token id is empty")
-			}
-			if _, exists := seen[sc.TokenID]; exists {
-				return nil, nil, fmt.Errorf("post-consensus persistence: duplicate token %q in transaction payload", sc.TokenID)
-			}
-			seen[sc.TokenID] = struct{}{}
-			affected = append(affected, sc.TokenID)
+		//
+		// SC tokens are never included for the receiver role. Smart contract
+		// deploy and execute operations are strictly initiator-side — the SC
+		// token stays with the initiator. In mixed-asset transactions (e.g.,
+		// RBT + SC execute), the receiver should only persist the RBT tokens.
+		if executionRole != ExecutionRoleReceiver {
+			for _, sc := range txInfo.Tokens.SmartContract {
+				if sc == nil {
+					return nil, nil, fmt.Errorf("post-consensus persistence: transaction token is nil")
+				}
+				if sc.TokenID == "" {
+					return nil, nil, fmt.Errorf("post-consensus persistence: transaction token id is empty")
+				}
+				if _, exists := seen[sc.TokenID]; exists {
+					return nil, nil, fmt.Errorf("post-consensus persistence: duplicate token %q in transaction payload", sc.TokenID)
+				}
+				seen[sc.TokenID] = struct{}{}
+				affected = append(affected, sc.TokenID)
 
-			// Determine role based on PreviousTransactionID
-			roleName := constants.TokenRole_Execute // Execute for existing SC
-			if sc.PreviousTransactionID == "" {
-				roleName = constants.TokenRole_Deploy // Genesis - SC deployment
-			}
+				// Determine role based on PreviousTransactionID
+				roleName := constants.TokenRole_Execute // Execute for existing SC
+				if sc.PreviousTransactionID == "" {
+					roleName = constants.TokenRole_Deploy // Genesis - SC deployment
+				}
 
-			inputs = append(inputs, persistenceTokenInput{
-				TokenID:               sc.TokenID,
-				PreviousTransactionID: sc.PreviousTransactionID,
-				RoleName:              roleName,
-				TokenTypeName:         constants.TokenType_SmartContract,
-				TokenValue:            sc.TokenValue,
-			})
+				inputs = append(inputs, persistenceTokenInput{
+					TokenID:               sc.TokenID,
+					PreviousTransactionID: sc.PreviousTransactionID,
+					RoleName:              roleName,
+					TokenTypeName:         constants.TokenType_SmartContract,
+					TokenValue:            sc.TokenValue,
+				})
+			}
 		}
 	}
 

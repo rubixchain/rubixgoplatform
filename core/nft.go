@@ -133,6 +133,15 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 		"rawData", string(data),
 	)
 
+	// Skip self-echo: when the node publishes an NFT event, it may receive
+	// its own message back via pubsub. Syncing from ourselves would race
+	// with the ongoing transaction's persistence and potentially corrupt
+	// token state.
+	if peerID == c.peerID {
+		c.log.Debug("NFTCallBack: Ignoring self-published event", "topic", topic)
+		return
+	}
+
 	var newEvent models.EventNFTPublishInfo
 	err := json.Unmarshal(data, &newEvent)
 	if err != nil {

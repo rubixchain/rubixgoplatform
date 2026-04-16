@@ -67,9 +67,20 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		if !txSucceeded {
 			c.log.Warn("InitiateTransaction: Transaction failed, releasing locked tokens", "did", initiatorDID)
 			if releaseErr := c.w.ReleaseAllLockedRBTTokensForDID(ctx, initiatorDID, reqID); releaseErr != nil {
-				c.log.Error("InitiateTransaction: failed to release locked tokens after failure", "err", releaseErr, "did", initiatorDID)
+				c.log.Error("InitiateTransaction: failed to release locked RBT tokens after failure", "err", releaseErr, "did", initiatorDID)
 			} else {
-				c.log.Info("InitiateTransaction: released locked tokens after failed transaction", "did", initiatorDID)
+				c.log.Info("InitiateTransaction: released locked RBT tokens after failed transaction", "did", initiatorDID)
+			}
+			// Also release any locked NFT/SC tokens. These are locked by
+			// BuildTransactionInfoFromRequest via QueryAndLockForExecution + batch
+			// status UPDATE, but ReleaseAllLockedRBTTokensForDID only handles RBT.
+			// Without this, NFT/SC tokens remain permanently stuck in Locked status
+			// after a failed transaction (e.g. consensus rejection, insufficient
+			// quorum liquidity).
+			if released, releaseErr := c.w.ReleaseAllLockedNFTAndSCTokensForDID(ctx, initiatorDID); releaseErr != nil {
+				c.log.Error("InitiateTransaction: failed to release locked NFT/SC tokens after failure", "err", releaseErr, "did", initiatorDID)
+			} else if released > 0 {
+				c.log.Info("InitiateTransaction: released locked NFT/SC tokens after failed transaction", "did", initiatorDID, "count", released)
 			}
 		} else {
 			c.log.Debug("InitiateTransaction: Transaction succeeded, tokens will be transferred", "did", initiatorDID)
@@ -462,19 +473,29 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		c.log.Info("InitiateTransaction: Sending tokens to receiver (synchronous)", "receiver", nextOwnerDID, "transactionID", transactionId)
 		c.sendTokensToReceiver(nextOwnerDID, transactionId, transactionInfo, signatureTobePublished, request)
 	} else {
-		// For SmartContract/NFT deployments/self-transfers, persist receiver role directly
-		// without going through sendTokensToReceiver (no remote peer to notify)
-		persistErr := c.w.PersistPostConsensus(ctx, &wallet.PostConsensusPersistenceRequest{
-			TransactionInfo:      transactionInfo,
-			Signature:            signatureTobePublished,
-			DID:                  nextOwnerDID,
-			ExecutionRole:        wallet.ExecutionRoleReceiver,
-			TransferNFTOwnership: request.Tokens.TransferNFTOwnership,
-		})
-		if persistErr != nil {
-			c.log.Error("InitiateTransaction: Failed to persist receiver state", "err", persistErr, "transactionID", transactionId, "did", nextOwnerDID)
+		// For SmartContract/NFT deployments/self-transfers, persist receiver role
+		// directly without going through sendTokensToReceiver (no remote peer to
+		// notify). However, only do this when the receiver is a *distinct* DID from
+		// the initiator. When initiator == receiver (self-deploy, self-execute) or
+		// when the receiver DID is empty (SC deploy with no owner), the initiator
+		// persistence already set the correct final token status (Deployed/Executed).
+		// Persisting a second time for the same DID would hit a transaction_unit
+		// uniqueness conflict and leave NFT/SC tokens in a non-recoverable state.
+		if nextOwnerDID != "" && nextOwnerDID != initiatorDID {
+			persistErr := c.w.PersistPostConsensus(ctx, &wallet.PostConsensusPersistenceRequest{
+				TransactionInfo:      transactionInfo,
+				Signature:            signatureTobePublished,
+				DID:                  nextOwnerDID,
+				ExecutionRole:        wallet.ExecutionRoleReceiver,
+				TransferNFTOwnership: request.Tokens.TransferNFTOwnership,
+			})
+			if persistErr != nil {
+				c.log.Error("InitiateTransaction: Failed to persist receiver state", "err", persistErr, "transactionID", transactionId, "did", nextOwnerDID)
+			} else {
+				c.log.Info("InitiateTransaction: Receiver state persisted", "transactionID", transactionId, "did", nextOwnerDID)
+			}
 		} else {
-			c.log.Info("InitiateTransaction: Receiver state persisted", "transactionID", transactionId, "did", nextOwnerDID)
+			c.log.Info("InitiateTransaction: Skipping receiver persistence (initiator is receiver or no receiver DID)", "initiator", initiatorDID, "receiver", nextOwnerDID, "transactionID", transactionId)
 		}
 	}
 
