@@ -276,7 +276,7 @@ func (w *Wallet) QueryAndLockForExecution(ctx context.Context, tx pgx.Tx, ownerD
 			  AND t.did = $2
 			  AND t.token_type = (SELECT id FROM token_type WHERE name = $3)
 			  AND (t.token_status = $4 OR t.token_status = $5
-			       OR ($3 = 'NFT' AND t.token_status = $6))
+			       OR ($3 = 'nft' AND t.token_status = $6))
 			ORDER BY t.token_id
 			FOR UPDATE OF t
 		`, tokenIDs, ownerDID, tokenTypeName, constants.TokenStatus_Deployed, constants.TokenStatus_Executed, constants.TokenStatus_Free)
@@ -290,7 +290,7 @@ func (w *Wallet) QueryAndLockForExecution(ctx context.Context, tx pgx.Tx, ownerD
 			WHERE t.token_id = ANY($1::text[])
 			  AND t.token_type = (SELECT id FROM token_type WHERE name = $2)
 			  AND (t.token_status = $3 OR t.token_status = $4
-			       OR ($2 = 'NFT' AND t.token_status = $5))
+			       OR ($2 = 'nft' AND t.token_status = $5))
 			ORDER BY t.token_id
 			FOR UPDATE OF t
 		`, tokenIDs, tokenTypeName, constants.TokenStatus_Deployed, constants.TokenStatus_Executed, constants.TokenStatus_Free)
