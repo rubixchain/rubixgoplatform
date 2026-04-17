@@ -1,6 +1,7 @@
 package wallet
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -93,4 +94,51 @@ func (w *Wallet) GetFullNodeSmartContractToken(tokenID string) (models.FullNodeS
 	}
 
 	return t, nil
+}
+
+// StoreInvalidTransaction stores failed validation payloads in fullnode_invalid_transactions.
+func (w *Wallet) StoreInvalidTransaction(transaction *models.Transactions, reason string) error {
+	if transaction == nil {
+		return fmt.Errorf("StoreInvalidTransaction: transaction is nil")
+	}
+	if reason == "" {
+		return fmt.Errorf("StoreInvalidTransaction: reason is required")
+	}
+
+	payload, err := json.Marshal(transaction)
+	if err != nil {
+		return fmt.Errorf("StoreInvalidTransaction: marshal transaction: %w", err)
+	}
+
+	_, err = w.db.Pool().Exec(w.Ctx, `
+		INSERT INTO fullnode_invalid_transactions (transaction, reason, created_at, updated_at)
+		VALUES ($1::json, $2, NOW(), NOW())
+	`, payload, reason)
+	if err != nil {
+		return fmt.Errorf("StoreInvalidTransaction: insert invalid transaction: %w", err)
+	}
+
+	return nil
+}
+
+func (w *Wallet) GetLatestFullNodeTransactionAndRoleByTokenID(tokenID string) (*models.Transactions, int16, error) {
+	row := w.db.Pool().QueryRow(w.Ctx,
+		`SELECT transaction_id, role FROM fullnode_tokenchain WHERE token_id = $1 ORDER BY position DESC LIMIT 1`, tokenID,
+	)
+
+	var txID string
+	var tokenRoleInTx int16
+	if err := row.Scan(&txID, &tokenRoleInTx); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, -1, nil
+		}
+		return nil, -1, fmt.Errorf("GetLatestFullNodeTransactionByTokenID scan: %w", err)
+	}
+
+	tx, err := w.GetTransactionByID(txID, true)
+	if err != nil {
+		return nil, -1, fmt.Errorf("GetLatestFullNodeTransactionByTokenID GetTransactionByID: %w", err)
+	}
+
+	return tx, tokenRoleInTx, nil
 }

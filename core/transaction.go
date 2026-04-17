@@ -125,6 +125,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	// this will be a list of *ipfsport.Peer since we can have multiple quorums, we need to loop over them
 	p, err := c.getPeer(quorumAddresses[0])
 	if err != nil {
+		c.log.Debug("initiateTransaction: failed to get peer object", err)
 		resp.Message = err.Error()
 		return resp
 	}
@@ -648,7 +649,7 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 	// Errors are logged but never break SendTokens — sync is best-effort.
 	if len(syncTokenIDs) > 0 {
 		initiatorDID := sendTokensRequest.TransactionInfo.Initiator
-		if err := c.SyncTransactionChainsFromPeer(initiatorDID, syncTokenIDs, prevTxIDs, []string{currentTxID}); err != nil {
+		if err := c.SyncTransactionChainsFromPeer(initiatorDID, syncTokenIDs, prevTxIDs, []string{currentTxID}, false); err != nil {
 			c.log.Warn("SendTokens: chain sync from sender failed (non-fatal)", "initiator", initiatorDID, "err", err)
 		}
 	}
@@ -672,7 +673,7 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 }
 
 func (c *Core) GetTransactionByID(txId string) (*models.TransactionInfo, error) {
-	transactionDetail, err := c.w.GetTransactionByID(txId)
+	transactionDetail, err := c.w.GetTransactionByID(txId, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get transactions details for tx: %v, err: %v", txId, err)
 	}
@@ -702,6 +703,11 @@ func retryBackoff(attempt int) time.Duration {
 	return time.Duration(attempt*50) * time.Millisecond
 }
 
+
 func retryWithRandomBackoff(attempt int) time.Duration {
 	return time.Duration(attempt*50+rand.Intn(1000)) * time.Millisecond
+}
+
+func (c *Core) GetTransactionsByDIDAndTokenType(did, tokenType string) ([]models.Transactions, error) {
+	return c.w.GetTransactionsByDIDAndTokenType(did, tokenType)
 }

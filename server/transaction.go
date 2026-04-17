@@ -14,7 +14,7 @@ type syncTransactionChainRequest struct {
 // @Summary Initiates a transaction
 // @Description Initiate a transaction
 // @ID txInit
-// @Tags tx
+// @Tags Transactions
 // @Accept json
 // @Produce json
 // @Param   input body models.TransactionRequest true "transaction"
@@ -34,7 +34,7 @@ func (s *Server) APIInitiateTransaction(req *ensweb.Request) *ensweb.Result {
 // NFT godoc
 // @Summary      Get Transactions by ID
 // @Description  Get Transactions by ID
-// @Tags         tx
+// @Tags         Transactions
 // @ID           txQuery
 // @Accept       json
 // @Produce      json
@@ -58,7 +58,7 @@ func (s *Server) APIGetTransactionByID(req *ensweb.Request) *ensweb.Result {
 // NFT godoc
 // @Summary      List transactions
 // @Description  List transactions
-// @Tags         tx
+// @Tags         Transactions
 // @ID           getAllTx
 // @Accept       json
 // @Produce      json
@@ -99,3 +99,32 @@ func (s *Server) APISyncTransactionChain(req *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(req, true, "ok", data)
 }
 
+// APIGetTransactionsByDID godoc
+// @Summary      Get Transactions by DID
+// @Description  Get Transactions by DID
+// @Tags         Transactions
+// @ID           getTxnsByDID
+// @Accept       json
+// @Produce      json
+// @Param        did        path   string  true   "DID"
+// @Param        token_type path  string  true  "Token Type (rbt, nft, ft, smartContract)"
+// @Success      200  {object}  model.BasicResponse
+// @Router       /rubix/v1/tx/{did}/{token_type} [get]
+func (s *Server) APIGetTransactionsByDID(req *ensweb.Request) *ensweb.Result {
+	did := s.GetRouteVar(req, "did")
+	if did == "" {
+		return s.BasicResponse(req, false, "empty did", nil)
+	}
+
+	tokenType := s.GetRouteVar(req, "token_type")
+	if tokenType == "" {
+		return s.BasicResponse(req, false, "empty token type", nil)
+	}
+
+	txInfo, err := s.c.GetTransactionsByDIDAndTokenType(did, tokenType)
+	if err != nil {
+		return s.BasicResponse(req, false, err.Error(), nil)
+	}
+
+	return s.BasicResponse(req, true, "", txInfo)
+}

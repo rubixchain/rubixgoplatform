@@ -81,7 +81,7 @@ func FindTokenRoleInTxn(tokenID string, txInfo *models.TransactionInfo) int16 {
 func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, tokenType int, w *wallet.Wallet, log logger.Logger) (error, *models.TransactionChainSyncReply) {
 	var err error
 
-	latestTransactionID := w.GetLatestTransactionID(tokenID)
+	latestTransactionID := w.GetLatestTransactionID(tokenID,false)
 	if latestTransactionID == "" {
 		log.Error("failed to get latest transaction id")
 		return err, nil

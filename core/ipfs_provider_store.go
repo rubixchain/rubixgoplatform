@@ -139,6 +139,11 @@ func (s *IPFSProviderStore) GetProviderByCID(cid string) (*IPFSProviderRecord, e
 			&r.TransactionID, &r.ResourceType, &r.ResourceID, &r.Initiator, &r.Owner, &r.TokenValue,
 			&r.CreatedAt, &r.UpdatedAt)
 	if err != nil {
+		//If no rows are found, return nil
+		if err == pgx.ErrNoRows {
+			s.log.Debug("no provider record found for cid", "cid", cid)
+			return nil, nil
+		}
 		return nil, err
 	}
 	return &r, nil

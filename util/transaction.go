@@ -65,6 +65,9 @@ func PublishTransaction(pubsub *types.PubSub, tx *models.TransactionInfo, signat
 		return nil, fmt.Errorf("PublishTransaction: failed to get transaction ID: %v", err)
 	}
 
+	fmt.Println("PublishTransaction: Initiator signature", "signature", signature.InitiatorSignature)
+	fmt.Println("PublishTransaction: Quorum signature", "signature", signature.Quorums)
+
 	txInfoBytes, err := models.SerializeTransactionInfo(tx)
 	if err != nil {
 		return nil, fmt.Errorf("PublishTransaction: failed to serialize TransactionInfo, err: %v", err)

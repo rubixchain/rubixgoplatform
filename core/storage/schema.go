@@ -153,12 +153,25 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
         );
 
         CREATE TABLE IF NOT EXISTS fts (
-            id          TEXT PRIMARY KEY,
-            ft_name     TEXT,
+            id          INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            ft_name     TEXT NOT NULL,
+            creator_did TEXT NOT NULL,
             ft_count    INTEGER,
-            creator_did TEXT,
             created_at  TIMESTAMPTZ DEFAULT NOW(),
-            updated_at  TIMESTAMPTZ DEFAULT NOW()
+            updated_at  TIMESTAMPTZ DEFAULT NOW(),
+
+            CONSTRAINT fts_name_did_unique UNIQUE (ft_name, creator_did)
+        );
+
+        CREATE TABLE IF NOT EXISTS ft_tokens (
+            token_id    TEXT PRIMARY KEY,
+            ft_id       INT,
+            created_at  TIMESTAMPTZ DEFAULT NOW(),
+            updated_at  TIMESTAMPTZ DEFAULT NOW(),
+
+            CONSTRAINT ft_id_fk
+            FOREIGN KEY (ft_id) 
+            REFERENCES fts(id)
         );
 
         CREATE TABLE IF NOT EXISTS token_recovery (
@@ -221,6 +234,14 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             CONSTRAINT unique_did_denom UNIQUE (did, denom)
         );
 
+        CREATE TABLE IF NOT EXISTS fullnode_transactions (
+            id          TEXT PRIMARY KEY,
+            info        JSON NOT NULL,
+            signature   JSONB NOT NULL,
+            created_at  TIMESTAMPTZ DEFAULT NOW(),
+            updated_at  TIMESTAMPTZ DEFAULT NOW()
+        );
+
         CREATE TABLE IF NOT EXISTS fullnode_rbt (
             token_id         TEXT PRIMARY KEY,
             parent_token_id  TEXT,
@@ -232,7 +253,11 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             latest_position  BIGINT NOT NULL DEFAULT 0,
             latest_role      SMALLINT,
             created_at       TIMESTAMPTZ DEFAULT NOW(),
-            updated_at       TIMESTAMPTZ DEFAULT NOW()
+            updated_at       TIMESTAMPTZ DEFAULT NOW(),
+            CONSTRAINT fullnode_rbt_transaction_id_fk 
+            FOREIGN KEY (transaction_id) 
+            REFERENCES fullnode_transactions(id)
+            DEFERRABLE INITIALLY DEFERRED
         );
 
         CREATE TABLE IF NOT EXISTS fullnode_ft (
@@ -245,7 +270,11 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             latest_position  BIGINT NOT NULL DEFAULT 0,
             latest_role      SMALLINT,
             created_at       TIMESTAMPTZ DEFAULT NOW(),
-            updated_at       TIMESTAMPTZ DEFAULT NOW()
+            updated_at       TIMESTAMPTZ DEFAULT NOW(),
+            CONSTRAINT fullnode_ft_transaction_id_fk 
+            FOREIGN KEY (transaction_id) 
+            REFERENCES fullnode_transactions(id)
+            DEFERRABLE INITIALLY DEFERRED
         );
 
         CREATE TABLE IF NOT EXISTS fullnode_nft (
@@ -258,7 +287,11 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             latest_position  BIGINT NOT NULL DEFAULT 0,
             latest_role      SMALLINT,
             created_at       TIMESTAMPTZ DEFAULT NOW(),
-            updated_at       TIMESTAMPTZ DEFAULT NOW()
+            updated_at       TIMESTAMPTZ DEFAULT NOW(),
+            CONSTRAINT fullnode_nft_transaction_id_fk   
+            FOREIGN KEY (transaction_id) 
+            REFERENCES fullnode_transactions(id)
+            DEFERRABLE INITIALLY DEFERRED
         );
 
         CREATE TABLE IF NOT EXISTS fullnode_smart_contract (
@@ -270,19 +303,37 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             latest_position  BIGINT NOT NULL DEFAULT 0,
             latest_role      SMALLINT,
             created_at       TIMESTAMPTZ DEFAULT NOW(),
-            updated_at       TIMESTAMPTZ DEFAULT NOW()
+            updated_at       TIMESTAMPTZ DEFAULT NOW(),     
+            CONSTRAINT fullnode_smart_contract_transaction_id_fk 
+            FOREIGN KEY (transaction_id) 
+            REFERENCES fullnode_transactions(id)
+            DEFERRABLE INITIALLY DEFERRED
         );
 
         CREATE TABLE IF NOT EXISTS fullnode_tokenchain (
             id                         INT        GENERATED ALWAYS AS IDENTITY,
             token_id                   TEXT       NOT NULL,
             transaction_id             TEXT       NOT NULL,
-            previous_transaction_id    TEXT       NOT NULL,
+            previous_transaction_id    TEXT,
             role                       SMALLINT   NOT NULL,
             position                   BIGINT     NOT NULL,
             created_at                 TIMESTAMPTZ DEFAULT NOW(),
             updated_at                 TIMESTAMPTZ DEFAULT NOW(),
-            PRIMARY KEY (token_id, position)
+            PRIMARY KEY (token_id, position),
+            UNIQUE (id),
+            -- No constraint prevents orphaned tokenchain entries pointing to non-existent transactions
+	            CONSTRAINT fk_tc_tx 
+	                FOREIGN KEY (transaction_id) 
+	                REFERENCES fullnode_transactions(id) 
+	                DEFERRABLE INITIALLY DEFERRED,
+	            CONSTRAINT fk_tc_prev_tx
+	                FOREIGN KEY (previous_transaction_id)
+	                REFERENCES fullnode_transactions(id)
+	                DEFERRABLE INITIALLY DEFERRED,
+	            -- role is SMALLINT but has no FK to token_role(id). Invalid role IDs can be inserted silently.
+	            CONSTRAINT fk_tc_role 
+	                FOREIGN KEY (role) 
+	                REFERENCES token_role(id)
         );
 
         CREATE TABLE IF NOT EXISTS fullnode_tokenchain_index (
@@ -290,6 +341,12 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             index      INTEGER[] NOT NULL,
             created_at TIMESTAMPTZ DEFAULT NOW(),
             updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS fullnode_invalid_transactions (
+        transaction JSON NOT NULL,
+        reason TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
         );
 
         CREATE TABLE IF NOT EXISTS ipfs_providers (
