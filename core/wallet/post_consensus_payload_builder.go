@@ -164,22 +164,41 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 		state.LatestPosition = position
 		state.LatestRole = int16(roleID)
 
-		// Set token status based on role and execution context
-		switch input.RoleName {
-		case constants.TokenRole_Deploy:
+		// Set token status based on role and execution context.
+		//
+		// SC-deploy collateral commits: when an RBT token is being pledged as
+		// collateral for an SC deployment, the token must be marked as Committed
+		// so it is no longer selectable by RBT/pledge pickers (which query
+		// WHERE token_status = TokenStatus_Free). This keeps the collateral
+		// terminally reserved against the SC.
+		isSCDeployCommit := input.RoleName == constants.TokenRole_Commit &&
+			executionRole == ExecutionRoleInitiator &&
+			hasSCDeploy(txInfo)
+
+		switch {
+		case input.RoleName == constants.TokenRole_Deploy:
 			// NFT/SC Deployment - token stays with initiator in Deployed status
 			if txInfo.Initiator != "" {
 				state.DID = txInfo.Initiator
 			}
 			state.TokenStatus = int16(constants.TokenStatus_Deployed)
-		case constants.TokenRole_Execute:
+		case input.RoleName == constants.TokenRole_Execute:
 			// SC/NFT Execution - token stays with initiator in Executed status
 			if txInfo.Initiator != "" {
 				state.DID = txInfo.Initiator
 			}
 			state.TokenStatus = int16(constants.TokenStatus_Executed)
+		case isSCDeployCommit:
+			// RBT collateral for an SC deployment — lock as Committed (terminal).
+			// The token remains with the initiator and will be excluded from
+			// future selection since all picker queries filter for Free.
+			if txInfo.Initiator != "" {
+				state.DID = txInfo.Initiator
+			}
+			state.TokenStatus = int16(constants.TokenStatus_Committed)
 		default:
-			// Transfer, Mint, Commit roles - use execution-role logic
+			// Transfer, Mint, and any commit role outside the SC-deploy-initiator
+			// context fall back to the existing execution-role logic.
 			switch executionRole {
 			case ExecutionRoleReceiver:
 				if txInfo.Owner != "" {
@@ -352,6 +371,26 @@ func collectPersistenceTokenInputs(txInfo *models.TransactionInfo, transferNFTOw
 	}
 
 	return inputs, affected, nil
+}
+
+// hasSCDeploy reports whether txInfo carries at least one smart-contract
+// deploy (an SC token with no PreviousTransactionID). This is the guard used
+// when deciding to lock committedTokens as TokenStatus_Committed — we only
+// flip the status for genuine SC-deploy collateral, not for any future caller
+// that happens to use TokenRole_Commit.
+func hasSCDeploy(txInfo *models.TransactionInfo) bool {
+	if txInfo == nil || txInfo.Tokens == nil {
+		return false
+	}
+	for _, sc := range txInfo.Tokens.SmartContract {
+		if sc == nil {
+			continue
+		}
+		if sc.PreviousTransactionID == "" {
+			return true
+		}
+	}
+	return false
 }
 
 func buildDerivedTokenChainRow(transactionID string, currentToken models.Token, latestRow *models.TokenChain, input persistenceTokenInput, roleID int16) (models.TokenChain, int64, error) {
