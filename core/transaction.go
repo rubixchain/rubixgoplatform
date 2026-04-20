@@ -453,8 +453,9 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	// Skip receiver sync for:
 	// 1. SmartContract-only transactions (no owner transfer concept)
 	// 2. NFT-only execution without ownership transfer (no receiver to notify)
-	// 3. Self-transfers (Initiator == Owner)
 	// NOTE: Mixed transactions (e.g., RBT + NFT) must NOT skip — the RBT receiver needs sync.
+	// NOTE: Self-transfer (initiator == owner) is naturally handled by the IsLocalDID
+	// check below — IsLocalDID(initiatorDID) is true, so we take the local branch.
 	skipReceiverSync := false
 	hasRBT := request.Tokens.RBT > 0
 	hasFT := len(request.Tokens.FT) > 0
@@ -464,23 +465,43 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	} else if request.HasNFT() && !request.Tokens.TransferNFTOwnership && !hasRBT && !hasFT {
 		c.log.Info("InitiateTransaction: Skipping receiver sync for NFT execution (no ownership transfer)", "did", initiatorDID, "transactionID", transactionId)
 		skipReceiverSync = true
-	} else if initiatorDID == nextOwnerDID {
-		c.log.Info("InitiateTransaction: Skipping receiver sync (self-transfer)", "did", initiatorDID, "transactionID", transactionId)
-		skipReceiverSync = true
 	}
 
 	if !skipReceiverSync {
-		c.log.Info("InitiateTransaction: Sending tokens to receiver (synchronous)", "receiver", nextOwnerDID, "transactionID", transactionId)
-		c.sendTokensToReceiver(nextOwnerDID, transactionId, transactionInfo, signatureTobePublished, request)
+		// Receiver sync needed — but skip network round-trip if receiver is on this node.
+		// In that case, the initiator persistence (with isLocalTransfer=true) has already
+		// recorded receiver-side token state via BuildPersistencePayload.
+		var isOwnerDIDLocal bool
+		isOwnerDIDLocal, err = c.w.IsLocalDID(nextOwnerDID)
+		if err != nil {
+			c.log.Error("InitiateTransaction: Failed to check if owner DID is local", "ownerDID", nextOwnerDID, "err", err)
+			resp.Message = "InitiateTransaction: Failed to check if owner DID is local: " + err.Error()
+			return resp
+		}
+
+		if !isOwnerDIDLocal {
+			c.log.Info("InitiateTransaction: Sending tokens to receiver (synchronous)", "receiver", nextOwnerDID, "transactionID", transactionId)
+			asyncMode := false
+			if asyncMode {
+				go c.sendTokensToReceiver(nextOwnerDID, transactionId, transactionInfo, signatureTobePublished, request)
+			} else {
+				if err := c.sendTokensToReceiverSync(nextOwnerDID, transactionId, transactionInfo, signatureTobePublished, request); err != nil {
+					c.log.Error("InitiateTransaction: receiver sync failed", "err", err)
+					resp.Status = false
+					resp.Message = "Transaction failed: receiver sync failed: " + err.Error()
+					return resp
+				}
+			}
+		} else {
+			c.log.Info("InitiateTransaction: Owner DID is local — receiver state handled by initiator persistence", "receiver", nextOwnerDID, "transactionID", transactionId)
+		}
 	} else {
-		// For SmartContract/NFT deployments/self-transfers, persist receiver role
-		// directly without going through sendTokensToReceiver (no remote peer to
-		// notify). However, only do this when the receiver is a *distinct* DID from
-		// the initiator. When initiator == receiver (self-deploy, self-execute) or
-		// when the receiver DID is empty (SC deploy with no owner), the initiator
-		// persistence already set the correct final token status (Deployed/Executed).
-		// Persisting a second time for the same DID would hit a transaction_unit
-		// uniqueness conflict and leave NFT/SC tokens in a non-recoverable state.
+		// SC/NFT skip cases — persist receiver role directly when receiver differs from initiator
+		// (defensive fallback for SC/NFT edge cases where nextOwnerDID != initiator).
+		// When initiator == receiver (self-deploy, self-execute) or when the receiver DID is empty
+		// (SC deploy with no owner), the initiator persistence already set the correct final token
+		// status (Deployed/Executed). Persisting a second time for the same DID would hit a
+		// transaction_unit uniqueness conflict and leave NFT/SC tokens in a non-recoverable state.
 		if nextOwnerDID != "" && nextOwnerDID != initiatorDID {
 			persistErr := c.w.PersistPostConsensus(ctx, &wallet.PostConsensusPersistenceRequest{
 				TransactionInfo:      transactionInfo,
@@ -783,4 +804,8 @@ func (c *Core) GetAllTransactions() ([]models.Transactions, error) {
 
 func retryWithRandomBackoff(attempt int) time.Duration {
 	return time.Duration(attempt*50+rand.Intn(1000)) * time.Millisecond
+}
+
+func (c *Core) GetTransactionsByDIDAndTokenType(did, tokenType string) ([]models.Transactions, error) {
+	return c.w.GetTransactionsByDIDAndTokenType(did, tokenType)
 }

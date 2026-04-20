@@ -170,18 +170,20 @@ func selectTokensForAmount(candidates []models.Token, amount float64) ([]models.
 func (w *Wallet) QueryAndLockFTs(ctx context.Context, tx pgx.Tx, ownerDID string, ftName string, creatorDID string, count int) ([]models.Token, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT t.token_id, t.parent_token_id, t.token_value, t.token_status,
-		       t.did, t.transaction_id, t.token_state_hash, t.token_type,
-		       t.latest_position, t.latest_role, t.created_at, t.updated_at
+			t.did, t.transaction_id, t.token_state_hash, t.token_type,
+			t.latest_position, t.latest_role, t.created_at, t.updated_at
 		FROM tokens t
-		INNER JOIN fts f ON f.id = t.token_id
+		INNER JOIN ft_tokens ft ON ft.token_id = t.token_id
+		INNER JOIN fts f ON f.id = ft.ft_id
 		WHERE t.token_type = (SELECT id FROM token_type WHERE name = $1)
-		  AND t.did = $2
-		  AND t.token_status = $3
-		  AND f.ft_name = $4
-		  AND f.creator_did = $5
+			AND t.did = $2
+			AND t.token_status = $3
+			AND f.ft_name = $4
+			AND f.creator_did = $5
 		ORDER BY t.token_id
+		LIMIT $6
 		FOR UPDATE OF t
-	`, constants.TokenType_FT, ownerDID, constants.TokenStatus_Free, ftName, creatorDID)
+	`, constants.TokenType_FT, ownerDID, constants.TokenStatus_Free, ftName, creatorDID, count)
 	if err != nil {
 		return nil, fmt.Errorf("QueryAndLockFTs: query: %w", err)
 	}
@@ -196,7 +198,7 @@ func (w *Wallet) QueryAndLockFTs(ctx context.Context, tx pgx.Tx, ownerDID string
 			len(tokens), count, ftName, creatorDID)
 	}
 
-	return tokens[:count], nil
+	return tokens, nil
 }
 
 // QueryAndLockByIDs selects and locks tokens by their IDs within an existing transaction.

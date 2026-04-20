@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
@@ -40,17 +41,16 @@ type TransferFTReqSwaggoInput struct {
 // @Success      200  {object}  model.BasicResponse
 // @Router       /rubix/v1/fts/mint [post]
 func (s *Server) APICreateFT(req *ensweb.Request) *ensweb.Result {
-	var createFTReq model.CreateFTReq
+	var createFTReq types.CreateFTReq
 	err := s.ParseJSON(req, &createFTReq)
 	if err != nil {
-		return s.BasicResponse(req, false, "Invalid input", nil)
+		return s.BasicResponse(req, false, "APICreateFT: Invalid input", nil)
 	}
 	if !s.validateDIDAccess(req, createFTReq.DID) {
-		return s.BasicResponse(req, false, "DID does not have an access", nil)
+		return s.BasicResponse(req, false, "APICreateFT: DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
-	rbtAmount := int(createFTReq.TokenCount)
-	go s.c.CreateFTs(req.ID, createFTReq.DID, createFTReq.FTCount, createFTReq.FTName, rbtAmount, createFTReq.FTNumStartIndex)
+	go s.c.CreateFTs(req.ID, createFTReq)
 	return s.didResponse(req, req.ID)
 }
 
@@ -99,7 +99,7 @@ func (s *Server) APIGetFTInfo(req *ensweb.Request) *ensweb.Result {
 	ac := model.BasicResponse{
 		Status:  true,
 		Message: "Got FT info successfully",
-		Result: ftInfo,
+		Result:  ftInfo,
 	}
 	if len(ftInfo) == 0 {
 		ac.Message = "No FTs found"
@@ -170,6 +170,5 @@ func (s *Server) APIListFTs(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, fmt.Sprintf("failed to get the list of FTs, err: %v", err), nil)
 	}
-
 	return s.BasicResponse(req, true, "FT Fetched successfully", ftList)
 }

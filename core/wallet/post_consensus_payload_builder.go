@@ -32,7 +32,7 @@ type persistenceTokenInput struct {
 //
 // It preserves current token_status from the tokens table and updates only the
 // fields needed for post-consensus persistence.
-func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID string, txInfo *models.TransactionInfo, did, executionRole string, transferNFTOwnership bool) ([]models.TokenChain, []models.Token, []string, error) {
+func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID string, txInfo *models.TransactionInfo, did, executionRole string, transferNFTOwnership bool, isLocalTransfer bool) ([]models.TokenChain, []models.Token, []string, error) {
 	if w == nil {
 		return nil, nil, nil, fmt.Errorf("post-consensus persistence: wallet is nil")
 	}
@@ -179,7 +179,7 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 			}
 			state.TokenStatus = int16(constants.TokenStatus_Executed)
 		default:
-			// Transfer, Mint, Commit roles - use existing logic based on execution role
+			// Transfer, Mint, Commit roles - use execution-role logic
 			switch executionRole {
 			case ExecutionRoleReceiver:
 				if txInfo.Owner != "" {
@@ -187,13 +187,19 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 				}
 				state.TokenStatus = int16(constants.TokenStatus_Free)
 			case ExecutionRoleInitiator:
-				if txInfo.Initiator != "" {
-					state.DID = txInfo.Initiator
+				if isLocalTransfer {
+					// Same-node transfer: initiator is also receiver locally — keep as Free
+					state.DID = txInfo.Owner
+					state.TokenStatus = int16(constants.TokenStatus_Free)
+				} else {
+					if txInfo.Initiator != "" {
+						state.DID = txInfo.Initiator
+					}
+					// Tokens are leaving the initiator — mark as Transferred so they are no
+					// longer counted as available balance. Non-selected locked tokens will be
+					// released separately by ReleaseAllLockedRBTTokensForDID.
+					state.TokenStatus = int16(constants.TokenStatus_Transferred)
 				}
-				// Tokens are leaving the initiator — mark as Transferred so they are no
-				// longer counted as available balance. Non-selected locked tokens will be
-				// released separately by ReleaseAllLockedRBTTokensForDID.
-				state.TokenStatus = int16(constants.TokenStatus_Transferred)
 			}
 		}
 

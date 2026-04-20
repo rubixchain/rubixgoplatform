@@ -1209,7 +1209,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "tx"
+                    "Transactions"
                 ],
                 "summary": "List transactions",
                 "operationId": "getAllTx",
@@ -1231,7 +1231,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "tx"
+                    "Transactions"
                 ],
                 "summary": "Initiates a transaction",
                 "operationId": "txInit",
@@ -1256,6 +1256,46 @@ const docTemplate = `{
                 }
             }
         },
+        "/rubix/v1/tx/{did}/{token_type}": {
+            "get": {
+                "description": "Get Transactions by DID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Transactions"
+                ],
+                "summary": "Get Transactions by DID",
+                "operationId": "getTxnsByDID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "DID",
+                        "name": "did",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Token Type (rbt, nft, ft, smartContract)",
+                        "name": "token_type",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/rubix/v1/tx/{tx_id}": {
             "get": {
                 "description": "Get Transactions by ID",
@@ -1266,7 +1306,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "tx"
+                    "Transactions"
                 ],
                 "summary": "Get Transactions by ID",
                 "operationId": "txQuery",

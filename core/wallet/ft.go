@@ -6,7 +6,7 @@ import (
 
 func (w *Wallet) ListFTs() ([]*models.FT, error) {
 	rows, err := w.db.Pool().Query(
-		w.Ctx, "SELECT id, ft_name, ft_count, creator_did FROM fts",
+		w.Ctx, "SELECT ft_name, creator_did, ft_count FROM fts",
 	)
 	if err != nil {
 		return nil, err
@@ -15,7 +15,7 @@ func (w *Wallet) ListFTs() ([]*models.FT, error) {
 	var ftList []*models.FT = make([]*models.FT, 0)
 	for rows.Next() {
 		var ftInfo *models.FT = &models.FT{}
-		if err := rows.Scan(&ftInfo.ID, &ftInfo.FTName, &ftInfo.FTCount, &ftInfo.CreatorDID); err != nil {
+		if err := rows.Scan(&ftInfo.FTName, &ftInfo.CreatorDID, &ftInfo.FTCount); err != nil {
 			return nil, err
 		}
 

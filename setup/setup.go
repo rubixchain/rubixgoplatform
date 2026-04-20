@@ -64,7 +64,6 @@ const (
 	APIValidateTokenChain               string = "/api/validate-token-chain"
 	APIGenerateFaucetTestToken          string = "/api/generate-faucettest-token"
 	APIFaucetTokenCheck                 string = "/api/faucet-token-check"
-	APICreateFT                         string = "/rubix/v1/fts/mint"
 	APIDumpFTTokenChainBlock            string = "/api/dump-ft-token-chain"
 	APIInitiateFTTransfer               string = "/api/initiate-ft-transfer"
 	APIFixFTCreator                     string = "/api/fix-ft-creator"
@@ -115,16 +114,20 @@ const (
 	APICreateNFT             string = "/rubix/v1/nfts/generate"
 	APIListNFTs              string = "/rubix/v1/nfts"
 	APIGetNFTChain           string = "/rubix/v1/nfts/{nft_id}/chain"
-	APITransaction           string = "/rubix/v1/tx"
-	APIGetTransactionByID    string = "/rubix/v1/tx/{tx_id}"
-	APISyncTransactionChain  string = "/rubix/v1/sync-transaction-chain"
 	APISubscribecontract     string = "/rubix/v1/smart_contracts/subscribe"
 	APISubscribeNFT          string = "/rubix/v1/nfts/subscribe"
 	APIFetchNft              string = "/rubix/v1/fetch-nft"
 	APIRegisterCallBackURL   string = "/rubix/v1/smart_contracts/register_callback"
 
-	// New endpoints
-	APIListFT string = "/rubix/v1/fts"
+	// Transactions endpoints
+	APITransaction          string = "/rubix/v1/tx"
+	APIGetTransactionByID   string = "/rubix/v1/tx/{tx_id}"
+	APISyncTransactionChain  string = "/rubix/v1/sync-transaction-chain"
+	APIGetTransactionsByDID string = "/rubix/v1/tx/{did}/{token_type}"
+
+	// FT endpoints
+	APIListFT   string = "/rubix/v1/fts"
+	APICreateFT string = "/rubix/v1/fts/mint"
 )
 
 // jwt.RegisteredClaims

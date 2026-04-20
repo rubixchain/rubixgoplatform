@@ -179,7 +179,6 @@ func (w *Wallet) GetLatestTransactionIdByTokenId(tokenID string, isFullNode bool
 		}
 		return "", fmt.Errorf("GetLatestTransactionIdByTokenId scan: %w", err)
 	}
-
 	return latestTxnId, nil
 }
 
@@ -205,4 +204,27 @@ func (w *Wallet) GetTransactionIdByIndex(index int16, isFullNode bool) (string, 
 		return "", fmt.Errorf("GetTransactionIdByIndex scan: %w", err)
 	}
 	return txnId, nil
+}
+
+func (w *Wallet) GetTransactionsByDIDAndTokenType(did, tokenType string) ([]models.Transactions, error) {
+	rows, err := w.db.Pool().Query(w.Ctx,
+		`SELECT id, info, signature, created_at, updated_at
+		FROM transactions
+		WHERE (info->>'initiator' = $1 OR info->>'owner' = $1)
+		AND (
+			CASE $2
+				WHEN 'rbt'           THEN json_typeof(info->'tokens'->'rbt') = 'array'
+				WHEN 'nft'           THEN json_typeof(info->'tokens'->'nft') = 'array'
+				WHEN 'ft'            THEN json_typeof(info->'tokens'->'ft') = 'array'
+				WHEN 'smartContract' THEN json_typeof(info->'tokens'->'smartContract') = 'array'
+				ELSE FALSE
+			END
+		)`,
+		did, tokenType,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetTransactionsByAddressAndTokenType: %w", err)
+	}
+
+	return pgx.CollectRows(rows, pgx.RowToStructByName[models.Transactions])
 }

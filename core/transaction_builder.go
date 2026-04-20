@@ -9,6 +9,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -116,7 +117,7 @@ func BuildTransactionInfoFromRequest(
 			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: begin tx for adding lock reference: %w", err)
 		}
 		defer tx.Rollback(ctx) //nolint:errcheck
-		
+
 		var tokenIDs []models.Token = make([]models.Token, 0)
 		for _, rbtToken := range rbtTokens {
 			tokenIDs = append(tokenIDs, models.Token{
@@ -170,7 +171,7 @@ func BuildTransactionInfoFromRequest(
 						PreviousTransactionID: tok.TransactionID,
 					})
 					allLockedIDs = append(allLockedIDs, tok.TokenID)
-					totalAmount += tok.TokenValue
+					totalAmount = rubixmath.AddFloat(totalAmount, tok.TokenValue)
 				}
 			}
 		}
@@ -305,8 +306,8 @@ func BuildTransactionInfoFromRequest(
 		if len(allLockedIDs) > 0 {
 			log.Info("BuildTransactionInfoFromRequest: Updating token status to LOCKED", "tokenCount", len(allLockedIDs))
 			_, err = tx.Exec(ctx,
-				`UPDATE tokens SET token_status = $1, updated_at = $2 WHERE token_id = ANY($3::text[])`,
-				constants.TokenStatus_Locked, time.Now(), allLockedIDs,
+				`UPDATE tokens SET token_status = $1, lock_reference_id = $2, updated_at = $3 WHERE token_id = ANY($4::text[])`,
+				constants.TokenStatus_Locked, referenceID, time.Now(), allLockedIDs,
 			)
 			if err != nil {
 				log.Error("BuildTransactionInfoFromRequest: Failed to update token status", "err", err, "tokenCount", len(allLockedIDs))
