@@ -434,8 +434,8 @@ func (w *Wallet) ReleaseAllLockedNFTAndSCTokensForDID(ctx context.Context, owner
 	result, err := w.db.Pool().Exec(ctx,
 		`UPDATE tokens SET
 		   token_status = CASE
-		     WHEN latest_role = $1 THEN $2
-		     ELSE $3
+		     WHEN latest_role = $1 THEN $2::smallint
+		     ELSE $3::smallint
 		   END,
 		   updated_at = $4
 		 WHERE did = $5

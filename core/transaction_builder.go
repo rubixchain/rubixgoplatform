@@ -331,10 +331,22 @@ func BuildTransactionInfoFromRequest(
 		log.Info("BuildTransactionInfoFromRequest: CommittedTokens added for SC deployment", "count", len(allCommittedTokens))
 	}
 
+	// On the TransactionInfo, Owner means "the DID that owns the tokens after this
+	// transaction settles" — not the receiver. For RBT/FT/NFT transfers the request's
+	// Owner field already carries the new owner DID (the receiver). For deploy flows
+	// (SC/NFT deploy) the request's Owner is empty because there is no separate
+	// receiver — the initiator IS the owner of the newly minted token. Default it
+	// to the initiator so post-consensus persistence always has a valid owner DID
+	// for the IsLocalDID check and upsert paths.
+	txInfoOwner := req.Owner
+	if txInfoOwner == "" {
+		txInfoOwner = req.Initiator
+	}
+
 	txInfo := &models.TransactionInfo{
 		Network:         networkMode,
 		Initiator:       req.Initiator,
-		Owner:           req.Owner,
+		Owner:           txInfoOwner,
 		Epoch:           int(time.Now().Unix()),
 		Tokens:          txTokens,
 		CommittedTokens: committedTokens,
