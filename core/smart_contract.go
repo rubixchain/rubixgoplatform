@@ -3,12 +3,14 @@ package core
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
@@ -374,13 +376,23 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 
 	c.log.Info("ContractCallBack: Transaction chain synced successfully", "token", smartContractToken)
 
-	curlUrl, err := c.w.GetSmartContractTokenUrl(smartContractToken)
+	curlUrl, err := c.w.GetCallbackURL(smartContractToken)
 	if err != nil {
+		// No callback registered for this SC is a normal case — the subscriber
+		// may simply be mirroring the chain without wanting an HTTP notification.
+		if errors.Is(err, pgx.ErrNoRows) {
+			c.log.Debug("ContractCallBack: No callback URL registered, skipping HTTP trigger", "token", smartContractToken)
+			return
+		}
 		c.log.Error("ContractCallBack: Failed to get smart contract callback URL", "token", smartContractToken, "err", err)
 		return
 	}
+	if curlUrl == "" {
+		c.log.Debug("ContractCallBack: Callback URL is empty, skipping HTTP trigger", "token", smartContractToken)
+		return
+	}
 
-	c.log.Debug("ContractCallBack: Sending callback HTTP request", "url", curlUrl, "token", smartContractToken)
+	c.log.Info("ContractCallBack: Sending callback HTTP request", "url", curlUrl, "token", smartContractToken)
 
 	payload := map[string]interface{}{
 		"smart_contract_hash": smartContractToken,
