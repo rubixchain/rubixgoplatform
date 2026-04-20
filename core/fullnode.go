@@ -162,7 +162,7 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 	c.handleFailedTransaction(txnEvent, lastErr)
 }
 
-// In this function, we will validate the transaction and store the details to the DB.
+// processSingleTransaction validates and stores a transaction to the DB.
 func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error {
 	txn := newEvent.Transaction
 	if txn == nil {

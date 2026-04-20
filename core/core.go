@@ -580,25 +580,38 @@ func (c *Core) SetupForienDIDQuorum(didStr string, selfDID string) (types.DIDCry
 
 func (c *Core) FetchDID(did string) error {
 	didDir := path.Join(c.didDir, did)
+	c.log.Debug("FetchDID: fetching DID", "did", did, "didDir", didDir)
 	pubKeyPath := path.Join(didDir, constants.PubKeyFileName)
+	c.log.Debug("FetchDID: pubKeyPath", "pubKeyPath", pubKeyPath)
 	_, dirErr := os.Stat(didDir)
+	c.log.Debug("FetchDID: dirErr", "dirErr", dirErr)
 	_, pubKeyErr := os.Stat(pubKeyPath)
+	c.log.Debug("FetchDID: pubKeyErr", "pubKeyErr", pubKeyErr)
 
 	if os.IsNotExist(dirErr) || os.IsNotExist(pubKeyErr) {
-		// Directory or pubKey.pem missing, fetch from IPFS
 		err := os.MkdirAll(didDir, os.ModeDir|os.ModePerm)
 		if err != nil {
 			c.log.Error("failed to create directory", "err", err)
 			return err
 		}
-		err = c.ipfsOps.Get(did, didDir+"/")
-		if err == nil {
-			c.log.Error("failed to perform ipfs get on input did", "did", did, "err", err)
-			return err
+		c.log.Debug("FetchDID: created directory", "didDir", didDir)
+		type result struct{ err error }
+		ch := make(chan result, 1)
+		go func() {
+			ch <- result{c.ipfsOps.Get(did, didDir+"/")}
+		}()
+
+		select {
+		case r := <-ch:
+			if r.err != nil {
+				c.log.Error("failed to perform ipfs get on input did", "did", did, "err", r.err)
+				return r.err
+			}
+			return nil
+		case <-time.After(2 * time.Minute):
+			return fmt.Errorf("FetchDID: timed out after 2 minutes fetching DID %s from IPFS", did)
 		}
-		return err
 	}
-	// Directory and pubKey.pem exist, nothing to do
 	return nil
 }
 
