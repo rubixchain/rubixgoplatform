@@ -82,41 +82,70 @@ func (c *Core) SyncTransactionChain(request *ensweb.Request) *ensweb.Result {
 //
 // prevTxIDs maps tokenID -> PreviousTransactionID from the incoming sendTokensRequest.
 // When a token's prevTxID already exists in the local chain, sync is skipped for that token.
-func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string, isFullnode bool) error {
+func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string, transferNFTOwnership bool, isFullnode bool) error {
 	if len(tokenIDs) == 0 {
+		c.log.Debug("SyncTransactionChainsFromPeer: No token IDs to sync, returning")
 		return nil
 	}
+
+	c.log.Info("SyncTransactionChainsFromPeer: Starting sync",
+		"peerDID", peerDID,
+		"tokenIDs", tokenIDs,
+		"tokenCount", len(tokenIDs),
+		"excludeTxIDCount", len(excludeTxIDs),
+		"prevTxIDCount", len(prevTxIDs),
+	)
 
 	req := syncTxChainRequest{DID: peerDID, TokenIDs: tokenIDs, ExcludeTransactionIDs: excludeTxIDs}
 
 	p, err := c.getPeer(peerDID)
 	if err != nil {
+		c.log.Error("SyncTransactionChainsFromPeer: getPeer failed", "peerDID", peerDID, "err", err)
 		return fmt.Errorf("SyncTransactionChainsFromPeer: getPeer failed: %w", err)
 	}
 	defer p.Close()
 
+	c.log.Debug("SyncTransactionChainsFromPeer: Peer connection established, sending sync request", "peerDID", peerDID)
+
 	var resp syncTxChainResponse
 	if err = p.SendJSONRequest("POST", APISyncTransactionChain, nil, &req, &resp, false, 30*time.Second); err != nil {
+		c.log.Error("SyncTransactionChainsFromPeer: Request failed", "peerDID", peerDID, "err", err)
 		return fmt.Errorf("SyncTransactionChainsFromPeer: request failed: %w", err)
 	}
 
 	if !resp.Status {
+		c.log.Error("SyncTransactionChainsFromPeer: Peer returned error", "peerDID", peerDID, "message", resp.Message)
 		return fmt.Errorf("SyncTransactionChainsFromPeer: peer returned error: %s", resp.Message)
 	}
 
+	c.log.Info("SyncTransactionChainsFromPeer: Received response from peer",
+		"peerDID", peerDID,
+		"tokenCount", len(resp.Data),
+		"message", resp.Message,
+	)
+
 	for tokenID, txs := range resp.Data {
-		prevTxID := prevTxIDs[tokenID]
+		c.log.Info("SyncTransactionChainsFromPeer: Applying chain for token",
+			"tokenID", tokenID,
+			"txCount", len(txs),
+		)
+		prevTxID := prevTxIDs[tokenID] // empty string if not in map — applyTokenChainFromSync handles this
 		if isFullnode {
 			if err := c.applyTokenChainFromSyncForFullNode(tokenID, txs, prevTxID); err != nil {
 				c.log.Warn("SyncTransactionChainsFromPeer: fullnode apply failed (non-fatal)", "tokenID", tokenID, "err", err)
+			} else {
+				c.log.Info("SyncTransactionChainsFromPeer: Chain applied successfully (fullnode)", "tokenID", tokenID, "txCount", len(txs))
 			}
 		} else {
-			if err := c.applyTokenChainFromSync(tokenID, txs, prevTxID); err != nil {
+			if err := c.applyTokenChainFromSync(tokenID, txs, prevTxID, transferNFTOwnership); err != nil {
 				c.log.Warn("SyncTransactionChainsFromPeer: apply failed (non-fatal)", "tokenID", tokenID, "err", err)
+			} else {
+				c.log.Info("SyncTransactionChainsFromPeer: Chain applied successfully", "tokenID", tokenID, "txCount", len(txs))
 			}
 		}
 	}
 
+	c.log.Info("SyncTransactionChainsFromPeer: Sync completed", "peerDID", peerDID, "tokenCount", len(tokenIDs))
 	return nil
 }
 
@@ -130,7 +159,7 @@ func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, 
 //     for this token — used to short-circuit sync when the local chain already has it
 //
 // Errors are returned but are non-fatal — callers log and continue.
-func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transactions, prevTxID string) error {
+func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transactions, prevTxID string, transferNFTOwnership bool) error {
 	if len(remoteTxs) == 0 {
 		return nil
 	}
@@ -299,14 +328,44 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transa
 		if tokenType < 0 {
 			return fmt.Errorf("applyTokenChainFromSync: token %s not found in any token array in txInfo — cannot determine type", tokenID)
 		}
-		firstRole := rubixsync.FindTokenRoleInTxn(tokenID, &firstTxInfo)
+		firstRole := rubixsync.FindTokenRoleInTxn(tokenID, &firstTxInfo, transferNFTOwnership)
+		// SC tokens have no Owner — use Initiator as the deploying DID.
+		ownerDID := firstTxInfo.Owner
+		if ownerDID == "" {
+			ownerDID = firstTxInfo.Initiator
+		}
+		// Ensure the owner DID exists in the dids table before inserting
+		// the token — tokens.did has a FK to dids.did. The DID may belong
+		// to a remote peer never registered locally.
+		if ownerDID != "" {
+			algoID, algoErr := c.w.GetDidAlgoIDByName(constants.DidAlgo_SECP256K1)
+			if algoErr != nil {
+				return fmt.Errorf("applyTokenChainFromSync: resolve algo ID for DID %s: %w", ownerDID, algoErr)
+			}
+			if didErr := c.w.CreateOrUpdateDID(&models.DID{
+				DID:    ownerDID,
+				Local:  false,
+				AlgoID: algoID,
+			}); didErr != nil {
+				return fmt.Errorf("applyTokenChainFromSync: upsert DID %s: %w", ownerDID, didErr)
+			}
+		}
+		// Derive token status from the role so synced tokens match what the
+		// originating node wrote (mirrors transaction_chain.go logic).
+		tokenStatus := int16(constants.TokenStatus_Free)
+		switch firstRole {
+		case int16(models.GetTokenRoleID(constants.TokenRole_Deploy)):
+			tokenStatus = int16(constants.TokenStatus_Deployed)
+		case int16(models.GetTokenRoleID(constants.TokenRole_Execute)):
+			tokenStatus = int16(constants.TokenStatus_Executed)
+		}
 		newToken := models.Token{
 			TokenID:        tokenID,
-			DID:            firstTxInfo.Owner,
+			DID:            ownerDID,
 			TransactionID:  newTxs[0].tx.ID,
 			TokenType:      tokenType,
 			TokenValue:     tokenValue,
-			TokenStatus:    constants.TokenStatus_Transferred,
+			TokenStatus:    tokenStatus,
 			LatestPosition: nextPosition,
 			LatestRole:     firstRole,
 		}
@@ -333,7 +392,7 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transa
 				"txID", e.tx.ID, "err", err)
 			role = 0
 		} else {
-			role = rubixsync.FindTokenRoleInTxn(tokenID, &txInfo)
+			role = rubixsync.FindTokenRoleInTxn(tokenID, &txInfo, transferNFTOwnership)
 		}
 
 		// Determine previous transaction ID for the tokenchain entry.
@@ -372,14 +431,28 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transa
 
 	//dead code. not needed
 	lastEntry := entries[len(entries)-1]
-	tokenForUpdate.DID = lastTxInfo.Owner
+	lastOwnerDID := lastTxInfo.Owner
+	if lastOwnerDID == "" {
+		lastOwnerDID = lastTxInfo.Initiator
+	}
+	// Derive final token status from the last chain entry's role so the
+	// token row matches what the originating node wrote.
+	lastStatus := int16(constants.TokenStatus_Free)
+	switch lastEntry.Role {
+	case int16(models.GetTokenRoleID(constants.TokenRole_Deploy)):
+		lastStatus = int16(constants.TokenStatus_Deployed)
+	case int16(models.GetTokenRoleID(constants.TokenRole_Execute)):
+		lastStatus = int16(constants.TokenStatus_Executed)
+	}
+	tokenForUpdate.DID = lastOwnerDID
 	tokenForUpdate.TransactionID = newTxs[len(newTxs)-1].tx.ID
 	tokenForUpdate.LatestPosition = lastEntry.Position
 	tokenForUpdate.LatestRole = lastEntry.Role
+	tokenForUpdate.TokenStatus = lastStatus
 	tokenForUpdate.UpdatedAt = time.Now()
-	//if updateErr := c.w.UpdateToken(tokenForUpdate); updateErr != nil {
-	//	return fmt.Errorf("applyTokenChainFromSync: UpdateToken for %s: %w", tokenID, updateErr)
-	//}
+	if updateErr := c.w.UpdateToken(tokenForUpdate); updateErr != nil {
+		return fmt.Errorf("applyTokenChainFromSync: UpdateToken for %s: %w", tokenID, updateErr)
+	}
 
 	c.log.Info("applyTokenChainFromSync: applied chain entries",
 		"tokenID", tokenID, "count", len(newTxs), "startPos", nextPosition)
@@ -521,7 +594,7 @@ func (c *Core) applyTokenChainFromSyncForFullNode(tokenID string, remoteTxs []mo
 		if err := json.Unmarshal(e.tx.Info, &txInfo); err != nil {
 			role = 0
 		} else {
-			role = rubixsync.FindTokenRoleInTxn(tokenID, &txInfo)
+			role = rubixsync.FindTokenRoleInTxn(tokenID, &txInfo, false)
 		}
 
 		var prevTxIDPtr *string

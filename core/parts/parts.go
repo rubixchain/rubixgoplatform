@@ -41,6 +41,7 @@ func CollectRBTTokens(
 	mintedTokensBeingBurnt []string,
 	err error,
 ) {
+	log.Info("CollectRBTTokens: Starting", "transferAmount", transferAmount, "ownedTokensCount", len(ownedRBTTokens))
 	mintedTokensBeingBurnt = make([]string, 0)
 	var splitOps []SplitOp = make([]SplitOp, 0)
 	tokensForTransfer = make([]*models.TokenInfo, 0)
@@ -48,6 +49,7 @@ func CollectRBTTokens(
 	parentsToBurn = make([]string, 0)
 
 	var did string = dc.GetDID()
+	log.Debug("CollectRBTTokens: DID retrieved", "did", did)
 
 	// Check if transfer amount doesn't exceed maximum supported decimal places.
 	decimalPlaces := strconv.FormatFloat(transferAmount, 'f', -1, 64)
@@ -67,7 +69,9 @@ func CollectRBTTokens(
 	for denom, count := range internalDenomMap {
 		totalBalance += float64(denom) * float64(count)
 	}
+	log.Info("CollectRBTTokens: Balance check", "totalBalance", totalBalance, "transferAmount", transferAmount)
 	if totalBalance < transferAmount {
+		log.Error("CollectRBTTokens: Insufficient balance", "totalBalance", totalBalance, "transferAmount", transferAmount)
 		return nil, nil, nil, nil, fmt.Errorf(
 			"CollectRBTTokens: insufficient balance: current balance %v, transfer amount %v",
 			totalBalance, transferAmount,
@@ -80,10 +84,13 @@ func CollectRBTTokens(
 
 	nonSplitDenomArr, remainingBalanceDenomArr, remainingAmount, err := GetSplitAndNonsplitTokenDenom(internalDenomMap, transferAmount)
 	if err != nil {
+		log.Error("CollectRBTTokens: Failed to get split/nonsplit denom", "err", err)
 		return nil, nil, nil, nil, fmt.Errorf("CollectRBTTokens: error occured while looking to fetch non-split token denom array for transfer, err: %v", err)
 	}
+	log.Info("CollectRBTTokens: Denom arrays calculated", "nonSplitDenomCount", len(nonSplitDenomArr), "remainingAmount", remainingAmount)
 
 	if len(nonSplitDenomArr) != 0 {
+		log.Debug("CollectRBTTokens: Processing non-split tokens", "nonSplitDenomCount", len(nonSplitDenomArr))
 		// In-memory filter: select tokens from ownedRBTTokens whose TokenValue matches
 		// entries in nonSplitDenomArr, consuming counts as tokens are matched.
 		denomCounters := make(map[types.DenomValue]types.DenomCount, len(nonSplitDenomArr))
@@ -99,6 +106,7 @@ func CollectRBTTokens(
 			denomCounters[tok.TokenValue]--
 		}
 
+		log.Info("CollectRBTTokens: Non-split tokens collected", "count", len(nonSplitTokenTransfer))
 		for _, nonSplit := range nonSplitTokenTransfer {
 			tokensForTransfer = append(tokensForTransfer, &models.TokenInfo{
 				TokenID:               nonSplit.TokenID,
@@ -106,14 +114,17 @@ func CollectRBTTokens(
 				TokenValue:            nonSplit.TokenValue,
 			})
 		}
+		log.Info("CollectRBTTokens: Tokens added to transfer list (non-split)", "tokensForTransferCount", len(tokensForTransfer))
 	}
 
 	var tokensToKeepList []models.Token = make([]models.Token, 0)
 	var tokensBeingBurntList []models.Token = make([]models.Token, 0)
 
 	if remainingAmount > rubixmath.ZeroFloat() {
+		log.Info("CollectRBTTokens: Remaining amount requires token splitting", "remainingAmount", remainingAmount)
 		// For the remaining amount, proceed to build the denom tree and split accordingly.
 		var remainingAvailableTokens []models.Token = removeTokensFromList(ownedRBTTokens, nonSplitTokenTransfer)
+		log.Debug("CollectRBTTokens: Remaining available tokens", "count", len(remainingAvailableTokens))
 
 		// Build the tree.
 		tokenDenomTree, err := BuildDenomTree(remainingAvailableTokens, did)
@@ -141,25 +152,30 @@ func CollectRBTTokens(
 		}
 
 		if remainingAmount > rubixmath.ZeroFloat() {
+			log.Error("CollectRBTTokens: Could not satisfy transfer amount after splits", "remainingAmount", remainingAmount)
 			return nil, nil, nil, nil, fmt.Errorf("CollectRBTTokens: could not satisfy transfer amount, remaining: %v", remainingAmount)
 		}
+		log.Info("CollectRBTTokens: Split planning complete", "splitOpsCount", len(splitOps))
 
 		// tokenCache := make(map[string]models.Token)
 
 		// Execute split operations. performTokenSplit now returns childMintRecords
 		// (partial — TransactionID not set yet) and no longer persists to DB.
-		for _, splitOp := range splitOps {
-			parentTokenRecordExists :=  w.IsRBTExists(splitOp.TokenID.String())
+		for i, splitOp := range splitOps {
+			log.Debug("CollectRBTTokens: Performing split operation", "index", i, "tokenID", splitOp.TokenID)
+			parentTokenRecordExists := w.IsRBTExists(splitOp.TokenID.String())
 			if !parentTokenRecordExists {
 				mintedTokensBeingBurnt = append(mintedTokensBeingBurnt, splitOp.TokenID.String())
 			}
-
 			partTokensToTransfer, tokensToKeep, tokensBeingBurnt, splitMintRecords, err := performTokenSplit(
 				w, dc, splitOp, remainingBalanceDenomArr, network,
 			)
 			if err != nil {
+				log.Error("CollectRBTTokens: Split operation failed", "tokenID", splitOp.TokenID, "err", err)
 				return nil, nil, nil, nil, fmt.Errorf("CollectRBTTokens: could not perform split at token: %v, err: %v", splitOp.TokenID, err)
 			}
+
+			log.Debug("CollectRBTTokens: Split operation completed", "partTokensCount", len(partTokensToTransfer), "toKeepCount", len(tokensToKeep), "toBurnCount", len(tokensBeingBurnt))
 
 			tokensToKeepList = append(tokensToKeepList, tokensToKeep...)
 			tokensBeingBurntList = append(tokensBeingBurntList, tokensBeingBurnt...)
@@ -173,6 +189,7 @@ func CollectRBTTokens(
 				})
 			}
 		}
+		log.Info("CollectRBTTokens: All split operations completed", "tokensForTransferCount", len(tokensForTransfer), "childRecordsCount", len(childRecords))
 	}
 
 	// KeepList and BurntList are compared to find any common elements.
@@ -188,8 +205,10 @@ func CollectRBTTokens(
 	// Build genesis transaction info and signature for the split operation.
 	// NOTE: storeGenesisTx and util.PublishTransaction are NOT called here.
 	// The caller persists via w.PersistGenesisBatch.
+	log.Debug("CollectRBTTokens: Creating genesis transaction", "toKeepCount", len(tokensToKeepList), "toBurnCount", len(tokensBeingBurntList))
 	transactionInfo, signature, err := createGenesisTransaction(dc, tokensToKeepList, tokensBeingBurntList, did, network)
 	if err != nil {
+		log.Error("CollectRBTTokens: Failed to create genesis transaction", "err", err)
 		return nil, nil, nil, nil, fmt.Errorf("CollectRBTTokens: failed to get genesis transaction info, err: %v", err)
 	}
 
@@ -220,6 +239,10 @@ func CollectRBTTokens(
 		childRecords[i].TokenChain.TransactionID = txID
 		childRecords[i].Token.TransactionID = txID
 	}
+	log.Info("CollectRBTTokens: Completed successfully",
+		"tokensForTransferCount", len(tokensForTransfer),
+		"childRecordsCount", len(childRecords),
+		"parentsToBurnCount", len(parentsToBurn))
 
 	if len(tokensForTransfer) == 0 {
 		return nil, nil, nil, nil, fmt.Errorf("CollectRBTTokens: unexpected error: no tokens collected for transfer")
