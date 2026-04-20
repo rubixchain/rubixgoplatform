@@ -139,9 +139,20 @@ func CreateRubixConfigFromUserConfig(userConfig types.UserConfig, nodeDir string
 	rubixConfig.DidDir = filepath.Join(rubixConfig.NetworkDir, "dids")
 	rubixConfig.TrustedNetwork = userConfig.Core.EnableTrustedNetwork
 
+	// node_index must be between 0 and 43 to avoid uint16 port overflow.
+	const maxNodeIndex = 43
+	if userConfig.Core.NodeIndex < 0 || userConfig.Core.NodeIndex > maxNodeIndex {
+		return types.RubixConfig{}, fmt.Errorf(
+			"invalid node_index %d: must be in range [0, %d]",
+			userConfig.Core.NodeIndex, maxNodeIndex,
+		)
+	}
+
 	rubixConfig.PortConfig.IPFSPort = (constants.IPFSPort + uint16(userConfig.Core.NodeIndex))
 	rubixConfig.PortConfig.SendPort = (constants.SendPort + uint16(userConfig.Core.NodeIndex))
-	rubixConfig.PortConfig.ReceiverPort = (constants.RecvPort + uint16(userConfig.Core.NodeIndex))
+	// ReceiverPort is spaced by MaxPeerConn so the derived Listener (+10) and
+	// PeerManager (+11) ports don't collide with the next node's ReceiverPort.
+	rubixConfig.PortConfig.ReceiverPort = constants.RecvPort + (constants.MaxPeerConn * uint16(userConfig.Core.NodeIndex))
 	rubixConfig.PortConfig.SwarmPort = (constants.SwarmPort + uint16(userConfig.Core.NodeIndex))
 	rubixConfig.PortConfig.IPFSAPIPort = (constants.IPFSAPIPort + uint16(userConfig.Core.NodeIndex))
 	rubixConfig.PortConfig.RubixServerPort = (constants.RubixServerPort + uint16(userConfig.Core.NodeIndex))
