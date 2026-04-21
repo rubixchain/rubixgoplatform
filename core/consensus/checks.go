@@ -152,43 +152,54 @@ func ValidateTokenOwnershipByPrevTxn(txnInfo *models.TransactionInfo, isFullnode
 		//b. we need to check that tx1 &tx2 both are having atleast 1 token in common, tx2 should be the transacion of atleast 1 token of tx1.
 
 		for _, tokenID := range tokenIDs {
-			fmt.Println("ValidateTokenOwnershipByPrevTxn:unpledge tokens related ownership check going to happen, token", tokenID)
 			//lets call the previous transaction as tx2.
-			tokenRole := FindTokenRoleInTxn(tokenID, &prevTxnInfo)
-			fmt.Println("ValidateTokenOwnershipByPrevTxn: tokenRole", tokenRole)
+			tokenChainForToken, err := w.GetTokenChainByTokenID(tokenID)
+			if err != nil {
+				return fmt.Errorf("ValidateTokenOwnershipByPrevTxn: failed to get latest role for token %s: %w", tokenID, err)
+			}
+			if len(tokenChainForToken) == 0 {
+				return fmt.Errorf("ValidateTokenOwnershipByPrevTxn: token chain not found for token %s, possible failure in syncing of the token", tokenID)
+			}
 
-			if tokenRole == int16(models.GetTokenRoleID(constants.TokenRole_Unpledge)) {
-				//lets prevPrevTxn as tx1. For which token is pledged.
-				prevPrevTxnID, ok := GetPreviousTxnIDForToken(tokenID, &prevTxnInfo)
-				if !ok {
-					return fmt.Errorf("failed to find previous transaction ID for token %s in transaction %s", tokenID, prevTxnID)
+			latestTokenChain := tokenChainForToken[len(tokenChainForToken)-1]
+
+			// If role is unpledged, we validate the whether the unpledge done is valid
+			if latestTokenChain.Role == int16(models.GetTokenRoleID(constants.TokenRole_Unpledge)) {
+				// There should be atleast a pledge and an unpledge block in the token chain for that token, 
+				// because if the role is unpledged, then it means that token should have been pledged before 
+				// and then unpledged in the previous transaction.
+				if len(tokenChainForToken) < 2 {
+					return fmt.Errorf("ValidateTokenOwnershipByPrevTxn: insufficient token chain entries for token %s to verify unpledged token's ownership", tokenID)
 				}
-				fmt.Println("ValidateTokenOwnershipByPrevTxn: pledged transactionId", prevPrevTxnID)
 
-				pledgedTxn, err := w.GetTransactionByID(prevPrevTxnID, isFullnode)
+				previousTransactionID := latestTokenChain.PreviousTransactionID
+				if previousTransactionID == nil {
+					return fmt.Errorf("ValidateTokenOwnershipByPrevTxn: previous transaction ID is nil for token %s that is unpledged", tokenID)
+				}
+
+				pledgedTxn, err := w.GetTransactionByID(*previousTransactionID, isFullnode)
 				if err != nil {
-					return fmt.Errorf("failed to get pledged transaction %s: %w", prevPrevTxnID, err)
+					return fmt.Errorf("failed to get pledged transaction %s: %w", *previousTransactionID, err)
 				}
 				if pledgedTxn == nil {
-					return fmt.Errorf("pledged transaction %s not found", prevPrevTxnID)
+					return fmt.Errorf("pledged transaction %s not found", *previousTransactionID)
 				}
 				var pledgedTxnInfo models.TransactionInfo
 				if err := json.Unmarshal(pledgedTxn.Info, &pledgedTxnInfo); err != nil {
-					return fmt.Errorf("failed to unmarshal info of pledged transaction %s: %w", prevPrevTxnID, err)
+					return fmt.Errorf("failed to unmarshal info of pledged transaction %s: %w", *previousTransactionID, err)
 				}
 
 				// The unpledged token must exist in the original pledge transaction's quorum tokens.
 				if !isTokenPledged(&pledgedTxnInfo, tokenID) {
-					return fmt.Errorf("token %s is marked unpledged but not found in quorum tokens of pledged transaction %s", tokenID, prevPrevTxnID)
+					return fmt.Errorf("token %s is marked unpledged but not found in quorum tokens of pledged transaction %s", tokenID, *previousTransactionID)
 				}
 				// tx1 and tx2 must have at least one common token.
-				if !getCommonTokens(&pledgedTxnInfo, &prevTxnInfo) {
-					return fmt.Errorf("no common token found between pledged transaction %s and previous transaction %s", prevPrevTxnID, prevTxnID)
+				if !getTransactionTokens(&pledgedTxnInfo, &prevTxnInfo) {
+					return fmt.Errorf("no common transaction tokens found between pledged transaction %s and previous transaction %s", *previousTransactionID, prevTxnID)
 				}
 			} else {
 				//If previous txn details are not there in the fullnode side, sync those transaction details from the initiator.
 				//In general, Previous transaction won't be nil, because we are calling this function after the sync in the  TokenChainIntigretyCheck function.
-
 				if prevTxnInfo.Owner != txnInfo.Initiator {
 					return fmt.Errorf(
 						"ownership mismatch: initiator %s does not match owner %s of previous transaction %s (affected tokens: %v)",
@@ -911,21 +922,21 @@ func isTokenPledged(txInfo *models.TransactionInfo, tokenID string) bool {
 	return false
 }
 
-// getCommonTokens returns true if at least one token present in pledgedTxnInfo.Tokens
-// is also present in prevTxnInfo transfer tokens, committed tokens, or quorum tokens.
-func getCommonTokens(pledgedTxnInfo *models.TransactionInfo, prevTxnInfo *models.TransactionInfo) bool {
-	if pledgedTxnInfo == nil || pledgedTxnInfo.Tokens == nil || prevTxnInfo == nil {
+// getTransactionTokens returns true if at least one token present in pledgedTxnInfo.Tokens
+// is also present in unpledgeTxnInfo transfer tokens, committed tokens, or quorum tokens.
+func getTransactionTokens(pledgedTxnInfo *models.TransactionInfo, unpledgeTxnInfo *models.TransactionInfo) bool {
+	if pledgedTxnInfo == nil || pledgedTxnInfo.Tokens == nil || unpledgeTxnInfo == nil {
 		return false
 	}
 
 	prevTxnTokenIDs := make(map[string]struct{})
 
-	if prevTxnInfo.Tokens != nil {
+	if unpledgeTxnInfo.Tokens != nil {
 		for _, list := range [][]*models.TokenInfo{
-			prevTxnInfo.Tokens.RBT,
-			prevTxnInfo.Tokens.NFT,
-			prevTxnInfo.Tokens.FT,
-			prevTxnInfo.Tokens.SmartContract,
+			unpledgeTxnInfo.Tokens.RBT,
+			unpledgeTxnInfo.Tokens.NFT,
+			unpledgeTxnInfo.Tokens.FT,
+			unpledgeTxnInfo.Tokens.SmartContract,
 		} {
 			for _, token := range list {
 				if token != nil && token.TokenID != "" {
@@ -935,13 +946,13 @@ func getCommonTokens(pledgedTxnInfo *models.TransactionInfo, prevTxnInfo *models
 		}
 	}
 
-	for _, token := range prevTxnInfo.CommittedTokens {
+	for _, token := range unpledgeTxnInfo.CommittedTokens {
 		if token != nil && token.TokenID != "" {
 			prevTxnTokenIDs[token.TokenID] = struct{}{}
 		}
 	}
 
-	for _, quorum := range prevTxnInfo.Quorums {
+	for _, quorum := range unpledgeTxnInfo.Quorums {
 		if quorum == nil {
 			continue
 		}

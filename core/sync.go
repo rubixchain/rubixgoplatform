@@ -6,9 +6,13 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	rubixsync "github.com/rubixchain/rubixgoplatform/core/sync"
+	rubixmath "github.com/rubixchain/rubixgoplatform/math"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -21,9 +25,9 @@ type syncTxChainRequest struct {
 
 // syncTxChainResponse is the response body for the batch token chain sync API.
 type syncTxChainResponse struct {
-	Status  bool                             `json:"status"`
-	Message string                           `json:"message"`
-	Data    map[string][]models.Transactions `json:"data"`
+	Status  bool                                   `json:"status"`
+	Message string                                 `json:"message"`
+	Data    map[string][]types.TransactionWithRole `json:"data"`
 }
 
 // SyncTransactionChain handles POST /api/sync-transaction-chain.
@@ -51,17 +55,17 @@ func (c *Core) SyncTransactionChain(request *ensweb.Request) *ensweb.Result {
 		excludeSet[id] = true
 	}
 
-	result := make(map[string][]models.Transactions)
+	result := make(map[string][]types.TransactionWithRole)
 	for _, tokenID := range req.TokenIDs {
-		txs, err := c.w.GetTransactionsByTokenID(tokenID)
+		txs, err := c.w.GetTransactionsAndTokenRoleByTokenID(tokenID)
 		if err != nil {
 			c.log.Warn("SyncTransactionChain: failed to fetch chain", "tokenID", tokenID, "err", err)
 			continue
 		}
 		if len(excludeSet) > 0 {
-			filtered := make([]models.Transactions, 0, len(txs))
+			filtered := make([]types.TransactionWithRole, 0, len(txs))
 			for _, tx := range txs {
-				if !excludeSet[tx.ID] {
+				if !excludeSet[tx.Tx.ID] {
 					filtered = append(filtered, tx)
 				}
 			}
@@ -130,7 +134,7 @@ func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, 
 //     for this token — used to short-circuit sync when the local chain already has it
 //
 // Errors are returned but are non-fatal — callers log and continue.
-func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transactions, prevTxID string) error {
+func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.TransactionWithRole, prevTxID string) error {
 	if len(remoteTxs) == 0 {
 		return nil
 	}
@@ -162,12 +166,13 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transa
 	type txWithPrev struct {
 		tx     models.Transactions
 		prevID string // PreviousTransactionID for this token within this transaction
+		role  int16  // Role for this token within this transaction
 	}
 	enriched := make([]txWithPrev, 0, len(remoteTxs))
 	for _, tx := range remoteTxs {
 		var txInfo models.TransactionInfo
 		var prev string
-		if err := json.Unmarshal(tx.Info, &txInfo); err == nil {
+		if err := json.Unmarshal(tx.Tx.Info, &txInfo); err == nil {
 			if txInfo.Tokens != nil {
 				for _, t := range txInfo.Tokens.RBT {
 					if t != nil && t.TokenID == tokenID {
@@ -193,7 +198,7 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transa
 				}
 			}
 		}
-		enriched = append(enriched, txWithPrev{tx: tx, prevID: prev})
+		enriched = append(enriched, txWithPrev{tx: tx.Tx, prevID: prev, role: tx.Role})
 	}
 
 	// Validate canonical linkage: for i > 0, enriched[i].prevID must equal enriched[i-1].tx.ID.
@@ -214,15 +219,15 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transa
 	// Step 3: Local prefix match — verify that our local chain is a prefix of the incoming chain.
 	// If there is a mismatch, we have a FORK — log ERROR and reject.
 	for i := 0; i < len(localChain) && i < len(remoteTxs); i++ {
-		if localChain[i].TransactionID != remoteTxs[i].ID {
+		if localChain[i].TransactionID != remoteTxs[i].Tx.ID {
 			c.log.Error("applyTokenChainFromSync: FORK DETECTED — local chain diverges from remote chain",
 				"tokenID", tokenID,
 				"position", i,
 				"localTxID", localChain[i].TransactionID,
-				"remoteTxID", remoteTxs[i].ID,
+				"remoteTxID", remoteTxs[i].Tx.ID,
 			)
 			return fmt.Errorf("applyTokenChainFromSync: fork detected for token %s at position %d: local=%s remote=%s",
-				tokenID, i, localChain[i].TransactionID, remoteTxs[i].ID)
+				tokenID, i, localChain[i].TransactionID, remoteTxs[i].Tx.ID)
 		}
 	}
 
@@ -263,8 +268,14 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transa
 		if firstTxInfo.Tokens != nil {
 			for _, t := range firstTxInfo.Tokens.RBT {
 				if t != nil && t.TokenID == tokenID {
+					var errTokenValue error
+
 					tokenType = int16(models.GetTokenTypeID(constants.TokenType_RBT))
-					tokenValue = t.TokenValue
+
+					tokenValue, errTokenValue = util.GetTokenValueFromTokenID(tokenID)
+					if errTokenValue != nil {
+						return fmt.Errorf("applyTokenChainFromSync: failed to get token value for RBT Token %s: %w", tokenID, errTokenValue)
+					}
 					break
 				}
 			}
@@ -300,8 +311,21 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transa
 			return fmt.Errorf("applyTokenChainFromSync: token %s not found in any token array in txInfo — cannot determine type", tokenID)
 		}
 		firstRole := rubixsync.FindTokenRoleInTxn(tokenID, &firstTxInfo)
+
+		var parentTokenID string
+		if tokenValue != rubixmath.OneFloat() {
+			parentTokenID, err = util.TokenID(tokenID).GetParentToken()
+			if err != nil {
+				return fmt.Errorf("applyTokenChainFromSync: failed to get parent token ID for %s: %w", tokenID, err)
+			}
+		}
+
 		newToken := models.Token{
 			TokenID:        tokenID,
+			ParentTokenID:  pgtype.Text{
+				String: parentTokenID,
+				Valid: true,
+			},
 			DID:            firstTxInfo.Owner,
 			TransactionID:  newTxs[0].tx.ID,
 			TokenType:      tokenType,
@@ -325,17 +349,6 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transa
 	// Step 6: Build tokenchain entries and apply atomically via ApplyTokenChainBatch.
 	entries := make([]*models.TokenChain, 0, len(newTxs))
 	for i, e := range newTxs {
-		// Derive role from transaction info.
-		var txInfo models.TransactionInfo
-		var role int16
-		if err := json.Unmarshal(e.tx.Info, &txInfo); err != nil {
-			c.log.Warn("applyTokenChainFromSync: cannot parse tx.Info, defaulting role to 0",
-				"txID", e.tx.ID, "err", err)
-			role = 0
-		} else {
-			role = rubixsync.FindTokenRoleInTxn(tokenID, &txInfo)
-		}
-
 		// Determine previous transaction ID for the tokenchain entry.
 		var prevTxIDPtr *string
 		if i == 0 {
@@ -353,7 +366,7 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transa
 			TokenID:               tokenID,
 			TransactionID:         e.tx.ID,
 			PreviousTransactionID: prevTxIDPtr,
-			Role:                  role,
+			Role:                  e.role,
 			Position:              nextPosition + int64(i),
 		})
 	}
@@ -389,7 +402,7 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.Transa
 // applyTokenChainFromSyncForFullNode mirrors applyTokenChainFromSync but
 // persists into fullnode tables (fullnode_transactions, fullnode_tokenchain,
 // fullnode_rbt/ft/nft/smart_contract) instead of the normal tables.
-func (c *Core) applyTokenChainFromSyncForFullNode(tokenID string, remoteTxs []models.Transactions, prevTxID string) error {
+func (c *Core) applyTokenChainFromSyncForFullNode(tokenID string, remoteTxs []types.TransactionWithRole, prevTxID string) error {
 	if len(remoteTxs) == 0 {
 		return nil
 	}
@@ -412,12 +425,13 @@ func (c *Core) applyTokenChainFromSyncForFullNode(tokenID string, remoteTxs []mo
 	type txWithPrev struct {
 		tx     models.Transactions
 		prevID string
+		role int16
 	}
 	enriched := make([]txWithPrev, 0, len(remoteTxs))
 	for _, tx := range remoteTxs {
 		var txInfo models.TransactionInfo
 		var prev string
-		if err := json.Unmarshal(tx.Info, &txInfo); err == nil {
+		if err := json.Unmarshal(tx.Tx.Info, &txInfo); err == nil {
 			if txInfo.Tokens != nil {
 				for _, t := range txInfo.Tokens.RBT {
 					if t != nil && t.TokenID == tokenID {
@@ -443,7 +457,7 @@ func (c *Core) applyTokenChainFromSyncForFullNode(tokenID string, remoteTxs []mo
 				}
 			}
 		}
-		enriched = append(enriched, txWithPrev{tx: tx, prevID: prev})
+		enriched = append(enriched, txWithPrev{tx: tx.Tx, prevID: prev, role: tx.Role})
 	}
 
 	for i := 1; i < len(enriched); i++ {
@@ -454,9 +468,9 @@ func (c *Core) applyTokenChainFromSyncForFullNode(tokenID string, remoteTxs []mo
 	}
 
 	for i := 0; i < len(localChain) && i < len(remoteTxs); i++ {
-		if localChain[i].TransactionID != remoteTxs[i].ID {
+		if localChain[i].TransactionID != remoteTxs[i].Tx.ID {
 			return fmt.Errorf("applyTokenChainFromSyncForFullNode: fork detected for token %s at position %d: local=%s remote=%s",
-				tokenID, i, localChain[i].TransactionID, remoteTxs[i].ID)
+				tokenID, i, localChain[i].TransactionID, remoteTxs[i].Tx.ID)
 		}
 	}
 
@@ -516,13 +530,6 @@ func (c *Core) applyTokenChainFromSyncForFullNode(tokenID string, remoteTxs []mo
 	entries := make([]models.TokenChain, 0, len(newTxs))
 	var lastRole int16
 	for i, e := range newTxs {
-		var txInfo models.TransactionInfo
-		var role int16
-		if err := json.Unmarshal(e.tx.Info, &txInfo); err != nil {
-			role = 0
-		} else {
-			role = rubixsync.FindTokenRoleInTxn(tokenID, &txInfo)
-		}
 
 		var prevTxIDPtr *string
 		if i == 0 {
@@ -539,10 +546,10 @@ func (c *Core) applyTokenChainFromSyncForFullNode(tokenID string, remoteTxs []mo
 			TokenID:               tokenID,
 			TransactionID:         e.tx.ID,
 			PreviousTransactionID: prevTxIDPtr,
-			Role:                  role,
+			Role:                  e.role,
 			Position:              nextPosition + int64(i),
 		})
-		lastRole = role
+		lastRole = e.role
 	}
 
 	// Extract raw transactions for the wallet method.
