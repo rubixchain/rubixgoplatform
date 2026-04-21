@@ -429,7 +429,7 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 	c.pqc[didStr] = dc
 
 	// Subscribe to "rubix_txns" event
-	// c.SubscribeTxnSetup()
+	c.SubscribeTxnSetup()
 
 	return nil
 }
