@@ -500,13 +500,5 @@ func (w *Wallet) CheckTxnsPresentInUnpledgeSequenceInfo(txs []string, quorumDID 
 		}
 	}
 
-	if len(result) == 0 {
-		w.log.Warn("CheckTxnsPresentInUnpledgeSequenceInfo: no matching transactions found in unpledge_sequence_info for the provided txs and quorumDID",
-			"txs", txs,
-			"quorumDID", quorumDID,
-			"transactionTokensFromIncomingTx", transactionTokensFromIncomingTx,
-		)
-	}
-
 	return result, rows.Err()
 }
