@@ -78,8 +78,20 @@ func (c *Core) initDynamicTxnProcessor() {
 		c.startWorker(i)
 	}
 
+	c.log.Info("Transaction processor initialized",
+		"initialWorkers", c.txnProcessor.currentWorkers,
+		"minWorkers", c.txnProcessor.minWorkers,
+		"maxWorkers", c.txnProcessor.maxWorkers,
+		"queueCapacity", cap(c.txnProcessor.txnQueue))
+
 	// Start system monitor
 	go c.systemMonitor()
+
+	// Periodically evict stale entries from the dedup map to bound memory
+	go c.dedupMapCleaner()
+
+	// Periodically verify that at least minWorkers are alive
+	go c.workerHealthCheck()
 }
 
 // Monitor system resources and adjust worker count
@@ -195,30 +207,34 @@ func (c *Core) scaleDown() {
 	defer c.txnProcessor.workersMutex.Unlock()
 
 	if c.txnProcessor.currentWorkers <= c.txnProcessor.minWorkers {
-		return // ALREADY AT MINIMUM
+		return
 	}
 
-	// Calculate how many workers to remove (25% decrease or minimum 1)
-	removeWorkers := max(1, c.txnProcessor.currentWorkers/4)                                    // 25% DECREASE
-	removeWorkers = min(removeWorkers, c.txnProcessor.currentWorkers-c.txnProcessor.minWorkers) // DON'T GO BELOW MIN
+	removeWorkers := max(1, c.txnProcessor.currentWorkers/4)
+	removeWorkers = min(removeWorkers, c.txnProcessor.currentWorkers-c.txnProcessor.minWorkers)
 
-	// Stop workers gracefully
+	// Never scale below minWorkers
+	if c.txnProcessor.currentWorkers-removeWorkers < c.txnProcessor.minWorkers {
+		removeWorkers = c.txnProcessor.currentWorkers - c.txnProcessor.minWorkers
+	}
+	if removeWorkers <= 0 {
+		return
+	}
+
 	c.txnProcessor.workerChanMutex.Lock()
 	workersToStop := make([]int, 0, removeWorkers)
 
-	// Select workers to stop (LIFO - last in, first out)
 	for workerID := c.txnProcessor.currentWorkers - 1; len(workersToStop) < removeWorkers && workerID >= c.txnProcessor.minWorkers; workerID-- {
 		if stopChan, exists := c.txnProcessor.workerChannels[workerID]; exists {
-			close(stopChan) // SIGNAL WORKER TO STOP
+			close(stopChan)
 			delete(c.txnProcessor.workerChannels, workerID)
 			workersToStop = append(workersToStop, workerID)
 		}
 	}
 	c.txnProcessor.workerChanMutex.Unlock()
 
-	c.txnProcessor.currentWorkers -= len(workersToStop) // UPDATE COUNT
-	c.txnProcessor.lastScaleAction = time.Now()         // UPDATE TIMESTAMP
-
+	c.txnProcessor.currentWorkers -= len(workersToStop)
+	c.txnProcessor.lastScaleAction = time.Now()
 }
 
 // Start a new worker
@@ -236,21 +252,35 @@ func (c *Core) startWorker(workerID int) {
 // Dynamic worker that can be individually stopped
 func (c *Core) dynamicWorker(workerID int, stopChan chan struct{}) {
 	defer c.txnProcessor.wg.Done()
+	defer func() {
+		// Remove ourselves from the live worker map so the health
+		// check can detect that we exited.
+		c.txnProcessor.workerChanMutex.Lock()
+		delete(c.txnProcessor.workerChannels, workerID)
+		c.txnProcessor.workerChanMutex.Unlock()
+
+		if r := recover(); r != nil {
+			c.log.Error("Transaction worker panicked — will be restarted by health check",
+				"workerID", workerID, "panic", r)
+		}
+	}()
 
 	for {
 		select {
-		case txnEvent := <-c.txnProcessor.txnQueue: // PROCESS TRANSACTION
+		case txnEvent, ok := <-c.txnProcessor.txnQueue:
+			if !ok || txnEvent == nil {
+				return
+			}
 			startTime := time.Now()
 			c.processTxnWithRetry(txnEvent, workerID)
 			processingTime := time.Since(startTime)
 
-			// Update metrics
-			c.updateProcessingMetrics(processingTime) // UPDATE METRICS
+			c.updateProcessingMetrics(processingTime)
 
-		case <-stopChan: // INDIVIDUAL STOP SIGNAL
+		case <-stopChan:
 			return
 
-		case <-c.txnProcessor.ctx.Done(): // GLOBAL SHUTDOWN
+		case <-c.txnProcessor.ctx.Done():
 			return
 		}
 	}
@@ -313,4 +343,63 @@ func (c *Core) GetDynamicWorkerPoolStats() map[string]interface{} {
 	}
 
 	return stats
+}
+
+// workerHealthCheck periodically verifies that at least minWorkers are
+// actively registered. On resource-constrained VMs aggressive scaleDown
+// calls or worker panics can leave zero consumers; this goroutine
+// detects the situation and restarts workers so that the txnQueue never
+// stalls.
+func (c *Core) workerHealthCheck() {
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			c.txnProcessor.workersMutex.Lock()
+			c.txnProcessor.workerChanMutex.RLock()
+			alive := len(c.txnProcessor.workerChannels)
+			c.txnProcessor.workerChanMutex.RUnlock()
+
+			if alive < c.txnProcessor.minWorkers {
+				deficit := c.txnProcessor.minWorkers - alive
+				c.log.Warn("Worker health check: fewer workers alive than minWorkers, restarting",
+					"alive", alive, "minWorkers", c.txnProcessor.minWorkers, "restarting", deficit)
+				for i := 0; i < deficit; i++ {
+					id := c.txnProcessor.currentWorkers + i
+					c.startWorker(id)
+				}
+				c.txnProcessor.currentWorkers += deficit
+			}
+			c.txnProcessor.workersMutex.Unlock()
+
+		case <-c.txnProcessor.ctx.Done():
+			return
+		}
+	}
+}
+
+const dedupTTL = 10 * time.Minute
+
+// dedupMapCleaner periodically removes entries older than dedupTTL from the
+// processedTxns sync.Map so memory doesn't grow unboundedly on long-running nodes.
+func (c *Core) dedupMapCleaner() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			now := time.Now()
+			c.txnProcessor.processedTxns.Range(func(key, value interface{}) bool {
+				if ts, ok := value.(time.Time); ok && now.Sub(ts) > dedupTTL {
+					c.txnProcessor.processedTxns.Delete(key)
+				}
+				return true
+			})
+		case <-c.txnProcessor.ctx.Done():
+			return
+		}
+	}
 }

@@ -92,12 +92,13 @@ func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, 
 		return nil
 	}
 
-	c.log.Info("SyncTransactionChainsFromPeer: Starting sync",
+	c.log.Debug("SyncTransactionChainsFromPeer: Starting sync",
 		"peerDID", peerDID,
 		"tokenIDs", tokenIDs,
 		"tokenCount", len(tokenIDs),
 		"excludeTxIDCount", len(excludeTxIDs),
 		"prevTxIDCount", len(prevTxIDs),
+		"isFullnode", isFullnode,
 	)
 
 	req := syncTxChainRequest{DID: peerDID, TokenIDs: tokenIDs, ExcludeTransactionIDs: excludeTxIDs}
@@ -122,7 +123,7 @@ func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, 
 		return fmt.Errorf("SyncTransactionChainsFromPeer: peer returned error: %s", resp.Message)
 	}
 
-	c.log.Info("SyncTransactionChainsFromPeer: Received response from peer",
+	c.log.Debug("SyncTransactionChainsFromPeer: Received response from peer",
 		"peerDID", peerDID,
 		"tokenCount", len(resp.Data),
 		"message", resp.Message,

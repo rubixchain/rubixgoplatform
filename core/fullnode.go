@@ -128,6 +128,11 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 
 // Process transaction with retry mechanism
 func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID int) {
+	if txnEvent == nil {
+		c.log.Debug("processTxnWithRetry: txn event is nil")
+		return
+	}
+
 	var lastErr error
 
 	for attempt := 0; attempt < c.txnProcessor.maxRetries; attempt++ {
@@ -155,11 +160,15 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 			"workerID", workerID)
 	}
 
-	// All retries exhausted - handle failure
+	// All retries exhausted — remove from dedup map so future pubsub
+	// re-deliveries can attempt processing again (conditions may change,
+	// e.g. peer becomes reachable for chain sync).
+	c.txnProcessor.processedTxns.Delete(txnEvent.TransactionID)
+
 	c.handleFailedTransaction(txnEvent, lastErr)
 }
 
-// In this function, we will validate the transaction and store the details to the DB.
+// processSingleTransaction validates and stores a transaction to the DB.
 func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error {
 	txn := newEvent.Transaction
 	if txn == nil {
@@ -215,6 +224,7 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 	}
 
 	//store the transaction
+	c.log.Debug("processSingleTransaction: about to persist fullnode transaction", txn, "TransactionInfo", transactionInfo)
 	if err := c.w.PersistFullNodeTransaction(c.w.Ctx, &wallet.FullNodePersistenceRequest{
 		Transaction:     txn,
 		TransactionInfo: transactionInfo,
