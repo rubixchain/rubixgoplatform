@@ -83,44 +83,46 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 		c.log.Error("failed to add publisher info to DB", "err", err)
 	}
 
-	// Check for duplicate transactions
-	if _, exists := c.txnProcessor.processedTxns.LoadOrStore(newEvent.TransactionID, time.Now()); exists {
-		c.log.Info("Duplicate transaction ignored", "txnID", newEvent.TransactionID)
-		return
-	}
-
-	// INCREMENT COUNTER when new transaction is processed
-	atomic.AddInt64(&c.txnProcessor.processedTxnCount, 1)
-
-	// ### commented: high-volume pub-sub noise (fires per transaction per node)
-	// c.log.Info("Received transaction", "txnID", newEvent.TransactionID, "mode", newEvent.AssetType)
-
-	// Update queue length metric for dynamic scaling
-	currentQueueLen := int64(len(c.txnProcessor.txnQueue))
-	c.txnProcessor.queueLength = currentQueueLen
-
-	// Queue transaction for processing with enhanced timeout handling
-	select {
-	case c.txnProcessor.txnQueue <- &newEvent:
-		c.log.Debug("Transaction queued successfully",
-			"txnID", newEvent.TransactionID,
-			"queueLength", currentQueueLen)
-
-	case <-time.After(5 * time.Second):
-		c.log.Error("Failed to queue transaction - queue full",
-			"txnID", newEvent.TransactionID,
-			"queueLength", len(c.txnProcessor.txnQueue))
-
-		if currentQueueLen > int64(c.txnProcessor.queueThreshold) {
-			c.log.Warn("Queue threshold exceeded - scaling may be needed",
-				"current", currentQueueLen,
-				"threshold", c.txnProcessor.queueThreshold)
+	if c.fullNode {
+		// Check for duplicate transactions
+		if _, exists := c.txnProcessor.processedTxns.LoadOrStore(newEvent.TransactionID, time.Now()); exists {
+			c.log.Info("Duplicate transaction ignored", "txnID", newEvent.TransactionID)
+			return
 		}
-		return
 
-	case <-c.txnProcessor.ctx.Done():
-		c.log.Info("Transaction processor shutting down")
-		return
+		// INCREMENT COUNTER when new transaction is processed
+		atomic.AddInt64(&c.txnProcessor.processedTxnCount, 1)
+
+		// ### commented: high-volume pub-sub noise (fires per transaction per node)
+		// c.log.Info("Received transaction", "txnID", newEvent.TransactionID, "mode", newEvent.AssetType)
+
+		// Update queue length metric for dynamic scaling
+		currentQueueLen := int64(len(c.txnProcessor.txnQueue))
+		c.txnProcessor.queueLength = currentQueueLen
+
+		// Queue transaction for processing with enhanced timeout handling
+		select {
+		case c.txnProcessor.txnQueue <- &newEvent:
+			c.log.Debug("Transaction queued successfully",
+				"txnID", newEvent.TransactionID,
+				"queueLength", currentQueueLen)
+
+		case <-time.After(5 * time.Second):
+			c.log.Error("Failed to queue transaction - queue full",
+				"txnID", newEvent.TransactionID,
+				"queueLength", len(c.txnProcessor.txnQueue))
+
+			if currentQueueLen > int64(c.txnProcessor.queueThreshold) {
+				c.log.Warn("Queue threshold exceeded - scaling may be needed",
+					"current", currentQueueLen,
+					"threshold", c.txnProcessor.queueThreshold)
+			}
+			return
+
+		case <-c.txnProcessor.ctx.Done():
+			c.log.Info("Transaction processor shutting down")
+			return
+		}
 	}
 }
 
