@@ -55,11 +55,11 @@ func (c *Core) CallBackQuorumUnpledge(tx *models.Transactions, did string) error
 			return fmt.Errorf("CallBackQuorumUnpledge: failed to get token value for RBT token %q, err: %v", rbtToken.TokenID, err)
 		}
 		if tokenValue != rubixmath.OneFloat() {
-			parentTokenID, err := util.TokenID(rbtToken.TokenID).GetParentToken()
+			ancestorTokens, err := util.TokenID(rbtToken.TokenID).GetHierarchy()
 			if err != nil {
 				return fmt.Errorf("CallBackQuorumUnpledge: failed to get parent token for RBT token %q, err: %v", rbtToken.TokenID, err)
 			}
-			rbtParentTokenList = append(rbtParentTokenList, parentTokenID)
+			rbtParentTokenList = append(rbtParentTokenList, ancestorTokens...)
 		}
 	}
 
@@ -107,7 +107,7 @@ func (c *Core) CallBackQuorumUnpledge(tx *models.Transactions, did string) error
 		}
 	}
 
-	if len(prevTransactionsSet) == 0 {
+	if len(prevTransactionsSet) == 0 && len(rbtParentTokenList) == 0 {
 		return nil
 	}
 
