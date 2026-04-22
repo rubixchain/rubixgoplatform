@@ -165,6 +165,10 @@ func (id TokenID) GetParentToken() (string, error) {
 
 	// x: child part index
 	x := child.PartIndex
+	if x == 0 {
+		//PartIndex is zero only for whole token, which has no parent
+		return "", nil
+	}
 
 	// lx: child level on tree
 	lx, err := GetTreeLevelFromPartIndex(x)
@@ -189,6 +193,28 @@ func (id TokenID) GetParentToken() (string, error) {
 
 	return fmt.Sprintf("%d_%d_%d", child.TokenLevel, child.TokenNumber, parentPartIndex), nil
 }
+
+// GetHierarchy returns the list of ancestor token IDs from the whole token down to the immediate parent.
+// It returns list of tokenIDs in the order: [immediate parent, grandparent, ..., whole token]
+func (id TokenID) GetHierarchy() ([]string, error) {
+	var hierarchy []string = make([]string, 0)
+
+	current := id
+	for {
+		parent, err := current.GetParentToken()
+		if err != nil {
+			return nil, fmt.Errorf("error getting parent for token %s: %v", current, err)
+		}
+		if parent == "" {
+			break
+		}
+		hierarchy = append(hierarchy, parent)
+		current = TokenID(parent)
+	}
+
+	return hierarchy, nil
+}
+
 
 // GetChildrenIndexRange returns the part-index range [first, last] of the children
 // of the node identified by parentPartIndex.

@@ -559,6 +559,7 @@ func (w *Wallet) PersistGenesisTokenRecord(
 				{
 					TokenID:               tokenID,
 					PreviousTransactionID: "",
+					TokenValue:            rubixmath.OneFloat(),
 				},
 			},
 		},

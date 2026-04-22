@@ -308,36 +308,13 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*models.DID, error) {
 
 	var peerID string
 
-	// In case of xell wallet, TRIE testnet and Rubix testnet have same swarm key but different peerIDs.
-	// So, an user should find another user's Rubix testnet DID-info in DIDTable and TRIE testnet DID-info in PeerDIDTable.
-	if c.testnet {
-		// 1. try DID table first
-		if _, err := c.w.GetDID(didStr); err == nil {
-			return &models.DID{
-				DID:    didStr,
-				PeerID: c.peerID,
-			}, nil
-		}
-
-		// 2. If missing, try peer table
-		peerID, _ = c.w.GetPeerID(didStr)
-
-		if peerID != "" {
-			return &models.DID{
-				DID:    didStr,
-				PeerID: peerID,
-			}, nil
-		}
-	} else {
-		// 1. Try peer table first
-		peerID, _ = c.w.GetPeerID(didStr)
-
-		if peerID != "" {
-			return &models.DID{
-				DID:    didStr,
-				PeerID: peerID,
-			}, nil
-		}
+	// 1. Try dids table first
+	peerID, _ = c.w.GetPeerID(didStr)
+	if peerID != "" {
+		return &models.DID{
+			DID:    didStr,
+			PeerID: peerID,
+		}, nil
 	}
 
 	// If peerID still missing, try resolving (via explorer or peer fetch)
