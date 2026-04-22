@@ -225,6 +225,14 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.Transac
 						}
 					}
 				}
+				if prev == "" {
+					for _, t := range txInfo.Tokens.SmartContract {
+						if t != nil && t.TokenID == tokenID {
+							prev = t.PreviousTransactionID
+							break
+						}
+					}
+				}
 			}
 		}
 		enriched = append(enriched, txWithPrev{tx: tx.Tx, prevID: prev, role: tx.Role})
@@ -527,6 +535,14 @@ func (c *Core) applyTokenChainFromSyncForFullNode(tokenID string, remoteTxs []ty
 				}
 				if prev == "" {
 					for _, t := range txInfo.Tokens.NFT {
+						if t != nil && t.TokenID == tokenID {
+							prev = t.PreviousTransactionID
+							break
+						}
+					}
+				}
+				if prev == "" {
+					for _, t := range txInfo.Tokens.SmartContract {
 						if t != nil && t.TokenID == tokenID {
 							prev = t.PreviousTransactionID
 							break
