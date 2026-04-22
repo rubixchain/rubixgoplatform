@@ -18,7 +18,9 @@ import (
 // Enhanced subscription setup with error handling
 func (c *Core) SubscribeTxnSetup() {
 	// Initialize the transaction processor
-	c.initDynamicTxnProcessor()
+	if c.fullNode {
+		c.initDynamicTxnProcessor()
+	}
 
 	topic := constants.Event_RubixTxns
 	err := c.ps.SubscribeTopic(topic, c.TxnCallBack)
