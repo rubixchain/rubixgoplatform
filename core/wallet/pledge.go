@@ -489,7 +489,7 @@ func (w *Wallet) UnpledgeTokens(prevTransactionId string, transaction *models.Tr
 // are present in the `unpledge_sequence_info` table AND are owned by the
 // given quorum DID (outer ownership gate — defense-in-depth with UnpledgeV2's
 // inner gate). Returns only tx_ids whose quorum_did column matches.
-func (w *Wallet) CheckTxnsPresentInUnpledgeSequenceInfo(txs []string, quorumDID string, transactionTokensFromIncomingTx []string) ([]string, error) {
+func (w *Wallet) CheckTxnsPresentInUnpledgeSequenceInfo(txs []string, quorumDID string, transactionTokensFromIncomingTxMap map[string][]string, rbtParentTokenList []string) ([]string, error) {
 	rows, err := w.db.Pool().Query(
 		w.Ctx,
 		`
@@ -514,6 +514,10 @@ func (w *Wallet) CheckTxnsPresentInUnpledgeSequenceInfo(txs []string, quorumDID 
 			return nil, err
 		}
 
+		transactionTokensFromIncomingTx, ok := transactionTokensFromIncomingTxMap[txID]
+		if !ok {
+			return nil, fmt.Errorf("CheckTxnsPresentInUnpledgeSequenceInfo: transaction tokens for previous txID %q not found in the provided map", txID)
+		}
 
 		// Check if the unpledging is being done for the correct transaction tokens
 		commonTokens := util.FindCommonElementsInList(transactionTokensFromIncomingTx, storedTransactionTokens)
@@ -521,6 +525,33 @@ func (w *Wallet) CheckTxnsPresentInUnpledgeSequenceInfo(txs []string, quorumDID 
 			w.log.Warn("CheckTxnsPresentInUnpledgeSequenceInfo: transaction tokens from incoming unpledge transaction do not match with transaction tokens in unpledge_sequence_info — skip (not the correct transaction to unpledge for)",
 				"txID", txID)
 		} else {
+			result = append(result, txID)
+		}
+	}
+
+	// The idea here is to collect transactions for transactions tokens which are currently pledgeed for,
+	// and they underwent a state change from transfer to burnt.
+	if len(rbtParentTokenList) != 0 {
+		rows, err := w.db.Pool().Query(
+			w.Ctx,
+			`
+			SELECT tx_id
+			FROM unpledge_sequence_info
+			WHERE transaction_tokens && $1::TEXT[]
+			AND quorum_did = $2
+			`,
+			rbtParentTokenList, quorumDID,
+		)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var txID string
+			if err := rows.Scan(&txID); err != nil {
+				return nil, fmt.Errorf("failed to scan tx_id: %v", err)
+			}
 			result = append(result, txID)
 		}
 	}
