@@ -14,7 +14,8 @@ func (w *Wallet) CreateOrUpdateDID(didInfo *models.DID) error {
 		VALUES ($1, $2, $3, $4)
 		ON CONFLICT(did)
 		DO UPDATE SET
-			peer_id = EXCLUDED.peer_id,
+			peer_id = CASE WHEN EXCLUDED.peer_id <> '' THEN EXCLUDED.peer_id
+			               ELSE dids.peer_id END,
 			local = EXCLUDED.local,
 			algo_id = EXCLUDED.algo_id;
 	`, didInfo.DID, didInfo.PeerID, didInfo.Local, didInfo.AlgoID); err != nil {

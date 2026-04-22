@@ -289,27 +289,5 @@ func (w *Wallet) UpdateFullNodeTransactionHistoryTable(t *model.FullNodeTxnHisto
 	return nil
 }
 
-// GetLatestTransactionID returns the latest transaction ID for a given token.
-// Delegates to GetLatestTransactionAndRoleByTokenID which queries tokenchain
-// ordered by position DESC LIMIT 1. Returns "" if the token has no chain entries.
-func (w *Wallet) GetLatestTransactionID(tokenID string,isFullNode bool) string {
-	if isFullNode {
-		tx, _, err := w.GetLatestFullNodeTransactionAndRoleByTokenID(tokenID)
-		if err != nil || tx == nil {
-			return ""
-		}
-		return tx.ID
-	}
-	tx, _, err := w.GetLatestTransactionAndRoleByTokenID(tokenID)
-	if err != nil || tx == nil {
-		return ""
-	}
-	return tx.ID
-}
-
-// GetTransactions returns serialized transactions for a token starting from a given transactionID.
-// Returns (transactions [][]byte, nextTransactionID string, err error).
-// TODO(phase11-upstream): implement using PostgreSQL tokenchain + transactions tables.
-func (w *Wallet) GetTransactions(tokenID string, transactionID string) ([][]byte, string, error) {
-	return nil, "", nil
-}
+// GetTransactions is now implemented in token_chain.go with the real
+// PostgreSQL-backed logic. The stub that was here has been removed.

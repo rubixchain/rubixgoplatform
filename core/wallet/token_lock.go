@@ -170,18 +170,20 @@ func selectTokensForAmount(candidates []models.Token, amount float64) ([]models.
 func (w *Wallet) QueryAndLockFTs(ctx context.Context, tx pgx.Tx, ownerDID string, ftName string, creatorDID string, count int) ([]models.Token, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT t.token_id, t.parent_token_id, t.token_value, t.token_status,
-		       t.did, t.transaction_id, t.token_state_hash, t.token_type,
-		       t.latest_position, t.latest_role, t.created_at, t.updated_at
+			t.did, t.transaction_id, t.token_state_hash, t.token_type,
+			t.latest_position, t.latest_role, t.created_at, t.updated_at
 		FROM tokens t
-		INNER JOIN fts f ON f.id = t.token_id
+		INNER JOIN ft_tokens ft ON ft.token_id = t.token_id
+		INNER JOIN fts f ON f.id = ft.ft_id
 		WHERE t.token_type = (SELECT id FROM token_type WHERE name = $1)
-		  AND t.did = $2
-		  AND t.token_status = $3
-		  AND f.ft_name = $4
-		  AND f.creator_did = $5
+			AND t.did = $2
+			AND t.token_status = $3
+			AND f.ft_name = $4
+			AND f.creator_did = $5
 		ORDER BY t.token_id
+		LIMIT $6
 		FOR UPDATE OF t
-	`, constants.TokenType_FT, ownerDID, constants.TokenStatus_Free, ftName, creatorDID)
+	`, constants.TokenType_FT, ownerDID, constants.TokenStatus_Free, ftName, creatorDID, count)
 	if err != nil {
 		return nil, fmt.Errorf("QueryAndLockFTs: query: %w", err)
 	}
@@ -196,7 +198,7 @@ func (w *Wallet) QueryAndLockFTs(ctx context.Context, tx pgx.Tx, ownerDID string
 			len(tokens), count, ftName, creatorDID)
 	}
 
-	return tokens[:count], nil
+	return tokens, nil
 }
 
 // QueryAndLockByIDs selects and locks tokens by their IDs within an existing transaction.
@@ -241,6 +243,82 @@ func (w *Wallet) QueryAndLockByIDs(ctx context.Context, tx pgx.Tx, ownerDID stri
 		}
 		return nil, fmt.Errorf("QueryAndLockByIDs(%s): tokens not found, not owned by %s, or already locked: %v",
 			tokenTypeName, ownerDID, missing)
+	}
+
+	return locked, nil
+}
+
+// QueryAndLockForExecution locks NFT or SmartContract tokens for execution.
+// Accepts tokens in Deployed or Executed status (after previous deployment/execution).
+// For NFTs, tokens in Free status are also accepted to support execution after
+// ownership transfer (where the receiver's NFT lands in Free status).
+// tokenIDs must be pre-sorted by the caller for deadlock prevention.
+// checkOwnership controls whether tokens.did must match ownerDID:
+//   - true  for NFT with TransferNFTOwnership=true: only the current owner may execute
+//   - false for SC (any subscriber may execute) and NFT with TransferNFTOwnership=false
+//
+// Returns all matched tokens or an error if any are missing or not in executable status.
+func (w *Wallet) QueryAndLockForExecution(ctx context.Context, tx pgx.Tx, ownerDID string, tokenIDs []string, tokenTypeName string, checkOwnership bool) ([]models.Token, error) {
+	if len(tokenIDs) == 0 {
+		return nil, nil
+	}
+
+	var (
+		rows pgx.Rows
+		err  error
+	)
+
+	if checkOwnership {
+		rows, err = tx.Query(ctx, `
+			SELECT t.token_id, t.parent_token_id, t.token_value, t.token_status,
+			       t.did, t.transaction_id, t.token_state_hash, t.token_type,
+			       t.latest_position, t.latest_role, t.created_at, t.updated_at
+			FROM tokens t
+			WHERE t.token_id = ANY($1::text[])
+			  AND t.did = $2
+			  AND t.token_type = (SELECT id FROM token_type WHERE name = $3)
+			  AND (t.token_status = $4 OR t.token_status = $5
+			       OR ($3 = 'nft' AND t.token_status = $6))
+			ORDER BY t.token_id
+			FOR UPDATE OF t
+		`, tokenIDs, ownerDID, tokenTypeName, constants.TokenStatus_Deployed, constants.TokenStatus_Executed, constants.TokenStatus_Free)
+	} else {
+		// SC execution or NFT without ownership transfer: any subscriber can execute.
+		rows, err = tx.Query(ctx, `
+			SELECT t.token_id, t.parent_token_id, t.token_value, t.token_status,
+			       t.did, t.transaction_id, t.token_state_hash, t.token_type,
+			       t.latest_position, t.latest_role, t.created_at, t.updated_at
+			FROM tokens t
+			WHERE t.token_id = ANY($1::text[])
+			  AND t.token_type = (SELECT id FROM token_type WHERE name = $2)
+			  AND (t.token_status = $3 OR t.token_status = $4
+			       OR ($2 = 'nft' AND t.token_status = $5))
+			ORDER BY t.token_id
+			FOR UPDATE OF t
+		`, tokenIDs, tokenTypeName, constants.TokenStatus_Deployed, constants.TokenStatus_Executed, constants.TokenStatus_Free)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("QueryAndLockForExecution(%s): query: %w", tokenTypeName, err)
+	}
+
+	locked, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.Token])
+	if err != nil {
+		return nil, fmt.Errorf("QueryAndLockForExecution(%s): collect: %w", tokenTypeName, err)
+	}
+
+	if len(locked) != len(tokenIDs) {
+		foundSet := make(map[string]bool, len(locked))
+		for _, tok := range locked {
+			foundSet[tok.TokenID] = true
+		}
+		var missing []string
+		for _, id := range tokenIDs {
+			if !foundSet[id] {
+				missing = append(missing, id)
+			}
+		}
+		return nil, fmt.Errorf("QueryAndLockForExecution(%s): tokens not found or not in executable status (Deployed/Executed, or Free for NFT): %v",
+			tokenTypeName, missing)
 	}
 
 	return locked, nil

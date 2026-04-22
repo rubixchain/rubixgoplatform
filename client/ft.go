@@ -5,11 +5,12 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 func (c *Client) CreateFT(did string, ftName string, ftCount int, wholeToken int, ftNumStartIndex int) (*model.BasicResponse, error) {
-	createFTReq := model.CreateFTReq{
+	createFTReq := types.CreateFTReq{
 		DID:             did,
 		FTName:          ftName,
 		FTCount:         ftCount,

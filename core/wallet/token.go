@@ -114,6 +114,25 @@ func (w *Wallet) GetTokenByTokenID(tokenID string) (models.Token, error) {
 	return token, nil
 }
 
+// GetLatestTransactionID returns the latest transaction ID for a given token.
+// Delegates to GetLatestTransactionAndRoleByTokenID which queries tokenchain
+// ordered by position DESC LIMIT 1. Returns "" if the token has no chain entries.
+// When isFullNode is true, queries the fullnode tables instead.
+func (w *Wallet) GetLatestTransactionID(tokenID string, isFullNode bool) string {
+	if isFullNode {
+		tx, _, err := w.GetLatestFullNodeTransactionAndRoleByTokenID(tokenID)
+		if err != nil || tx == nil {
+			return ""
+		}
+		return tx.ID
+	}
+	tx, _, err := w.GetLatestTransactionAndRoleByTokenID(tokenID)
+	if err != nil || tx == nil {
+		return ""
+	}
+	return tx.ID
+}
+
 func (w *Wallet) GetRBTTokenByStatus(tokenID string, tokenStatus int) (models.Token, error) {
 	row := w.db.Pool().QueryRow(w.Ctx,
 		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
@@ -400,6 +419,41 @@ func (w *Wallet) ReleaseAllLockedRBTTokensForDID(ctx context.Context, ownerDID s
 	return err
 }
 
+// ReleaseAllLockedNFTAndSCTokensForDID resets all Locked NFT and SmartContract tokens for a DID
+// back to their correct executable status. Unlike RBT tokens (which return to Free), NFT/SC
+// tokens must return to Deployed or Executed depending on their latest role:
+//   - latest_role = Deploy (4) → Deployed
+//   - anything else (Execute, etc.) → Executed
+//
+// Called on transaction failure after BuildTransactionInfoFromRequest to prevent NFT/SC tokens
+// from staying permanently locked when the transaction does not complete.
+// Note: NFT/SC tokens are locked via a batch UPDATE in BuildTransactionInfoFromRequest without
+// setting lock_reference_id, so we match by DID + Locked status + token type only.
+func (w *Wallet) ReleaseAllLockedNFTAndSCTokensForDID(ctx context.Context, ownerDID string) (int64, error) {
+	deployRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Deploy))
+	result, err := w.db.Pool().Exec(ctx,
+		`UPDATE tokens SET
+		   token_status = CASE
+		     WHEN latest_role = $1 THEN $2::smallint
+		     ELSE $3::smallint
+		   END,
+		   updated_at = $4
+		 WHERE did = $5
+		   AND token_status = $6
+		   AND token_type IN (
+		     (SELECT id FROM token_type WHERE name = $7),
+		     (SELECT id FROM token_type WHERE name = $8)
+		   )`,
+		deployRoleID, int16(constants.TokenStatus_Deployed), int16(constants.TokenStatus_Executed),
+		time.Now(), ownerDID, int16(constants.TokenStatus_Locked),
+		constants.TokenType_NFT, constants.TokenType_SmartContract,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 // ReleaseNonSelectedLockedRBTTokensForDID resets all Locked RBT tokens for a DID back to Free,
 // EXCLUDING the specified selectedTokenIDs, scoped to the given referenceID so that concurrent
 // pledge requests for the same DID cannot accidentally free each other's locked tokens.
@@ -551,10 +605,10 @@ func (w *Wallet) CreateToken(t *models.Token) error {
 	if _, err := w.db.Pool().Exec(w.Ctx,
 		`INSERT INTO tokens(token_id, parent_token_id, token_value, token_status, did, transaction_id,
 		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())`,
 		t.TokenID, t.ParentTokenID, t.TokenValue, t.TokenStatus,
 		t.DID, t.TransactionID, t.TokenStateHash, t.TokenType,
-		t.LatestPosition, t.LatestRole, t.CreatedAt, t.UpdatedAt,
+		t.LatestPosition, t.LatestRole,
 	); err != nil {
 		return fmt.Errorf("CreateToken: %w", err)
 	}
@@ -565,10 +619,10 @@ func (w *Wallet) CreateRBTToken(token models.Token) error {
 	if _, err := w.db.Pool().Exec(w.Ctx,
 		`INSERT INTO tokens(token_id, parent_token_id, token_value, token_status, did, transaction_id,
 		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())`,
 		token.TokenID, token.ParentTokenID, token.TokenValue, token.TokenStatus,
 		token.DID, token.TransactionID, token.TokenStateHash, token.TokenType,
-		token.LatestPosition, token.LatestRole, token.CreatedAt, token.UpdatedAt,
+		token.LatestPosition, token.LatestRole,
 	); err != nil {
 		return fmt.Errorf("failed to create token with id: %v, err: %v", token.TokenID, err)
 	}
@@ -639,6 +693,34 @@ func (w *Wallet) GetTokenByDIDAndTokenType(didStr string, tokenType int16) ([]mo
 		tokens = append(tokens, t)
 	}
 	return tokens, rows.Err()
+}
+
+func (w *Wallet) GetWholeRBTs(numToken int, didStr string) (remainingAmount int, wholeRbtList []models.Token, err error) {
+	rows, err := w.db.Pool().Query(w.Ctx,
+		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
+		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+		 FROM tokens 
+		 WHERE did=$1 AND token_type=$2 AND token_value=$3 AND token_status=$4 
+		 LIMIT $5::int`,
+		didStr, models.GetTokenTypeID(constants.TokenType_RBT), float64(1), constants.TokenStatus_Free, numToken,
+	)
+	if err != nil {
+		return -1, nil, fmt.Errorf("GetAllTokens: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var t models.Token
+		if err := rows.Scan(
+			&t.TokenID, &t.ParentTokenID, &t.TokenValue, &t.TokenStatus,
+			&t.DID, &t.TransactionID, &t.TokenStateHash, &t.TokenType,
+			&t.LatestPosition, &t.LatestRole, &t.CreatedAt, &t.UpdatedAt,
+		); err != nil {
+			return -1, nil, fmt.Errorf("GetAllTokens scan: %w", err)
+		}
+		wholeRbtList = append(wholeRbtList, t)
+	}
+	remainingAmount = numToken - len(wholeRbtList)
+	return remainingAmount, wholeRbtList, rows.Err()
 }
 
 func (w *Wallet) IsRBTExists(id string) bool {

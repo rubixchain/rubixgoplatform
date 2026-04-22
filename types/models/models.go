@@ -99,12 +99,19 @@ type UnpledgeSequenceInfo struct {
 }
 
 type FT struct {
-	ID         string    `db:"id"`
+	ID         int32     `db:"id"`
 	FTName     string    `db:"ft_name"`
-	FTCount    int64     `db:"ft_count"`
 	CreatorDID string    `db:"creator_did"`
+	FTCount    int64     `db:"ft_count"`
 	CreatedAt  time.Time `db:"created_at"`
 	UpdatedAt  time.Time `db:"updated_at"`
+}
+
+type FTTokens struct {
+	TokenID   string    `db:"token_id"`
+	FTID      int32     `db:"ft_id"`
+	CreatedAt time.Time `db:"created_at"`
+	UpdatedAt time.Time `db:"updated_at"`
 }
 
 type TokenRecovery struct {
@@ -263,4 +270,13 @@ type GenesisAndLatestTransactionSyncReply struct {
 	Message            string `json:"message"`
 	GenesisTransaction []byte `json:"genesis_transaction"`
 	LatestTransaction  []byte `json:"latest_transaction"`
+}
+
+// IPFSContractInfo holds IPFS metadata for both NFTs and Smart Contracts.
+// This unified structure is used to store contract information in IPFS,
+// where the ArtifactHash points to a folder containing all contract files.
+type IPFSContractInfo struct {
+	DID          string `json:"did"`
+	ArtifactHash string `json:"artifactHash"`
+	PeerID       string `json:"peerID"`
 }

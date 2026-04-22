@@ -137,11 +137,14 @@ func CreateRubixConfigFromUserConfig(userConfig types.UserConfig, nodeDir string
 
 	rubixConfig.NetworkDir = filepath.Join(nodeDir, networkDirName)
 	rubixConfig.DidDir = filepath.Join(rubixConfig.NetworkDir, "dids")
+	rubixConfig.NFTDir = filepath.Join(rubixConfig.NetworkDir, "nfts")
+	rubixConfig.SmartContractDir = filepath.Join(rubixConfig.NetworkDir, "smart_contracts")
 	rubixConfig.TrustedNetwork = userConfig.Core.EnableTrustedNetwork
-
 	rubixConfig.PortConfig.IPFSPort = (constants.IPFSPort + uint16(userConfig.Core.NodeIndex))
 	rubixConfig.PortConfig.SendPort = (constants.SendPort + uint16(userConfig.Core.NodeIndex))
-	rubixConfig.PortConfig.ReceiverPort = (constants.RecvPort + uint16(userConfig.Core.NodeIndex))
+	// ReceiverPort is spaced by MaxPeerConn so the derived Listener (+10) and
+	// PeerManager (+11) ports don't collide with the next node's ReceiverPort.
+	rubixConfig.PortConfig.ReceiverPort = constants.RecvPort + (constants.MaxPeerConn * uint16(userConfig.Core.NodeIndex))
 	rubixConfig.PortConfig.SwarmPort = (constants.SwarmPort + uint16(userConfig.Core.NodeIndex))
 	rubixConfig.PortConfig.IPFSAPIPort = (constants.IPFSAPIPort + uint16(userConfig.Core.NodeIndex))
 	rubixConfig.PortConfig.RubixServerPort = (constants.RubixServerPort + uint16(userConfig.Core.NodeIndex))

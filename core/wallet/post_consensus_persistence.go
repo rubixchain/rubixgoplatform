@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -32,6 +33,7 @@ type PostConsensusPersistenceRequest struct {
 	TokenChainRows            []models.TokenChain
 	TokenStates               []models.Token
 	SkipSignatureVerification bool
+	TransferNFTOwnership      bool
 }
 
 type PostConsensusPersistenceCoordinator struct {
@@ -83,7 +85,7 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 	isLocalTransfer = isLocalTransfer && (req.ExecutionRole == ExecutionRoleInitiator)
 
 	if len(req.TokenChainRows) == 0 || len(req.TokenStates) == 0 {
-		derivedTokenChains, derivedTokenStates, derivedAffectedTokens, err := pc.wallet.BuildPersistencePayload(ctx, txRecord.ID, req.TransactionInfo, req.DID, req.ExecutionRole, isLocalTransfer)
+		derivedTokenChains, derivedTokenStates, derivedAffectedTokens, err := pc.wallet.BuildPersistencePayload(ctx, txRecord.ID, req.TransactionInfo, req.DID, req.ExecutionRole, req.TransferNFTOwnership, isLocalTransfer)
 		if err != nil {
 			return err
 		}
@@ -143,8 +145,15 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 	if err := pc.upsertTokenStates(ctx, tx, req.TokenStates); err != nil {
 		return err
 	}
-	if err := pc.upsertTokenDenomDeltas(ctx, tx, req.DID, req.TokenStates, req.ExecutionRole, isLocalTransfer, req.TransactionInfo.Owner); err != nil {
-		return err
+	if len(req.TransactionInfo.Tokens.RBT) != 0 {
+		if err := pc.upsertTokenDenomDeltas(ctx, tx, req.DID, req.TokenStates, req.ExecutionRole, isLocalTransfer, req.TransactionInfo.Owner); err != nil {
+			return err
+		}
+	}
+	if len(req.TransactionInfo.Tokens.FT) != 0 {
+		if err := pc.upsertFTInfo(ctx, tx, req.TokenStates, req.ExecutionRole, isLocalTransfer); err != nil {
+			return err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("post-consensus persistence: commit: %w", err)
@@ -366,6 +375,14 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 			}
 		}
 	}
+	// Include CommittedTokens (used for SC/NFT deployment pledges)
+	if req.TransactionInfo != nil && req.TransactionInfo.CommittedTokens != nil {
+		for _, t := range req.TransactionInfo.CommittedTokens {
+			if t != nil {
+				txInfoTokenSet[t.TokenID] = true
+			}
+		}
+	}
 
 	for _, row := range req.TokenChainRows {
 		if row.Position == 0 {
@@ -383,13 +400,14 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 		var dbStatus int16
 		var dbTransactionID string
 		var dbLatestPosition int64
+		var dbTokenType int16
 
 		err := tx.QueryRow(ctx, `
-			SELECT did, token_status, transaction_id, latest_position
+			SELECT did, token_status, transaction_id, latest_position, token_type
 			FROM tokens
 			WHERE token_id = $1
 			FOR UPDATE
-		`, row.TokenID).Scan(&dbDID, &dbStatus, &dbTransactionID, &dbLatestPosition)
+		`, row.TokenID).Scan(&dbDID, &dbStatus, &dbTransactionID, &dbLatestPosition, &dbTokenType)
 		if err != nil {
 			if err == pgx.ErrNoRows {
 				return fmt.Errorf("transfer: token %q does not exist", row.TokenID)
@@ -398,7 +416,14 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 		}
 
 		/*
-			if dbDID != req.DID {
+			// SC tokens and NFT tokens do not enforce did ownership — any subscriber
+			// can execute an SC, and NFT execution does not require ownership transfer.
+			// Ownership is only checked for RBT and FT transfers.
+			scTypeID := int16(models.GetTokenTypeID(constants.TokenType_SmartContract))
+			nftTypeID := int16(models.GetTokenTypeID(constants.TokenType_NFT))
+			skipOwnershipCheck := dbTokenType == scTypeID || dbTokenType == nftTypeID
+
+			if !skipOwnershipCheck && dbDID != req.DID {
 				return fmt.Errorf("transfer: token %q not owned by %s", row.TokenID, req.DID)
 			}
 		*/
@@ -414,10 +439,19 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 			}
 		} else {
 			// Receiver: also permit Transferred — token was sent out and is now returning to this node.
+			// For NFT/SC tokens, additionally permit Deployed and Executed — these tokens stay with
+			// the initiator after deploy/execute and may be encountered by a receiver persistence
+			// path in edge cases (e.g., mixed-asset transactions where the receiver node syncs
+			// the full transaction chain including NFT/SC tokens it doesn't own).
 			// Terminal and error states (Burnt, Orphaned, ChainSyncIssue, BeingDoubleSpent) are rejected.
+			scTypeID := int16(models.GetTokenTypeID(constants.TokenType_SmartContract))
+			nftTypeID := int16(models.GetTokenTypeID(constants.TokenType_NFT))
+			isNFTorSC := dbTokenType == scTypeID || dbTokenType == nftTypeID
+
 			if dbStatus != int16(constants.TokenStatus_Free) &&
 				dbStatus != int16(constants.TokenStatus_Locked) &&
-				dbStatus != int16(constants.TokenStatus_Transferred) {
+				dbStatus != int16(constants.TokenStatus_Transferred) &&
+				!(isNFTorSC && (dbStatus == int16(constants.TokenStatus_Deployed) || dbStatus == int16(constants.TokenStatus_Executed))) {
 				return fmt.Errorf("transfer: token %q has unexpected status %d for receiver (want Free, Locked, or Transferred)", row.TokenID, dbStatus)
 			}
 		}
@@ -688,6 +722,89 @@ func (pc *PostConsensusPersistenceCoordinator) upsertTokenDenomDeltas(ctx contex
 			`, ownerDID, denom, delta)
 			if err != nil {
 				return fmt.Errorf("post-consensus persistence: upsert token_denom (did=%s denom=%v delta=%d): %w", ownerDID, denom, delta, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (pc *PostConsensusPersistenceCoordinator) upsertFTInfo(
+	ctx context.Context, 
+	tx pgx.Tx, 
+	tokenStates []models.Token, 
+	executionRole string, 
+	isReceiverLocal bool,
+	) error {
+	// there won't be any changes in the tables fts, and ft_tokens is receiver belongs to the same table
+	if isReceiverLocal {
+		pc.wallet.log.Debug("******* receiver is local")
+		return nil
+	}
+
+	// Step 1: Group tokens by ftName + creatorDID
+	groups := make(map[string]*types.FTMap)
+	for _, ftInfo := range tokenStates {
+		tokenID := ftInfo.TokenID
+		// Split only into 3 parts (ftName might contain underscores)
+		parts := strings.SplitN(tokenID, "_", 3)
+		if len(parts) != 3 {
+			return fmt.Errorf("upsertFTInfo: invalid FT token ID format: %s", tokenID)
+		}
+
+		// Group key is ftName + creatorDID combination
+		key := parts[0] + "_" + parts[1]
+
+		if _, exists := groups[key]; !exists {
+			groups[key] = &types.FTMap{
+				FTInfo: models.FTInfo{
+					FTName:     parts[0],
+					CreatorDID: parts[1],
+					NumberOfFts:    0,
+				},
+				FTIdList:   []string{},
+			}
+		}
+
+		switch ftInfo.TokenStatus {
+		case constants.TokenStatus_Transferred:
+			groups[key].FTInfo.NumberOfFts--
+		case constants.TokenStatus_Free:
+			groups[key].FTInfo.NumberOfFts++
+		}
+
+		groups[key].FTIdList = append(groups[key].FTIdList, tokenID)
+	}
+
+
+	for _, group := range groups {
+		// Step 2: Upsert into fts table and get ftsID
+		var ftsID int32
+		err := tx.QueryRow(ctx,
+			`INSERT INTO fts (ft_name, creator_did, ft_count, created_at, updated_at)
+             VALUES ($1, $2, $3, NOW(), NOW())
+             ON CONFLICT (ft_name, creator_did) DO UPDATE SET
+                 ft_count   = fts.ft_count + $3,
+                 updated_at = NOW()
+             RETURNING id`,
+			group.FTInfo.FTName, group.FTInfo.CreatorDID, group.FTInfo.NumberOfFts,
+		).Scan(&ftsID)
+		if err != nil {
+			return fmt.Errorf("CreateFTs: upsert fts: %w", err)
+		}
+
+		// Step 3: Upsert each token into ft_tokens table in case the executor is receiver
+		if executionRole == ExecutionRoleReceiver {
+			for _, tokenID := range group.FTIdList {
+				_, err = tx.Exec(ctx,
+					`INSERT INTO ft_tokens (token_id, ft_id, created_at, updated_at)
+					 VALUES ($1, $2, NOW(), NOW())
+					 ON CONFLICT (token_id) DO NOTHING`,
+					tokenID, ftsID,
+				)
+				if err != nil {
+					return fmt.Errorf("CreateFTs: insert ft_token %s: %w", tokenID, err)
+				}
 			}
 		}
 	}

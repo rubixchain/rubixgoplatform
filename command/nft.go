@@ -8,7 +8,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/client"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core"
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -54,101 +53,6 @@ func (cmd *Command) createNFT() {
 	cmd.log.Info("NFT created successfully")
 }
 
-func (cmd *Command) deployNFT() {
-	if cmd.nft == "" {
-		cmd.log.Info("NFT id cannot be empty")
-		fmt.Print("Enter NFT Id : ")
-		_, err := fmt.Scan(&cmd.nft)
-		if err != nil {
-			cmd.log.Error("Failed to get NFT")
-			return
-		}
-	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.nft)
-	if len(cmd.nft) != 46 || !strings.HasPrefix(cmd.nft, "Qm") || !is_alphanumeric {
-		cmd.log.Error("Invalid NFT")
-		return
-	}
-	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.deployerAddr)
-	if !strings.HasPrefix(cmd.deployerAddr, "bafybmi") || len(cmd.deployerAddr) != 59 || !is_alphanumeric {
-		cmd.log.Error("Invalid deployer DID")
-		return
-	}
-	if cmd.quorumType < 1 || cmd.quorumType > 2 {
-		cmd.log.Error("Invalid trans type")
-		return
-	}
-	deployRequest := model.DeployNFTRequest{
-		NFT:        cmd.nft,
-		DID:        cmd.deployerAddr,
-		QuorumType: cmd.quorumType,
-		NFTValue:   cmd.nftValue,
-		NFTData:    cmd.nftData,
-	}
-	response, err := cmd.c.DeployNFT(&deployRequest)
-	if err != nil {
-		cmd.log.Error("Failed to deploy NFT, Token ", cmd.nft, "err", err)
-		return
-	}
-	msg, status := cmd.SignatureResponse(response)
-	if !status {
-		cmd.log.Error("Failed to deploy NFT, Token ", cmd.nft, "msg", msg)
-		return
-	}
-	cmd.log.Info(msg)
-	cmd.log.Info("NFT Deployed successfully")
-}
-
-func (cmd *Command) executeNFT() {
-	if cmd.nft == "" {
-		cmd.log.Info("NFT id cannot be empty")
-		fmt.Print("Enter NFT Id : ")
-		_, err := fmt.Scan(&cmd.nft)
-		if err != nil {
-			cmd.log.Error("Failed to get SC Token ID")
-			return
-		}
-	}
-
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.nft)
-	if len(cmd.nft) != 46 || !strings.HasPrefix(cmd.nft, "Qm") || !is_alphanumeric {
-		cmd.log.Error("Invalid nft")
-		return
-	}
-
-	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.executorAddr)
-	if !strings.HasPrefix(cmd.executorAddr, "bafybmi") || len(cmd.executorAddr) != 59 || !is_alphanumeric {
-		cmd.log.Error("Invalid executer DID")
-		return
-	}
-	if cmd.quorumType < 1 || cmd.quorumType > 2 {
-		cmd.log.Error("Invalid trans type")
-		return
-	}
-
-	executeRequest := model.ExecuteNFTRequest{
-		NFT:        cmd.nft,
-		Executor:   cmd.executorAddr,
-		Receiver:   cmd.receiverAddr,
-		QuorumType: cmd.quorumType,
-		Comment:    cmd.transComment,
-		NFTValue:   cmd.rbtAmount,
-	}
-	response, err := cmd.c.ExecuteNFT(&executeRequest)
-	if err != nil {
-		cmd.log.Error("Failed to execute NFT, Token ", cmd.nft, "err", err)
-		return
-	}
-	msg, status := cmd.SignatureResponse(response)
-	if !status {
-		cmd.log.Error("Failed to execute nft, Token ", cmd.nft, "msg", msg)
-		return
-	}
-	cmd.log.Info(msg)
-	cmd.log.Info("NFT executed successfully")
-
-}
-
 func (cmd *Command) SubscribeNFT() {
 	if cmd.nft == "" {
 		cmd.log.Info("nft id cannot be empty")
@@ -183,23 +87,6 @@ func (cmd *Command) SubscribeNFT() {
 	}
 	cmd.log.Info("New event subscribed successfully")
 }
-
-func (cmd *Command) getAllNFTs() {
-	if cmd.did == "" {
-		cmd.log.Error("Failed to get NFTs, DID is required to get NFTs")
-		return
-	}
-	tkns, err := cmd.c.GetAllNFTs(cmd.did)
-	if err != nil {
-		cmd.log.Error("Failed to get NFTs, " + err.Error())
-		return
-	}
-	for _, tkn := range tkns.Tokens {
-		fmt.Printf("NFT : %s, Status : %d\n", tkn.Token, tkn.TokenStatus)
-	}
-	cmd.log.Info("Got all NFTs successfully")
-}
-
 func (cmd *Command) getNFTsByDid() {
 	if cmd.did == "" {
 		cmd.log.Error("Failed to get NFTs, DID is required to get NFTs")

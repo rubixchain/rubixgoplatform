@@ -116,18 +116,12 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIGetTxnByTxnID, "GET", s.AuthHandle(s.APIGetTxnByTxnID, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetTxnByDID, "GET", s.AuthHandle(s.APIGetTxnByDID, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetTxnByComment, "GET", s.AuthHandle(s.APIGetTxnByComment, true, s.AuthError, false))
-	s.AddRoute(setup.APIGetAllNFT, "GET", s.AuthHandle(s.APIGetAllNFT, true, s.AuthError, false))
 	// s.AddRoute(setup.APIAddNFTSale, "GET", s.AuthHandle(s.APIAddNFTSale, true, s.AuthError, false))
 	s.AddRoute(setup.APICreateNFT, "POST", s.AuthHandle(s.APICreateNFT, true, s.AuthError, false))
-	s.AddRoute(setup.APIDeployNFT, "POST", s.AuthHandle(s.APIDeployNFT, true, s.AuthError, false))
-	s.AddRoute(setup.APIExecuteNFT, "POST", s.AuthHandle(s.APIExecuteNFT, true, s.AuthError, false))
-	s.AddRoute(setup.APIDeploySmartContract, "POST", s.AuthHandle(s.APIDeploySmartContract, true, s.AuthError, false))
 	s.AddRoute(setup.APIGenerateSmartContract, "POST", s.AuthHandle(s.APIGenerateSmartContract, true, s.AuthError, false))
 	s.AddRoute(setup.APIFetchSmartContract, "GET", s.AuthHandle(s.APIFetchSmartContract, true, s.AuthError, false))
-	s.AddRoute(setup.APIPublishContract, "POST", s.AuthHandle(s.APIPublishContract, true, s.AuthError, false))
-	s.AddRoute(setup.APISubscribecontract, "POST", s.AuthHandle(s.APISubscribecontract, true, s.AuthError, false))
+	s.AddRoute(setup.APISubscribecontract, "GET", s.AuthHandle(s.APISubscribecontract, true, s.AuthError, false))
 	s.AddRoute(setup.APIDumpSmartContractTokenChainBlock, "POST", s.AuthHandle(s.APIDumpSmartContractTokenChainBlock, true, s.AuthError, false))
-	s.AddRoute(setup.APIExecuteSmartContract, "POST", s.AuthHandle(s.APIExecuteSmartContract, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetSmartContractTokenData, "POST", s.AuthHandle(s.APIGetSmartContractTokenChainData, true, s.AuthError, false))
 	s.AddRoute(setup.APIRegisterCallBackURL, "POST", s.AuthHandle(s.APIRegisterCallbackURL, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetTxnByNode, "GET", s.AuthHandle(s.APIGetTxnByNode, true, s.AuthError, false))
@@ -144,7 +138,6 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIValidateTokenChain, "GET", s.AuthHandle(s.APIValidateTokenChain, false, s.AuthError, false))
 	s.AddRoute(setup.APIGenerateFaucetTestToken, "POST", s.AuthHandle(s.APIGenerateFaucetTestToken, true, s.AuthError, false))
 	s.AddRoute(setup.APIFaucetTokenCheck, "GET", s.AuthHandle(s.APIFaucetTokenCheck, false, s.AuthError, false))
-	s.AddRoute(setup.APICreateFT, "POST", s.AuthHandle(s.APICreateFT, true, s.AuthError, false))
 	s.AddRoute(setup.APIDumpFTTokenChainBlock, "POST", s.AuthHandle(s.APIDumpFTTokenChainBlock, true, s.AuthError, false))
 	s.AddRoute(setup.APIInitiateFTTransfer, "POST", s.AuthHandle(s.APIInitiateFTTransfer, true, s.AuthError, true))
 	s.AddRoute(setup.APIGetFtByDid, "GET", s.AuthHandle(s.APIGetFTInfo, true, s.AuthError, false))
@@ -152,7 +145,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIGetFTCreatorStats, "GET", s.AuthHandle(s.APIGetFTCreatorStats, true, s.AuthError, false))
 	s.AddRoute(setup.APIValidateToken, "GET", s.AuthHandle(s.APIValidateToken, false, s.AuthError, false))
 	s.AddRoute(setup.APIDumpNFTTokenChain, "GET", s.AuthHandle(s.APIDumpNFTTokenChain, true, s.AuthError, false))
-	s.AddRoute(setup.APISubscribeNFT, "POST", s.AuthHandle(s.APISubscribeNFT, true, s.AuthError, false))
+	s.AddRoute(setup.APISubscribeNFT, "GET", s.AuthHandle(s.APISubscribeNFT, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetNFTTokenChainData, "GET", s.AuthHandle(s.APIGetNFTTokenChainData, true, s.AuthError, false))
 	s.AddRoute(setup.APIFetchNft, "GET", s.AuthHandle(s.APIFetchNft, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetNftByDid, "GET", s.AuthHandle(s.APIGetNFTsByDid, true, s.AuthError, false))
@@ -180,11 +173,18 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIListNFTs, "GET", s.AuthHandle(s.APIListNFTs, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetNFTChain, "GET", s.AuthHandle(s.APIGetNFTChain, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetSmartContractChain, "GET", s.AuthHandle(s.APIGetSmartContractChain, true, s.AuthError, false))
+
+	// Transactions
 	s.AddRoute(setup.APITransaction, "POST", s.AuthHandle(s.APIInitiateTransaction, true, s.AuthError, false))
 	s.AddRoute(setup.APITransaction, "GET", s.APIGetTransactions)
 	s.AddRoute(setup.APIGetTransactionByID, "GET", s.APIGetTransactionByID)
 	s.AddRoute(setup.APISyncTransactionChain, "POST", s.AuthHandle(s.APISyncTransactionChain, true, s.AuthError, false))
-	s.AddRoute(setup.APIListFT, "POST", s.APIListFTs)
+	s.AddRoute(setup.APIGetTransactionsByDID, "GET", s.APIGetTransactionsByDID)
+
+	// FTs
+	s.AddRoute(setup.APICreateFT, "POST", s.AuthHandle(s.APICreateFT, true, s.AuthError, false))
+	s.AddRoute(setup.APIListFT, "GET", s.APIListFTs)
+
 	s.AddRoute(setup.APIGetDIDBalance, "GET", s.AuthHandle(s.APIGetDIDBalance, true, s.AuthError, false))
 }
 
