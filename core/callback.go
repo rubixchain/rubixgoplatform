@@ -6,6 +6,9 @@ import (
 	"fmt"
 
 	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
+	
+	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 )
 
 // Quorums listening on "rubix_txns" event will check the `Tokens` attribute
@@ -19,9 +22,16 @@ func (c *Core) CallBackQuorumUnpledge(tx *models.Transactions, did string) error
 		return fmt.Errorf("failed to unmarshal transaction info, err: %v", err)
 	}
 
+	// The following list is maintained to keep a list of parent tokens for the corresponding
+	// part tokens present in `txInfo.Tokens.RBT` attribute. This is done to cover the scenario
+	// where the parent token, with a lineage of transfer history, was burnt to mint that the said part token.
+	// In such cases, any quorum who pledged for that parent token should be able to unpledge.
+	var rbtParentTokenList []string = make([]string, 0)
+
 	// Loop through all the tokens and gather previous transactionID and
 	// pledge Token ID map
 	var prevTransactionsSet map[string]struct{} = make(map[string]struct{})
+	var transactionTokens map[string][]string = make(map[string][]string)
 
 	addToSet := func(id string) {
 		if id != "" {
@@ -31,18 +41,70 @@ func (c *Core) CallBackQuorumUnpledge(tx *models.Transactions, did string) error
 
 	for _, rbtToken := range txInfo.Tokens.RBT {
 		addToSet(rbtToken.PreviousTransactionID)
+
+		if rbtToken.PreviousTransactionID != "" {
+			if _, ok := transactionTokens[rbtToken.PreviousTransactionID]; !ok {
+				transactionTokens[rbtToken.PreviousTransactionID] = make([]string, 0)
+			}
+			transactionTokens[rbtToken.PreviousTransactionID] = append(transactionTokens[rbtToken.PreviousTransactionID], rbtToken.TokenID)
+		}
+
+		// If the RBT token has a parent token, add it to the parentTokenList
+		tokenValue, err := util.GetTokenValueFromTokenID(rbtToken.TokenID)
+		if err != nil {
+			return fmt.Errorf("CallBackQuorumUnpledge: failed to get token value for RBT token %q, err: %v", rbtToken.TokenID, err)
+		}
+		if tokenValue != rubixmath.OneFloat() {
+			parentTokenID, err := util.TokenID(rbtToken.TokenID).GetParentToken()
+			if err != nil {
+				return fmt.Errorf("CallBackQuorumUnpledge: failed to get parent token for RBT token %q, err: %v", rbtToken.TokenID, err)
+			}
+			rbtParentTokenList = append(rbtParentTokenList, parentTokenID)
+		}
 	}
 
 	for _, ftToken := range txInfo.Tokens.FT {
 		addToSet(ftToken.PreviousTransactionID)
+		
+		if ftToken.PreviousTransactionID != "" {
+			if _, ok := transactionTokens[ftToken.PreviousTransactionID]; !ok {
+				transactionTokens[ftToken.PreviousTransactionID] = make([]string, 0)
+			}
+			transactionTokens[ftToken.PreviousTransactionID] = append(transactionTokens[ftToken.PreviousTransactionID], ftToken.TokenID)
+		}
 	}
 
 	for _, nftToken := range txInfo.Tokens.NFT {
 		addToSet(nftToken.PreviousTransactionID)
+
+		if nftToken.PreviousTransactionID != "" {
+			if _, ok := transactionTokens[nftToken.PreviousTransactionID]; !ok {
+				transactionTokens[nftToken.PreviousTransactionID] = make([]string, 0)
+			}
+			transactionTokens[nftToken.PreviousTransactionID] = append(transactionTokens[nftToken.PreviousTransactionID], nftToken.TokenID)
+		}
 	}
 
 	for _, smartContractToken := range txInfo.Tokens.SmartContract {
 		addToSet(smartContractToken.PreviousTransactionID)
+
+		if smartContractToken.PreviousTransactionID != "" {
+			if _, ok := transactionTokens[smartContractToken.PreviousTransactionID]; !ok {
+				transactionTokens[smartContractToken.PreviousTransactionID] = make([]string, 0)
+			}
+			transactionTokens[smartContractToken.PreviousTransactionID] = append(transactionTokens[smartContractToken.PreviousTransactionID], smartContractToken.TokenID)
+		}
+	}
+
+	for _, committedToken := range txInfo.CommittedTokens {
+		addToSet(committedToken.PreviousTransactionID)
+
+		if committedToken.PreviousTransactionID != "" {
+			if _, ok := transactionTokens[committedToken.PreviousTransactionID]; !ok {
+				transactionTokens[committedToken.PreviousTransactionID] = make([]string, 0)
+			}
+			transactionTokens[committedToken.PreviousTransactionID] = append(transactionTokens[committedToken.PreviousTransactionID], committedToken.TokenID)
+		}
 	}
 
 	if len(prevTransactionsSet) == 0 {
@@ -54,7 +116,7 @@ func (c *Core) CallBackQuorumUnpledge(tx *models.Transactions, did string) error
 		prevTransactionList = append(prevTransactionList, prevTransaction)
 	}
 
-	transactionToUnpledge, err := c.w.CheckTxnsPresentInUnpledgeSequenceInfo(prevTransactionList, did)
+	transactionToUnpledge, err := c.w.CheckTxnsPresentInUnpledgeSequenceInfo(prevTransactionList, did, transactionTokens, rbtParentTokenList)
 	if err != nil {
 		return fmt.Errorf("CallBackQuorumUnpledge: failed to get transactions from `unpledge_sequence_info` table for did %q, err: %v", did, err)
 	}
@@ -80,7 +142,7 @@ func (c *Core) CallBackQuorumUnpledge(tx *models.Transactions, did string) error
 		if !ok {
 			return fmt.Errorf("CallBackQuorumUnpledge: quorum DID not setup: %s", did)
 		}
-		if err := c.UnpledgeV2(context.Background(), txToUnpledge, did); err != nil {
+		if err := c.UnpledgeV2(context.Background(), txToUnpledge, did, tx); err != nil {
 			c.log.Error("CallBackQuorumUnpledge: UnpledgeV2 failed",
 				"prevTxID", txToUnpledge,
 				"did", did,

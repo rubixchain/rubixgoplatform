@@ -858,11 +858,11 @@ func (w *Wallet) InsertGenesisTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, 
 		return fmt.Errorf("InsertGenesisTokenInfo: token %s already exists in tokens table - duplicate genesis call rejected", token.TokenID)
 	}
 
-	// updated ft_tokens table with token ID 
+	// updated ft_tokens table with token ID
 	if tokenType == constants.TokenType_FT {
 		ftToken := &models.FTTokens{
 			TokenID: token.TokenID,
-			FTID: ftsRefID,
+			FTID:    ftsRefID,
 		}
 
 		cmdTagFTToken, err := tx.Exec(w.Ctx,
@@ -951,7 +951,7 @@ func (w *Wallet) UpdateTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, did, tx
 		LatestPosition: newTokenChainHeight,
 		LatestRole:     tokenRoleID,
 	}
-	
+
 	cmdTagToken, err := tx.Exec(w.Ctx,
 		`UPDATE tokens SET
             token_status    = $1,
@@ -1061,6 +1061,66 @@ func (w *Wallet) GetTokenChainIndices(tokenID string) ([]int, error) {
 	}
 
 	return indices, nil
+}
+
+func (w *Wallet) GetTransactionsAndTokenRoleByTokenID(tokenID string) ([]types.TransactionWithRole, error) {
+	var transactionsWithRole []types.TransactionWithRole = make([]types.TransactionWithRole, 0)
+
+	// Step 1: Get the index array from tokenchain_index
+	var indices []int
+	err := w.db.Pool().QueryRow(w.Ctx,
+		`SELECT index FROM tokenchain_index WHERE token_id = $1`,
+		tokenID,
+	).Scan(&indices)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("GetTransactionsAndTokenRoleByTokenID: no tokenchain_index found for token_id %s", tokenID)
+		}
+		return nil, fmt.Errorf("GetTransactionsAndTokenRoleByTokenID: failed to get indices: %w", err)
+	}
+
+	if len(indices) == 0 {
+		return transactionsWithRole, nil
+	}
+
+	// Step 2 & 3: Get transactions and roles in exact order using unnest WITH ORDINALITY
+	rows, err := w.db.Pool().Query(w.Ctx, `
+		SELECT t.id AS id, t.info AS info, t.signature AS signature, tc.role AS role
+		FROM unnest($1::int[]) WITH ORDINALITY AS idx(id, ord)
+		JOIN tokenchain tc ON tc.id = idx.id
+		JOIN transactions t ON t.id = tc.transaction_id
+		ORDER BY idx.ord
+	`, indices)
+
+	if err != nil {
+		return nil, fmt.Errorf("GetTransactionsAndTokenRoleByTokenID: failed to get transactions and roles: %w", err)
+	}
+
+	type transactionWithRoleRow struct {
+		ID        string          `db:"id"`
+		Info      json.RawMessage `db:"info"`
+		Signature json.RawMessage `db:"signature"`
+		Role      int16           `db:"role"`
+	}
+	rowsWithRole, err := pgx.CollectRows(rows, pgx.RowToStructByName[transactionWithRoleRow])
+	if err != nil {
+		return nil, fmt.Errorf("GetTransactionsAndTokenRoleByTokenID: failed to collect rows: %w", err)
+	}
+
+	for _, row := range rowsWithRole {
+		tx := models.Transactions{
+			ID:        row.ID,
+			Info:      row.Info,
+			Signature: row.Signature,
+		}
+
+		transactionsWithRole = append(transactionsWithRole, types.TransactionWithRole{
+			Tx:   tx,
+			Role: row.Role,
+		})
+	}
+	return transactionsWithRole, nil
 }
 
 // GetTransactionsByTokenID retrieves all transactions for a token in chronological order.

@@ -36,10 +36,12 @@ import (
 // Parameters:
 //   - mainTxID:   lookup key in unpledge_sequence_info (the main transfer txID)
 //   - quorumDID: DID that owns the pledged tokens
+//   - proofTx:  transaction info that represents as the proof for which unpledge is being performed. 
 func (c *Core) UnpledgeV2(
 	ctx context.Context,
 	mainTxID string,
 	quorumDID string,
+	proofTx *models.Transactions,
 ) error {
 	if mainTxID == "" {
 		return fmt.Errorf("UnpledgeV2: mainTxID is required")
@@ -124,7 +126,6 @@ func (c *Core) UnpledgeV2(
 
 	// --- Atomic unpledge: UPDATE tokenchain + UPDATE tokens in one tx -----------
 	unpledgeRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Unpledge))
-	pledgeRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Pledge))
 
 	unpledgeTx, err := c.w.BeginTx(ctx)
 	if err != nil {
@@ -132,25 +133,87 @@ func (c *Core) UnpledgeV2(
 	}
 	defer unpledgeTx.Rollback(ctx) //nolint:errcheck
 
-	// Step 1: Flip tokenchain role 8->9 for all pledge rows under mainTxID
-	if _, err := unpledgeTx.Exec(ctx, `
-		UPDATE tokenchain SET role = $2, updated_at = NOW()
-		WHERE transaction_id = $1 AND role = $3
-	`, mainTxID, unpledgeRoleID, pledgeRoleID); err != nil {
+	// Step 1: Insert proofTx in `transaction` table
+	// if _, err := unpledgeTx.Exec(ctx, `
+	//     INSERT INTO transactions (id, info, signature)
+	// 	VALUES ($1, $2, $3)
+	// `, proofTx.ID, proofTx.Info, proofTx.Signature); err != nil {
+	// 	return fmt.Errorf("UnpledgeV2: insert proofTx into transactions table for prevTX %q: %w", mainTxID, err)
+	// }
+
+	// Step 1: Add tokenchain and tokenchain_index entries for unpledge tokens
+	rows, err := unpledgeTx.Query(ctx, `
+		WITH inserted AS (
+			INSERT INTO tokenchain (
+				token_id,
+				transaction_id,
+				previous_transaction_id,
+				role,
+				position
+			)
+			SELECT
+				tc.token_id,
+				$2,
+				tc.transaction_id,
+				$3,
+				tc.position + 1
+			FROM (
+				SELECT DISTINCT ON (token_id)
+					token_id,
+					transaction_id,
+					position
+				FROM tokenchain
+				WHERE token_id = ANY($1::text[])
+				ORDER BY token_id, position DESC
+			) tc
+			RETURNING id, token_id
+		)
+		INSERT INTO tokenchain_index (token_id, index)
+		SELECT
+			i.token_id,
+			ARRAY[i.id]
+		FROM inserted i
+		ON CONFLICT (token_id)
+		DO UPDATE
+		SET index = tokenchain_index.index || EXCLUDED.index,
+			updated_at = NOW()
+		RETURNING token_id;
+	`, pledgeTokens, proofTx.ID, unpledgeRoleID)
+	if err != nil {
 		return fmt.Errorf("UnpledgeV2: update tokenchain role for mainTxID %q: %w", mainTxID, err)
 	}
+	defer rows.Close()
 
-	// Step 2: Set tokens status=FREE, latest_role=9
-	// NOTE: transaction_id and latest_position on the tokens row do NOT change —
-	// the tokenchain row position is unchanged; we only flip role and status.
+	updatedCount := 0
+
+	for rows.Next() {
+		var tokenID string
+		if err := rows.Scan(&tokenID); err != nil {
+			return fmt.Errorf("UnpledgeV2: scan failed: %w", err)
+		}
+		updatedCount++
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("UnpledgeV2: rows err: %w", err)
+	}
+
+	if updatedCount != len(pledgeTokens) {
+		return fmt.Errorf(
+			"UnpledgeV2: tokenchain update mismatch (expected %d, got %d). Missing tokens in tokenchain?",
+			len(pledgeTokens),
+			updatedCount,
+		)
+	}
+
+	// Step 2: Update tokens status to FREE
 	if _, err := unpledgeTx.Exec(ctx, `
-		UPDATE tokens SET token_status = $2, latest_role = $3, updated_at = NOW()
+		UPDATE tokens SET token_status = $2, latest_role = $3, updated_at = NOW(),
+		latest_position = latest_position + 1, transaction_id = $4
 		WHERE token_id = ANY($1::text[])
-	`, pledgeTokens, int16(constants.TokenStatus_Free), unpledgeRoleID); err != nil {
+	`, pledgeTokens, int16(constants.TokenStatus_Free), unpledgeRoleID, proofTx.ID); err != nil {
 		return fmt.Errorf("UnpledgeV2: update token status for mainTxID %q: %w", mainTxID, err)
 	}
 
-	// NO tokenchain_index rebuild — UPDATE does not change position or add rows.
 
 	if err := unpledgeTx.Commit(ctx); err != nil {
 		return fmt.Errorf("UnpledgeV2: commit unpledge tx for mainTxID %q: %w", mainTxID, err)

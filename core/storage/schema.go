@@ -147,6 +147,7 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             pledge_tokens  TEXT[],
             epoch          INTEGER,
             quorum_did     TEXT,
+            transaction_tokens TEXT[], 
             created_at     TIMESTAMPTZ DEFAULT NOW(),
             updated_at     TIMESTAMPTZ DEFAULT NOW()
         );
