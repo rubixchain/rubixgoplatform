@@ -602,21 +602,17 @@ func (c *Core) SetupForienDIDQuorum(didStr string, selfDID string) (types.DIDCry
 
 func (c *Core) FetchDID(did string) error {
 	didDir := path.Join(c.didDir, did)
-	c.log.Debug("FetchDID: fetching DID", "did", did, "didDir", didDir)
+	
 	pubKeyPath := path.Join(didDir, constants.PubKeyFileName)
-	c.log.Debug("FetchDID: pubKeyPath", "pubKeyPath", pubKeyPath)
 	_, dirErr := os.Stat(didDir)
-	c.log.Debug("FetchDID: dirErr", "dirErr", dirErr)
 	_, pubKeyErr := os.Stat(pubKeyPath)
-	c.log.Debug("FetchDID: pubKeyErr", "pubKeyErr", pubKeyErr)
-
+	
 	if os.IsNotExist(dirErr) || os.IsNotExist(pubKeyErr) {
 		err := os.MkdirAll(didDir, os.ModeDir|os.ModePerm)
 		if err != nil {
 			c.log.Error("failed to create directory", "err", err)
 			return err
 		}
-		c.log.Debug("FetchDID: created directory", "didDir", didDir)
 		type result struct{ err error }
 		ch := make(chan result, 1)
 		go func() {
