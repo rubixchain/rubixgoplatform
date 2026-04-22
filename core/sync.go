@@ -163,7 +163,7 @@ func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, 
 //     for this token — used to short-circuit sync when the local chain already has it
 //
 // Errors are returned but are non-fatal — callers log and continue.
-func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []models.TransactionWithRole, prevTxID string, transferNFTOwnership bool) error {
+func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.TransactionWithRole, prevTxID string, transferNFTOwnership bool) error {
 	if len(remoteTxs) == 0 {
 		return nil
 	}
