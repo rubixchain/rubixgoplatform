@@ -1,6 +1,7 @@
 package parts
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/rubixchain/rubixgoplatform/types"
@@ -201,6 +202,13 @@ func TestGetParentToken(t *testing.T) {
 			expected:    "",
 			expectError: true,
 		},
+		{
+			// Out of range part index
+			name:        "out of range part index returns error",
+			child:       "25_1",
+			expected:    "",
+			expectError: false,
+		},
 	}
 
 	for _, tc := range tests {
@@ -216,6 +224,60 @@ func TestGetParentToken(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			if result != tc.expected {
+				t.Errorf("got %+v, want %+v", result, tc.expected)
+			}
+		})
+	}
+}
+
+func TestGetHierarchy(t *testing.T) {
+	// This can be implemented once we have the GetTokenHierarchy function which returns the full hierarchy of a token up to the root
+
+	tests := []struct {
+		name        string
+		child       util.TokenID
+		expected    []string
+		expectError bool
+	}{
+		{
+			name:        "L3 token returns correct hierarchy",
+			child:       "1_1_14",
+			expected:    []string{"1_1_3", "1_1_1", "1_1"},
+			expectError: false,
+		},
+		{
+			name:        "L3 token returns correct hierarchy",
+			child:       "1_1_26",
+			expected:    []string{"1_1_9", "1_1_2", "1_1"},
+			expectError: false,
+		},
+		{
+			name:        "L3 token returns correct hierarchy",
+			child:       "1_32_26",
+			expected:    []string{"1_32_9", "1_32_2", "1_32"},
+			expectError: false,
+		},
+		{
+			name:        "whole token",
+			child:       "1_32",
+			expected:    []string{},
+			expectError: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := tc.child.GetHierarchy()
+			if tc.expectError {
+				if err == nil {
+					t.Errorf("expected error but got none; result: %+v", result)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(result, tc.expected) {
 				t.Errorf("got %+v, want %+v", result, tc.expected)
 			}
 		})
