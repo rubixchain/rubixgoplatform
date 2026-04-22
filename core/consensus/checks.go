@@ -50,8 +50,12 @@ func ValidateTransactionInfoFields(txnInfo *models.TransactionInfo) error {
 		return err
 	}
 
-	if err := validateDID(txnInfo.Owner, "owner"); err != nil {
-		return err
+	// Owner DID is optional for deployment transactions (SC/NFT deployment)
+	// It should only be validated if it's not empty
+	if txnInfo.Owner != "" {
+		if err := validateDID(txnInfo.Owner, "owner"); err != nil {
+			return err
+		}
 	}
 
 	currentEpoch := int(time.Now().Unix())
@@ -115,9 +119,17 @@ func ValidateTokenOwnershipByPrevTxn(txnInfo *models.TransactionInfo, isFullnode
 
 	prevTxnTokensMap := make(map[string][]string)
 
+	// Only RBT and FT tokens are checked for ownership by previous transaction.
+	// NFT and SmartContract tokens are excluded because the Owner field in
+	// TransactionInfo represents the RBT counterparty/receiver, not the NFT/SC
+	// token owner. For NFT/SC execution (non-ownership-transfer), any DID with
+	// access can execute — the initiator does not need to match the previous
+	// transaction's Owner. Ownership enforcement for NFT transfers is handled
+	// at the initiator node via QueryAndLockForExecution's checkOwnership flag.
+	// So the onwership validation for NFTs will only be a matter when the
+	// Transfer ownership flag is true. Which we are not passing in here. Which needs to be passed inorder to validate the ownership transfer.
 	tokenLists := [][]*models.TokenInfo{
 		txnInfo.Tokens.RBT,
-		txnInfo.Tokens.NFT,
 		txnInfo.Tokens.FT,
 	}
 
@@ -323,38 +335,65 @@ func ValidateTransactionValueAndPledge(txnInfo *models.TransactionInfo) error {
 		return fmt.Errorf("transaction has no tokens")
 	}
 
-	//First check whether quorum is involved in the transaction or not, if quorum is not involved don't do this check.
+	// First check whether quorum is involved in the transaction or not, if quorum is not involved don't do this check.
 	if len(txnInfo.Quorums) == 0 {
 		return nil
 	}
 
-	if len(txnInfo.Tokens.RBT) != 0 {
-		transactionValue := rubixmath.ZeroFloat()
-		for _, t := range txnInfo.Tokens.RBT {
+	transactionValue := rubixmath.ZeroFloat()
+
+	// Count RBT tokens (verifiable from token ID)
+	for _, t := range txnInfo.Tokens.RBT {
+		tokenValue, err := util.GetTokenValueFromTokenID(t.TokenID)
+		if err != nil {
+			return fmt.Errorf("failed to get value for RBT token %s: %w", t.TokenID, err)
+		}
+		transactionValue = rubixmath.AddFloat(transactionValue, tokenValue)
+	}
+
+	// NOTE: NFT and SmartContract value checks are commented out for now.
+	// Fullnode can only independently verify RBT values from token IDs.
+	// NFT/SC values are self-reported by the initiator and cannot be cross-checked.
+	// Uncomment when independent value verification is available for these asset types.
+
+	// // Count NFT token values
+	// // NFT value is optional - if not set or 0, default pledge requirement is 1 RBT
+	// for _, t := range txnInfo.Tokens.NFT {
+	// 	var tokenValue float64
+	// 	if t.TokenValue > 0 {
+	// 		tokenValue = t.TokenValue
+	// 	} else {
+	// 		// NFT with no explicit value requires 1 RBT pledge
+	// 		tokenValue = 1.0
+	// 	}
+	// 	transactionValue = rubixmath.AddFloat(transactionValue, tokenValue)
+	// }
+
+	// // Count SmartContract token values
+	// // SC value is mandatory and must be present in TokenValue field
+	// for _, t := range txnInfo.Tokens.SmartContract {
+	// 	if t.TokenValue <= 0 {
+	// 		return fmt.Errorf("SmartContract token %s has invalid value %v: value must be greater than 0", t.TokenID, t.TokenValue)
+	// 	}
+	// 	transactionValue = rubixmath.AddFloat(transactionValue, t.TokenValue)
+	// }
+
+	totalPledgeValue := rubixmath.ZeroFloat()
+	for _, quorum := range txnInfo.Quorums {
+		for _, t := range quorum.Tokens {
 			tokenValue, err := util.GetTokenValueFromTokenID(t.TokenID)
 			if err != nil {
-				return fmt.Errorf("failed to get value for RBT token %s: %w", t.TokenID, err)
+				return fmt.Errorf("failed to get value for pledge token %s from quorum %s: %w", t.TokenID, quorum.Did, err)
 			}
-			transactionValue = rubixmath.AddFloat(transactionValue, tokenValue)
+			totalPledgeValue = rubixmath.AddFloat(totalPledgeValue, tokenValue)
 		}
+	}
 
-		totalPledgeValue := rubixmath.ZeroFloat()
-		for _, quorum := range txnInfo.Quorums {
-			for _, t := range quorum.Tokens {
-				tokenValue, err := util.GetTokenValueFromTokenID(t.TokenID)
-				if err != nil {
-					return fmt.Errorf("failed to get value for pledge token %s from quorum %s: %w", t.TokenID, quorum.Did, err)
-				}
-				totalPledgeValue = rubixmath.AddFloat(totalPledgeValue, tokenValue)
-			}
-		}
-
-		if transactionValue > totalPledgeValue {
-			return fmt.Errorf(
-				"transaction value (%v) does not match total pledge amount (%v)",
-				transactionValue, totalPledgeValue,
-			)
-		}
+	if transactionValue > totalPledgeValue {
+		return fmt.Errorf(
+			"transaction value (%v) does not match total pledge amount (%v)",
+			transactionValue, totalPledgeValue,
+		)
 	}
 
 	return nil
@@ -498,37 +537,6 @@ func ValidateTokenIDRelatedChecks(
 	// 	return fmt.Errorf("failed to validate genuine token creator: %w", err)
 	// }
 	return nil
-}
-
-func FindTokenRoleInTxn(tokenID string, txInfo *models.TransactionInfo) int16 {
-	if txInfo.Tokens != nil {
-		for _, lists := range [][]*models.TokenInfo{
-			txInfo.Tokens.RBT, txInfo.Tokens.NFT,
-			txInfo.Tokens.FT, txInfo.Tokens.SmartContract,
-		} {
-			for _, t := range lists {
-				if t.TokenID == tokenID {
-					return int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
-				}
-			}
-		}
-	}
-
-	for _, t := range txInfo.CommittedTokens {
-		if t.TokenID == tokenID {
-			return int16(models.GetTokenRoleID(constants.TokenRole_Commit))
-		}
-	}
-
-	for _, q := range txInfo.Quorums {
-		for _, t := range q.Tokens {
-			if t.TokenID == tokenID {
-				return int16(models.GetTokenRoleID(constants.TokenRole_Pledge))
-			}
-		}
-	}
-
-	return int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
 }
 
 // func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, w *wallet.Wallet, log logger.Logger) (error, *models.TransactionChainSyncReply) {

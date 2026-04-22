@@ -236,7 +236,7 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 		return c.l.RenderJSON(request, response, http.StatusBadRequest)
 	}
 	syncTxChains := func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error {
-		return c.SyncTransactionChainsFromPeer(peerDID, tokenIDs, prevTxIDs, excludeTxIDs, c.fullNode)
+		return c.SyncTransactionChainsFromPeer(peerDID, tokenIDs, prevTxIDs, excludeTxIDs, false, c.fullNode)
 	}
 	isTransactionInfoValidated, err := consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, nil, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains)
 	if err != nil || !isTransactionInfoValidated {

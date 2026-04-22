@@ -107,6 +107,8 @@ type Core struct {
 	shutdownMgr          *ShutdownManager
 	d                    *did.DID
 	didDir               string
+	nftDir               string
+	smartContractDir     string
 	pm                   *ipfsport.PeerManager
 	l                    *ipfsport.Listener
 	ps                   *types.PubSub
@@ -193,11 +195,29 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 
 	c.log = log.Named("Core")
 	c.didDir = c.cfg.DidDir
+	c.nftDir = c.cfg.NFTDir
+	c.smartContractDir = c.cfg.SmartContractDir
 
 	if _, err := os.Stat(c.didDir); os.IsNotExist(err) {
 		err := os.MkdirAll(c.didDir, os.ModeDir|os.ModePerm)
 		if err != nil {
 			c.log.Error("Failed to create did directory", "err", err)
+			return nil, err
+		}
+	}
+
+	if _, err := os.Stat(c.nftDir); os.IsNotExist(err) {
+		err := os.MkdirAll(c.nftDir, os.ModeDir|os.ModePerm)
+		if err != nil {
+			c.log.Error("Failed to create nft directory", "err", err)
+			return nil, err
+		}
+	}
+
+	if _, err := os.Stat(c.smartContractDir); os.IsNotExist(err) {
+		err := os.MkdirAll(c.smartContractDir, os.ModeDir|os.ModePerm)
+		if err != nil {
+			c.log.Error("Failed to create smart contract directory", "err", err)
 			return nil, err
 		}
 	}
@@ -279,6 +299,8 @@ func (c *Core) SetupCore() error {
 	var err error
 	c.log.Info("Setting up the core")
 	c.didDir = c.cfg.DidDir
+	c.nftDir = c.cfg.NFTDir
+	c.smartContractDir = c.cfg.SmartContractDir
 
 	cfg := &ipfsport.Config{AppName: c.getCoreAppName(c.peerID), Port: c.cfg.PortConfig.ReceiverPort + 10}
 	c.l, err = ipfsport.NewListener(cfg, c.log, c.ipfs)
@@ -438,19 +460,19 @@ func (c *Core) CreateTempFolder() (string, error) {
 }
 
 func (c *Core) CreateSCTempFolder() (string, error) {
-	folderName := path.Join(c.cfg.NetworkDir, "smart_contracts", uuid.New().String())
+	folderName := path.Join(c.smartContractDir, uuid.New().String())
 	err := os.MkdirAll(folderName, os.ModeDir|os.ModePerm)
 	return folderName, err
 }
 
 func (c *Core) CreateNFTTempFolder() (string, error) {
-	folderName := path.Join(c.cfg.NetworkDir, "nfts", uuid.New().String())
+	folderName := path.Join(c.nftDir, uuid.New().String())
 	err := os.MkdirAll(folderName, os.ModeDir|os.ModePerm)
 	return folderName, err
 }
 
 func (c *Core) RenameSCFolder(tempFolderPath string, smartContractName string) (string, error) {
-	scFolderName := path.Join(c.cfg.NetworkDir, "smart_contracts", smartContractName)
+	scFolderName := path.Join(c.smartContractDir, smartContractName)
 	info, _ := os.Stat(scFolderName)
 
 	// Check if the Smart Contract Folder exists
@@ -467,7 +489,7 @@ func (c *Core) RenameSCFolder(tempFolderPath string, smartContractName string) (
 }
 
 func (c *Core) RenameNFTFolder(tempFolderPath string, nft string) (string, error) {
-	nftFolderName := path.Join(c.cfg.NetworkDir, "nfts", nft)
+	nftFolderName := path.Join(c.nftDir, nft)
 	err := os.Rename(tempFolderPath, nftFolderName)
 	if err != nil {
 		c.log.Error("Unable to rename ", tempFolderPath, " to ", nftFolderName, "error ", err)
@@ -603,7 +625,7 @@ func (c *Core) FetchDID(did string) error {
 }
 
 func (c *Core) GetNFTFromIpfs(nftTokenHash string, nftFolderHash string) error {
-	dirPath := path.Join(c.cfg.NetworkDir, "nfts", nftTokenHash)
+	dirPath := path.Join(c.nftDir, nftTokenHash)
 	// Check if the directory exists
 	_, err := os.Stat(dirPath)
 	if os.IsNotExist(err) {

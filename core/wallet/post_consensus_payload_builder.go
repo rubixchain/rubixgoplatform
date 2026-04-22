@@ -32,7 +32,7 @@ type persistenceTokenInput struct {
 //
 // It preserves current token_status from the tokens table and updates only the
 // fields needed for post-consensus persistence.
-func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID string, txInfo *models.TransactionInfo, did, executionRole string, isLocalTransfer bool) ([]models.TokenChain, []models.Token, []string, error) {
+func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID string, txInfo *models.TransactionInfo, did, executionRole string, transferNFTOwnership bool, isLocalTransfer bool) ([]models.TokenChain, []models.Token, []string, error) {
 	if w == nil {
 		return nil, nil, nil, fmt.Errorf("post-consensus persistence: wallet is nil")
 	}
@@ -52,7 +52,7 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 		return nil, nil, nil, fmt.Errorf("post-consensus persistence: invalid execution role %q", executionRole)
 	}
 
-	inputs, affectedTokens, err := collectPersistenceTokenInputs(txInfo)
+	inputs, affectedTokens, err := collectPersistenceTokenInputs(txInfo, transferNFTOwnership, executionRole)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -73,22 +73,60 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 	tokenStates := make([]models.Token, 0, len(inputs))
 
 	for _, input := range inputs {
-		currentToken, exists := currentTokens[input.TokenID]
-		if !exists {
-			if executionRole != ExecutionRoleReceiver {
-				return nil, nil, nil, fmt.Errorf("post-consensus persistence: token state for token %q is required to derive payload", input.TokenID)
+		roleID := models.GetTokenRoleID(input.RoleName)
+		if roleID <= 0 {
+			return nil, nil, nil, fmt.Errorf("post-consensus persistence: unsupported token role %q for token %q", input.RoleName, input.TokenID)
+		}
+
+		// For genesis transactions (Deploy, Mint), token doesn't exist yet in the database
+		// Skip token state lookup and initialize empty token state
+		isGenesis := input.RoleName == constants.TokenRole_Deploy || input.RoleName == constants.TokenRole_Mint
+		var currentToken models.Token
+		var exists bool
+
+		if !isGenesis {
+			// Non-genesis: Token must exist in database (Transfer, Execute, Commit, etc.)
+			currentToken, exists = currentTokens[input.TokenID]
+			if !exists {
+				// Special case: Receiver receiving token for first time (not in their DB yet)
+				if executionRole == ExecutionRoleReceiver {
+					// Receiver genesis case: token is arriving for the first time.
+					// Synthesize a zero-value token so buildDerivedTokenChainRow produces position=0.
+					tokenValue := input.TokenValue
+					if tokenValue == 0 {
+						// Fallback: derive from token ID (only works for RBT tokens)
+						if derived, err := util.GetTokenValueFromTokenID(input.TokenID); err == nil && derived > 0 {
+							tokenValue = derived
+						}
+					}
+					// NFT tokens can have zero value (collectibles with no monetary value)
+					// RBT and SmartContract tokens must have a value > 0
+					if tokenValue == 0 && input.TokenTypeName != constants.TokenType_NFT {
+						return nil, nil, nil, fmt.Errorf("post-consensus persistence: cannot determine token value for genesis token %q", input.TokenID)
+					}
+					tokenTypeID := models.GetTokenTypeID(input.TokenTypeName)
+					if tokenTypeID <= 0 {
+						tokenTypeID = models.GetTokenTypeID(constants.TokenType_RBT)
+					}
+					currentToken = models.Token{
+						TokenID:    input.TokenID,
+						TokenValue: tokenValue,
+						TokenType:  int16(tokenTypeID),
+					}
+					// Force position=0: receiver's chain starts fresh for this token.
+					input.PreviousTransactionID = ""
+				} else {
+					return nil, nil, nil, fmt.Errorf("post-consensus persistence: token state for token %q is required to derive payload", input.TokenID)
+				}
 			}
-			// Receiver genesis case: token is arriving for the first time.
-			// Synthesize a zero-value token so buildDerivedTokenChainRow produces position=0.
+		} else {
+			// Genesis (Deploy/Mint): Token is being created, initialize empty state
 			tokenValue := input.TokenValue
 			if tokenValue == 0 {
-				// Fallback: derive from token ID (for tokens created before TokenValue was populated in TokenInfo)
+				// Try to derive from token ID
 				if derived, err := util.GetTokenValueFromTokenID(input.TokenID); err == nil && derived > 0 {
 					tokenValue = derived
 				}
-			}
-			if tokenValue == 0 {
-				return nil, nil, nil, fmt.Errorf("post-consensus persistence: cannot determine token value for genesis token %q", input.TokenID)
 			}
 			tokenTypeID := models.GetTokenTypeID(input.TokenTypeName)
 			if tokenTypeID <= 0 {
@@ -99,15 +137,6 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 				TokenValue: tokenValue,
 				TokenType:  int16(tokenTypeID),
 			}
-			// Force position=0: receiver's chain starts fresh for this token.
-			// Without this, PreviousTransactionID != "" would push position to 1,
-			// causing validateTransferChainContinuity to reject a token not yet in DB.
-			input.PreviousTransactionID = ""
-		}
-
-		roleID := models.GetTokenRoleID(input.RoleName)
-		if roleID <= 0 {
-			return nil, nil, nil, fmt.Errorf("post-consensus persistence: unsupported token role %q for token %q", input.RoleName, input.TokenID)
 		}
 
 		row, position, err := buildDerivedTokenChainRow(transactionID, currentToken, latestRows[input.TokenID], input, int16(roleID))
@@ -134,19 +163,62 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 		state.TransactionID = transactionID
 		state.LatestPosition = position
 		state.LatestRole = int16(roleID)
-		switch executionRole {
-		case ExecutionRoleReceiver:
-			if txInfo.Owner != "" {
-				state.DID = txInfo.Owner
-			}
-			state.TokenStatus = int16(constants.TokenStatus_Free)
-		case ExecutionRoleInitiator:
-			if isLocalTransfer {
-				state.DID = txInfo.Owner
-				state.TokenStatus = int16(constants.TokenStatus_Free)
-			} else {
+
+		// Set token status based on role and execution context.
+		//
+		// SC-deploy collateral commits: when an RBT token is being pledged as
+		// collateral for an SC deployment, the token must be marked as Committed
+		// so it is no longer selectable by RBT/pledge pickers (which query
+		// WHERE token_status = TokenStatus_Free). This keeps the collateral
+		// terminally reserved against the SC.
+		isSCDeployCommit := input.RoleName == constants.TokenRole_Commit &&
+			executionRole == ExecutionRoleInitiator &&
+			hasSCDeploy(txInfo)
+
+		switch {
+		case input.RoleName == constants.TokenRole_Deploy:
+			// NFT/SC Deployment - token stays with initiator in Deployed status
+			if txInfo.Initiator != "" {
 				state.DID = txInfo.Initiator
-				state.TokenStatus = int16(constants.TokenStatus_Transferred)
+			}
+			state.TokenStatus = int16(constants.TokenStatus_Deployed)
+		case input.RoleName == constants.TokenRole_Execute:
+			// SC/NFT Execution - token stays with initiator in Executed status
+			if txInfo.Initiator != "" {
+				state.DID = txInfo.Initiator
+			}
+			state.TokenStatus = int16(constants.TokenStatus_Executed)
+		case isSCDeployCommit:
+			// RBT collateral for an SC deployment — lock as Committed (terminal).
+			// The token remains with the initiator and will be excluded from
+			// future selection since all picker queries filter for Free.
+			if txInfo.Initiator != "" {
+				state.DID = txInfo.Initiator
+			}
+			state.TokenStatus = int16(constants.TokenStatus_Committed)
+		default:
+			// Transfer, Mint, and any commit role outside the SC-deploy-initiator
+			// context fall back to the existing execution-role logic.
+			switch executionRole {
+			case ExecutionRoleReceiver:
+				if txInfo.Owner != "" {
+					state.DID = txInfo.Owner
+				}
+				state.TokenStatus = int16(constants.TokenStatus_Free)
+			case ExecutionRoleInitiator:
+				if isLocalTransfer {
+					// Same-node transfer: initiator is also receiver locally — keep as Free
+					state.DID = txInfo.Owner
+					state.TokenStatus = int16(constants.TokenStatus_Free)
+				} else {
+					if txInfo.Initiator != "" {
+						state.DID = txInfo.Initiator
+					}
+					// Tokens are leaving the initiator — mark as Transferred so they are no
+					// longer counted as available balance. Non-selected locked tokens will be
+					// released separately by ReleaseAllLockedRBTTokensForDID.
+					state.TokenStatus = int16(constants.TokenStatus_Transferred)
+				}
 			}
 		}
 
@@ -157,7 +229,7 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 	return tokenChains, tokenStates, affectedTokens, nil
 }
 
-func collectPersistenceTokenInputs(txInfo *models.TransactionInfo) ([]persistenceTokenInput, []string, error) {
+func collectPersistenceTokenInputs(txInfo *models.TransactionInfo, transferNFTOwnership bool, executionRole string) ([]persistenceTokenInput, []string, error) {
 	seen := make(map[string]struct{})
 	inputs := make([]persistenceTokenInput, 0)
 	affected := make([]string, 0)
@@ -190,25 +262,135 @@ func collectPersistenceTokenInputs(txInfo *models.TransactionInfo) ([]persistenc
 		return nil
 	}
 
+	// Process each token type with appropriate role assignment
 	if txInfo.Tokens != nil {
+		// RBT tokens: Transfer role (becomes Mint for genesis via PreviousTransactionID check in appendInputs)
 		if err := appendInputs(txInfo.Tokens.RBT, constants.TokenRole_Transfer, constants.TokenType_RBT); err != nil {
 			return nil, nil, err
 		}
-		if err := appendInputs(txInfo.Tokens.NFT, constants.TokenRole_Transfer, constants.TokenType_NFT); err != nil {
-			return nil, nil, err
+
+		// NFT tokens: Check if genesis (deployment), execution, or transfer
+		// - If PreviousTransactionID is empty → Deploy (genesis)
+		// - If transferNFTOwnership is false → Execute (no ownership change)
+		// - If transferNFTOwnership is true → Transfer (ownership change)
+		//
+		// For receiver role: only include NFT tokens when ownership is being transferred.
+		// Deploy and Execute operations are initiator-only — the NFT stays with the
+		// initiator. Including them for the receiver in mixed-asset transactions
+		// (e.g., RBT + NFT execute) would create phantom NFT records on the receiver node.
+		for _, nft := range txInfo.Tokens.NFT {
+			if nft == nil {
+				return nil, nil, fmt.Errorf("post-consensus persistence: transaction token is nil")
+			}
+			if nft.TokenID == "" {
+				return nil, nil, fmt.Errorf("post-consensus persistence: transaction token id is empty")
+			}
+
+			// Receiver should only persist NFT tokens when ownership is being transferred.
+			// Deploy and Execute are initiator-only operations — skip for receiver.
+			if executionRole == ExecutionRoleReceiver && !transferNFTOwnership {
+				continue
+			}
+
+			if _, exists := seen[nft.TokenID]; exists {
+				return nil, nil, fmt.Errorf("post-consensus persistence: duplicate token %q in transaction payload", nft.TokenID)
+			}
+			seen[nft.TokenID] = struct{}{}
+			affected = append(affected, nft.TokenID)
+
+			// Determine role based on PreviousTransactionID and transferNFTOwnership flag.
+			// The flag is authoritative: false=Execute (no ownership change), true=Transfer.
+			// This replaces the old Owner==Initiator heuristic which was incorrect in
+			// mixed transactions (e.g., RBT transfer + NFT execution) where Owner is
+			// the RBT receiver, not the NFT owner.
+			var roleName string
+			if nft.PreviousTransactionID == "" {
+				roleName = constants.TokenRole_Deploy // Genesis - NFT deployment
+			} else if !transferNFTOwnership {
+				roleName = constants.TokenRole_Execute // NFT execution without ownership change
+			} else {
+				roleName = constants.TokenRole_Transfer // NFT ownership transfer
+			}
+
+			inputs = append(inputs, persistenceTokenInput{
+				TokenID:               nft.TokenID,
+				PreviousTransactionID: nft.PreviousTransactionID,
+				RoleName:              roleName,
+				TokenTypeName:         constants.TokenType_NFT,
+				TokenValue:            nft.TokenValue,
+			})
 		}
+
+		// FT tokens: Transfer role
 		if err := appendInputs(txInfo.Tokens.FT, constants.TokenRole_Transfer, constants.TokenType_FT); err != nil {
 			return nil, nil, err
 		}
-		if err := appendInputs(txInfo.Tokens.SmartContract, constants.TokenRole_Transfer, constants.TokenType_SmartContract); err != nil {
-			return nil, nil, err
+
+		// SmartContract tokens: Check if genesis (deployment) or execution
+		// - If PreviousTransactionID is empty → Deploy (genesis)
+		// - Otherwise → Execute (existing SC)
+		//
+		// SC tokens are never included for the receiver role. Smart contract
+		// deploy and execute operations are strictly initiator-side — the SC
+		// token stays with the initiator. In mixed-asset transactions (e.g.,
+		// RBT + SC execute), the receiver should only persist the RBT tokens.
+		if executionRole != ExecutionRoleReceiver {
+			for _, sc := range txInfo.Tokens.SmartContract {
+				if sc == nil {
+					return nil, nil, fmt.Errorf("post-consensus persistence: transaction token is nil")
+				}
+				if sc.TokenID == "" {
+					return nil, nil, fmt.Errorf("post-consensus persistence: transaction token id is empty")
+				}
+				if _, exists := seen[sc.TokenID]; exists {
+					return nil, nil, fmt.Errorf("post-consensus persistence: duplicate token %q in transaction payload", sc.TokenID)
+				}
+				seen[sc.TokenID] = struct{}{}
+				affected = append(affected, sc.TokenID)
+
+				// Determine role based on PreviousTransactionID
+				roleName := constants.TokenRole_Execute // Execute for existing SC
+				if sc.PreviousTransactionID == "" {
+					roleName = constants.TokenRole_Deploy // Genesis - SC deployment
+				}
+
+				inputs = append(inputs, persistenceTokenInput{
+					TokenID:               sc.TokenID,
+					PreviousTransactionID: sc.PreviousTransactionID,
+					RoleName:              roleName,
+					TokenTypeName:         constants.TokenType_SmartContract,
+					TokenValue:            sc.TokenValue,
+				})
+			}
 		}
 	}
+
+	// Committed tokens: Commit role
 	if err := appendInputs(txInfo.CommittedTokens, constants.TokenRole_Commit, constants.TokenType_RBT); err != nil {
 		return nil, nil, err
 	}
 
 	return inputs, affected, nil
+}
+
+// hasSCDeploy reports whether txInfo carries at least one smart-contract
+// deploy (an SC token with no PreviousTransactionID). This is the guard used
+// when deciding to lock committedTokens as TokenStatus_Committed — we only
+// flip the status for genuine SC-deploy collateral, not for any future caller
+// that happens to use TokenRole_Commit.
+func hasSCDeploy(txInfo *models.TransactionInfo) bool {
+	if txInfo == nil || txInfo.Tokens == nil {
+		return false
+	}
+	for _, sc := range txInfo.Tokens.SmartContract {
+		if sc == nil {
+			continue
+		}
+		if sc.PreviousTransactionID == "" {
+			return true
+		}
+	}
+	return false
 }
 
 func buildDerivedTokenChainRow(transactionID string, currentToken models.Token, latestRow *models.TokenChain, input persistenceTokenInput, roleID int16) (models.TokenChain, int64, error) {

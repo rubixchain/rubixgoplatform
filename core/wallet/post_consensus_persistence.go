@@ -33,6 +33,7 @@ type PostConsensusPersistenceRequest struct {
 	TokenChainRows            []models.TokenChain
 	TokenStates               []models.Token
 	SkipSignatureVerification bool
+	TransferNFTOwnership      bool
 }
 
 type PostConsensusPersistenceCoordinator struct {
@@ -84,7 +85,7 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 	isLocalTransfer = isLocalTransfer && (req.ExecutionRole == ExecutionRoleInitiator)
 
 	if len(req.TokenChainRows) == 0 || len(req.TokenStates) == 0 {
-		derivedTokenChains, derivedTokenStates, derivedAffectedTokens, err := pc.wallet.BuildPersistencePayload(ctx, txRecord.ID, req.TransactionInfo, req.DID, req.ExecutionRole, isLocalTransfer)
+		derivedTokenChains, derivedTokenStates, derivedAffectedTokens, err := pc.wallet.BuildPersistencePayload(ctx, txRecord.ID, req.TransactionInfo, req.DID, req.ExecutionRole, req.TransferNFTOwnership, isLocalTransfer)
 		if err != nil {
 			return err
 		}
@@ -374,6 +375,14 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 			}
 		}
 	}
+	// Include CommittedTokens (used for SC/NFT deployment pledges)
+	if req.TransactionInfo != nil && req.TransactionInfo.CommittedTokens != nil {
+		for _, t := range req.TransactionInfo.CommittedTokens {
+			if t != nil {
+				txInfoTokenSet[t.TokenID] = true
+			}
+		}
+	}
 
 	for _, row := range req.TokenChainRows {
 		if row.Position == 0 {
@@ -391,13 +400,14 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 		var dbStatus int16
 		var dbTransactionID string
 		var dbLatestPosition int64
+		var dbTokenType int16
 
 		err := tx.QueryRow(ctx, `
-			SELECT did, token_status, transaction_id, latest_position
+			SELECT did, token_status, transaction_id, latest_position, token_type
 			FROM tokens
 			WHERE token_id = $1
 			FOR UPDATE
-		`, row.TokenID).Scan(&dbDID, &dbStatus, &dbTransactionID, &dbLatestPosition)
+		`, row.TokenID).Scan(&dbDID, &dbStatus, &dbTransactionID, &dbLatestPosition, &dbTokenType)
 		if err != nil {
 			if err == pgx.ErrNoRows {
 				return fmt.Errorf("transfer: token %q does not exist", row.TokenID)
@@ -406,7 +416,14 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 		}
 
 		/*
-			if dbDID != req.DID {
+			// SC tokens and NFT tokens do not enforce did ownership — any subscriber
+			// can execute an SC, and NFT execution does not require ownership transfer.
+			// Ownership is only checked for RBT and FT transfers.
+			scTypeID := int16(models.GetTokenTypeID(constants.TokenType_SmartContract))
+			nftTypeID := int16(models.GetTokenTypeID(constants.TokenType_NFT))
+			skipOwnershipCheck := dbTokenType == scTypeID || dbTokenType == nftTypeID
+
+			if !skipOwnershipCheck && dbDID != req.DID {
 				return fmt.Errorf("transfer: token %q not owned by %s", row.TokenID, req.DID)
 			}
 		*/
@@ -422,10 +439,19 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 			}
 		} else {
 			// Receiver: also permit Transferred — token was sent out and is now returning to this node.
+			// For NFT/SC tokens, additionally permit Deployed and Executed — these tokens stay with
+			// the initiator after deploy/execute and may be encountered by a receiver persistence
+			// path in edge cases (e.g., mixed-asset transactions where the receiver node syncs
+			// the full transaction chain including NFT/SC tokens it doesn't own).
 			// Terminal and error states (Burnt, Orphaned, ChainSyncIssue, BeingDoubleSpent) are rejected.
+			scTypeID := int16(models.GetTokenTypeID(constants.TokenType_SmartContract))
+			nftTypeID := int16(models.GetTokenTypeID(constants.TokenType_NFT))
+			isNFTorSC := dbTokenType == scTypeID || dbTokenType == nftTypeID
+
 			if dbStatus != int16(constants.TokenStatus_Free) &&
 				dbStatus != int16(constants.TokenStatus_Locked) &&
-				dbStatus != int16(constants.TokenStatus_Transferred) {
+				dbStatus != int16(constants.TokenStatus_Transferred) &&
+				!(isNFTorSC && (dbStatus == int16(constants.TokenStatus_Deployed) || dbStatus == int16(constants.TokenStatus_Executed))) {
 				return fmt.Errorf("transfer: token %q has unexpected status %d for receiver (want Free, Locked, or Transferred)", row.TokenID, dbStatus)
 			}
 		}

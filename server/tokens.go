@@ -192,7 +192,6 @@ func (s *Server) APIValidateTokenChain(req *ensweb.Request) *ensweb.Result {
 	userDID := s.GetQuery(req, "did")
 	token := s.GetQuery(req, "token")
 	blockCountStr := s.GetQuery(req, "blockcount")
-	smartContractChainValidationStr := s.GetQuery(req, "SCChainValidation")
 	blockCount, err := strconv.Atoi(blockCountStr)
 	if err != nil {
 		return s.BasicResponse(req, false, "Failed to convert blockCount string into integer", nil)
@@ -202,24 +201,13 @@ func (s *Server) APIValidateTokenChain(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "user did is not provided", nil)
 	}
 
-	smartContractChainValidation, err := strconv.ParseBool(smartContractChainValidationStr)
-	if err != nil {
-		return s.BasicResponse(req, false, "Error converting string to boolean", nil)
-	}
-
 	var br *model.BasicResponse
-	if smartContractChainValidation {
-		s.log.Debug("validating smart contract")
-		br, err = s.c.SmartContractTokenChainValidation(userDID, token, blockCount)
-		if err != nil {
-			return s.BasicResponse(req, false, br.Message, nil)
-		}
-	} else {
-		s.log.Debug("validating rbt token")
-		br, err = s.c.TokenChainValidation(userDID, token, blockCount)
-		if err != nil {
-			return s.BasicResponse(req, false, br.Message, nil)
-		}
+
+	s.log.Debug("validating rbt token")
+	br, err = s.c.TokenChainValidation(userDID, token, blockCount)
+	if err != nil {
+		return s.BasicResponse(req, false, br.Message, nil)
+
 	}
 
 	return s.RenderJSON(req, br, http.StatusOK)
