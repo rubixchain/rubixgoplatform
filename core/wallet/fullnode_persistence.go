@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 type FullNodePersistenceRequest struct {
@@ -230,7 +231,19 @@ func deriveFullNodeTokenState(existing fullNodeTokenState, txInfo *models.Transa
 	}
 	if input.tokenInfo.TokenValue > 0 {
 		state.tokenValue = input.tokenInfo.TokenValue
+	} else {
+		//In tokenInfo if token value is passed as 0, it can be NFT or RBT(whose value passed as 0),
+		//In any other case token value passed as non 0,
+		//So if the tokenID is starting with not starting with "Qm", assume that it as RBT and compute the tokenValue from the tokenID
+		if !strings.HasPrefix(input.tokenInfo.TokenID, "Qm") {
+			derivedValue, err := util.GetTokenValueFromTokenID(input.tokenInfo.TokenID)
+			if err != nil {
+				return fullNodeTokenState{}
+			}
+			state.tokenValue = derivedValue
+		}
 	}
+	
 	if input.tokenInfo.Data != "" {
 		state.tokenStateHash = input.tokenInfo.Data
 	}
