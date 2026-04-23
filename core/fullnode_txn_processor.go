@@ -56,7 +56,7 @@ func (c *Core) initDynamicTxnProcessor() {
 	numCPU := runtime.NumCPU()
 
 	c.txnProcessor = &DynamicTxnProcessor{
-		txnQueue:        make(chan *models.EventTransaction, 1000),
+		txnQueue:        make(chan *models.EventTransaction, 10000),
 		ctx:             ctx,
 		cancel:          cancel,
 		minWorkers:      max(1, numCPU/4),
