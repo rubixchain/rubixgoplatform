@@ -84,31 +84,29 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	}
 
 	if c.fullNode {
-		// Check for duplicate transactions
-		if _, exists := c.txnProcessor.processedTxns.LoadOrStore(newEvent.TransactionID, time.Now()); exists {
+		// Cheaply reject already-seen transactions without blocking.
+		if _, exists := c.txnProcessor.processedTxns.Load(newEvent.TransactionID); exists {
 			c.log.Info("Duplicate transaction ignored", "txnID", newEvent.TransactionID)
 			return
 		}
 
-		// INCREMENT COUNTER when new transaction is processed
-		atomic.AddInt64(&c.txnProcessor.processedTxnCount, 1)
-
-		// ### commented: high-volume pub-sub noise (fires per transaction per node)
-		// c.log.Info("Received transaction", "txnID", newEvent.TransactionID, "mode", newEvent.AssetType)
-
 		// Update queue length metric for dynamic scaling
 		currentQueueLen := int64(len(c.txnProcessor.txnQueue))
-		c.txnProcessor.queueLength = currentQueueLen
+		atomic.StoreInt64(&c.txnProcessor.queueLength, currentQueueLen)
 
 		// Queue transaction for processing with enhanced timeout handling
 		select {
 		case c.txnProcessor.txnQueue <- &newEvent:
+			// Mark as seen only AFTER successful enqueue so a failed send
+			// doesn't permanently poison the dedup map.
+			c.txnProcessor.processedTxns.Store(newEvent.TransactionID, time.Now())
+			atomic.AddInt64(&c.txnProcessor.processedTxnCount, 1)
 			c.log.Debug("Transaction queued successfully",
 				"txnID", newEvent.TransactionID,
 				"queueLength", currentQueueLen)
 
-		case <-time.After(5 * time.Second):
-			c.log.Error("Failed to queue transaction - queue full",
+		case <-time.After(10 * time.Second):
+			c.log.Error("Failed to queue transaction - queue full, will retry on next delivery",
 				"txnID", newEvent.TransactionID,
 				"queueLength", len(c.txnProcessor.txnQueue))
 
