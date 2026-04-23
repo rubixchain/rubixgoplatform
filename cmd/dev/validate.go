@@ -37,7 +37,7 @@ func validatePostTransfer(w *wallet.Wallet, dids []string, didTokens map[string]
 
 	// Validate tokenchain per token
 	for _, tokenID := range allTokensCombined {
-		chain, err := w.GetTokenChainByTokenID(tokenID)
+		chain, err := w.GetTokenChainByTokenID(tokenID, false)
 		if err != nil {
 			log.Fatalf("validation: GetTokenChainByTokenID(%s): %v", tokenID, err)
 		}
@@ -83,7 +83,7 @@ func validatePostTransfer(w *wallet.Wallet, dids []string, didTokens map[string]
 		if err != nil {
 			log.Fatalf("validation: ReadToken(%s): %v", tokenID, err)
 		}
-		chain, err := w.GetTokenChainByTokenID(tokenID)
+		chain, err := w.GetTokenChainByTokenID(tokenID, false)
 		if err != nil {
 			log.Fatalf("validation: GetTokenChainByTokenID(%s): %v", tokenID, err)
 		}
@@ -99,7 +99,7 @@ func validatePostTransfer(w *wallet.Wallet, dids []string, didTokens map[string]
 	// D1 tokens: genesis(0) + D1->D3(1) = 2 rows
 	// D2 tokens: genesis(0) + D2->D1(1) + D1->D3(2) = 3 rows
 	for _, tokenID := range didTokens[d1] {
-		chain, err := w.GetTokenChainByTokenID(tokenID)
+		chain, err := w.GetTokenChainByTokenID(tokenID, false)
 		if err != nil {
 			log.Fatalf("validation: GetTokenChainByTokenID(%s): %v", tokenID, err)
 		}
@@ -108,7 +108,7 @@ func validatePostTransfer(w *wallet.Wallet, dids []string, didTokens map[string]
 		}
 	}
 	for _, tokenID := range didTokens[d2] {
-		chain, err := w.GetTokenChainByTokenID(tokenID)
+		chain, err := w.GetTokenChainByTokenID(tokenID, false)
 		if err != nil {
 			log.Fatalf("validation: GetTokenChainByTokenID(%s): %v", tokenID, err)
 		}

@@ -228,16 +228,34 @@ func (w *Wallet) batchUpsertTokenChainIndex(ctx context.Context, tx pgx.Tx, toke
 	return nil
 }
 
-func (w *Wallet) GetTokenChainByTokenID(tokenID string) ([]models.TokenChain, error) {
-	rows, err := w.db.Pool().Query(w.Ctx,
-		`SELECT id, token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at
-		 FROM tokenchain WHERE token_id = $1 ORDER BY position ASC`, tokenID,
+func (w *Wallet) GetTokenChainByTokenID(tokenID string, isFullNode bool) ([]models.TokenChain, error) {
+	var (
+		rows pgx.Rows
+		err  error
 	)
+	if isFullNode {
+		rows, err = w.db.Pool().Query(w.Ctx,
+			`SELECT id, token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at
+			FROM fullnode_tokenchain WHERE token_id = $1 ORDER BY position ASC`, tokenID,
+		)
+	} else {
+		rows, err = w.db.Pool().Query(w.Ctx,
+			`SELECT id, token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at
+			FROM tokenchain WHERE token_id = $1 ORDER BY position ASC`, tokenID,
+		)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("GetTokenChainByTokenID: %w", err)
 	}
 
-	return pgx.CollectRows(rows, pgx.RowToStructByName[models.TokenChain])
+	result, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.TokenChain])
+	if err != nil {
+		return nil, fmt.Errorf("GetTokenChainByTokenID: %w", err)
+	}
+	if len(result) == 0 {
+		return nil, fmt.Errorf("GetTokenChainByTokenID: no token chain found for token %s", tokenID)
+	}
+	return result, nil
 }
 
 // GetTokenChainByTokenIDAndPrevTxnId fetches up to 100 tokenchain rows for a token

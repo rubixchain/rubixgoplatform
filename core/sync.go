@@ -169,7 +169,7 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.Transac
 	}
 
 	// Step 1: Get local tokenchain (ordered by position ASC) to determine what we already have.
-	localChain, err := c.w.GetTokenChainByTokenID(tokenID)
+	localChain, err := c.w.GetTokenChainByTokenID(tokenID, false)
 	if err != nil {
 		// No local chain at all — treat as empty (receiver never held this token).
 		localChain = nil
@@ -195,7 +195,7 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.Transac
 	type txWithPrev struct {
 		tx     models.Transactions
 		prevID string // PreviousTransactionID for this token within this transaction
-		role  int16  // Role for this token within this transaction
+		role   int16  // Role for this token within this transaction
 	}
 	enriched := make([]txWithPrev, 0, len(remoteTxs))
 	for _, tx := range remoteTxs {
@@ -355,16 +355,16 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.Transac
 				return fmt.Errorf("applyTokenChainFromSync: failed to get parent token ID for %s: %w", tokenID, err)
 			}
 		}
-  
-    firstRole := rubixsync.FindTokenRoleInTxn(tokenID, &firstTxInfo, transferNFTOwnership)
-    
-    // SC tokens have no Owner — use Initiator as the deploying DID.
+
+		firstRole := rubixsync.FindTokenRoleInTxn(tokenID, &firstTxInfo, transferNFTOwnership)
+
+		// SC tokens have no Owner — use Initiator as the deploying DID.
 		ownerDID := firstTxInfo.Owner
 		if ownerDID == "" {
 			ownerDID = firstTxInfo.Initiator
 		}
-    
-    // Ensure the owner DID exists in the dids table before inserting
+
+		// Ensure the owner DID exists in the dids table before inserting
 		// the token — tokens.did has a FK to dids.did. The DID may belong
 		// to a remote peer never registered locally.
 		if ownerDID != "" {
@@ -380,7 +380,6 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.Transac
 				return fmt.Errorf("applyTokenChainFromSync: upsert DID %s: %w", ownerDID, didErr)
 			}
 		}
-    
 
 		// Derive token status from the role so synced tokens match what the
 		// originating node wrote (mirrors transaction_chain.go logic).
@@ -391,13 +390,13 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.Transac
 		case int16(models.GetTokenRoleID(constants.TokenRole_Execute)):
 			tokenStatus = int16(constants.TokenStatus_Executed)
 		}
-  
+
 		newToken := models.Token{
-			TokenID:        tokenID,
-			DID:            ownerDID,
-      ParentTokenID:  pgtype.Text{
+			TokenID: tokenID,
+			DID:     ownerDID,
+			ParentTokenID: pgtype.Text{
 				String: parentTokenID,
-				Valid: true,
+				Valid:  true,
 			},
 			TransactionID:  newTxs[0].tx.ID,
 			TokenType:      tokenType,
@@ -492,6 +491,11 @@ func (c *Core) applyTokenChainFromSyncForFullNode(tokenID string, remoteTxs []ty
 	if len(remoteTxs) == 0 {
 		return nil
 	}
+	c.log.Debug("applyTokenChainFromSyncForFullNode: Starting sync",
+		"tokenID", tokenID,
+		"remoteTxs", fmt.Sprintf("%+v", remoteTxs),
+		"prevTxID", prevTxID,
+	)
 
 	localChain, err := c.w.GetFullNodeTokenChainByTokenID(tokenID)
 	if err != nil {
@@ -511,7 +515,7 @@ func (c *Core) applyTokenChainFromSyncForFullNode(tokenID string, remoteTxs []ty
 	type txWithPrev struct {
 		tx     models.Transactions
 		prevID string
-		role int16
+		role   int16
 	}
 	enriched := make([]txWithPrev, 0, len(remoteTxs))
 	for _, tx := range remoteTxs {
