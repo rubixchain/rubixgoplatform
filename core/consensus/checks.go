@@ -165,7 +165,7 @@ func ValidateTokenOwnershipByPrevTxn(txnInfo *models.TransactionInfo, isFullnode
 
 		for _, tokenID := range tokenIDs {
 			//lets call the previous transaction as tx2.
-			tokenChainForToken, err := w.GetTokenChainByTokenID(tokenID)
+			tokenChainForToken, err := w.GetTokenChainByTokenID(tokenID, isFullnode)
 			if err != nil {
 				return fmt.Errorf("ValidateTokenOwnershipByPrevTxn: failed to get latest role for token %s: %w", tokenID, err)
 			}
@@ -177,8 +177,8 @@ func ValidateTokenOwnershipByPrevTxn(txnInfo *models.TransactionInfo, isFullnode
 
 			// If role is unpledged, we validate the whether the unpledge done is valid
 			if latestTokenChain.Role == int16(models.GetTokenRoleID(constants.TokenRole_Unpledge)) {
-				// There should be atleast a pledge and an unpledge block in the token chain for that token, 
-				// because if the role is unpledged, then it means that token should have been pledged before 
+				// There should be atleast a pledge and an unpledge block in the token chain for that token,
+				// because if the role is unpledged, then it means that token should have been pledged before
 				// and then unpledged in the previous transaction.
 				if len(tokenChainForToken) < 2 {
 					return fmt.Errorf("ValidateTokenOwnershipByPrevTxn: insufficient token chain entries for token %s to verify unpledged token's ownership", tokenID)
@@ -654,6 +654,7 @@ func TokenChainIntegrityCheck(
 	type tokenCheck struct {
 		tokenID               string
 		previousTransactionID string
+		syncFromPeerDID       string
 		label                 string // for log messages
 	}
 	var allTokens []tokenCheck
@@ -672,6 +673,7 @@ func TokenChainIntegrityCheck(
 			allTokens = append(allTokens, tokenCheck{
 				tokenID:               t.TokenID,
 				previousTransactionID: t.PreviousTransactionID,
+				syncFromPeerDID:       txnInfo.Initiator,
 				label:                 tokenType,
 			})
 		}
@@ -686,6 +688,7 @@ func TokenChainIntegrityCheck(
 				allTokens = append(allTokens, tokenCheck{
 					tokenID:               t.TokenID,
 					previousTransactionID: t.PreviousTransactionID,
+					syncFromPeerDID:       quorum.Did,
 					label:                 "pledge:" + quorum.Did,
 				})
 			}
@@ -697,7 +700,8 @@ func TokenChainIntegrityCheck(
 	}
 
 	// Phase 1: identify tokens whose local chain tip doesn't match.
-	tokensToSync := make([]string, 0)
+	tokensToSyncByPeer := make(map[string][]string)
+	tokenIDSyncPeerMap := make(map[string]string)
 	tokenIDPrevTxIDMap := make(map[string]string)
 
 	for _, tc := range allTokens {
@@ -705,7 +709,8 @@ func TokenChainIntegrityCheck(
 		if err != nil {
 			log.Debug("TokenChainIntigrityCheck: token not found locally, marking for sync",
 				"tokenID", tc.tokenID, "label", tc.label)
-			tokensToSync = append(tokensToSync, tc.tokenID)
+			tokensToSyncByPeer[tc.syncFromPeerDID] = append(tokensToSyncByPeer[tc.syncFromPeerDID], tc.tokenID)
+			tokenIDSyncPeerMap[tc.tokenID] = tc.syncFromPeerDID
 			tokenIDPrevTxIDMap[tc.tokenID] = tc.previousTransactionID
 			continue
 		}
@@ -716,15 +721,22 @@ func TokenChainIntegrityCheck(
 				"expectedPrevTxID", tc.previousTransactionID,
 				"label", tc.label,
 			)
-			tokensToSync = append(tokensToSync, tc.tokenID)
+			tokensToSyncByPeer[tc.syncFromPeerDID] = append(tokensToSyncByPeer[tc.syncFromPeerDID], tc.tokenID)
+			tokenIDSyncPeerMap[tc.tokenID] = tc.syncFromPeerDID
 			tokenIDPrevTxIDMap[tc.tokenID] = tc.previousTransactionID
 		}
 	}
 
 	// Phase 2: sync tokens that are out of date.
-	if len(tokensToSync) > 0 && syncTxChains != nil {
-		if err := syncTxChains(txnInfo.Initiator, tokensToSync, tokenIDPrevTxIDMap, []string{currentTxID}); err != nil {
-			return fmt.Errorf("TokenChainIntigrityCheck: sync failed: %w", err)
+	if len(tokensToSyncByPeer) > 0 && syncTxChains != nil {
+		for peerDID, tokensToSync := range tokensToSyncByPeer {
+			peerPrevTxIDs := make(map[string]string, len(tokensToSync))
+			for _, tokenID := range tokensToSync {
+				peerPrevTxIDs[tokenID] = tokenIDPrevTxIDMap[tokenID]
+			}
+			if err := syncTxChains(peerDID, tokensToSync, peerPrevTxIDs, []string{currentTxID}); err != nil {
+				return fmt.Errorf("TokenChainIntigrityCheck: sync failed from %s: %w", peerDID, err)
+			}
 		}
 	}
 
@@ -736,11 +748,12 @@ func TokenChainIntegrityCheck(
 
 		localTxID, err := w.GetLatestTransactionIdByTokenId(tc.tokenID, isFullnode)
 		if err != nil {
-			return fmt.Errorf("TokenChainIntigrityCheck: token %s (%s) still not found locally after sync", tc.tokenID, tc.label)
+			return fmt.Errorf("TokenChainIntigrityCheck: token %s (%s) still not found locally after sync from %s",
+				tc.tokenID, tc.label, tokenIDSyncPeerMap[tc.tokenID])
 		}
 		if localTxID != tc.previousTransactionID {
-			return fmt.Errorf("TokenChainIntigrityCheck: token %s (%s) chain mismatch after sync: local latest %s != expected %s",
-				tc.tokenID, tc.label, localTxID, tc.previousTransactionID)
+			return fmt.Errorf("TokenChainIntigrityCheck: token %s (%s) chain mismatch after sync from %s: local latest %s != expected %s",
+				tc.tokenID, tc.label, tokenIDSyncPeerMap[tc.tokenID], localTxID, tc.previousTransactionID)
 		}
 	}
 

@@ -197,7 +197,7 @@ func RunStressTests(w *wallet.Wallet, cfg *types.RubixConfig, dids []string, did
 	}
 	if s1Succeeded != 1 {
 		tok, _ := w.ReadToken(tok0)
-		chain, _ := w.GetTokenChainByTokenID(tok0)
+		chain, _ := w.GetTokenChainByTokenID(tok0, false)
 		fmt.Printf("[STRESS S1 DEBUG] token state: %+v, chain len=%d\n", tok, len(chain))
 		log.Fatalf("STRESS FAIL S1: expected 1 success, got %d successes, %d failures", s1Succeeded, s1Failed)
 	}
@@ -212,7 +212,7 @@ func RunStressTests(w *wallet.Wallet, cfg *types.RubixConfig, dids []string, did
 		if tok.DID != s1ToDID {
 			log.Fatalf("[STRESS S1] post-validate: token %s owner=%s, expected %s", tok0, tok.DID, s1ToDID)
 		}
-		chain, err := w.GetTokenChainByTokenID(tok0)
+		chain, err := w.GetTokenChainByTokenID(tok0, false)
 		if err != nil {
 			log.Fatalf("[STRESS S1] post-validate: GetTokenChainByTokenID(%s): %v", tok0, err)
 		}
@@ -325,7 +325,7 @@ func RunStressTests(w *wallet.Wallet, cfg *types.RubixConfig, dids []string, did
 			if tok.DID != xfer.toDID {
 				log.Fatalf("[STRESS S2] post-validate: token %s owner=%s, expected %s", xfer.tokenID, tok.DID, xfer.toDID)
 			}
-			chain, err := w.GetTokenChainByTokenID(xfer.tokenID)
+			chain, err := w.GetTokenChainByTokenID(xfer.tokenID, false)
 			if err != nil {
 				log.Fatalf("[STRESS S2] post-validate: GetTokenChainByTokenID(%s): %v", xfer.tokenID, err)
 			}
@@ -471,7 +471,7 @@ func RunStressTests(w *wallet.Wallet, cfg *types.RubixConfig, dids []string, did
 		if owner, ok := currentOwners[tokenID]; ok && tok.DID != owner {
 			log.Fatalf("[HARNESS] FAIL: token %s owner mismatch: DB=%s expected=%s", tokenID, tok.DID, owner)
 		}
-		chain, err := w.GetTokenChainByTokenID(tokenID)
+		chain, err := w.GetTokenChainByTokenID(tokenID, false)
 		if err != nil {
 			log.Fatalf("[HARNESS] GetTokenChainByTokenID(%s): %v", tokenID, err)
 		}

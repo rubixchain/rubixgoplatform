@@ -327,7 +327,7 @@ func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
 	}
 
 	// Fetch token chain from PostgreSQL
-	chain, err := c.w.GetTokenChainByTokenID(tr.Token)
+	chain, err := c.w.GetTokenChainByTokenID(tr.Token, false)
 	if err != nil {
 		c.log.Error("Error fetching token chain", "error", err)
 		return c.l.RenderJSON(req, &TCBSyncReply{
@@ -1989,7 +1989,7 @@ func VerifyTokens(serverURL string, tokens []string) (TokenVerificationResponse,
 // detected gap or linkage break. The block-based min/max ID concept has been removed —
 // chain integrity is now defined by position sequentiality and previous_transaction_id linkage.
 func (c *Core) GetMissingBlockSequence(tokenSyncInfo TokenSyncInfo) error {
-	chain, err := c.w.GetTokenChainByTokenID(tokenSyncInfo.TokenID)
+	chain, err := c.w.GetTokenChainByTokenID(tokenSyncInfo.TokenID,false)
 	if err != nil {
 		c.log.Error("Failed to fetch token chain", "token", tokenSyncInfo.TokenID, "error", err)
 		return fmt.Errorf("failed to fetch token chain for %s: %w", tokenSyncInfo.TokenID, err)

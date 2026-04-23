@@ -268,7 +268,7 @@ func main_old() {
 	}
 
 	// F6: Verify -- tokenchain shows position 0 (mint) + position 1 (transfer)
-	chain, err := w.GetTokenChainByTokenID("QmTestToken001")
+	chain, err := w.GetTokenChainByTokenID("QmTestToken001", false)
 	if err != nil {
 		log.Fatalf("GetTokenChainByTokenID(QmTestToken001) failed: %v", err)
 	}
@@ -476,7 +476,7 @@ func main_old() {
 	}
 
 	for _, tid := range allTokenIDs {
-		chainEntries, err := w.GetTokenChainByTokenID(tid)
+		chainEntries, err := w.GetTokenChainByTokenID(tid, false)
 		if err != nil {
 			log.Fatalf("GetTokenChainByTokenID(%s) failed: %v", tid, err)
 		}
@@ -528,7 +528,7 @@ func main_old() {
 	fmt.Println("\n--- Step J2: PreviousTransactionID linkage verification ---")
 
 	for _, tid := range allTokenIDs {
-		chainEntries, err := w.GetTokenChainByTokenID(tid)
+		chainEntries, err := w.GetTokenChainByTokenID(tid, false)
 		if err != nil {
 			log.Fatalf("GetTokenChainByTokenID(%s) failed in step J2: %v", tid, err)
 		}
