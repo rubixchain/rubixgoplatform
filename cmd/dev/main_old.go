@@ -104,7 +104,7 @@ func main_old() {
 	w := c.GetWallet()
 
 	// Step B: Create sender DID (real keypair + IPFS CID + Postgres upsert)
-	senderDID, err := c.CreateDID(&types.DIDCreate{PrivPWD: "test-sender-pwd"}, true)
+	senderDID, err := c.CreateDID(&types.DIDCreate{PrivPWD: "test-sender-pwd"})
 	if err != nil {
 		log.Fatalf("CreateDID(sender) failed: %v", err)
 	}
@@ -320,7 +320,7 @@ func main_old() {
 
 	// Step G: Create receiver DID (real keypair + IPFS CID + Postgres upsert)
 	fmt.Println("\n--- Step G: Create receiver DID ---")
-	receiverDID, err := c.CreateDID(&types.DIDCreate{PrivPWD: "test-receiver-pwd"}, true)
+	receiverDID, err := c.CreateDID(&types.DIDCreate{PrivPWD: "test-receiver-pwd"})
 	if err != nil {
 		log.Fatalf("CreateDID(receiver) failed: %v", err)
 	}

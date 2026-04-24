@@ -169,8 +169,8 @@ func (c *Core) InitDIDModule() {
 	}
 }
 
-func (c *Core) CreateDID(didCreate *types.DIDCreate, localDID bool) (did string, err error) {
-	if localDID { // create key pair from mnemonic an d then did from the private key
+func (c *Core) CreateDID(didCreate *types.DIDCreate) (did string, err error) {
+	if didCreate.PubKey == "" { // create key pair from mnemonic and then did from the private key
 		did, err = c.d.CreateDID(didCreate)
 		if err != nil {
 			return "", fmt.Errorf("Core: CreateDID: faile create did locally, err: %w", err)
@@ -189,7 +189,7 @@ func (c *Core) CreateDID(didCreate *types.DIDCreate, localDID bool) (did string,
 	dt := &models.DID{
 		DID:    did,
 		PeerID: c.peerID,
-		Local:  localDID,
+		Local:  true,
 	}
 	algoID, err := c.w.GetDidAlgoIDByName(constants.DidAlgo_SECP256K1)
 	if err != nil {
