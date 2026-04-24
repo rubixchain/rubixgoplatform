@@ -53,15 +53,7 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "failed to parse did configuration", nil)
 	}
 
-	// depending on pub key passed or not, direct the function call
-	var didLocal bool
-	if didCreate.PubKey == "" {
-		didLocal = true // create key pair and did locally
-	} else {
-		didLocal = false // create did from the input public key
-	}
-
-	did, err := s.c.CreateDID(&didCreate, didLocal)
+	did, err := s.c.CreateDID(&didCreate)
 	if err != nil {
 		s.log.Error("failed to create did", "err", err)
 		return s.BasicResponse(req, false, err.Error(), nil)

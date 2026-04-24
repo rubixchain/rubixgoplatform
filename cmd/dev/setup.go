@@ -44,7 +44,7 @@ func createDIDs(c *core.Core, count int) []string {
 	for range count {
 		didID, err := c.CreateDID(&types.DIDCreate{
 			PrivPWD: "pwd-1",
-		}, true)
+		})
 		if err != nil {
 			log.Fatal(err)
 		}
