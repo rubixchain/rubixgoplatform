@@ -604,7 +604,6 @@ func (cmd *Command) runApp() {
 	if cmd.fullNode {
 		cmd.log.Info("Node is running as a Full node")
 		rubixCore.SubscribeTCDetails()
-		rubixCore.RetryFailedTokenSync()
 	}
 
 	ch := make(chan os.Signal, 1)

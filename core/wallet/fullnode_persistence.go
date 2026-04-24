@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -243,7 +244,7 @@ func deriveFullNodeTokenState(existing fullNodeTokenState, txInfo *models.Transa
 			state.tokenValue = derivedValue
 		}
 	}
-	
+
 	if input.tokenInfo.Data != "" {
 		state.tokenStateHash = input.tokenInfo.Data
 	}
@@ -560,42 +561,125 @@ func (w *Wallet) PersistFullNodeSyncedTokenChain(
 	}
 
 	lastEntry := entries[len(entries)-1]
-	var tokenValue float64
-	var tokenStateHash string
+
+	// Locate the synced token in the transaction to decide the correct
+	// owner DID and tokenValue to persist. Resolution order:
+	//
+	//   1. lastTxInfo.Tokens.{RBT,FT,NFT,SmartContract}
+	//        → transfer/committed token — owner = lastTxInfo.Owner
+	//
+	//   2. lastTxInfo.Quorums[].Tokens
+	//        → pledge token of the LAST synced transaction
+	//        → owner = that QuorumInfo.Did
+	//        → value from QuorumInfo entry if non-zero, else derive from tokenID
+	//
+	//If token is not present in lastTransactionInfo, which means for the given
+	//transactionInfo it is the unpledged token, so it won't be there.
+	//In that case, search the token in the previous txnInfo(which is pledged txn) and update the token details accordingly.
+	//   3. entries' last PreviousTransactionID → find that tx in newTxs →
+	//      inspect its Quorums[].Tokens
+	//        → pledge token created by an earlier tx in this sync batch
+	//        → owner = that QuorumInfo.Did
+	//        → value from QuorumInfo entry if non-zero, else derive from tokenID
+	var (
+		tokenValue     float64
+		tokenStateHash string
+		pledgeOwnerDID string
+		foundIn        string // "transfer" | "pledge:last" | "pledge:prev" | ""
+	)
+
+	// Step 1: transfer / committed token lookup in the last transaction.
 	if lastTxInfo != nil && lastTxInfo.Tokens != nil {
-		for _, t := range lastTxInfo.Tokens.RBT {
-			if t != nil && t.TokenID == tokenID {
-				tokenValue = t.TokenValue
-				tokenStateHash = t.Data
+		transferLists := [][]*models.TokenInfo{
+			lastTxInfo.Tokens.RBT,
+			lastTxInfo.Tokens.FT,
+			lastTxInfo.Tokens.NFT,
+			lastTxInfo.Tokens.SmartContract,
+		}
+		for _, list := range transferLists {
+			for _, t := range list {
+				if t != nil && t.TokenID == tokenID {
+					tokenValue = t.TokenValue
+					tokenStateHash = t.Data
+					foundIn = "transfer"
+					break
+				}
+			}
+			if foundIn != "" {
 				break
 			}
 		}
-		if tokenValue == 0 {
-			for _, t := range lastTxInfo.Tokens.FT {
-				if t != nil && t.TokenID == tokenID {
-					tokenValue = t.TokenValue
-					tokenStateHash = t.Data
-					break
+	}
+
+	// Step 2: pledge token lookup in lastTxInfo.Quorums[].Tokens.
+	if foundIn == "" && lastTxInfo != nil {
+		for _, q := range lastTxInfo.Quorums {
+			if q == nil {
+				continue
+			}
+			for _, t := range q.Tokens {
+				if t == nil || t.TokenID != tokenID {
+					continue
 				}
+				if t.TokenValue > 0 {
+					tokenValue = t.TokenValue
+				} else {
+					v, err := util.GetTokenValueFromTokenID(tokenID)
+					if err != nil {
+						return fmt.Errorf("fullnode sync persistence: derive token value for pledge token %q: %w", tokenID, err)
+					}
+					tokenValue = v
+				}
+				tokenStateHash = t.Data
+				pledgeOwnerDID = q.Did
+				foundIn = "pledge:last"
+				break
+			}
+			if foundIn != "" {
+				break
 			}
 		}
-		if tokenValue == 0 {
-			for _, t := range lastTxInfo.Tokens.NFT {
-				if t != nil && t.TokenID == tokenID {
-					tokenValue = t.TokenValue
+	}
+
+	// Step 3: pledge token lookup in the previous transaction referenced by the
+	// last chain entry. The previous tx must be part of this sync batch (newTxs).
+	if foundIn == "" && lastEntry.PreviousTransactionID != nil && *lastEntry.PreviousTransactionID != "" {
+		prevTxID := *lastEntry.PreviousTransactionID
+		for i := range newTxs {
+			if newTxs[i].ID != prevTxID {
+				continue
+			}
+			var prevTxInfo models.TransactionInfo
+			if err := json.Unmarshal(newTxs[i].Info, &prevTxInfo); err != nil {
+				return fmt.Errorf("fullnode sync persistence: unmarshal prev tx %q info: %w", prevTxID, err)
+			}
+			for _, q := range prevTxInfo.Quorums {
+				if q == nil {
+					continue
+				}
+				for _, t := range q.Tokens {
+					if t == nil || t.TokenID != tokenID {
+						continue
+					}
+					if t.TokenValue > 0 {
+						tokenValue = t.TokenValue
+					} else {
+						v, err := util.GetTokenValueFromTokenID(tokenID)
+						if err != nil {
+							return fmt.Errorf("fullnode sync persistence: derive token value for pledge token %q (via prev tx %q): %w", tokenID, prevTxID, err)
+						}
+						tokenValue = v
+					}
 					tokenStateHash = t.Data
+					pledgeOwnerDID = q.Did
+					foundIn = "pledge:prev"
+					break
+				}
+				if foundIn != "" {
 					break
 				}
 			}
-		}
-		if tokenValue == 0 {
-			for _, t := range lastTxInfo.Tokens.SmartContract {
-				if t != nil && t.TokenID == tokenID {
-					tokenValue = t.TokenValue
-					tokenStateHash = t.Data
-					break
-				}
-			}
+			break
 		}
 	}
 
@@ -613,8 +697,15 @@ func (w *Wallet) PersistFullNodeSyncedTokenChain(
 	if tokenStateHash != "" {
 		tokenState.tokenStateHash = tokenStateHash
 	}
-	if lastTxInfo != nil && lastTxInfo.Owner != "" {
-		tokenState.did = lastTxInfo.Owner
+	switch foundIn {
+	case "pledge:last", "pledge:prev":
+		if pledgeOwnerDID != "" {
+			tokenState.did = pledgeOwnerDID
+		}
+	default:
+		if lastTxInfo != nil && lastTxInfo.Owner != "" {
+			tokenState.did = lastTxInfo.Owner
+		}
 	}
 	tokenState.transactionID = lastEntry.TransactionID
 	tokenState.latestPosition = lastEntry.Position
