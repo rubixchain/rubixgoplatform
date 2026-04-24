@@ -30,6 +30,21 @@ func AddFloat(a float64, b float64) float64 {
 	return FloatPrecision(a + b)
 }
 
+func ScaledFloatDiv(a float64, b float64) float64 {
+	if b == 0 {
+		return FloatPrecision(0)
+	}
+
+	scale := math.Pow10(constants.MaxSupportedDecimalPlaces)
+
+	scaledA := math.Round(a * scale)
+	scaledB := math.Round(b * scale)
+
+	floatDiv := scaledA / scaledB
+
+	return FloatPrecision(floatDiv)
+}
+
 func ScaledMultFloatInt(a float64, b int64) (float64, error) {
 	if math.IsNaN(a) || math.IsInf(a, 0) {
 		return 0, errors.New("invalid float value")
@@ -48,7 +63,7 @@ func ScaledMultFloatInt(a float64, b int64) (float64, error) {
 
 	resultUnits := scaledInt * b
 
-	return float64(resultUnits) / scale, nil
+	return ScaledFloatDiv(float64(resultUnits), scale), nil
 }
 
 func Min(a, b int) int {

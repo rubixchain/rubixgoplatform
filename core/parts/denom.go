@@ -52,12 +52,12 @@ func GetSplitAndNonsplitTokenDenom(
 			break
 		}
 
-		maxByTarget := int(math.Floor(remaining / denomValue))
-
+		maxByTarget := int(rubixmath.ScaledFloatDiv(remaining, denomValue))
+		
 		canTake := rubixmath.Min(int(denomCount), maxByTarget)
 
 		if canTake > 0 {
-			amount := float64(canTake) * denomValue
+			amount := rubixmath.FloatPrecision(float64(canTake) * denomValue)
 
 			targetDenomArr[denomValue] = int64(canTake)
 			updatedDenomArr[denomValue] -= int64(canTake)
