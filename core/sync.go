@@ -494,7 +494,7 @@ func (c *Core) applyTokenChainFromSyncForFullNode(tokenID string, remoteTxs []ty
 	}
 	c.log.Debug("applyTokenChainFromSyncForFullNode: Starting sync",
 		"tokenID", tokenID,
-		"remoteTxs", fmt.Sprintf("%+v", remoteTxs),
+		"remoteTxs", len(remoteTxs),
 		"prevTxID", prevTxID,
 	)
 

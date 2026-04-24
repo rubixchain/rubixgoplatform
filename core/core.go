@@ -713,29 +713,6 @@ func (c *Core) tokenSyncCleanupRoutine() {
 	}
 }
 
-func (c *Core) RetryFailedTokenSync() {
-	go func() {
-		c.RetryTokenSyncTicker = time.NewTicker(1 * time.Hour)
-		defer c.RetryTokenSyncTicker.Stop()
-
-		for range c.RetryTokenSyncTicker.C {
-			retryErrChan := make(chan error, 1)
-			go func() {
-				retryErrChan <- c.RetryFailedTOSyncTokens()
-			}()
-
-			err := <-retryErrChan
-			if err != nil {
-				c.log.Error("RetryFailedTOSyncTokens execution failed", "err", err)
-			} else {
-				c.log.Info("RetryFailedTOSyncTokens executed successfully")
-			}
-
-		}
-
-	}()
-}
-
 // GetSyncTransactionChainData returns transaction chains for the given token IDs,
 // excluding any transactions whose IDs appear in excludeTxIDs.
 func (c *Core) GetSyncTransactionChainData(tokenIDs []string, excludeTxIDs []string) (map[string][]models.Transactions, error) {
