@@ -621,8 +621,28 @@ func (c *Core) applyTokenChainFromSyncForFullNode(tokenID string, remoteTxs []ty
 			}
 		}
 	}
+	//search it in the quorum tokens as well.
+	for _, quorum := range firstTxInfo.Quorums {
+		for _, t := range quorum.Tokens {
+			if t != nil && t.TokenID == tokenID {
+				tokenType = constants.TokenType_RBT
+				break
+			}
+		}
+
+	}
+
+	for _, committedToken := range firstTxInfo.CommittedTokens {
+		if committedToken != nil && committedToken.TokenID == tokenID {
+			tokenType = constants.TokenType_RBT
+			break
+		}
+	}
+	//If token is not found in any of the above 4 assets, we can assume that it is a unpledge token for a transaction
+	//So we can assign tokenType as RBT for now.
 	if tokenType == "" {
-		return fmt.Errorf("applyTokenChainFromSyncForFullNode: token %s not found in any token array — cannot determine type", tokenID)
+		c.log.Debug("applyTokenChainFromSyncForFullNode: token %s not found in any token array —so assigning RBT as tokenType", tokenID)
+		tokenType = constants.TokenType_RBT
 	}
 
 	// Build tokenchain entries.
