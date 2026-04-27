@@ -8,83 +8,62 @@ import (
 	"time"
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
 type PubSubCallback func(peerID string, topic string, data []byte)
 
-// topicCounters holds per-topic publish / receive counters.
-// Both publishCount and receiveCount are accessed via sync/atomic.
-type topicCounters struct {
-	publishCount int64
-	receiveCount int64
-}
+// trackedTopic is the only topic for which we keep publish/receive
+// counters and emit per-message + periodic stats logs. We intentionally
+// scope this to the transaction event so unrelated topics (rubix_did,
+// remove_rubix_did, token_chain_details, etc.) don't add noise to the logs.
+const trackedTopic = constants.Event_RubixTxns
 
 type PubSub struct {
-	ipfs       *ipfsnode.Shell
-	log        logger.Logger
-	sub        map[string]PubSubCallback
-	counters   sync.Map // map[string]*topicCounters
-	statsOnce  sync.Once
+	ipfs *ipfsnode.Shell
+	log  logger.Logger
+	sub  map[string]PubSubCallback
+
+	// Counters for trackedTopic only.
+	publishCount int64
+	receiveCount int64
+	statsOnce    sync.Once
 }
 
 func NewPubSub(ipfs *ipfsnode.Shell, log logger.Logger) (*PubSub, error) {
-	ps := &PubSub{ipfs: ipfs, log: log, sub: make(map[string]PubSubCallback)}
-	ps.startStatsReporter()
-	return ps, nil
+	return &PubSub{ipfs: ipfs, log: log, sub: make(map[string]PubSubCallback)}, nil
 }
 
-// getCounters returns the per-topic counter struct, creating it on first use.
-func (ps *PubSub) getCounters(topic string) *topicCounters {
-	if v, ok := ps.counters.Load(topic); ok {
-		return v.(*topicCounters)
-	}
-	v, _ := ps.counters.LoadOrStore(topic, &topicCounters{})
-	return v.(*topicCounters)
+// GetTrackedTopicStats returns a snapshot of (published, received) counts
+// for the tracked transaction topic.
+func (ps *PubSub) GetTrackedTopicStats() (published int64, received int64) {
+	return atomic.LoadInt64(&ps.publishCount), atomic.LoadInt64(&ps.receiveCount)
 }
 
-// GetTopicStats returns a snapshot of (publish, receive) counts for a topic.
-func (ps *PubSub) GetTopicStats(topic string) (published int64, received int64) {
-	c := ps.getCounters(topic)
-	return atomic.LoadInt64(&c.publishCount), atomic.LoadInt64(&c.receiveCount)
-}
-
-// startStatsReporter logs a summary of publish/receive counts every 30s,
-// for every topic with non-zero traffic. Useful to verify that publishers
-// and subscribers are seeing the same number of messages.
+// startStatsReporter logs a 30-second cumulative + delta summary at INFO
+// level for the tracked topic. Started lazily on first subscribe/publish.
 func (ps *PubSub) startStatsReporter() {
 	ps.statsOnce.Do(func() {
 		go func() {
 			ticker := time.NewTicker(30 * time.Second)
 			defer ticker.Stop()
-			var lastPub, lastRcv sync.Map // map[string]int64
+			var lastPub, lastRcv int64
 			for range ticker.C {
-				ps.counters.Range(func(key, value interface{}) bool {
-					topic := key.(string)
-					c := value.(*topicCounters)
-					pub := atomic.LoadInt64(&c.publishCount)
-					rcv := atomic.LoadInt64(&c.receiveCount)
-					var prevPub, prevRcv int64
-					if v, ok := lastPub.Load(topic); ok {
-						prevPub = v.(int64)
-					}
-					if v, ok := lastRcv.Load(topic); ok {
-						prevRcv = v.(int64)
-					}
-					deltaPub := pub - prevPub
-					deltaRcv := rcv - prevRcv
-					if deltaPub != 0 || deltaRcv != 0 || pub != 0 || rcv != 0 {
-						ps.log.Info("PUBSUB STATS",
-							"topic", topic,
-							"publishedTotal", pub,
-							"receivedTotal", rcv,
-							"publishedDelta30s", deltaPub,
-							"receivedDelta30s", deltaRcv)
-					}
-					lastPub.Store(topic, pub)
-					lastRcv.Store(topic, rcv)
-					return true
-				})
+				pub := atomic.LoadInt64(&ps.publishCount)
+				rcv := atomic.LoadInt64(&ps.receiveCount)
+				deltaPub := pub - lastPub
+				deltaRcv := rcv - lastRcv
+				if pub != 0 || rcv != 0 {
+					ps.log.Info("PUBSUB STATS",
+						"topic", trackedTopic,
+						"publishedTotal", pub,
+						"receivedTotal", rcv,
+						"publishedDelta30s", deltaPub,
+						"receivedDelta30s", deltaRcv)
+				}
+				lastPub = pub
+				lastRcv = rcv
 			}
 		}()
 	})
@@ -102,26 +81,27 @@ func (ps *PubSub) SubscribeTopic(topic string, cb PubSubCallback) error {
 		ps.log.Error("topic failed to subscribe", "err", err)
 		return err
 	}
-	// Ensure counter struct exists so the stats reporter sees this topic
-	// even before any traffic.
-	ps.getCounters(topic)
+	if topic == trackedTopic {
+		ps.startStatsReporter()
+	}
 	go ps.receivePub(topic, p)
 	return nil
 }
 
 func (ps *PubSub) receivePub(topic string, p *ipfsnode.PubSubSubscription) {
-	counters := ps.getCounters(topic)
 	for {
 		m, err := p.Next()
 		if err != nil {
 			continue
 		}
-		count := atomic.AddInt64(&counters.receiveCount, 1)
-		ps.log.Debug("PUBSUB RECV",
-			"topic", topic,
-			"from", m.From.String(),
-			"bytes", len(m.Data),
-			"receivedTotal", count)
+		if topic == trackedTopic {
+			count := atomic.AddInt64(&ps.receiveCount, 1)
+			ps.log.Debug("PUBSUB RECV",
+				"topic", topic,
+				"from", m.From.String(),
+				"bytes", len(m.Data),
+				"receivedTotal", count)
+		}
 		cb := ps.sub[topic]
 		if cb != nil {
 			go cb(m.From.String(), topic, m.Data)
@@ -137,10 +117,13 @@ func (ps *PubSub) Publish(topic string, model interface{}) error {
 	if err := ps.ipfs.PubSubPublish(topic, string(b)); err != nil {
 		return err
 	}
-	count := atomic.AddInt64(&ps.getCounters(topic).publishCount, 1)
-	ps.log.Debug("PUBSUB SEND",
-		"topic", topic,
-		"bytes", len(b),
-		"publishedTotal", count)
+	if topic == trackedTopic {
+		ps.startStatsReporter()
+		count := atomic.AddInt64(&ps.publishCount, 1)
+		ps.log.Debug("PUBSUB SEND",
+			"topic", topic,
+			"bytes", len(b),
+			"publishedTotal", count)
+	}
 	return nil
 }
