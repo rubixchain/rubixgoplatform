@@ -213,7 +213,6 @@ func (s *Server) APIListNFTs(req *ensweb.Request) *ensweb.Result {
 // @Param        nft_id   path      string  true  "NFT Token ID"
 // @Success      200  {object}  model.BasicResponse
 // @Router       /rubix/v1/nfts/{nft_id}/chain [get]
-
 func (s *Server) APIGetNFTChain(req *ensweb.Request) *ensweb.Result {
 	nftID := s.GetRouteVar(req, "nft_id")
 	TokenChainResponse, err := s.c.GetNFTChain(nftID)
@@ -229,11 +228,12 @@ func (s *Server) APIGetNFTChain(req *ensweb.Request) *ensweb.Result {
 // @Tags         NFT
 // @Accept       json
 // @Produce      json
-// @Param        input query GetNFTSwaggoInput true "Get nfts by did"
-// @Success      200  {object}  model.NFTList
-// @Router       /api/get-nfts-by-did [get]
+// @Param        did  path      string  true  "DID (e.g. did:bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)"
+// @Success      200  {object}  model.BasicResponse
+// @Failure      400  {object}  model.BasicResponse
+// @Router       /rubix/v1/dids/{did}/balances/nft [get]
 func (s *Server) APIGetNFTsByDid(req *ensweb.Request) *ensweb.Result {
-	did := s.GetQuery(req, "did")
+	did := s.GetRouteVar(req, "did")
 	resp, err := s.c.GetNFTsByDid(did)
 	if err != nil {
 		return s.BasicResponse(req, false, "failed to get nfts, err: "+err.Error(), nil)
