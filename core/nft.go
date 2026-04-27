@@ -340,10 +340,6 @@ func (c *Core) GetNFTsByDid(did string) ([]types.NFTBalance, error) {
 	// List out all nft ids and their values, and return the list
 	var nftInfo []types.NFTBalance
 	for _, nft := range nftInfoList {
-		// consider free NFTs only
-		if nft.TokenStatus != constants.TokenStatus_Free {
-			continue
-		}
 		nftInfo = append(nftInfo, types.NFTBalance{
 			NFTId:    nft.TokenID,
 			NFTValue: nft.TokenValue,

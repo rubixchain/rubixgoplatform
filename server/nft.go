@@ -213,7 +213,6 @@ func (s *Server) APIListNFTs(req *ensweb.Request) *ensweb.Result {
 // @Param        nft_id   path      string  true  "NFT Token ID"
 // @Success      200  {object}  model.BasicResponse
 // @Router       /rubix/v1/nfts/{nft_id}/chain [get]
-
 func (s *Server) APIGetNFTChain(req *ensweb.Request) *ensweb.Result {
 	nftID := s.GetRouteVar(req, "nft_id")
 	TokenChainResponse, err := s.c.GetNFTChain(nftID)
