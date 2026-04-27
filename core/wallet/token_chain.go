@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/constants"
@@ -710,6 +711,7 @@ func (w *Wallet) PersistGenesisTokenRecord(
 	// if network != constants.NetworkID_RBT_Local {
 	w.log.Debug("PersistGenesisTokenRecord: txInfo", txInfo)
 
+	time.Sleep(10 * time.Millisecond)
 	if _, err := util.PublishTransaction(ps, txInfo, sigStruct, true, ""); err != nil {
 		return "", err
 	}
