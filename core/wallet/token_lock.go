@@ -627,6 +627,10 @@ func (w *Wallet) lockTokensForSplitOnce(
 
 		rows.Close()
 
+		if bestLarge != nil && len(smallTokens) == 0 && count == batchSize {
+			break
+		}
+
 		if count < batchSize {
 			break
 		}
