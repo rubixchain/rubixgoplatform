@@ -53,6 +53,8 @@ func BuildTransactionInfoFromRequest(
 
 	// --- RBT path (separate — CollectRBTTokens manages its own locking) ---
 	if req.HasRBT() {
+		var genTX *models.Transactions = nil
+
 		log.Info("BuildTransactionInfoFromRequest: Processing RBT tokens", "amount", req.GetRBTAmount())
 		ownerDID := dc.GetDID()
 		log.Debug("BuildTransactionInfoFromRequest: Locking RBT tokens for split", "did", ownerDID, "amount", req.GetRBTAmount())
@@ -79,7 +81,7 @@ func BuildTransactionInfoFromRequest(
 		}
 
 		if len(childTokensKept) > 0 && len(burntParentToken) > 0 {
-			genTX := childTokensKept[0].TxRecord
+			genTX = childTokensKept[0].TxRecord
 			if genTX == nil {
 				return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: generated transaction record is nil")
 			}
@@ -127,6 +129,20 @@ func BuildTransactionInfoFromRequest(
 
 		if _, err := w.AddLockReferenceForToken(ctx, tx, tokenIDs, referenceID); err != nil {
 			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: failed to add lock reference for token %v: %w", rbtTokens, err)
+		}
+
+		// Before adding rbtTokens, add the previous transaction ID
+		if len(childTokensKept) > 0 && len(burntParentToken) > 0 {
+			for _, selectedTokens := range rbtTokens {
+				if genTX == nil {
+					return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest(RBT): generated transaction record is nil")
+				}
+
+				if selectedTokens.PreviousTransactionID == "" {
+					selectedTokens.PreviousTransactionID = genTX.ID
+				}
+
+			}
 		}
 
 		txTokens.RBT = rbtTokens

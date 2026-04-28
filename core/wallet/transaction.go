@@ -146,6 +146,31 @@ func (w *Wallet) GetGenesisTransactionIdByTokenId(tokenID string, isFullNode boo
 	return genesisTxnId, nil
 }
 
+// ReturnLatestTransactionIdByTokenId is similar to GetLatestTransactionIdByTokenId
+// It just returns empty string if no transaction is found for the given token id instead of returning an error
+func (w *Wallet) ReturnLatestTransactionIdByTokenId(tokenID string) (string, error) {
+	var row pgx.Row = w.db.Pool().QueryRow(w.Ctx,
+		`SELECT transaction_id 
+		FROM tokenchain 
+		WHERE id = (
+			SELECT index[array_upper(index, 1)] 
+			FROM tokenchain_index 
+			WHERE token_id = $1 
+		)`,
+		tokenID,
+	)
+	
+	var latestTxnId string
+	if err := row.Scan(&latestTxnId); err != nil {
+		if err == pgx.ErrNoRows {
+			return "", nil
+		}
+		return "", fmt.Errorf("GetLatestTransactionIdByTokenId scan: %w", err)
+	}
+	return latestTxnId, nil
+}
+
+
 // get latest transaction id of the given token id
 func (w *Wallet) GetLatestTransactionIdByTokenId(tokenID string, isFullNode bool) (string, error) {
 	var row pgx.Row

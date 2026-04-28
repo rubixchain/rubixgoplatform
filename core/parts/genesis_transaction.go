@@ -9,7 +9,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-func createGenesisTransaction(dc types.DIDCrypto,
+func createGenesisTransaction(w *wallet.Wallet, dc types.DIDCrypto,
 	freeTokens []models.Token, committedTokens []models.Token,
 	did string, network string,
 ) (*models.TransactionInfo, *models.Signature, error) {
@@ -17,16 +17,26 @@ func createGenesisTransaction(dc types.DIDCrypto,
 	var committedTokensInfo []*models.TokenInfo = make([]*models.TokenInfo, 0)
 
 	for _, token := range freeTokens {
+		prevTransactionID, err := w.ReturnLatestTransactionIdByTokenId(token.TokenID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("createGenesisTransaction: failed to get latest transaction id for token %s, err: %v", token.TokenID, err)
+		}
+
 		freeTokensInfo = append(freeTokensInfo, &models.TokenInfo{
 			TokenID:               token.TokenID,
-			PreviousTransactionID: token.TransactionID,
+			PreviousTransactionID: prevTransactionID,
 		})
 	}
 
 	for _, token := range committedTokens {
+		prevTransactionID, err := w.ReturnLatestTransactionIdByTokenId(token.TokenID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("createGenesisTransaction: failed to get latest transaction id for token %s, err: %v", token.TokenID, err)
+		}
+
 		committedTokensInfo = append(committedTokensInfo, &models.TokenInfo{
 			TokenID:               token.TokenID,
-			PreviousTransactionID: token.TransactionID,
+			PreviousTransactionID: prevTransactionID,
 		})
 	}
 
