@@ -408,36 +408,14 @@ func IsParentTokenBurnt(
 ) (error, bool) {
 	var parentTokenID string
 	var err error
-	var tokenDetails models.FullNodeRBT
-
-	if isFullNode {
-		tokenDetails, err = w.GetFullNodeRBTToken(tokenID)
-		if err != nil {
-			return fmt.Errorf("IsParentTokenBurnt:failed to get fullnode RBT token info %s: %w", tokenID, err), false
-		}
-
-		if !tokenDetails.ParentTokenID.Valid || tokenDetails.ParentTokenID.String == "" {
-			partTokenID := util.TokenID(tokenID)
-			parentTokenID, err = partTokenID.GetParentToken()
-			if err != nil {
-				return fmt.Errorf("IsParentTokenBurnt:failed to get parent for token %s: %w", partTokenID, err), false
-			}
-			if parentTokenID == "" {
-				return nil, false
-			}
-		} else {
-			parentTokenID = tokenDetails.ParentTokenID.String
-		}
-
-	} else {
-		partTokenID := util.TokenID(tokenID)
-		parentTokenID, err = partTokenID.GetParentToken()
-		if err != nil {
-			return fmt.Errorf("IsParentTokenBurnt: failed to get parent id of token %s: %w", partTokenID, err), false
-		}
-		if parentTokenID == "" {
-			return fmt.Errorf("IsParentTokenBurnt: failed to compute parent id of token %s: %w", partTokenID, err), false
-		}
+	
+	partTokenID := util.TokenID(tokenID)
+	parentTokenID, err = partTokenID.GetParentToken()
+	if err != nil {
+		return fmt.Errorf("IsParentTokenBurnt: failed to get parent id of token %s: %w", partTokenID, err), false
+	}
+	if parentTokenID == "" {
+		return fmt.Errorf("IsParentTokenBurnt: failed to compute parent id of token %s: %w", partTokenID, err), false
 	}
 
 	var genesisTx *models.Transactions
