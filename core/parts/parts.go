@@ -206,7 +206,7 @@ func CollectRBTTokens(
 	// NOTE: storeGenesisTx and util.PublishTransaction are NOT called here.
 	// The caller persists via w.PersistGenesisBatch.
 	log.Debug("CollectRBTTokens: Creating genesis transaction", "toKeepCount", len(tokensToKeepList), "toBurnCount", len(tokensBeingBurntList))
-	transactionInfo, signature, err := createGenesisTransaction(dc, tokensToKeepList, tokensBeingBurntList, did, network)
+	transactionInfo, signature, err := createGenesisTransaction(w, dc, tokensToKeepList, tokensBeingBurntList, did, network)
 	if err != nil {
 		log.Error("CollectRBTTokens: Failed to create genesis transaction", "err", err)
 		return nil, nil, nil, nil, fmt.Errorf("CollectRBTTokens: failed to get genesis transaction info, err: %v", err)
