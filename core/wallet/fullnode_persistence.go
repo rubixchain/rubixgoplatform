@@ -76,6 +76,14 @@ func (w *Wallet) PersistFullNodeTransaction(ctx context.Context, req *FullNodePe
 		if roleName == constants.TokenRole_Transfer && input.tokenInfo.PreviousTransactionID == "" {
 			roleName = constants.TokenRole_Mint
 		}
+		if roleName == constants.TokenRole_Execute && input.tokenInfo.PreviousTransactionID == "" {
+			roleName = constants.TokenRole_Deploy
+		}
+
+		//If roleName is commit and if length of req.TransactionInfo.quorums is = 0, then the roleName should be burnt
+		if roleName == constants.TokenRole_Commit && len(req.TransactionInfo.Quorums) == 0 {
+			roleName = constants.TokenRole_Burn
+		}
 		roleID := models.GetTokenRoleID(roleName)
 		if roleID <= 0 {
 			return fmt.Errorf("fullnode persistence: unsupported token role %q for token %q", roleName, input.tokenInfo.TokenID)
@@ -150,15 +158,15 @@ func collectFullNodeTokenInputs(txInfo *models.TransactionInfo) ([]fullNodeToken
 		if err := appendInputs(txInfo.Tokens.FT, constants.TokenType_FT, constants.TokenRole_Transfer); err != nil {
 			return nil, nil, err
 		}
-		if err := appendInputs(txInfo.Tokens.NFT, constants.TokenType_NFT, constants.TokenRole_Transfer); err != nil {
+		if err := appendInputs(txInfo.Tokens.NFT, constants.TokenType_NFT, constants.TokenRole_Deploy); err != nil {
 			return nil, nil, err
 		}
-		if err := appendInputs(txInfo.Tokens.SmartContract, constants.TokenType_SmartContract, constants.TokenRole_Transfer); err != nil {
+		if err := appendInputs(txInfo.Tokens.SmartContract, constants.TokenType_SmartContract, constants.TokenRole_Execute); err != nil {
 			return nil, nil, err
 		}
-	}
-	if err := appendInputs(txInfo.CommittedTokens, constants.TokenType_RBT, constants.TokenRole_Commit); err != nil {
-		return nil, nil, err
+		if err := appendInputs(txInfo.CommittedTokens, constants.TokenType_RBT, constants.TokenRole_Commit); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	return inputs, affected, nil
@@ -211,8 +219,8 @@ func buildFullNodeTokenChainRow(transactionID string, latestRow *models.TokenCha
 			prevTxID = &prev
 		} else {
 			position = 0
-			prev := transactionID
-			prevTxID = &prev
+
+			prevTxID = nil
 		}
 	}
 	return models.TokenChain{
@@ -250,6 +258,23 @@ func deriveFullNodeTokenState(existing fullNodeTokenState, txInfo *models.Transa
 	}
 	if txInfo.Owner != "" {
 		state.did = txInfo.Owner
+	}
+	// Keep status aligned with role-derived transitions.
+	switch input.roleName {
+	case constants.TokenRole_Burn:
+		state.tokenStatus = int16(constants.TokenStatus_Burnt)
+	case constants.TokenRole_Commit:
+		state.tokenStatus = int16(constants.TokenStatus_Committed)
+	case constants.TokenRole_Deploy:
+		state.tokenStatus = int16(constants.TokenStatus_Deployed)
+	case constants.TokenRole_Execute:
+		state.tokenStatus = int16(constants.TokenStatus_Executed)
+	case constants.TokenRole_Pledge:
+		state.tokenStatus = int16(constants.TokenStatus_Pledged)
+	case constants.TokenRole_Transfer:
+		state.tokenStatus = int16(constants.TokenStatus_Transferred)
+	case constants.TokenRole_Mint:
+		state.tokenStatus = int16(constants.TokenStatus_Generated)
 	}
 	state.transactionID = transactionID
 	state.latestPosition = position

@@ -46,7 +46,7 @@ func (ps *PubSub) GetTrackedTopicStats() (published int64, received int64) {
 func (ps *PubSub) startStatsReporter() {
 	ps.statsOnce.Do(func() {
 		go func() {
-			ticker := time.NewTicker(30 * time.Second)
+			ticker := time.NewTicker(120 * time.Second)
 			defer ticker.Stop()
 			var lastPub, lastRcv int64
 			for range ticker.C {
