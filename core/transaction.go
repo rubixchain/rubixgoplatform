@@ -11,6 +11,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/consensus"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -226,7 +227,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 			resp.Message = "invalid quorum token"
 			return resp
 		}
-		totalPledged += val
+		totalPledged = rubixmath.AddFloat(totalPledged, val)
 	}
 
 	if totalPledged < transactionValue {
