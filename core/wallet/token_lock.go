@@ -626,6 +626,15 @@ func (w *Wallet) lockTokensForSplitOnce(
 		}
 
 		rows.Close()
+		// Early exit:
+		// If bestLarge is already selected and no small tokens were found in this batch,
+		// we can safely stop scanning.
+		//
+		// For uniform-value token sets, this is provably correct.
+		//
+		// For mixed-value sets, the keyset cursor does NOT guarantee global DESC ordering
+		// across batch boundaries (see §1). Therefore, we only allow early exit when
+		// smallTokens is empty, ensuring correctness while preserving bestLarge as fallback.
 
 		if bestLarge != nil && len(smallTokens) == 0 && count == batchSize {
 			break
