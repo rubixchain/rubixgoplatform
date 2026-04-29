@@ -43,6 +43,12 @@ func (c *Core) UnpledgeV2(
 	quorumDID string,
 	proofTx *models.Transactions,
 ) error {
+	var eventUnpledgeInfo *models.EventUnpledgeInfo = &models.EventUnpledgeInfo{
+		UnpledgeInfo:          make([]models.MsgUnpledgeTokenInfo, 0),
+		UnpledgeTransactionID: "",
+		PledgeTransactionID: "",
+	}
+
 	if mainTxID == "" {
 		return fmt.Errorf("UnpledgeV2: mainTxID is required")
 	}
@@ -263,6 +269,19 @@ func (c *Core) UnpledgeV2(
 
 	if err := cleanupTx.Commit(ctx); err != nil {
 		return fmt.Errorf("UnpledgeV2: commit cleanup tx for mainTxID %q: %w", mainTxID, err)
+	}
+
+	eventUnpledgeInfo.UnpledgeTransactionID = proofTx.ID
+	eventUnpledgeInfo.PledgeTransactionID = mainTxID
+	for _, tokenID := range pledgeTokens {
+		eventUnpledgeInfo.UnpledgeInfo = append(eventUnpledgeInfo.UnpledgeInfo, models.MsgUnpledgeTokenInfo{
+			TokenID: tokenID,
+		})
+	}
+
+	if err := util.PublishUnpledgeInfo(c.ps, eventUnpledgeInfo); err != nil {
+		c.log.Error("UnpledgeV2: failed to publish unpledge event", "mainTxID", mainTxID, "error", err)
+		// Non-fatal: the unpledge succeeded, so return nil even if the event publish fails.
 	}
 
 	c.log.Info("UnpledgeV2 complete", "mainTxID", mainTxID, "tokens", len(pledgeTokens))

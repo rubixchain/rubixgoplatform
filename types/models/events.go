@@ -1,11 +1,11 @@
 package models
 
 type EventTransaction struct {
-	Transaction *Transactions `json:"transaction"`
-	Status      bool          `json:"status"`
-	Message     string        `json:"message"`
-	TransactionID string      `json:"transaction_id"`
-	AssetType   int           `json:"asset_type"`
+	Transaction   *Transactions `json:"transaction"`
+	Status        bool          `json:"status"`
+	Message       string        `json:"message"`
+	TransactionID string        `json:"transaction_id"`
+	AssetType     int           `json:"asset_type"`
 }
 
 type EventSmartContractPublishInfo struct {
@@ -25,4 +25,14 @@ type EventNFTPublishInfo struct {
 	Epoch                int    `json:"epoch"`
 	NFTData              string `json:"nft_data"`
 	NFTOwnershipTransfer bool   `json:"nft_ownership_transfer,omitempty"`
+}
+
+type EventUnpledgeInfo struct {
+	UnpledgeInfo          []MsgUnpledgeTokenInfo `json:"unpledgeInfo"`
+	PledgeTransactionID   string                 `json:"pledgeTransactionID"`
+	UnpledgeTransactionID string                 `json:"unpledgeTransactionID"`
+}
+
+type MsgUnpledgeTokenInfo struct {
+	TokenID               string `json:"tokenId"`
 }
