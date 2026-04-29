@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	lockTokensForSplitRetryBudget = 3 * time.Second
+	lockTokensForSplitRetryBudget = 15 * time.Second
 	lockTokensForSplitMaxRetries  = 5
 )
 
