@@ -139,13 +139,14 @@ func (c *Core) UnpledgeV2(
 	}
 	defer unpledgeTx.Rollback(ctx) //nolint:errcheck
 
-	// Step 1: Insert proofTx in `transaction` table
-	// if _, err := unpledgeTx.Exec(ctx, `
-	//     INSERT INTO transactions (id, info, signature)
-	// 	VALUES ($1, $2, $3)
-	// `, proofTx.ID, proofTx.Info, proofTx.Signature); err != nil {
-	// 	return fmt.Errorf("UnpledgeV2: insert proofTx into transactions table for prevTX %q: %w", mainTxID, err)
-	// }
+	// Step 0: Insert proofTx in `transaction` table
+	if _, err := unpledgeTx.Exec(ctx, `
+	    INSERT INTO transactions (id, info, signature)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (id) DO NOTHING
+	`, proofTx.ID, proofTx.Info, proofTx.Signature); err != nil {
+		return fmt.Errorf("UnpledgeV2: insert proofTx into transactions table for prevTX %q: %w", mainTxID, err)
+	}
 
 	// Step 1: Add tokenchain and tokenchain_index entries for unpledge tokens
 	rows, err := unpledgeTx.Query(ctx, `
@@ -222,13 +223,13 @@ func (c *Core) UnpledgeV2(
 
 
 	if err := unpledgeTx.Commit(ctx); err != nil {
-		return fmt.Errorf("UnpledgeV2: commit unpledge tx for mainTxID %q: %w", mainTxID, err)
+		return fmt.Errorf("UnpledgeV2: commit unpledge tx for mainTxID %q, proofTxID %q: %w", mainTxID, proofTx.ID, err)
 	}
 
 	// All tokens succeeded — increment token_denom and delete the sequence row.
 	cleanupTx, err := c.w.BeginTx(ctx)
 	if err != nil {
-		return fmt.Errorf("UnpledgeV2: begin cleanup tx for mainTxID %q: %w", mainTxID, err)
+		return fmt.Errorf("UnpledgeV2: begin cleanup tx for mainTxID %q, proofTxID %q: %w", mainTxID, proofTx.ID, err)
 	}
 	defer cleanupTx.Rollback(ctx) //nolint:errcheck
 
@@ -239,7 +240,7 @@ func (c *Core) UnpledgeV2(
 		if err != nil {
 			// Non-fatal: log and skip so we still delete the sequence row.
 			c.log.Error("UnpledgeV2: get token value for denom update",
-				"tokenID", tokenID, "mainTxID", mainTxID, "error", err)
+				"tokenID", tokenID, "mainTxID", mainTxID, "proofTxID", proofTx.ID, "error", err)
 			continue
 		}
 		tokenDenomMap[tokenValue]++
@@ -256,7 +257,7 @@ func (c *Core) UnpledgeV2(
 				count = token_denom.count + EXCLUDED.count,
 				updated_at = NOW()
 		`, quorumDID, denomValueList, denomCountList); err != nil {
-			return fmt.Errorf("UnpledgeV2: increment token_denom for mainTxID %q: %w", mainTxID, err)
+			return fmt.Errorf("UnpledgeV2: increment token_denom for mainTxID %q, proofTxID %q: %w", mainTxID, proofTx.ID, err)
 		}
 	}
 
@@ -264,11 +265,11 @@ func (c *Core) UnpledgeV2(
 	if _, err := cleanupTx.Exec(ctx,
 		`DELETE FROM unpledge_sequence_info WHERE tx_id = $1`, mainTxID,
 	); err != nil {
-		return fmt.Errorf("UnpledgeV2: delete unpledge_sequence_info for mainTxID %q: %w", mainTxID, err)
+		return fmt.Errorf("UnpledgeV2: delete unpledge_sequence_info for mainTxID %q, proofTxID %q: %w", mainTxID, proofTx.ID, err)
 	}
 
 	if err := cleanupTx.Commit(ctx); err != nil {
-		return fmt.Errorf("UnpledgeV2: commit cleanup tx for mainTxID %q: %w", mainTxID, err)
+		return fmt.Errorf("UnpledgeV2: commit cleanup tx for mainTxID %q, proofTxID %q: %w", mainTxID, proofTx.ID, err)
 	}
 
 	eventUnpledgeInfo.UnpledgeTransactionID = proofTx.ID
@@ -280,11 +281,11 @@ func (c *Core) UnpledgeV2(
 	}
 
 	if err := util.PublishUnpledgeInfo(c.ps, eventUnpledgeInfo); err != nil {
-		c.log.Error("UnpledgeV2: failed to publish unpledge event", "mainTxID", mainTxID, "error", err)
+		c.log.Error("UnpledgeV2: failed to publish unpledge event", "mainTxID", mainTxID, "proofTxID", proofTx.ID, "error", err)
 		// Non-fatal: the unpledge succeeded, so return nil even if the event publish fails.
 	}
 
-	c.log.Info("UnpledgeV2 complete", "mainTxID", mainTxID, "tokens", len(pledgeTokens))
+	c.log.Info("UnpledgeV2 complete", "mainTxID", mainTxID, "proofTxID", proofTx.ID, "tokens", len(pledgeTokens))
 
 	return nil
 }
