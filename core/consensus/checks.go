@@ -408,7 +408,7 @@ func IsParentTokenBurnt(
 ) (error, bool) {
 	var parentTokenID string
 	var err error
-	
+
 	partTokenID := util.TokenID(tokenID)
 	parentTokenID, err = partTokenID.GetParentToken()
 	if err != nil {
@@ -655,6 +655,22 @@ func TokenChainIntegrityCheck(
 				label:                 tokenType,
 			})
 		}
+	}
+
+	// Include CommittedTokens (parent tokens being burnt/split). Without this,
+	// the parent's prior chain history is never synced, and the upcoming chain
+	// row insert can fail with a foreign-key violation on
+	// previous_transaction_id when the prior tx is missing locally.
+	for _, t := range txnInfo.CommittedTokens {
+		if t == nil || t.TokenID == "" || t.PreviousTransactionID == "" {
+			continue
+		}
+		allTokens = append(allTokens, tokenCheck{
+			tokenID:               t.TokenID,
+			previousTransactionID: t.PreviousTransactionID,
+			syncFromPeerDID:       txnInfo.Initiator,
+			label:                 "committed",
+		})
 	}
 
 	if isFullnode {

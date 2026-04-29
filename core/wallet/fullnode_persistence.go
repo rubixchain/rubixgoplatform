@@ -99,6 +99,24 @@ func (w *Wallet) PersistFullNodeTransaction(ctx context.Context, req *FullNodePe
 			return err
 		}
 
+		// Strong idempotency: if a row already exists for this (token_id,
+		// transaction_id) at any position, skip adding it again. This prevents
+		// duplicate pubsub deliveries from inserting an additional row with the
+		// same transaction_id (which used to manifest as either two rows with
+		// the same transaction_id or a self-referencing row at position+1).
+		existingRow, err := w.findFullNodeTokenChainRowByTokenIDTx(ctx, tx, input.tokenInfo.TokenID, req.Transaction.ID)
+		if err != nil {
+			return err
+		}
+		if existingRow != nil {
+			w.log.Debug("PersistFullNodeTransaction: skipping duplicate chain row",
+				"tokenID", input.tokenInfo.TokenID,
+				"transactionID", req.Transaction.ID,
+				"existingPosition", existingRow.Position,
+			)
+			continue
+		}
+
 		chainRow, position := buildFullNodeTokenChainRow(req.Transaction.ID, latestRow, input.tokenInfo.PreviousTransactionID, int16(roleID), input.tokenInfo.TokenID)
 		tokenChainRows = append(tokenChainRows, chainRow)
 
@@ -168,6 +186,14 @@ func collectFullNodeTokenInputs(txInfo *models.TransactionInfo) ([]fullNodeToken
 			return nil, nil, err
 		}
 	}
+	//If there are pledged tokens in txInfo.Quorums, add them to the inputs
+	if len(txInfo.Quorums) > 0 {
+		for _, quorum := range txInfo.Quorums {
+			if err := appendInputs(quorum.Tokens, constants.TokenType_RBT, constants.TokenRole_Pledge); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
 
 	return inputs, affected, nil
 }
@@ -183,6 +209,29 @@ func (w *Wallet) insertFullNodeTransaction(ctx context.Context, tx pgx.Tx, trans
 	}
 	w.log.Debug("insertFullNodeTransaction: Transactions inserted successfully")
 	return nil
+}
+
+// findFullNodeTokenChainRowByTokenIDTx returns the row matching (tokenID,
+// transactionID) at any position, or (nil, nil) if no such row exists.
+// This is used to enforce idempotency on duplicate pubsub deliveries: a
+// (token_id, transaction_id) pair must never be inserted more than once.
+func (w *Wallet) findFullNodeTokenChainRowByTokenIDTx(ctx context.Context, tx pgx.Tx, tokenID, transactionID string) (*models.TokenChain, error) {
+	var row models.TokenChain
+	err := tx.QueryRow(ctx, `
+		SELECT id, token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at
+		FROM fullnode_tokenchain
+		WHERE token_id = $1 AND transaction_id = $2
+		LIMIT 1
+	`, tokenID, transactionID).Scan(
+		&row.ID, &row.TokenID, &row.TransactionID, &row.PreviousTransactionID, &row.Role, &row.Position, &row.CreatedAt, &row.UpdatedAt,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("fullnode persistence: lookup tokenchain row by tx id for token %q tx %q: %w", tokenID, transactionID, err)
+	}
+	return &row, nil
 }
 
 func (w *Wallet) readLatestFullNodeTokenChainRowTx(ctx context.Context, tx pgx.Tx, tokenID string) (*models.TokenChain, error) {
@@ -206,6 +255,21 @@ func (w *Wallet) readLatestFullNodeTokenChainRowTx(ctx context.Context, tx pgx.T
 }
 
 func buildFullNodeTokenChainRow(transactionID string, latestRow *models.TokenChain, previousTransactionID string, roleID int16, tokenID string) (models.TokenChain, int64) {
+	// Idempotency: if this exact transaction is already the latest row for the
+	// token, return that row unchanged. Prevents duplicate pubsub deliveries
+	// from creating self-referencing chain rows (transaction_id ==
+	// previous_transaction_id at position+1).
+	if latestRow != nil && latestRow.TransactionID == transactionID {
+		return models.TokenChain{
+			ID:                    latestRow.ID,
+			TokenID:               latestRow.TokenID,
+			TransactionID:         latestRow.TransactionID,
+			PreviousTransactionID: latestRow.PreviousTransactionID,
+			Role:                  latestRow.Role,
+			Position:              latestRow.Position,
+		}, latestRow.Position
+	}
+
 	var position int64
 	var prevTxID *string
 	if latestRow != nil {
@@ -219,7 +283,6 @@ func buildFullNodeTokenChainRow(transactionID string, latestRow *models.TokenCha
 			prevTxID = &prev
 		} else {
 			position = 0
-
 			prevTxID = nil
 		}
 	}
