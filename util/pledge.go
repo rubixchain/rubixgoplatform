@@ -21,7 +21,7 @@ func PublishUnpledgeInfo(pubsub *types.PubSub, eventUnpledgeInfo *models.EventUn
 		return fmt.Errorf("PublishUnpledgeInfo: pledge transaction ID is required")
 	}
 
-	if err := pubsub.Publish(constants.Event_RubixTxns, eventUnpledgeInfo); err != nil {
+	if err := pubsub.Publish(constants.Event_Unpledge, eventUnpledgeInfo); err != nil {
 		return fmt.Errorf("PublishUnpledgeInfo: failed to publish unpledge info, err: %v", err)
 	}
 
