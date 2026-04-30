@@ -391,7 +391,7 @@ func ValidateTransactionValueAndPledge(txnInfo *models.TransactionInfo) error {
 
 	if transactionValue > totalPledgeValue {
 		return fmt.Errorf(
-			"transaction value (%v) does not match total pledge amount (%v)",
+			"transaction value (%v) is more than the total pledge amount (%v)",
 			transactionValue, totalPledgeValue,
 		)
 	}

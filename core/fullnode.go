@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -131,7 +132,6 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 	}
 
 	var lastErr error
-
 	for attempt := 0; attempt < c.txnProcessor.maxRetries; attempt++ {
 		if attempt > 0 {
 			c.log.Info("Retrying transaction processing",
@@ -162,7 +162,19 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 	// e.g. peer becomes reachable for chain sync).
 	c.txnProcessor.processedTxns.Delete(txnEvent.TransactionID)
 
-	c.handleFailedTransaction(txnEvent, lastErr)
+	// If the terminal failure is a validation failure, persist it once to the
+	// invalid transactions table for audit. Doing this only here (instead of
+	// inside processSingleTransaction) avoids writing the same row once per
+	// retry attempt.
+	if lastErr != nil &&
+		txnEvent.Transaction != nil &&
+		strings.Contains(lastErr.Error(), "failed to validate transaction") {
+		if persistErr := c.w.StoreInvalidTransaction(txnEvent.Transaction, lastErr.Error()); persistErr != nil {
+			c.log.Error("processTxnWithRetry: failed to persist invalid transaction",
+				"txnID", txnEvent.TransactionID,
+				"error", persistErr)
+		}
+	}
 }
 
 // processSingleTransaction validates and stores a transaction to the DB.
@@ -204,20 +216,13 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 	syncTxChains := func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error {
 		return c.SyncTransactionChainsFromPeer(peerDID, tokenIDs, prevTxIDs, excludeTxIDs, false, c.fullNode)
 	}
-	isTransactionInfoValidated, err := consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, quorumDCs, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains)
+	_, err = consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, quorumDCs, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains)
 	if err != nil {
 		c.log.Error("processSingleTransaction:failed to validate transaction", "error", err)
+		// Storing the invalid transaction is deferred to processTxnWithRetry,
+		// which records it once after all retries are exhausted instead of on
+		// every attempt.
 		return fmt.Errorf("processSingleTransaction: failed to validate transaction: %w", err)
-	}
-	if !isTransactionInfoValidated {
-		validationErr := fmt.Errorf("transaction validation failed")
-		c.log.Error("processSingleTransaction:failed to validate transaction", "error", validationErr)
-
-		if persistErr := c.w.StoreInvalidTransaction(txn, validationErr.Error()); persistErr != nil {
-			c.log.Error("processSingleTransaction:failed to persist invalid transaction", "error", persistErr)
-		}
-
-		return fmt.Errorf("processSingleTransaction: failed to validate transaction: %w", validationErr)
 	}
 
 	//store the transaction

@@ -96,7 +96,10 @@ func (w *Wallet) GetFullNodeSmartContractToken(tokenID string) (models.FullNodeS
 	return t, nil
 }
 
-// StoreInvalidTransaction stores failed validation payloads in fullnode_invalid_transactions.
+// StoreInvalidTransaction stores failed validation payloads in
+// fullnode_invalid_transactions. The caller is responsible for ensuring this
+// is invoked at most once per transaction (e.g. only after all retries are
+// exhausted) — duplicate calls will produce duplicate rows.
 func (w *Wallet) StoreInvalidTransaction(transaction *models.Transactions, reason string) error {
 	if transaction == nil {
 		return fmt.Errorf("StoreInvalidTransaction: transaction is nil")
