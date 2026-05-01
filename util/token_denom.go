@@ -128,6 +128,11 @@ func GetRbtIDElements(tokenID string) (types.RbtIDElements, error) {
 	var err error
 	rbtElems := types.RbtIDElements{}
 
+	// Check if the token is a Smart Contract or NFT
+	if strings.HasPrefix(tokenID, "Qm") {
+		return types.RbtIDElements{}, fmt.Errorf("token ID %v is most likely a NFT or Smart Contract", tokenID)
+	}
+
 	// check if token id is ft id, by checking if the length of the id is more than legth of DID (59)
 	if len(tokenID) > 59 {
 		return types.RbtIDElements{}, fmt.Errorf("invalid token id format for rbt: %s, id length should be <= 15 (<max 2 digits level>_<max 7 digits token number>_<max 4 digits part index>)", tokenID)

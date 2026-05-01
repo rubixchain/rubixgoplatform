@@ -350,10 +350,14 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.Transac
 		}
 
 		var parentTokenID string
-		if tokenValue != rubixmath.OneFloat() {
-			parentTokenID, err = util.TokenID(tokenID).GetParentToken()
-			if err != nil {
-				return fmt.Errorf("applyTokenChainFromSync: failed to get parent token ID for %s: %w", tokenID, err)
+		_, err := util.GetRbtIDElements(tokenID)
+		// Only get parent token for RBT token
+		if err == nil {
+			if tokenValue != rubixmath.OneFloat() {
+				parentTokenID, err = util.TokenID(tokenID).GetParentToken()
+				if err != nil {
+					return fmt.Errorf("applyTokenChainFromSync: failed to get parent token ID for %s: %w", tokenID, err)
+				}
 			}
 		}
 
