@@ -524,7 +524,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	// Return immediately - receiver sync happens in background (if needed)
 	c.log.Info("InitiateTransaction: Transaction completed successfully", "transactionID", transactionId, "initiator", initiatorDID, "receiver", nextOwnerDID)
 	resp.Status = true
-	resp.Message = "Transfer initiated successfully"
+	resp.Message = fmt.Sprintf("Transaction %v completed successfully", transactionId)
 	resp.Result = map[string]interface{}{
 		"transactionID": transactionId,
 	}
