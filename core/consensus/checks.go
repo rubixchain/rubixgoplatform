@@ -228,19 +228,82 @@ func ValidateTokenOwnershipByPrevTxn(txnInfo *models.TransactionInfo, isFullnode
 	if isFullnode {
 		for _, quorum := range txnInfo.Quorums {
 			for _, t := range quorum.Tokens {
-				tokenDetails, err := w.GetFullNodeRBTToken(t.TokenID)
-				if err != nil {
-					return fmt.Errorf("failed to get fullnode RBT token %s: %w", t.TokenID, err)
-				} // Handle the case where there is no RBT token in the fullnode rbt tokens table,
-				//If we call, ValidateTokenOwnershipByPrevTxn function after calling the TokenChainIntigrityCheck function,
-				//There is no need to sync the transaction chain from the peer, because the TokenChainIntigrityCheck function will sync the transaction chain from the peer.
-				previousTransactionOwner := tokenDetails.DID
-				if previousTransactionOwner != quorum.Did {
-					return fmt.Errorf("ValidateTokenOwnershipByPrevTxn: ownership mismatch, quorum %s does not match owner %s of previous transaction %s", quorum.Did, tokenDetails.DID, t.TokenID)
+				//skip the check if the token is just now minted token
+				if t.PreviousTransactionID == "" {
+					continue
 				}
+				prevTx, err := w.GetTransactionByID(t.PreviousTransactionID, isFullnode)
+				if err != nil {
+					return fmt.Errorf("failed to get previous transaction %s: %w", t.PreviousTransactionID, err)
+				}
+				if prevTx == nil {
+					return fmt.Errorf("previous transaction %s not found", t.PreviousTransactionID)
+				}
+				var prevTxnInfo models.TransactionInfo
+				if err := json.Unmarshal(prevTx.Info, &prevTxnInfo); err != nil {
+					return fmt.Errorf("failed to unmarshal info of previous transaction %s: %w", t.PreviousTransactionID, err)
+				}
+
+				//lets call the previous transaction as tx2.
+				tokenChainForToken, err := w.GetTokenChainByTokenID(t.TokenID, isFullnode)
+				if err != nil {
+					return fmt.Errorf("ValidateTokenOwnershipByPrevTxn: failed to get latest role for token %s: %w", t.TokenID, err)
+				}
+				if len(tokenChainForToken) == 0 {
+					return fmt.Errorf("ValidateTokenOwnershipByPrevTxn: token chain not found for token %s, possible failure in syncing of the token", t.TokenID)
+				}
+
+				latestTokenChain := tokenChainForToken[len(tokenChainForToken)-1]
+				// If role is unpledged, we validate the whether the unpledge done is valid
+				if latestTokenChain.Role == int16(models.GetTokenRoleID(constants.TokenRole_Unpledge)) {
+					// There should be atleast a pledge and an unpledge block in the token chain for that token,
+					// because if the role is unpledged, then it means that token should have been pledged before
+					// and then unpledged in the previous transaction.
+					if len(tokenChainForToken) < 2 {
+						return fmt.Errorf("ValidateTokenOwnershipByPrevTxn: insufficient token chain entries for token %s to verify unpledged token's ownership", t.TokenID)
+					}
+
+					previousTransactionID := latestTokenChain.PreviousTransactionID
+					if previousTransactionID == nil {
+						return fmt.Errorf("ValidateTokenOwnershipByPrevTxn: previous transaction ID is nil for token %s that is unpledged", t.TokenID)
+					}
+
+					pledgedTxn, err := w.GetTransactionByID(*previousTransactionID, isFullnode)
+					if err != nil {
+						return fmt.Errorf("failed to get pledged transaction %s: %w", *previousTransactionID, err)
+					}
+					if pledgedTxn == nil {
+						return fmt.Errorf("pledged transaction %s not found", *previousTransactionID)
+					}
+					var pledgedTxnInfo models.TransactionInfo
+					if err := json.Unmarshal(pledgedTxn.Info, &pledgedTxnInfo); err != nil {
+						return fmt.Errorf("failed to unmarshal info of pledged transaction %s: %w", *previousTransactionID, err)
+					}
+
+					// The unpledged token must exist in the original pledge transaction's quorum tokens.
+					if !isTokenPledged(&pledgedTxnInfo, t.TokenID) {
+						return fmt.Errorf("token %s is marked unpledged but not found in quorum tokens of pledged transaction %s", t.TokenID, *previousTransactionID)
+					}
+					// tx1 and tx2 must have at least one common token.
+					if !getTransactionTokens(&pledgedTxnInfo, &prevTxnInfo) {
+						return fmt.Errorf("no common transaction tokens found between pledged transaction %s and previous transaction %s", *previousTransactionID, prevTx.ID)
+					}
+				} else {
+					//If previous txn details are not there in the fullnode side, sync those transaction details from the initiator.
+					//In general, Previous transaction won't be nil, because we are calling this function after the sync in the  TokenChainIntigretyCheck function.
+					if prevTxnInfo.Owner != quorum.Did {
+						return fmt.Errorf(
+							"ownership mismatch: initiator %s does not match owner %s of previous transaction %s (affected tokens: %v)",
+							txnInfo.Initiator, prevTxnInfo.Owner, prevTx.ID, t.TokenID,
+						)
+					}
+
+				}
+
 			}
 		}
 	}
+
 	return nil
 
 }
