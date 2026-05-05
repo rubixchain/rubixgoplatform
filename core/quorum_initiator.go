@@ -104,6 +104,23 @@ func (c *Core) requestPledgeTokenHandler(request *ensweb.Request) *ensweb.Result
 		return c.l.RenderJSON(request, &response, http.StatusNotFound)
 	}
 	dc := c.pqc[did]
+
+	// add initiator peer details to dids table, if it is not already present
+	if isExist := c.IsDIDExist(pledgeTokenRequest.InitiatorPeerInfo.DID); !isExist {
+		if pledgeTokenRequest.InitiatorPeerInfo.PeerID != c.peerID {
+			pledgeTokenRequest.InitiatorPeerInfo.Local = false
+		} else {
+			pledgeTokenRequest.InitiatorPeerInfo.Local = true
+		}
+		err = c.AddPeerDetails(*pledgeTokenRequest.InitiatorPeerInfo)
+		if err != nil {
+			errMsg := fmt.Sprintf("requestPledgeTokenHandler: Failed to add initiator peer info to db; err: %v", err)
+			c.log.Error(errMsg)
+			response.Message = errMsg
+			return c.l.RenderJSON(request, &response, http.StatusBadRequest)
+		}
+	}
+
 	// Strict minimal liquidity guard (260409-0ko):
 	// Cheap pre-check to short-circuit pledge requests when the quorum clearly
 	// does not have enough free RBT balance. This avoids entering
@@ -219,7 +236,6 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 			transactionTokens = append(transactionTokens, sc.TokenID)
 		}
 	}
-
 
 	//Need to call ValidateTransaction function here
 	initiatorDIDCrypto, err := c.InitialiseDID(txnInfo.Initiator)

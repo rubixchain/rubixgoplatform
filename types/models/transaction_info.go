@@ -1,6 +1,8 @@
 package models
 
-import "encoding/json"
+import (
+	"encoding/json"
+)
 
 type TransactionInfo struct {
 	Initiator       string             `json:"initiator"`
@@ -81,8 +83,9 @@ type SmartContractInfo struct {
 }
 
 type PledgeTokenRequest struct {
-	ReferenceId      string  `json:"referenceId"`
-	TransactionValue float64 `json:"transactionValue"`
+	ReferenceId       string  `json:"referenceId"`
+	TransactionValue  float64 `json:"transactionValue"`
+	InitiatorPeerInfo *DID    `json:"initiator_info"`
 }
 
 type PledgeTokenResponse struct {
@@ -95,6 +98,7 @@ type SendTokensRequest struct {
 	NFTOwnershipTransfer bool               `json:"nftOwnershipTransfer"`
 	TransactionInfo      *TransactionInfo   `json:"transactionInfo"`
 	Signature            *Signature         `json:"signature"`
+	InitiatorPeerInfo    *DID               `json:"initiator_info"`
 }
 
 // TokenChainResponse represents a single transaction in the smart contract token chain

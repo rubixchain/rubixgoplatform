@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/consensus"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -176,6 +177,14 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	pledgeTokenRequest := models.PledgeTokenRequest{
 		ReferenceId:      reqID,
 		TransactionValue: transactionValue,
+	}
+
+	// prepare did info to share with receiver
+	algoID, _ := c.w.GetDidAlgoIDByName(constants.DidAlgo_SECP256K1)
+	pledgeTokenRequest.InitiatorPeerInfo = &models.DID{
+		DID:    initiatorDID,
+		PeerID: c.peerID,
+		AlgoID: algoID,
 	}
 
 	var pledgeTokenResponse models.PledgeTokenResponse
@@ -582,6 +591,14 @@ func (c *Core) sendTokensToReceiver(
 		sendTokensRequest.NFTOwnershipTransfer = request.Tokens.TransferNFTOwnership
 	}
 
+	// prepare did info to share with receiver
+	algoID, _ := c.w.GetDidAlgoIDByName(constants.DidAlgo_SECP256K1)
+	sendTokensRequest.InitiatorPeerInfo = &models.DID{
+		DID:    txInfo.Initiator,
+		PeerID: c.peerID,
+		AlgoID: algoID,
+	}
+
 	// Send tokens to receiver with 2-minute timeout
 	// SendJSONRequest has built-in retry logic (3 attempts with exponential backoff)
 	err = receiverPeer.SendJSONRequest(
@@ -648,6 +665,14 @@ func (c *Core) sendTokensToReceiverSync(
 		sendTokensRequest.NFTOwnershipTransfer = request.Tokens.TransferNFTOwnership
 	}
 
+	// prepare did info to share with receiver
+	algoID, _ := c.w.GetDidAlgoIDByName(constants.DidAlgo_SECP256K1)
+	sendTokensRequest.InitiatorPeerInfo = &models.DID{
+		DID:    txInfo.Initiator,
+		PeerID: c.peerID,
+		AlgoID: algoID,
+	}
+
 	// Send tokens to receiver with 2-minute timeout
 	// SendJSONRequest has built-in retry logic (3 attempts with exponential backoff)
 	err = receiverPeer.SendJSONRequest(
@@ -697,6 +722,22 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 		c.log.Error("SendTokens: Failed to parse json request", "err", err)
 		crep.Message = "SendTokens: Failed to parse json request"
 		return c.l.RenderJSON(request, &crep, http.StatusBadRequest)
+	}
+
+	// add initiator peer details to dids table, if not there
+	if isExist := c.IsDIDExist(sendTokensRequest.InitiatorPeerInfo.DID); !isExist {
+		if sendTokensRequest.InitiatorPeerInfo.PeerID != c.peerID {
+			sendTokensRequest.InitiatorPeerInfo.Local = false
+		} else {
+			sendTokensRequest.InitiatorPeerInfo.Local = true
+		}
+		err = c.AddPeerDetails(*sendTokensRequest.InitiatorPeerInfo)
+		if err != nil {
+			errMsg := fmt.Sprintf("SendTokens: Failed to add initiator peer info to db; err: %v", err)
+			c.log.Error(errMsg)
+			crep.Message = errMsg
+			return c.l.RenderJSON(request, &crep, http.StatusBadRequest)
+		}
 	}
 
 	if sendTokensRequest.TransactionInfo == nil || sendTokensRequest.Signature == nil {
