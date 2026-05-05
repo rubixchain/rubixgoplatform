@@ -180,7 +180,13 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	}
 
 	// prepare did info to share with receiver
-	algoID, _ := c.w.GetDidAlgoIDByName(constants.DidAlgo_SECP256K1)
+	algoID, err := c.w.GetDidAlgoIDByName(constants.DidAlgo_SECP256K1)
+	if err != nil {
+		errMsg := fmt.Sprintf("InitiateTransaction: Failed to get algoID of Initiator, quorumDID: %s, err: %v", quorumAddresses[0], err)
+		c.log.Error(errMsg)
+		resp.Message = errMsg
+		return resp
+	}
 	pledgeTokenRequest.InitiatorPeerInfo = &models.DID{
 		DID:    initiatorDID,
 		PeerID: c.peerID,
@@ -592,7 +598,14 @@ func (c *Core) sendTokensToReceiver(
 	}
 
 	// prepare did info to share with receiver
-	algoID, _ := c.w.GetDidAlgoIDByName(constants.DidAlgo_SECP256K1)
+	algoID, err := c.w.GetDidAlgoIDByName(constants.DidAlgo_SECP256K1)
+	if err != nil {
+		c.log.Warn("sendTokensToReceiver: failed to get algo ID of Initiator (will sync later)",
+			"receiver", receiverDID,
+			"transactionID", transactionID,
+			"err", err)
+		return
+	}
 	sendTokensRequest.InitiatorPeerInfo = &models.DID{
 		DID:    txInfo.Initiator,
 		PeerID: c.peerID,
@@ -666,7 +679,12 @@ func (c *Core) sendTokensToReceiverSync(
 	}
 
 	// prepare did info to share with receiver
-	algoID, _ := c.w.GetDidAlgoIDByName(constants.DidAlgo_SECP256K1)
+	algoID, err := c.w.GetDidAlgoIDByName(constants.DidAlgo_SECP256K1)
+	if err != nil {
+		errMsg := fmt.Sprintf("sendTokensToReceiver: failed to get algo ID of Initiator, will sync later; receiver: %s, transactionID: %s, err: %s", receiverDID, transactionID, err)
+		c.log.Warn(errMsg)
+		return fmt.Errorf(errMsg)
+	}
 	sendTokensRequest.InitiatorPeerInfo = &models.DID{
 		DID:    txInfo.Initiator,
 		PeerID: c.peerID,
