@@ -744,6 +744,12 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 
 	// add initiator peer details to dids table, if not there
 	if isExist := c.IsDIDExist(sendTokensRequest.InitiatorPeerInfo.DID); !isExist {
+		if sendTokensRequest.InitiatorPeerInfo.PeerID == "" {
+			errMsg := fmt.Sprintf("SendTokens: Failed to register initiator peer info, peerID is empty; err: %v", err)
+			c.log.Error(errMsg)
+			crep.Message = errMsg
+			return c.l.RenderJSON(request, &crep, http.StatusBadRequest)
+		}
 		if sendTokensRequest.InitiatorPeerInfo.PeerID != c.peerID {
 			sendTokensRequest.InitiatorPeerInfo.Local = false
 		} else {
