@@ -238,6 +238,48 @@ func (c *Core) PledgeV2(
 		}
 	}
 
+	// Update the incoming transactions for the transaction tokens
+	_, err = pledgeTx.Exec(ctx, `
+		WITH inserted AS (
+			INSERT INTO tokenchain (
+				token_id,
+				transaction_id,
+				previous_transaction_id,
+				role,
+				position
+			)
+			SELECT
+				tc.token_id,
+				$2,
+				tc.transaction_id,
+				$3,
+				tc.position + 1
+			FROM (
+				SELECT DISTINCT ON (token_id)
+					token_id,
+					transaction_id,
+					position
+				FROM tokenchain
+				WHERE token_id = ANY($1::text[])
+				ORDER BY token_id, position DESC
+			) tc
+			RETURNING id, token_id
+		)
+		INSERT INTO tokenchain_index (token_id, index)
+		SELECT
+			i.token_id,
+			ARRAY[i.id]
+		FROM inserted i
+		ON CONFLICT (token_id)
+		DO UPDATE
+		SET index = tokenchain_index.index || EXCLUDED.index,
+			updated_at = NOW()
+		RETURNING token_id;
+	`,transactionTokens, mainTxID, int16(models.GetTokenRoleID(constants.TokenRole_Transfer)))
+	if err != nil {
+		return fmt.Errorf("PledgeV2: failed to insert tokenchain records for incoming tx: %v", err)
+	}
+
 	if err := pledgeTx.Commit(ctx); err != nil {
 		return fmt.Errorf("PledgeV2: commit pledge tx: %w", err)
 	}
