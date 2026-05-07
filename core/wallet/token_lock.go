@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	stdmath "math"
 	"math/rand"
 	"sort"
@@ -13,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -406,6 +408,44 @@ func (w *Wallet) LockFTTokens(ctx context.Context, ownerDID string, ftName strin
 	return selected, nil
 }
 
+func SelectTokensFromTokenDenomForLocking(
+	inputTokenDenom map[types.DenomValue]types.DenomCount,
+	transferAmount float64,
+) (denomArrForTokenSelection map[types.DenomValue]types.DenomCount, err error) {
+	denomArrForTokenSelection = make(map[types.DenomValue]types.DenomCount)
+
+	remaining := rubixmath.FloatPrecision(transferAmount)
+
+	var denomsArr []types.DenomValue = make([]types.DenomValue, 0)
+	for denom := range inputTokenDenom {
+		denomsArr = append(denomsArr, denom)
+	}
+	sort.Slice(denomsArr, func(i, j int) bool {
+		return denomsArr[i] > denomsArr[j]
+	})
+
+	for _, denomValue := range denomsArr {
+		if remaining <= 0 {
+			break
+		}
+
+		denomCount := inputTokenDenom[denomValue]
+
+		maxByTarget := int(math.Ceil(rubixmath.ScaledFloatDiv(remaining, denomValue)))
+
+		canTake := rubixmath.Min(int(denomCount), maxByTarget)
+
+		if canTake > 0 {
+			amount := rubixmath.FloatPrecision(float64(canTake) * denomValue)
+			denomArrForTokenSelection[denomValue] = int64(canTake)
+			remaining = rubixmath.FloatPrecision(remaining - amount)
+		}
+	}
+
+	return denomArrForTokenSelection, nil
+}
+
+
 // LockTokensForSplit selects and locks the minimum set of free RBT tokens needed
 // for the given amount, using a three-phase approach:
 //
@@ -470,6 +510,10 @@ func (w *Wallet) lockTokensForSplitOnce(
 	amount float64,
 	referenceID string,
 ) ([]models.Token, error) {
+	tokenDenom, err := w.GetTokenDenomArray(ownerDID)
+	if err != nil {
+		return nil, fmt.Errorf("lockTokensForSplitOnce: failed to get token denom for DID: %v, err: %v", ownerDID, err)
+	}
 
 	tx, err := w.db.BeginTx(ctx)
 	if err != nil {
@@ -483,181 +527,41 @@ func (w *Wallet) lockTokensForSplitOnce(
 
 	precAmount := rubixmath.FloatPrecision(amount)
 
-	// ─────────────────────────────────────────────
-	// STEP 1: token_denom planner
-	// ─────────────────────────────────────────────
-	rows, err := tx.Query(ctx, `
-		SELECT denom, count
-		FROM token_denom
-		WHERE did = $1
-	`, ownerDID)
+	denomArrayForTokenSelection, err := SelectTokensFromTokenDenomForLocking(tokenDenom, precAmount)
 	if err != nil {
-		return nil, fmt.Errorf("token_denom query: %w", err)
-	}
-	defer rows.Close()
-
-	var canUseSmall bool
-	var bestLargeDenom float64
-
-	for rows.Next() {
-		var denom float64
-		var count int
-
-		if err := rows.Scan(&denom, &count); err != nil {
-			return nil, fmt.Errorf("token_denom scan: %w", err)
-		}
-
-		if count == 0 {
-			continue
-		}
-
-		if rubixmath.FloatPrecision(denom) <= precAmount {
-			canUseSmall = true
-		}
-
-		if rubixmath.FloatPrecision(denom) > precAmount {
-			if bestLargeDenom == 0 || denom < bestLargeDenom {
-				bestLargeDenom = denom
-			}
-		}
+		return nil, err
 	}
 
-	// ─────────────────────────────────────────────
-	// STEP 2: Fast path (no small tokens exist)
-	// ─────────────────────────────────────────────
-	if !canUseSmall && bestLargeDenom > 0 {
+	var tokensToLockForTransaction []models.Token
 
-		var tok models.Token
-
-		err := tx.QueryRow(ctx, `
-			SELECT token_id, parent_token_id, token_value, token_status, did,
-			       transaction_id, token_state_hash, token_type,
-			       latest_position, latest_role, created_at, updated_at
-			FROM tokens
-			WHERE did=$1
-			  AND token_type=(SELECT id FROM token_type WHERE name=$2)
-			  AND token_status=$3
-			  AND token_value >= $4
-			ORDER BY token_value ASC
-			LIMIT 1
-			FOR UPDATE SKIP LOCKED
-		`, ownerDID, constants.TokenType_RBT, constants.TokenStatus_Free, amount).Scan(
-			&tok.TokenID, &tok.ParentTokenID, &tok.TokenValue, &tok.TokenStatus,
-			&tok.DID, &tok.TransactionID, &tok.TokenStateHash, &tok.TokenType,
-			&tok.LatestPosition, &tok.LatestRole, &tok.CreatedAt, &tok.UpdatedAt,
-		)
-
-		if err != nil {
-			return nil, fmt.Errorf("fast-path token fetch: %w", err)
-		}
-
-		return w.lockSelectedTokens(ctx, tx, []models.Token{tok}, referenceID)
-	}
-
-	// ─────────────────────────────────────────────
-	// STEP 3: Scan with correct early termination
-	// ─────────────────────────────────────────────
-
-	var smallTokens []models.Token
-	var smallSum float64
-
-	var bestLarge *models.Token
-
-	batchSize := 100
-	var lastSeenID string
-
-	for {
+	for denomValue, denomCount := range denomArrayForTokenSelection {
 		rows, err := tx.Query(ctx, `
 			SELECT token_id, parent_token_id, token_value, token_status, did,
 			       transaction_id, token_state_hash, token_type,
 			       latest_position, latest_role, created_at, updated_at
 			FROM tokens
-			WHERE did=$1
-			  AND token_type=(SELECT id FROM token_type WHERE name=$2)
-			  AND token_status=$3
-			  AND token_id > $5
+			WHERE did = $1
+			  AND token_type = (SELECT id FROM token_type WHERE name = $2)
+			  AND token_status = $3
+			  AND token_value = $4
 			ORDER BY token_value DESC, token_id ASC
-			LIMIT $4
+			LIMIT $5
 			FOR UPDATE SKIP LOCKED
-		`, ownerDID, constants.TokenType_RBT, constants.TokenStatus_Free, batchSize, lastSeenID)
-
+		`, ownerDID, constants.TokenType_RBT, constants.TokenStatus_Free, denomValue, denomCount)
 		if err != nil {
 			return nil, fmt.Errorf("scan query: %w", err)
 		}
 
-		count := 0
-
-		for rows.Next() {
-			count++
-
-			var tok models.Token
-			if err := rows.Scan(
-				&tok.TokenID, &tok.ParentTokenID, &tok.TokenValue, &tok.TokenStatus,
-				&tok.DID, &tok.TransactionID, &tok.TokenStateHash, &tok.TokenType,
-				&tok.LatestPosition, &tok.LatestRole, &tok.CreatedAt, &tok.UpdatedAt,
-			); err != nil {
-				rows.Close()
-				return nil, fmt.Errorf("scan: %w", err)
-			}
-
-			lastSeenID = tok.TokenID
-			precVal := rubixmath.FloatPrecision(tok.TokenValue)
-
-			if precVal <= precAmount {
-				smallTokens = append(smallTokens, tok)
-				smallSum = rubixmath.AddFloat(smallSum, precVal)
-
-				if rubixmath.FloatPrecision(smallSum) >= precAmount {
-					rows.Close()
-					return w.lockSelectedTokens(ctx, tx, smallTokens, referenceID)
-				}
-			} else {
-				// track smallest large token
-				if bestLarge == nil || precVal < rubixmath.FloatPrecision(bestLarge.TokenValue) {
-					t := tok
-					bestLarge = &t
-				}
-			}
-		}
-
-		if err := rows.Err(); err != nil {
+		denomTokens, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.Token])
+		if err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("rows err: %w", err)
+			return nil, fmt.Errorf("scan collect: %w", err)
 		}
 
-		rows.Close()
-		// Early exit:
-		// If bestLarge is already selected and no small tokens were found in this batch,
-		// we can safely stop scanning.
-		//
-		// For uniform-value token sets, this is provably correct.
-		//
-		// For mixed-value sets, the keyset cursor does NOT guarantee global DESC ordering
-		// across batch boundaries (see §1). Therefore, we only allow early exit when
-		// smallTokens is empty, ensuring correctness while preserving bestLarge as fallback.
-
-		if bestLarge != nil && len(smallTokens) == 0 && count == batchSize {
-			break
-		}
-
-		if count < batchSize {
-			break
-		}
+		tokensToLockForTransaction = append(tokensToLockForTransaction, denomTokens...)
 	}
-
-	// ─────────────────────────────────────────────
-	// STEP 4: Final decision
-	// ─────────────────────────────────────────────
-
-	if rubixmath.FloatPrecision(smallSum) >= precAmount {
-		return w.lockSelectedTokens(ctx, tx, smallTokens, referenceID)
-	}
-
-	if bestLarge != nil {
-		return w.lockSelectedTokens(ctx, tx, []models.Token{*bestLarge}, referenceID)
-	}
-
-	return nil, fmt.Errorf("insufficient balance")
+	
+	return w.lockSelectedTokens(ctx, tx, tokensToLockForTransaction, referenceID)
 }
 
 func (w *Wallet) AddLockReferenceForToken(ctx context.Context,
