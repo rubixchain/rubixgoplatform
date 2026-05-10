@@ -204,7 +204,7 @@ func collectFullNodeTokenInputs(txInfo *models.TransactionInfo) ([]fullNodeToken
 		if err := appendInputs(txInfo.Tokens.FT, constants.TokenType_FT, constants.TokenRole_Transfer); err != nil {
 			return nil, nil, err
 		}
-		if err := appendInputs(txInfo.Tokens.NFT, constants.TokenType_NFT, constants.TokenRole_Deploy); err != nil {
+		if err := appendInputs(txInfo.Tokens.NFT, constants.TokenType_NFT, constants.TokenRole_Execute); err != nil {
 			return nil, nil, err
 		}
 		if err := appendInputs(txInfo.Tokens.SmartContract, constants.TokenType_SmartContract, constants.TokenRole_Execute); err != nil {
