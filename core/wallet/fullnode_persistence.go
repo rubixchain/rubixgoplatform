@@ -102,7 +102,9 @@ func (w *Wallet) PersistFullNodeTransaction(ctx context.Context, req *FullNodePe
 		if roleName == constants.TokenRole_Transfer && input.tokenInfo.PreviousTransactionID == "" {
 			roleName = constants.TokenRole_Mint
 		}
+		w.log.Debug("PersistFullNodeTransaction:PreviousTransactionID1 is :", input.tokenInfo.PreviousTransactionID)
 		if roleName == constants.TokenRole_Execute && input.tokenInfo.PreviousTransactionID == "" {
+			w.log.Debug("PersistFullNodeTransaction:PreviousTransactionID2 is :", input.tokenInfo.PreviousTransactionID)
 			roleName = constants.TokenRole_Deploy
 		}
 
