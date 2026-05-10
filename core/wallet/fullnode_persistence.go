@@ -37,6 +37,32 @@ type fullNodeTokenState struct {
 	exists         bool
 }
 
+// This function returns the quorumDID corresponding the tokenID from the pledged tokens
+func FindDIDByTokenID(quorums []*models.QuorumInfo, tokenID string) (string, error) {
+	if tokenID == "" {
+		return "", fmt.Errorf("tokenID is empty")
+	}
+
+	for _, q := range quorums {
+		if q == nil {
+			continue
+		}
+		for _, t := range q.Tokens {
+			if t == nil {
+				continue
+			}
+			if t.TokenID == tokenID {
+				if q.Did == "" {
+					return "", fmt.Errorf("did is empty for tokenID %q", tokenID)
+				}
+				return q.Did, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("tokenID %q not found in quorum tokens", tokenID)
+}
+
 func (w *Wallet) PersistFullNodeTransaction(ctx context.Context, req *FullNodePersistenceRequest) error {
 	if w == nil {
 		return fmt.Errorf("fullnode persistence: wallet is nil")
@@ -322,6 +348,15 @@ func deriveFullNodeTokenState(existing fullNodeTokenState, txInfo *models.Transa
 	if txInfo.Owner != "" {
 		state.did = txInfo.Owner
 	}
+	//If it is a pledged token, did should be updated as the quorumDID.
+	if input.roleName == constants.TokenRole_Pledge {
+		quorumDID, err := FindDIDByTokenID(txInfo.Quorums, input.tokenInfo.TokenID)
+		if err != nil {
+			return fullNodeTokenState{}
+		}
+		state.did = quorumDID
+	}
+
 	// Keep status aligned with role-derived transitions.
 	switch input.roleName {
 	case constants.TokenRole_Burn:
@@ -775,10 +810,35 @@ func (w *Wallet) PersistFullNodeSyncedTokenChain(
 	if err != nil {
 		return err
 	}
+	//whether the token is already present in the database or not, derive the token_status from the transactionInfo or tokenchain
 	if !tokenState.exists {
 		tokenState.tokenID = tokenID
+		// tokenState.tokenStatus = int16(constants.TokenStatus_Free)
+	}
+	//we have to derive the token_status depending on the role of the token in the transaction.
+	switch lastRole {
+	case int16(models.GetTokenRoleID(constants.TokenRole_Mint)):
+		tokenState.tokenStatus = int16(constants.TokenStatus_Generated)
+	case int16(models.GetTokenRoleID(constants.TokenRole_Transfer)):
+		tokenState.tokenStatus = int16(constants.TokenStatus_Transferred)
+	case int16(models.GetTokenRoleID(constants.TokenRole_Commit)):
+		tokenState.tokenStatus = int16(constants.TokenStatus_Committed)
+	case int16(models.GetTokenRoleID(constants.TokenRole_Pledge)):
+		tokenState.tokenStatus = int16(constants.TokenStatus_Pledged)
+	case int16(models.GetTokenRoleID(constants.TokenRole_Unpledge)):
+		tokenState.tokenStatus = int16(constants.TokenStatus_Free)
+	case int16(models.GetTokenRoleID(constants.TokenRole_Burn)):
+		tokenState.tokenStatus = int16(constants.TokenStatus_Burnt)
+	case int16(models.GetTokenRoleID(constants.TokenRole_Uncommit)):
+		tokenState.tokenStatus = int16(constants.TokenStatus_Free)
+	case int16(models.GetTokenRoleID(constants.TokenRole_Execute)):
+		tokenState.tokenStatus = int16(constants.TokenStatus_Executed)
+	case int16(models.GetTokenRoleID(constants.TokenRole_Deploy)):
+		tokenState.tokenStatus = int16(constants.TokenStatus_Deployed)
+	default:
 		tokenState.tokenStatus = int16(constants.TokenStatus_Free)
 	}
+
 	if tokenValue > 0 {
 		tokenState.tokenValue = tokenValue
 	}
