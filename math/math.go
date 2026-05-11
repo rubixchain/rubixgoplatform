@@ -18,6 +18,18 @@ func FloatPrecision(f float64) float64 {
 	return float64(round(f*output)) / output
 }
 
+// MaxSupportedDecimalPlaces returns the maximum number of decimal places
+// allowed for a Rubix transfer amount.
+func MaxSupportedDecimalPlaces() int {
+	return constants.MaxSupportedDecimalPlaces
+}
+
+// MinTransferAmount returns the smallest amount that can be transferred in
+// Rubix, i.e. 10^-MaxSupportedDecimalPlaces (0.001 at 3 decimal places).
+func MinTransferAmount() float64 {
+	return FloatPrecision(math.Pow10(-constants.MaxSupportedDecimalPlaces))
+}
+
 func ZeroFloat() float64 {
 	return FloatPrecision(0.0)
 }
