@@ -34,7 +34,7 @@ statement_timeout_seconds = 20
 
 [ipfs]
 mainnet_bootstrap_nodes = [
-	"/ip4/172.188.67.118/tcp/4001/p2p/12D3KooWMvgneC9omYaHyKVkFUf1wKCqtMnVqEopTGT1CTGacUEm",
+	"/ip4/172.188.67.118/tcp/4001/p2p/12D3KooWN9Nrg2DmY52uc8ihvjPTFEnJKMdveztDFVgxRyoD6QyE",
 ]
 testnet_bootstrap_nodes = [
 	"/ip4/103.209.145.177/tcp/4011/p2p/12D3KooWKAHAYEjjckeWi2s3oCnvkbTJX3x6fV3HZbjMEVzMfJeL", 
