@@ -863,7 +863,7 @@ func (c *Core) GetTransactionByID(txId string) (*models.TransactionInfo, error) 
 		return nil, fmt.Errorf("failed to get transactions details for tx: %v, err: %v", txId, err)
 	}
 
-	var txInfo *models.TransactionInfo
+	txInfo := &models.TransactionInfo{}
 	if err := json.Unmarshal(transactionDetail.Info, txInfo); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal transaction info, err: %v", err)
 	}
