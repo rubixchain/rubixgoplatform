@@ -209,6 +209,19 @@ func ValidateTokenOwnershipByPrevTxn(txnInfo *models.TransactionInfo, isFullnode
 				if !getTransactionTokens(&pledgedTxnInfo, &prevTxnInfo) {
 					return fmt.Errorf("no common transaction tokens found between pledged transaction %s and previous transaction %s", *previousTransactionID, prevTxnID)
 				}
+
+				//If above 2 checks pass, we are sure that, the token is a unpledged token, which previously got pledged.
+				//now ensure that initiator is same as the guy who has pledged this token previously.
+				//we have to get the quorum DID which has pledged this token from the list of quorumDIDs.
+				//check whether that quorumDID is same as the initiatorDID or not
+				quorumDID, err := wallet.FindDIDByTokenID(txnInfo.Quorums, tokenID)
+				if err != nil {
+					return fmt.Errorf("failed to get quorum DID for token %s: %w", tokenID, err)
+				}
+				if quorumDID != txnInfo.Initiator {
+					return fmt.Errorf("ownership mismatch: initiator %s does not match quorum %s of token %s", txnInfo.Initiator, quorumDID, tokenID)
+				}
+
 			} else {
 				//If previous txn details are not there in the fullnode side, sync those transaction details from the initiator.
 				//In general, Previous transaction won't be nil, because we are calling this function after the sync in the  TokenChainIntigretyCheck function.
@@ -288,6 +301,18 @@ func ValidateTokenOwnershipByPrevTxn(txnInfo *models.TransactionInfo, isFullnode
 					if !getTransactionTokens(&pledgedTxnInfo, &prevTxnInfo) {
 						return fmt.Errorf("no common transaction tokens found between pledged transaction %s and previous transaction %s", *previousTransactionID, prevTx.ID)
 					}
+					//If above 2 checks pass, we are sure that, the token is a unpledged token, which previously got pledged.
+					//now ensure that initiator is same as the guy who has pledged this token previously.
+					//we have to get the quorum DID which has pledged this token from the list of quorumDIDs.
+					//check whether that quorumDID is same as the quorumDID or not
+					quorumDID, err := wallet.FindDIDByTokenID(txnInfo.Quorums, t.TokenID)
+					if err != nil {
+						return fmt.Errorf("failed to get quorum DID for token %s: %w", t.TokenID, err)
+					}
+					if quorumDID != quorum.Did {
+						return fmt.Errorf("ownership mismatch: initiator %s does not match quorum %s of token %s", txnInfo.Initiator, quorumDID, t.TokenID)
+					}
+
 				} else {
 					//If previous txn details are not there in the fullnode side, sync those transaction details from the initiator.
 					//In general, Previous transaction won't be nil, because we are calling this function after the sync in the  TokenChainIntigretyCheck function.
