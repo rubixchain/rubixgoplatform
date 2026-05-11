@@ -145,10 +145,21 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 		}
 
 		state := currentToken
-		if state.TokenValue == 0 {
+		if input.TokenTypeName == constants.TokenType_NFT {
+			// NFT value is mutable per execution and per transfer. input.TokenValue
+			// carries the resolved value from BuildTransactionInfoFromRequest
+			// (either a non-zero request override or the wallet's fallback value),
+			// so we always mirror it into the wallet record. Zero is permitted.
+			state.TokenValue = input.TokenValue
+		} else if state.TokenValue == 0 {
+			// RBT / FT / SmartContract: only resolve a value when the wallet has
+			// none yet (genesis / receiver-first-time path). Existing non-zero
+			// values are preserved across transfers.
 			tokenValue := input.TokenValue
 
 			if tokenValue == 0 {
+				// GetTokenValueFromTokenID parses RBT-style IDs; it cleanly fails
+				// for FT/SC IDs and we skip the assignment in that case.
 				if derived, err := util.GetTokenValueFromTokenID(input.TokenID); err == nil && derived > 0 {
 					tokenValue = derived
 				}

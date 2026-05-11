@@ -24,9 +24,9 @@ func MaxSupportedDecimalPlaces() int {
 	return constants.MaxSupportedDecimalPlaces
 }
 
-// MinTransferAmount returns the smallest amount that can be transferred in
-// Rubix, i.e. 10^-MaxSupportedDecimalPlaces (0.001 at 3 decimal places).
-func MinTransferAmount() float64 {
+// MinDecimalUnit returns the smallest representable value at the configured
+// decimal precision, i.e. 10^-MaxSupportedDecimalPlaces (0.001 at 3 decimal places).
+func MinDecimalUnit() float64 {
 	return FloatPrecision(math.Pow10(-constants.MaxSupportedDecimalPlaces))
 }
 

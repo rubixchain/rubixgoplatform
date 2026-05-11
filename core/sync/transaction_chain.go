@@ -9,7 +9,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -102,8 +101,6 @@ func FindTokenRoleInTxn(tokenID string, txInfo *models.TransactionInfo, transfer
 }
 
 // findTokenValue returns the TokenValue for tokenID from any token list in txInfo.
-// For NFT tokens with a TokenValue of 0, MinTransferAmount() is pledged so that
-// the splitting logic always has a non-zero amount to work with.
 // Returns 0 if not found.
 func findTokenValue(tokenID string, txInfo *models.TransactionInfo) float64 {
 	if txInfo.Tokens != nil {
@@ -114,9 +111,6 @@ func findTokenValue(tokenID string, txInfo *models.TransactionInfo) float64 {
 		}
 		for _, t := range txInfo.Tokens.NFT {
 			if t.TokenID == tokenID {
-				if t.TokenValue == 0 {
-					return math.MinTransferAmount()
-				}
 				return t.TokenValue
 			}
 		}

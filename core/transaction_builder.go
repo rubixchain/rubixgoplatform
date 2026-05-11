@@ -220,14 +220,30 @@ func BuildTransactionInfoFromRequest(
 					}
 					tok := locked[0]
 					log.Info("BuildTransactionInfoFromRequest: NFT locked for execution", "nftID", tok.TokenID, "prevTxID", tok.TransactionID)
+
+					// A non-zero request value overrides the wallet's stored value
+					// (NFT value is mutable per execution). Zero/omitted falls back
+					// to the wallet's stored value.
+					chosenValue := nftInfo.Value
+					if chosenValue == 0 {
+						chosenValue = tok.TokenValue
+					}
+
 					txTokens.NFT = append(txTokens.NFT, &models.TokenInfo{
 						TokenID:               tok.TokenID,
 						PreviousTransactionID: tok.TransactionID,
 						Data:                  nftInfo.Data,
-						TokenValue:            tok.TokenValue,
+						TokenValue:            chosenValue,
 					})
 					allLockedIDs = append(allLockedIDs, tok.TokenID)
-					totalAmount += tok.TokenValue
+
+					// Pledge contribution is floored to MinDecimalUnit so the quorum
+					// always locks a non-zero amount even for zero-value NFTs.
+					pledgeContribution := chosenValue
+					if pledgeContribution < rubixmath.MinDecimalUnit() {
+						pledgeContribution = rubixmath.MinDecimalUnit()
+					}
+					totalAmount = rubixmath.AddFloat(totalAmount, pledgeContribution)
 				} else {
 					// DEPLOYMENT MODE: Token doesn't exist, prepare for deployment
 					log.Info("BuildTransactionInfoFromRequest: NFT does not exist - DEPLOYMENT MODE", "nftID", nftInfo.NFTId, "value", nftInfo.Value)
@@ -238,7 +254,12 @@ func BuildTransactionInfoFromRequest(
 						Data:                  nftInfo.Data,
 						TokenValue:            nftInfo.Value,
 					})
-					totalAmount += nftInfo.Value
+
+					pledgeContribution := nftInfo.Value
+					if pledgeContribution < rubixmath.MinDecimalUnit() {
+						pledgeContribution = rubixmath.MinDecimalUnit()
+					}
+					totalAmount = rubixmath.AddFloat(totalAmount, pledgeContribution)
 				}
 			}
 		}
