@@ -73,6 +73,13 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 			} else {
 				c.log.Info("InitiateTransaction: released locked RBT tokens after failed transaction", "did", initiatorDID)
 			}
+
+			// release all locked FTs
+			if releaseFtErr := c.w.ReleaseAllLockedFTTokensForDID(ctx, initiatorDID, reqID); releaseFtErr != nil {
+				c.log.Error("InitiateTransaction: failed to release locked FTs after failure", "err", releaseFtErr, "did", initiatorDID)
+			} else {
+				c.log.Info("InitiateTransaction: released locked FTs after failed transaction", "did", initiatorDID)
+			}
 			// Also release any locked NFT/SC tokens. These are locked by
 			// BuildTransactionInfoFromRequest via QueryAndLockForExecution + batch
 			// status UPDATE, but ReleaseAllLockedRBTTokensForDID only handles RBT.
@@ -744,6 +751,12 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 
 	// add initiator peer details to dids table, if not there
 	if isExist := c.IsDIDExist(sendTokensRequest.InitiatorPeerInfo.DID); !isExist {
+		if sendTokensRequest.InitiatorPeerInfo.PeerID == "" {
+			errMsg := fmt.Sprintf("SendTokens: Failed to register initiator peer info, peerID is empty; err: %v", err)
+			c.log.Error(errMsg)
+			crep.Message = errMsg
+			return c.l.RenderJSON(request, &crep, http.StatusBadRequest)
+		}
 		if sendTokensRequest.InitiatorPeerInfo.PeerID != c.peerID {
 			sendTokensRequest.InitiatorPeerInfo.Local = false
 		} else {

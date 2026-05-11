@@ -319,7 +319,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*models.DID, error) {
 
 	// If peerID still missing, try resolving (via explorer or peer fetch)
 	if peerID == "" {
-		if !c.testnet {
+		if !c.testnet || !c.localnet{
 			peerInfo, err := c.GetPeerFromExplorer(didStr)
 			if err != nil {
 				return nil, fmt.Errorf("explorer lookup failed: %w", err)

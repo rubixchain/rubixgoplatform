@@ -220,7 +220,6 @@ func (cmd *Command) GetRBTBalance() {
 		cmd.log.Error("Invalid response from the node", "err", err)
 		return
 	}
-	fmt.Printf("Response : %v\n", response)
 	if !response.Status {
 		cmd.log.Error("Failed to get account info", "message", response.Message)
 	} else {
@@ -254,7 +253,6 @@ func (cmd *Command) GetDIDBalance() {
 		cmd.log.Error("Invalid response from the node", "err", err)
 		return
 	}
-	fmt.Printf("Response : %v\n", response)
 	if !response.Status {
 		cmd.log.Error("Failed to get balance for DID ", cmd.did, "message", response.Message)
 	} else {
