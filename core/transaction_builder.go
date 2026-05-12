@@ -51,6 +51,13 @@ func BuildTransactionInfoFromRequest(
 	var totalAmount float64
 	var allCommittedTokens []*models.TokenInfo
 
+	// nftCurrentOwner is captured from the wallet's tokens row when an existing
+	// NFT is locked for execution. It is used below to pin txInfo.Owner for
+	// NFT-only execute transactions so the chain payload accurately reflects the
+	// current owner. Stays empty for deploys and for
+	// non-NFT flows.
+	var nftCurrentOwner string
+
 	// --- RBT path (separate — CollectRBTTokens manages its own locking) ---
 	if req.HasRBT() {
 		var genTX *models.Transactions = nil
@@ -221,11 +228,19 @@ func BuildTransactionInfoFromRequest(
 					tok := locked[0]
 					log.Info("BuildTransactionInfoFromRequest: NFT locked for execution", "nftID", tok.TokenID, "prevTxID", tok.TransactionID)
 
-					// A non-zero request value overrides the wallet's stored value
-					// (NFT value is mutable per execution). Zero/omitted falls back
-					// to the wallet's stored value.
+					// Capture the chain owner cached in the wallet row. Used below to
+					// pin txInfo.Owner for NFT-only execute transactions so the chain
+					// payload reflects the actual on-chain owner instead of the
+					// initiator default.
+					nftCurrentOwner = tok.DID
+
+					// only the current owner is allowed to update the value
+					// subscriber the request value is silently ignored and the wallet's
+					// stored value is used unchanged.
+					//
+					// Data can still be set by any executor.
 					chosenValue := nftInfo.Value
-					if chosenValue == 0 {
+					if chosenValue == 0 || req.Initiator != tok.DID {
 						chosenValue = tok.TokenValue
 					}
 
@@ -378,6 +393,26 @@ func BuildTransactionInfoFromRequest(
 	txInfoOwner := req.Owner
 	if txInfoOwner == "" {
 		txInfoOwner = req.Initiator
+	}
+
+	// For an NFT-only single-NFT execute (transferNFTOwnership=false), set
+	// txInfoOwner to the NFT's current chain owner so the transaction record
+	// shows who actually owns the NFT, even when a non-owner is executing it.
+	// Persistence and sync already keep ownership correct on every node — this
+	// just makes the chain payload easier to read directly.
+	//
+	// Skipped when:
+	//   - Deploy: no existing owner yet.
+	//   - Transfer (transferNFTOwnership=true): req.Owner is the new owner.
+	//   - Mixed-asset: Owner carries the RBT/FT receiver; NFT side handled by persistence.
+	//   - Multi-NFT: a single Owner field can't represent multiple owners.
+	if !req.Tokens.TransferNFTOwnership &&
+		nftCurrentOwner != "" &&
+		len(req.Tokens.NFT) == 1 &&
+		req.Tokens.RBT == 0 &&
+		len(req.Tokens.FT) == 0 &&
+		len(req.Tokens.SmartContract) == 0 {
+		txInfoOwner = nftCurrentOwner
 	}
 
 	txInfo := &models.TransactionInfo{

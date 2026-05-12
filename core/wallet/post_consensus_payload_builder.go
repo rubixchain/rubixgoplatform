@@ -194,8 +194,11 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 			}
 			state.TokenStatus = int16(constants.TokenStatus_Deployed)
 		case input.RoleName == constants.TokenRole_Execute:
-			// SC/NFT Execution - token stays with initiator in Executed status
-			if txInfo.Initiator != "" {
+			// SmartContract execute: ownership moves to the executor (initiator).
+			// NFT (and anything else) execute: keep the existing owner — state.DID stays
+			// at currentToken.DID (fetched from the chain head), so non-owner subscribers
+			// can execute without overwriting the chain's owner.
+			if input.TokenTypeName == constants.TokenType_SmartContract && txInfo.Initiator != "" {
 				state.DID = txInfo.Initiator
 			}
 			state.TokenStatus = int16(constants.TokenStatus_Executed)
