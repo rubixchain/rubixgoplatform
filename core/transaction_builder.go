@@ -192,6 +192,7 @@ func BuildTransactionInfoFromRequest(
 					txTokens.FT = append(txTokens.FT, &models.TokenInfo{
 						TokenID:               tok.TokenID,
 						PreviousTransactionID: tok.TransactionID,
+						TokenValue:            tok.TokenValue,
 					})
 					allLockedIDs = append(allLockedIDs, tok.TokenID)
 					totalAmount = rubixmath.AddFloat(totalAmount, tok.TokenValue)

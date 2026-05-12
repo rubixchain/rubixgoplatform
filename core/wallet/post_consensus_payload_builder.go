@@ -123,6 +123,10 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 			// Genesis (Deploy/Mint): Token is being created, initialize empty state
 			tokenValue := input.TokenValue
 			if tokenValue == 0 {
+				// cannot derive FT value and it cannot be 0, as the quorum needs to pledge the sum of FT values
+				if input.TokenTypeName == constants.TokenType_FT {
+					return nil, nil, nil, fmt.Errorf("FT value is 0 for token %s", input.TokenID)
+				}
 				// Try to derive from token ID
 				if derived, err := util.GetTokenValueFromTokenID(input.TokenID); err == nil && derived > 0 {
 					tokenValue = derived
@@ -158,8 +162,13 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 			tokenValue := input.TokenValue
 
 			if tokenValue == 0 {
+				// FT cannot derive value from token ID and must not be zero (the quorum
+				// pledges the sum of FT values).
+				if input.TokenTypeName == constants.TokenType_FT {
+					return nil, nil, nil, fmt.Errorf("FT value is 0 for token %s", input.TokenID)
+				}
 				// GetTokenValueFromTokenID parses RBT-style IDs; it cleanly fails
-				// for FT/SC IDs and we skip the assignment in that case.
+				// for SC IDs and we skip the assignment in that case.
 				if derived, err := util.GetTokenValueFromTokenID(input.TokenID); err == nil && derived > 0 {
 					tokenValue = derived
 				}

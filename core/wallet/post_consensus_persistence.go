@@ -151,7 +151,14 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 		}
 	}
 	if len(req.TransactionInfo.Tokens.FT) != 0 {
-		if err := pc.upsertFTInfo(ctx, tx, req.TokenStates, req.ExecutionRole, isLocalTransfer); err != nil {
+		// extract FTs out of all tokens
+		ftStates := make([]models.Token, 0)
+		for _, tokenInfo := range req.TokenStates {
+			if tokenInfo.TokenType == int16(models.GetTokenTypeID(constants.TokenType_FT)) {
+				ftStates = append(ftStates, tokenInfo)
+			}
+		}
+		if err := pc.upsertFTInfo(ctx, tx, ftStates, req.ExecutionRole, isLocalTransfer); err != nil {
 			return err
 		}
 	}

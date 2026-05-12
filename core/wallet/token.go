@@ -419,6 +419,21 @@ func (w *Wallet) ReleaseAllLockedRBTTokensForDID(ctx context.Context, ownerDID s
 	return err
 }
 
+// ReleaseAllLockedFTTokensForDID resets all Locked FTs for a DID back to Free.
+// Called on transaction failure after LockTokensForSplit to prevent tokens from staying
+// permanently locked when the transaction does not complete.
+func (w *Wallet) ReleaseAllLockedFTTokensForDID(ctx context.Context, ownerDID string, referenceId string) error {
+	_, err := w.db.Pool().Exec(ctx,
+		`UPDATE tokens SET token_status=$1, updated_at=$2, lock_reference_id=NULL
+		 WHERE did=$4
+		   AND token_status=$5
+		   AND lock_reference_id=$3
+		   AND token_type=(SELECT id FROM token_type WHERE name=$6)`,
+		constants.TokenStatus_Free, time.Now(), referenceId, ownerDID, constants.TokenStatus_Locked, constants.TokenType_FT,
+	)
+	return err
+}
+
 // ReleaseAllLockedNFTAndSCTokensForDID resets all Locked NFT and SmartContract tokens for a DID
 // back to their correct executable status. Unlike RBT tokens (which return to Free), NFT/SC
 // tokens must return to Deployed or Executed depending on their latest role:
