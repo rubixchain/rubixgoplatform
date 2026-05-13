@@ -74,6 +74,11 @@ type NFTInfo struct {
 	NFTId string  `json:"nftId"`
 	Value float64 `json:"value"`
 	Data  string  `json:"data"`
+	// ParentNFTId, when non-empty, signals a child-mint instruction: this entry
+	// mints a brand-new child NFT linked to the named parent. The parent is
+	// executed in the same transaction. NFTId is ignored when ParentNFTId is set —
+	// the server derives the child NFT ID via IPFS-add of parentNFTId+uuid.
+	ParentNFTId string `json:"parentNFTId,omitempty"`
 }
 
 type SmartContractInfo struct {
