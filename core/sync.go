@@ -474,12 +474,31 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.Transac
 	case int16(models.GetTokenRoleID(constants.TokenRole_Execute)):
 		lastStatus = int16(constants.TokenStatus_Executed)
 	}
-	tokenForUpdate.DID = lastOwnerDID
+	// For NFT executions, ownership doesn't change
+	// in sync with the chain head when a non-owner subscriber executes an NFT.
+	if lastEntry.Role == int16(models.GetTokenRoleID(constants.TokenRole_Execute)) &&
+		tokenForUpdate.TokenType != int16(models.GetTokenTypeID(constants.TokenType_SmartContract)) {
+		// Leave tokenForUpdate.DID at its existing value.
+	} else {
+		tokenForUpdate.DID = lastOwnerDID
+	}
 	tokenForUpdate.TransactionID = newTxs[len(newTxs)-1].tx.ID
 	tokenForUpdate.LatestPosition = lastEntry.Position
 	tokenForUpdate.LatestRole = lastEntry.Role
 	tokenForUpdate.TokenStatus = lastStatus
 	tokenForUpdate.UpdatedAt = time.Now()
+
+	// NFT value is mutable per execution and per transfer.
+	// RBT/FT/SC values are immutable across the chain and stay as set at creation.
+	if tokenForUpdate.TokenType == int16(models.GetTokenTypeID(constants.TokenType_NFT)) && lastTxInfo.Tokens != nil {
+		for _, t := range lastTxInfo.Tokens.NFT {
+			if t != nil && t.TokenID == tokenID {
+				tokenForUpdate.TokenValue = t.TokenValue
+				break
+			}
+		}
+	}
+
 	if updateErr := c.w.UpdateToken(tokenForUpdate); updateErr != nil {
 		return fmt.Errorf("applyTokenChainFromSync: UpdateToken for %s: %w", tokenID, updateErr)
 	}

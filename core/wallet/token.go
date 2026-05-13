@@ -285,11 +285,11 @@ func (w *Wallet) GetTokensFromDenomMap(denomMap map[types.DenomValue]types.Denom
 func (w *Wallet) UpdateToken(token models.Token) error {
 	if _, err := w.db.Pool().Exec(w.Ctx,
 		`UPDATE tokens SET did=$1, transaction_id=$2, token_state_hash=$3,
-		 token_status=$4, latest_position=$5, latest_role=$6, updated_at=NOW()
-		 WHERE token_id=$7`,
+		 token_status=$4, latest_position=$5, latest_role=$6, token_value=$7, updated_at=NOW()
+		 WHERE token_id=$8`,
 		token.DID, token.TransactionID, token.TokenStateHash,
 		token.TokenStatus, token.LatestPosition, token.LatestRole,
-		token.TokenID,
+		token.TokenValue, token.TokenID,
 	); err != nil {
 		return fmt.Errorf("failed to update token %v: %w", token.TokenID, err)
 	}

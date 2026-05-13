@@ -101,7 +101,6 @@ func FindTokenRoleInTxn(tokenID string, txInfo *models.TransactionInfo, transfer
 }
 
 // findTokenValue returns the TokenValue for tokenID from any token list in txInfo.
-// For NFT tokens, a minimum value of 1.0 is enforced (1 RBT must always be pledged).
 // Returns 0 if not found.
 func findTokenValue(tokenID string, txInfo *models.TransactionInfo) float64 {
 	if txInfo.Tokens != nil {
@@ -112,9 +111,6 @@ func findTokenValue(tokenID string, txInfo *models.TransactionInfo) float64 {
 		}
 		for _, t := range txInfo.Tokens.NFT {
 			if t.TokenID == tokenID {
-				if t.TokenValue < 1.0 {
-					return 1.0
-				}
 				return t.TokenValue
 			}
 		}

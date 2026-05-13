@@ -149,14 +149,26 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 		}
 
 		state := currentToken
-		if state.TokenValue == 0 {
+		if input.TokenTypeName == constants.TokenType_NFT {
+			// NFT value is mutable per execution and per transfer. input.TokenValue
+			// carries the resolved value from BuildTransactionInfoFromRequest
+			// (either a non-zero request override or the wallet's fallback value),
+			// so we always mirror it into the wallet record. Zero is permitted.
+			state.TokenValue = input.TokenValue
+		} else if state.TokenValue == 0 {
+			// RBT / FT / SmartContract: only resolve a value when the wallet has
+			// none yet (genesis / receiver-first-time path). Existing non-zero
+			// values are preserved across transfers.
 			tokenValue := input.TokenValue
 
 			if tokenValue == 0 {
-				// cannot derive FT value and it cannot be 0, as the quorum needs to pledge the sum of FT values
+				// FT cannot derive value from token ID and must not be zero (the quorum
+				// pledges the sum of FT values).
 				if input.TokenTypeName == constants.TokenType_FT {
 					return nil, nil, nil, fmt.Errorf("FT value is 0 for token %s", input.TokenID)
 				}
+				// GetTokenValueFromTokenID parses RBT-style IDs; it cleanly fails
+				// for SC IDs and we skip the assignment in that case.
 				if derived, err := util.GetTokenValueFromTokenID(input.TokenID); err == nil && derived > 0 {
 					tokenValue = derived
 				}
@@ -191,8 +203,11 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 			}
 			state.TokenStatus = int16(constants.TokenStatus_Deployed)
 		case input.RoleName == constants.TokenRole_Execute:
-			// SC/NFT Execution - token stays with initiator in Executed status
-			if txInfo.Initiator != "" {
+			// SmartContract execute: ownership moves to the executor (initiator).
+			// NFT (and anything else) execute: keep the existing owner — state.DID stays
+			// at currentToken.DID (fetched from the chain head), so non-owner subscribers
+			// can execute without overwriting the chain's owner.
+			if input.TokenTypeName == constants.TokenType_SmartContract && txInfo.Initiator != "" {
 				state.DID = txInfo.Initiator
 			}
 			state.TokenStatus = int16(constants.TokenStatus_Executed)
