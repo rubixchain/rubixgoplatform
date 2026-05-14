@@ -1261,7 +1261,7 @@ func (w *Wallet) GetSmartContractChainByTokenID(tokenID string) ([]models.TokenC
 	}
 
 	// Step 3: Convert transactions to TokenChainResponse using util function
-	return util.ConvertToTokenChainResponses(transactions)
+	return util.ConvertToTokenChainResponses(transactions, tokenID)
 }
 
 // GetNFTChainByTokenID retrieves all transactions for an NFT token
@@ -1283,5 +1283,5 @@ func (w *Wallet) GetNFTChainByTokenID(tokenID string) ([]models.TokenChainRespon
 	}
 
 	// Step 3: Convert transactions to TokenChainResponse using util function
-	return util.ConvertToTokenChainResponses(transactions)
+	return util.ConvertToTokenChainResponses(transactions, tokenID)
 }

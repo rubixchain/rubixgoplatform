@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -113,15 +115,9 @@ func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
 func (s *Server) APISubscribeNFT(request *ensweb.Request) *ensweb.Result {
 	// Get NFT from query parameter
 	nft := s.GetQuery(request, "nft")
-	if nft == "" {
-		return s.BasicResponse(request, false, "NFT query parameter is required", nil)
-	}
-
-	// Validate NFT format
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(nft)
-	if len(nft) != 46 || !strings.HasPrefix(nft, "Qm") || !is_alphanumeric {
-		s.log.Error("Invalid NFT")
-		return s.BasicResponse(request, false, "Invalid NFT", nil)
+	if err := util.ValidateCIDFormat(nft); err != nil {
+		s.log.Error("Invalid NFT", "err", err)
+		return s.BasicResponse(request, false, fmt.Sprintf("NFT %s", err.Error()), nil)
 	}
 
 	topic := nft
@@ -147,11 +143,9 @@ func (s *Server) APIFetchNft(req *ensweb.Request) *ensweb.Result {
 	// Get the NFT id from the request
 	fetchNft.NFT = s.GetQuery(req, "nft")
 
-	// Validate the NFT id
-	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(fetchNft.NFT)
-	if len(fetchNft.NFT) != 46 || !strings.HasPrefix(fetchNft.NFT, "Qm") || !isAlphanumeric {
-		s.log.Error("Invalid nft")
-		return s.BasicResponse(req, false, "Invalid nft", nil)
+	if err := util.ValidateCIDFormat(fetchNft.NFT); err != nil {
+		s.log.Error("Invalid nft", "err", err)
+		return s.BasicResponse(req, false, fmt.Sprintf("NFT %s", err.Error()), nil)
 	}
 
 	// Check if the NFT directory already exists

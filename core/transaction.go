@@ -96,6 +96,20 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		}
 	}()
 
+	// Expand any child-mint entries (those with ParentNFTId set) into
+	// parent-execute + child-deploy pairs before building the transaction info.
+	// Server-generates the child NFT IDs and rewrites request.Tokens.NFT in place.
+	mintedChildren, err := c.expandChildMintEntries(request)
+	if err != nil {
+		c.log.Error("InitiateTransaction: child-mint expansion failed", "err", err)
+		resp.Message = "InitiateTransaction: child-mint expansion failed: " + err.Error()
+		return resp
+	}
+	if len(mintedChildren) > 0 {
+		c.log.Info("InitiateTransaction: expanded child-mint entries",
+			"childCount", len(mintedChildren))
+	}
+
 	c.log.Info("InitiateTransaction: Building transaction info", "maxRetries", 3)
 	maxRetries := 3
 	var transactionInfo *models.TransactionInfo
@@ -547,8 +561,9 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	c.log.Info("InitiateTransaction: Transaction completed successfully", "transactionID", transactionId, "initiator", initiatorDID, "receiver", nextOwnerDID)
 	resp.Status = true
 	resp.Message = fmt.Sprintf("Transaction %v completed successfully", transactionId)
-	resp.Result = map[string]interface{}{
-		"transactionID": transactionId,
+	resp.Result = model.TransactionResult{
+		TransactionID:     transactionId,
+		MintedNFTChildren: mintedChildren,
 	}
 	return resp
 }

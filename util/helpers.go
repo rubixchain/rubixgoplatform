@@ -8,8 +8,24 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 )
+
+// cidAlphanumericPattern is reused by ValidateCIDFormat; compiled once.
+var cidAlphanumericPattern = regexp.MustCompile(`^[a-zA-Z0-9]*$`)
+
+// ValidateCIDFormat checks that id looks like a v0 IPFS CID. Returns nil if
+// valid, an error otherwise. Callers wrap the error with field context.
+func ValidateCIDFormat(id string) error {
+	if id == "" {
+		return fmt.Errorf("id is required")
+	}
+	if len(id) != 46 || !strings.HasPrefix(id, "Qm") || !cidAlphanumericPattern.MatchString(id) {
+		return fmt.Errorf("invalid CID format: %s", id)
+	}
+	return nil
+}
 
 // GetRandString returns a cryptographically random 32-byte hex string.
 func GetRandString() string {
