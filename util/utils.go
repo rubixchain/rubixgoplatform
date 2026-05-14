@@ -46,10 +46,12 @@ func UnzipMap[K comparable, V any](m map[K]V) ([]K, []V) {
 	return keys, values
 }
 
-// ConvertToTokenChainResponses converts an array of Transactions into TokenChainResponse array.
-// It parses the JSON Info field to extract Initiator, Epoch, and Data fields.
-// It works for both SmartContract and NFT token types, extracting data from whichever is present.
-func ConvertToTokenChainResponses(transactions []models.Transactions) ([]models.TokenChainResponse, error) {
+// ConvertToTokenChainResponses converts raw transaction rows into the per-token
+// chain response. targetTokenID is the token whose chain is being requested; the
+// Data field is taken from the matching NFT or SmartContract entry inside each
+// transaction, not blindly from index 0. This matters for transactions that
+// carry multiple NFT entries (e.g. child-mint: parent execute + child deploy).
+func ConvertToTokenChainResponses(transactions []models.Transactions, targetTokenID string) ([]models.TokenChainResponse, error) {
 	responses := make([]models.TokenChainResponse, 0, len(transactions))
 
 	for _, txn := range transactions {
@@ -59,15 +61,23 @@ func ConvertToTokenChainResponses(transactions []models.Transactions) ([]models.
 			return nil, fmt.Errorf("convertToTokenChainResponses: failed to unmarshal transaction info for txn %s: %w", txn.ID, err)
 		}
 
-		// Extract Data from SmartContract or NFT tokens
+		// Pick the data field from the SmartContract or NFT entry that matches
+		// targetTokenID. Falls back to "" when no entry matches.
 		var data string
 		if txInfo.Tokens != nil {
-			// Check SmartContract tokens first
-			if len(txInfo.Tokens.SmartContract) > 0 {
-				data = txInfo.Tokens.SmartContract[0].Data
-			} else if len(txInfo.Tokens.NFT) > 0 {
-				// Fall back to NFT tokens if no SmartContract
-				data = txInfo.Tokens.NFT[0].Data
+			for _, sc := range txInfo.Tokens.SmartContract {
+				if sc != nil && sc.TokenID == targetTokenID {
+					data = sc.Data
+					break
+				}
+			}
+			if data == "" {
+				for _, n := range txInfo.Tokens.NFT {
+					if n != nil && n.TokenID == targetTokenID {
+						data = n.Data
+						break
+					}
+				}
 			}
 		}
 
