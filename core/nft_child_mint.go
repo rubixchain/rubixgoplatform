@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 // expandChildMintEntries turns child-mint requests into normal execute and
@@ -46,6 +47,18 @@ func (c *Core) expandChildMintEntries(request *models.TransactionRequest) ([]mod
 
 	if request.Tokens.TransferNFTOwnership {
 		return nil, fmt.Errorf("child-mint cannot be combined with transferNftOwnership=true")
+	}
+
+	// Validate every non-empty ParentNFTId has a CID shape before any wallet
+	// lookups so typos surface with a precise error instead of a downstream
+	// "not found in wallet".
+	for _, n := range request.Tokens.NFT {
+		if n.ParentNFTId == "" {
+			continue
+		}
+		if err := util.ValidateCIDFormat(n.ParentNFTId); err != nil {
+			return nil, fmt.Errorf("parentNFTId %w", err)
+		}
 	}
 
 	// Track parents named directly via NFTId so we can catch the case where

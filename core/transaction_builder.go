@@ -47,6 +47,20 @@ func BuildTransactionInfoFromRequest(
 		"owner", req.Owner,
 	)
 
+	// Reject NFT and SmartContract entries with badly-shaped IDs up front.
+	// Callers must subscribe to obtain a real CID; this catches empty strings
+	// and typos before any work begins.
+	for _, n := range req.GetAllNFTs() {
+		if err := util.ValidateCIDFormat(n.NFTId); err != nil {
+			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: NFT %w", err)
+		}
+	}
+	for _, sc := range req.GetAllSmartContracts() {
+		if err := util.ValidateCIDFormat(sc.SmartContractId); err != nil {
+			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: SmartContract %w", err)
+		}
+	}
+
 	txTokens := &models.TransactionTokens{}
 	var totalAmount float64
 	var allCommittedTokens []*models.TokenInfo
