@@ -35,9 +35,14 @@ statement_timeout_seconds = 20
 [ipfs]
 mainnet_bootstrap_nodes = [
 	"/ip4/172.188.67.118/tcp/4001/p2p/12D3KooWN9Nrg2DmY52uc8ihvjPTFEnJKMdveztDFVgxRyoD6QyE",
+	"/ip4/103.127.158.120/tcp/4001/p2p/12D3KooWJSckNDq5CD8b3bs5WSJN6GApVw547i4ye19C7R99LLWH",
+  	"/ip4/161.35.169.251/tcp/4001/p2p/12D3KooWMnBFGSvnfa82J42FnGxcBnSNEsGpt2G5iq3C79a3Hm7H",
+  	"/ip4/172.104.191.191/tcp/4001/p2p/12D3KooWFudnWZY1v1m4YXCzDWZSbNt7nvf5F42uzM6vErZ4NwqJ",
 ]
 testnet_bootstrap_nodes = [
-	"/ip4/103.209.145.177/tcp/4011/p2p/12D3KooWKAHAYEjjckeWi2s3oCnvkbTJX3x6fV3HZbjMEVzMfJeL", 
+	"/ip4/103.209.145.177/tcp/4011/p2p/12D3KooWKAHAYEjjckeWi2s3oCnvkbTJX3x6fV3HZbjMEVzMfJeL",
+	"/ip4/103.209.145.177/tcp/4001/p2p/12D3KooWNF5g1G6QHa2Xjbnsm5N1e4FKompLbk3dRcSgZkVzmFsh",
+  	"/ip4/98.70.52.158/tcp/4001/p2p/12D3KooWNrfpqpSWi4N1WL9Xv8j87hm7nBMqJ3vWWp3qJ3d2MJp8",
 ]
 localnet_bootstrap_nodes = []
 `
