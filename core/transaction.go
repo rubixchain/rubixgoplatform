@@ -561,13 +561,10 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	c.log.Info("InitiateTransaction: Transaction completed successfully", "transactionID", transactionId, "initiator", initiatorDID, "receiver", nextOwnerDID)
 	resp.Status = true
 	resp.Message = fmt.Sprintf("Transaction %v completed successfully", transactionId)
-	result := map[string]interface{}{
-		"transactionID": transactionId,
+	resp.Result = model.TransactionResult{
+		TransactionID:     transactionId,
+		MintedNFTChildren: mintedChildren,
 	}
-	if len(mintedChildren) > 0 {
-		result["mintedNFTChildren"] = mintedChildren
-	}
-	resp.Result = result
 	return resp
 }
 

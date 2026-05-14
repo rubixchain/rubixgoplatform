@@ -5,14 +5,9 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
-
-// MintedChild reports one server-generated child NFT ID back to the caller.
-type MintedChild struct {
-	ParentNFTId string `json:"parentNFTId"`
-	ChildNFTId  string `json:"childNFTId"`
-}
 
 // expandChildMintEntries turns child-mint requests into normal execute and
 // deploy entries that the rest of the pipeline already understands.
@@ -28,9 +23,13 @@ type MintedChild struct {
 //   - a parent that does not exist locally.
 //
 // Ownership of the parent is checked later by QueryAndLockForExecution.
-func (c *Core) expandChildMintEntries(request *models.TransactionRequest) ([]MintedChild, error) {
+func (c *Core) expandChildMintEntries(request *models.TransactionRequest) ([]model.MintedChild, error) {
+	// Always return a non-nil slice so callers (and JSON marshalling) get
+	// "[]" instead of "null" when no children are minted.
+	empty := []model.MintedChild{}
+
 	if request == nil || len(request.Tokens.NFT) == 0 {
-		return nil, nil
+		return empty, nil
 	}
 
 	// Nothing to do if no entry asks for a child mint.
@@ -42,7 +41,7 @@ func (c *Core) expandChildMintEntries(request *models.TransactionRequest) ([]Min
 		}
 	}
 	if !hasChildMint {
-		return nil, nil
+		return empty, nil
 	}
 
 	if request.Tokens.TransferNFTOwnership {
@@ -104,7 +103,7 @@ func (c *Core) expandChildMintEntries(request *models.TransactionRequest) ([]Min
 
 	// Walk the original list: keep regular entries as-is, turn each child-mint
 	// entry into a deploy entry with a server-generated ID.
-	mintedChildren := make([]MintedChild, 0)
+	mintedChildren := make([]model.MintedChild, 0)
 	for _, n := range request.Tokens.NFT {
 		if n.ParentNFTId == "" {
 			expanded = append(expanded, n)
@@ -133,7 +132,7 @@ func (c *Core) expandChildMintEntries(request *models.TransactionRequest) ([]Min
 			Data:  n.Data,
 		})
 
-		mintedChildren = append(mintedChildren, MintedChild{
+		mintedChildren = append(mintedChildren, model.MintedChild{
 			ParentNFTId: n.ParentNFTId,
 			ChildNFTId:  childID,
 		})
