@@ -41,7 +41,6 @@ mainnet_bootstrap_nodes = [
 ]
 testnet_bootstrap_nodes = [
 	"/ip4/103.209.145.177/tcp/4011/p2p/12D3KooWKAHAYEjjckeWi2s3oCnvkbTJX3x6fV3HZbjMEVzMfJeL",
-	"/ip4/103.209.145.177/tcp/4001/p2p/12D3KooWNF5g1G6QHa2Xjbnsm5N1e4FKompLbk3dRcSgZkVzmFsh",
   	"/ip4/98.70.52.158/tcp/4001/p2p/12D3KooWNrfpqpSWi4N1WL9Xv8j87hm7nBMqJ3vWWp3qJ3d2MJp8",
 ]
 localnet_bootstrap_nodes = []
