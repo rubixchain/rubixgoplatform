@@ -34,6 +34,9 @@ type PostConsensusPersistenceRequest struct {
 	TokenStates               []models.Token
 	SkipSignatureVerification bool
 	TransferNFTOwnership      bool
+	// ChildToParent maps a new child NFT's token ID to its parent NFT's
+	// token ID. Set by the originator only; sync receivers leave it nil.
+	ChildToParent map[string]string
 }
 
 type PostConsensusPersistenceCoordinator struct {
@@ -85,7 +88,7 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 	isLocalTransfer = isLocalTransfer && (req.ExecutionRole == ExecutionRoleInitiator)
 
 	if len(req.TokenChainRows) == 0 || len(req.TokenStates) == 0 {
-		derivedTokenChains, derivedTokenStates, derivedAffectedTokens, err := pc.wallet.BuildPersistencePayload(ctx, txRecord.ID, req.TransactionInfo, req.DID, req.ExecutionRole, req.TransferNFTOwnership, isLocalTransfer)
+		derivedTokenChains, derivedTokenStates, derivedAffectedTokens, err := pc.wallet.BuildPersistencePayload(ctx, txRecord.ID, req.TransactionInfo, req.DID, req.ExecutionRole, req.TransferNFTOwnership, isLocalTransfer, req.ChildToParent)
 		if err != nil {
 			return err
 		}

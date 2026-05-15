@@ -24,13 +24,17 @@ import (
 //   - a parent that does not exist locally.
 //
 // Ownership of the parent is checked later by QueryAndLockForExecution.
-func (c *Core) expandChildMintEntries(request *models.TransactionRequest) ([]model.MintedChild, error) {
-	// Always return a non-nil slice so callers (and JSON marshalling) get
-	// "[]" instead of "null" when no children are minted.
+//
+// childToParent maps each new child token ID to its parent — consumed by
+// post-consensus persistence to set tokens.parent_token_id on the originator.
+func (c *Core) expandChildMintEntries(request *models.TransactionRequest) ([]model.MintedChild, map[string]string, error) {
+	// Always return a non-nil slice/map so callers (and JSON marshalling) get
+	// "[]" / empty map instead of "null" when no children are minted.
 	empty := []model.MintedChild{}
+	emptyMap := map[string]string{}
 
 	if request == nil || len(request.Tokens.NFT) == 0 {
-		return empty, nil
+		return empty, emptyMap, nil
 	}
 
 	// Nothing to do if no entry asks for a child mint.
@@ -42,11 +46,11 @@ func (c *Core) expandChildMintEntries(request *models.TransactionRequest) ([]mod
 		}
 	}
 	if !hasChildMint {
-		return empty, nil
+		return empty, emptyMap, nil
 	}
 
 	if request.Tokens.TransferNFTOwnership {
-		return nil, fmt.Errorf("child-mint cannot be combined with transferNftOwnership=true")
+		return nil, nil, fmt.Errorf("child-mint cannot be combined with transferNftOwnership=true")
 	}
 
 	// Validate every non-empty ParentNFTId has a CID shape before any wallet
@@ -57,7 +61,7 @@ func (c *Core) expandChildMintEntries(request *models.TransactionRequest) ([]mod
 			continue
 		}
 		if err := util.ValidateCIDFormat(n.ParentNFTId); err != nil {
-			return nil, fmt.Errorf("parentNFTId %w", err)
+			return nil, nil, fmt.Errorf("parentNFTId %w", err)
 		}
 	}
 
@@ -82,11 +86,11 @@ func (c *Core) expandChildMintEntries(request *models.TransactionRequest) ([]mod
 			continue
 		}
 		if _, clash := explicitParents[n.ParentNFTId]; clash {
-			return nil, fmt.Errorf("parent NFT %s appears as both an explicit execute target and a child-mint parent in the same request", n.ParentNFTId)
+			return nil, nil, fmt.Errorf("parent NFT %s appears as both an explicit execute target and a child-mint parent in the same request", n.ParentNFTId)
 		}
 		tok, err := c.w.GetTokenByTokenID(n.ParentNFTId)
 		if err != nil {
-			return nil, fmt.Errorf("parent NFT %s not found in wallet: %w", n.ParentNFTId, err)
+			return nil, nil, fmt.Errorf("parent NFT %s not found in wallet: %w", n.ParentNFTId, err)
 		}
 		parentValues[n.ParentNFTId] = tok.TokenValue
 	}
@@ -117,6 +121,7 @@ func (c *Core) expandChildMintEntries(request *models.TransactionRequest) ([]mod
 	// Walk the original list: keep regular entries as-is, turn each child-mint
 	// entry into a deploy entry with a server-generated ID.
 	mintedChildren := make([]model.MintedChild, 0)
+	childToParent := make(map[string]string)
 	for _, n := range request.Tokens.NFT {
 		if n.ParentNFTId == "" {
 			expanded = append(expanded, n)
@@ -128,7 +133,7 @@ func (c *Core) expandChildMintEntries(request *models.TransactionRequest) ([]mod
 		payload := []byte(n.ParentNFTId + childUUID)
 		childID, err := IpfsAddWithBackoff(c.ipfs, bytes.NewReader(payload))
 		if err != nil {
-			return nil, fmt.Errorf("failed to IPFS-add child NFT payload for parent %s: %w", n.ParentNFTId, err)
+			return nil, nil, fmt.Errorf("failed to IPFS-add child NFT payload for parent %s: %w", n.ParentNFTId, err)
 		}
 
 		// Child inherits parent value when the request omits it.
@@ -138,7 +143,8 @@ func (c *Core) expandChildMintEntries(request *models.TransactionRequest) ([]mod
 		}
 
 		// Leave ParentNFTId empty on the synthesized entry — it's a finished
-		// deploy entry now, not something to expand again.
+		// deploy entry now, not something to expand again. The parent reference
+		// is kept in childToParent and threaded into post-consensus persistence.
 		expanded = append(expanded, models.NFTInfo{
 			NFTId: childID,
 			Value: childValue,
@@ -149,8 +155,9 @@ func (c *Core) expandChildMintEntries(request *models.TransactionRequest) ([]mod
 			ParentNFTId: n.ParentNFTId,
 			ChildNFTId:  childID,
 		})
+		childToParent[childID] = n.ParentNFTId
 	}
 
 	request.Tokens.NFT = expanded
-	return mintedChildren, nil
+	return mintedChildren, childToParent, nil
 }
