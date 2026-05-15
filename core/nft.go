@@ -346,6 +346,27 @@ func (c *Core) GetChildNFTs(parentNFTId string) ([]types.NFTBalance, error) {
 	return children, nil
 }
 
+// GetParentNFT returns the parent NFT of childNFTId, or (nil, nil) when the
+// child is unknown locally or has no parent.
+func (c *Core) GetParentNFT(childNFTId string) (*types.NFTBalance, error) {
+	child, err := c.w.GetTokenByTokenID(childNFTId)
+	if err != nil {
+		return nil, nil
+	}
+	if !child.ParentTokenID.Valid || child.ParentTokenID.String == "" {
+		return nil, nil
+	}
+	parent, err := c.w.GetTokenByTokenID(child.ParentTokenID.String)
+	if err != nil {
+		// Parent ID recorded but row not in this wallet — return ID with zero value.
+		return &types.NFTBalance{NFTId: child.ParentTokenID.String}, nil
+	}
+	return &types.NFTBalance{
+		NFTId:    parent.TokenID,
+		NFTValue: parent.TokenValue,
+	}, nil
+}
+
 // GetNFTsByDid returns an empty NFT list stub for a given DID.
 func (c *Core) GetNFTsByDid(did string) ([]types.NFTBalance, error) {
 	nftTokenType := int16(models.GetTokenTypeID(constants.TokenType_NFT))
