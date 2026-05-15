@@ -6,7 +6,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/types"
-	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -24,16 +23,6 @@ func (c *Client) CreateFT(did string, ftName string, ftCount int, wholeToken int
 		return nil, err
 	}
 	return &basicresponse, nil
-}
-
-func (c *Client) TransferFT(rt *models.TransactionRequest) (*model.BasicResponse, error) {
-	var br model.BasicResponse
-	err := c.sendJSONRequest("POST", setup.APITransaction, nil, rt, &br, time.Minute*2)
-	if err != nil {
-		c.log.Error("Failed FT Transfer", "err", err)
-		return nil, err
-	}
-	return &br, nil
 }
 
 func (c *Client) GetFTInfo(didStr string) (*model.BasicResponse, error) {

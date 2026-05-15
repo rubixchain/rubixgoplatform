@@ -117,7 +117,7 @@ func (cmd *Command) transferFT() {
 		Memo:    cmd.transComment,
 	}
 
-	br, err := cmd.c.TransferFT(&transferFtReq)
+	br, err := cmd.c.InitiateTransaction(&transferFtReq)
 	if err != nil {
 		cmd.log.Error("Failed FT transfer", "err", err)
 		return
