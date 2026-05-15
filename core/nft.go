@@ -328,6 +328,24 @@ func (c *Core) publishNFTEvents(
 	}
 }
 
+// GetChildNFTs returns NFTs whose parent_token_id matches parentNFTId.
+// Empty slice when no children exist or the parent is unknown.
+func (c *Core) GetChildNFTs(parentNFTId string) ([]types.NFTBalance, error) {
+	childRows, err := c.w.GetChildNFTs(parentNFTId)
+	if err != nil && err.Error() != "no records found" {
+		c.log.Error("GetChildNFTs: query failed", "parentNFTId", parentNFTId, "err", err)
+		return []types.NFTBalance{}, fmt.Errorf("failed to get child NFTs, error: %w", err)
+	}
+	children := make([]types.NFTBalance, 0, len(childRows))
+	for _, ch := range childRows {
+		children = append(children, types.NFTBalance{
+			NFTId:    ch.TokenID,
+			NFTValue: ch.TokenValue,
+		})
+	}
+	return children, nil
+}
+
 // GetNFTsByDid returns an empty NFT list stub for a given DID.
 func (c *Core) GetNFTsByDid(did string) ([]types.NFTBalance, error) {
 	nftTokenType := int16(models.GetTokenTypeID(constants.TokenType_NFT))

@@ -114,6 +114,7 @@ const (
 	APICreateNFT             string = "/rubix/v1/nfts/generate"
 	APIListNFTs              string = "/rubix/v1/nfts"
 	APIGetNFTChain           string = "/rubix/v1/nfts/{nft_id}/chain"
+	APIGetChildNFTs          string = "/rubix/v1/nfts/{nft_id}/children"
 	APISubscribecontract     string = "/rubix/v1/smart_contracts/subscribe"
 	APISubscribeNFT          string = "/rubix/v1/nfts/subscribe"
 	APIFetchNft              string = "/rubix/v1/fetch-nft"
