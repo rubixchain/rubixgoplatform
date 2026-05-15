@@ -58,9 +58,3 @@ func (c *Core) RetryFailedFTDownloads(did string) (string, error) {
 func (c *Core) GetFailedFTDownloadStatus(did string) (interface{}, error) {
 	return nil, nil
 }
-
-// InitiateRBTTransfer initiates an RBT transfer for a web request (async, goroutine-safe).
-// TODO(phase11-upstream): wire to the canonical InitiateTransaction path.
-func (c *Core) InitiateRBTTransfer(reqID string, req *model.RBTTransferRequest) {
-	c.log.Error("InitiateRBTTransfer: not implemented", "reqID", reqID)
-}

@@ -79,10 +79,8 @@ const (
 	AddPeerDetailsCmd              string = "addpeerdetails"
 	GetPledgedTokenDetailsCmd      string = "getpledgedtokendetails"
 	CheckPinnedState               string = "checkpinnedstate"
-	SelfTransferRBT                string = "self-transfer-rbt"
 	RunUnpledge                    string = "run-unpledge"
 	UnpledgePOWPledgeTokens        string = "unpledge-pow-pledge-tokens"
-	PinTokenCmd                    string = "pinToken"
 	GenerateFaucetTestRBTCmd       string = "generatefaucetrbt"
 	FaucetTokenCheck               string = "faucettokencheck"
 	ValidateTokenchainCmd          string = "validatetokenchain"
@@ -90,7 +88,6 @@ const (
 	CreateFTCmd                    string = "createft"
 	DumpFTTokenChainCmd            string = "dump-ft"
 	TransferFTCmd                  string = "transfer-ft"
-	ValidateTokenCmd               string = "validatetoken"
 	DumpNFTTokenChainCmd           string = "dump-nft-tokenchain"
 	SubscribeNFTCmd                string = "subscribe-nft"
 	FetchNftCmd                    string = "fetch-nft"
@@ -152,17 +149,14 @@ var commands = []string{VersionCmd,
 	GetSmartContractData,
 	GetPeerID,
 	AddPeerDetailsCmd,
-	SelfTransferRBT,
 	RunUnpledge,
 	UnpledgePOWPledgeTokens,
-	PinTokenCmd,
 	CheckQuorumStatusCmd,
 	ValidateTokenchainCmd,
 	CreateFTCmd,
 	DumpFTTokenChainCmd,
 	TransferFTCmd,
 	GetFTBalanceCmd,
-	ValidateTokenCmd,
 	DumpNFTTokenChainCmd,
 	SubscribeNFTCmd,
 	FetchNftCmd,
@@ -888,14 +882,10 @@ func Run(args []string) {
 		cmd.GetPledgedTokenDetails()
 	case CheckPinnedState:
 		cmd.CheckPinnedState()
-	case SelfTransferRBT:
-		cmd.SelfTransferRBT()
 	case RunUnpledge:
 		cmd.RunUnpledge()
 	case UnpledgePOWPledgeTokens:
 		cmd.UnpledgePOWBasedPledgedTokens()
-	case PinTokenCmd:
-		cmd.PinRBT()
 	case ValidateTokenchainCmd:
 		cmd.ValidateTokenchain()
 	case GenerateFaucetTestRBTCmd:
@@ -910,8 +900,6 @@ func Run(args []string) {
 		cmd.transferFT()
 	case GetFTBalanceCmd:
 		cmd.getFTinfo()
-	case ValidateTokenCmd:
-		cmd.ValidateToken()
 	case DumpNFTTokenChainCmd:
 		cmd.dumpNFTTokenChain()
 	case SubscribeNFTCmd:

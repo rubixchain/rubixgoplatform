@@ -245,16 +245,6 @@ func (s *Server) APIFaucetTokenCheck(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSON(req, br, http.StatusOK)
 }
 
-func (s *Server) APIValidateToken(req *ensweb.Request) *ensweb.Result {
-	token := s.GetQuery(req, "token")
-	br, err := s.c.ValidateToken(token)
-	if err != nil {
-		s.log.Error("Failed to validate token ", err)
-		return s.BasicResponse(req, false, "Failed to validate token : "+err.Error(), nil)
-	}
-	return s.RenderJSON(req, br, http.StatusOK)
-}
-
 // initiates transaction request from wallet server
 func (s *Server) TxnReqFromWallet(txnReq *model.RBTTransferRequest, req *ensweb.Request) *ensweb.Result {
 	is_alphanumeric_sender := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(txnReq.Sender)
@@ -279,6 +269,6 @@ func (s *Server) TxnReqFromWallet(txnReq *model.RBTTransferRequest, req *ensweb.
 		return s.BasicResponse(req, false, "invalid sender DID access", nil)
 	}
 	s.c.AddWebReq(req)
-	go s.c.InitiateRBTTransfer(req.ID, txnReq)
+	// go s.c.InitiateRBTTransfer(req.ID, txnReq)    // replace it with InitTransaction
 	return s.didResponse(req, req.ID)
 }
