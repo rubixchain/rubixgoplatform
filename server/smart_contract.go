@@ -181,16 +181,6 @@ func moveFile(src, dst string) error {
 	return nil
 }
 
-// SmartContract godoc
-// @Summary      Fetch Smart Contract
-// @Description  This API will Fetch smart contract
-// @Tags         Smart Contract
-// @ID   	     fetch-smart-contract
-// @Accept       json
-// @Produce      json
-// @Param        input query FetchSmartContractSwaggoInput true "Fetch smart contract"
-// @Success      200  {object}  model.BasicResponse
-// @Router       /api/fetch-smart-contract [get]
 func (s *Server) APIFetchSmartContract(req *ensweb.Request) *ensweb.Result {
 	smartContractToken := s.GetQuery(req, "smartContractToken")
 

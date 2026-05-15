@@ -25,31 +25,6 @@ definitions:
         items: {}
         type: array
     type: object
-  model.NFTInfo:
-    properties:
-      nft:
-        type: string
-      nft_file_name:
-        type: string
-      nft_metadata:
-        type: string
-      nft_value:
-        type: number
-      owner_did:
-        type: string
-    type: object
-  model.NFTList:
-    properties:
-      message:
-        type: string
-      nfts:
-        items:
-          $ref: '#/definitions/model.NFTInfo'
-        type: array
-      result: {}
-      status:
-        type: boolean
-    type: object
   models.FTInfo:
     properties:
       creatorDID:
@@ -64,6 +39,13 @@ definitions:
       data:
         type: string
       nftId:
+        type: string
+      parentNFTId:
+        description: |-
+          ParentNFTId, when non-empty, signals a child-mint instruction: this entry
+          mints a brand-new child NFT linked to the named parent. The parent is
+          executed in the same transaction. NFTId is ignored when ParentNFTId is set —
+          the server derives the child NFT ID via IPFS-add of parentNFTId+uuid.
         type: string
       value:
         type: number
@@ -127,66 +109,6 @@ definitions:
       peerID:
         type: string
     type: object
-  server.DeployNFTSwaggoInput:
-    properties:
-      did:
-        type: string
-      nft:
-        type: string
-      nft_data:
-        type: string
-      nft_file_name:
-        type: string
-      nft_metadata:
-        type: string
-      nft_value:
-        type: number
-      quorum_type:
-        type: integer
-    type: object
-  server.DeploySmartContractSwaggoInput:
-    properties:
-      comment:
-        type: string
-      deployerAddr:
-        type: string
-      quorumType:
-        type: integer
-      rbtAmount:
-        type: number
-      smartContractToken:
-        type: string
-    type: object
-  server.ExecuteNFTSwaggoInput:
-    properties:
-      comment:
-        type: string
-      executor:
-        type: string
-      nft:
-        type: string
-      nft_data:
-        type: string
-      nft_value:
-        type: number
-      quorum_type:
-        type: integer
-      receiver:
-        type: string
-    type: object
-  server.ExecuteSmartContractSwaggoInput:
-    properties:
-      comment:
-        type: string
-      executorAddr:
-        type: string
-      quorumType:
-        type: integer
-      smartContractData:
-        type: string
-      smartContractToken:
-        type: string
-    type: object
   server.FailedFTDownloadStatusRequest:
     properties:
       did:
@@ -197,16 +119,6 @@ definitions:
       latest:
         type: boolean
       token:
-        type: string
-    type: object
-  server.NewNFTSwaggoInput:
-    properties:
-      nft:
-        type: string
-    type: object
-  server.NewSubscriptionSwaggoInput:
-    properties:
-      smartContractToken:
         type: string
     type: object
   server.RegisterCallBackURLSwaggoInput:
@@ -220,6 +132,19 @@ definitions:
     properties:
       did:
         type: string
+    type: object
+  server.syncTransactionChainRequest:
+    properties:
+      did:
+        type: string
+      exclude_transaction_ids:
+        items:
+          type: string
+        type: array
+      token_ids:
+        items:
+          type: string
+        type: array
     type: object
   types.DIDCreate:
     properties:
@@ -272,138 +197,6 @@ paths:
       summary: Add Peer
       tags:
       - Account
-  /api/deploy-nft:
-    post:
-      consumes:
-      - application/json
-      description: This API will deploy the NFT
-      operationId: deploy-nft
-      parameters:
-      - description: Deploy nft
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.DeployNFTSwaggoInput'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Deploy NFT
-      tags:
-      - NFT
-  /api/deploy-smart-contract:
-    post:
-      consumes:
-      - application/json
-      description: This API will deploy smart contract Token
-      operationId: deploy-smart-contract
-      parameters:
-      - description: Deploy smart contract
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.DeploySmartContractSwaggoInput'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Deploy Smart Contract
-      tags:
-      - Smart Contract
-  /api/execute-nft:
-    post:
-      consumes:
-      - application/json
-      description: This API will add a new block which indicates either transfer of
-        ownership of NFT or internal state change through self-execution
-      parameters:
-      - description: 'Transfer the ownership of particular NFT or self-execution with
-          some data if ''receiver'' is empty '
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.ExecuteNFTSwaggoInput'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Execution of NFT
-      tags:
-      - NFT
-  /api/execute-smart-contract:
-    post:
-      consumes:
-      - application/json
-      description: This API will Execute smart contract Token
-      parameters:
-      - description: Execute smart contrct and add details to chain
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.ExecuteSmartContractSwaggoInput'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Execute Smart Contract
-      tags:
-      - Smart Contract
-  /api/fetch-nft:
-    get:
-      consumes:
-      - application/json
-      description: This API will Fetch NFT
-      operationId: fetch-nft
-      parameters:
-      - in: query
-        name: nft
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Fetch NFT
-      tags:
-      - NFT
-  /api/fetch-smart-contract:
-    get:
-      consumes:
-      - application/json
-      description: This API will Fetch smart contract
-      operationId: fetch-smart-contract
-      parameters:
-      - in: query
-        name: smartContractToken
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Fetch Smart Contract
-      tags:
-      - Smart Contract
   /api/get-failed-ft-download-status:
     post:
       consumes:
@@ -497,21 +290,6 @@ paths:
       summary: Get Smart Contract Token Chain Data
       tags:
       - Smart Contract
-  /api/list-nfts:
-    get:
-      consumes:
-      - application/json
-      description: This API will get all NFTs deployed on the node
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.NFTList'
-      summary: Get ALL NFTs
-      tags:
-      - NFT
   /api/recover-lost-tokens:
     post:
       consumes:
@@ -629,50 +407,6 @@ paths:
       summary: Retry Failed FT Downloads
       tags:
       - FT
-  /api/subscribe-nft:
-    post:
-      consumes:
-      - application/json
-      description: This API endpoint allows subscribing to a NFT.
-      parameters:
-      - description: Subscribe to input nft
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.NewNFTSwaggoInput'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Subscribe to NFT
-      tags:
-      - NFT
-  /api/subscribe-smart-contract:
-    post:
-      consumes:
-      - application/json
-      description: This API endpoint allows subscribing to a smart contract.
-      parameters:
-      - description: Subscribe to input contract
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.NewSubscriptionSwaggoInput'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Subscribe to Smart Contract
-      tags:
-      - Smart Contract
   /rubix/v1/dids:
     get:
       consumes:
@@ -746,7 +480,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: Retrieves the Non-Fungible Token (NFT) balance for a given DID.
+      description: This API will get all NFTs owned by the particular did
       parameters:
       - description: DID (e.g. did:bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)
         in: path
@@ -764,9 +498,9 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/model.BasicResponse'
-      summary: Get NFT Balance
+      summary: Get NFTs owned by the particular did
       tags:
-      - DID
+      - NFT
   /rubix/v1/dids/{did}/balances/rbt:
     get:
       consumes:
@@ -880,6 +614,77 @@ paths:
       summary: Create FT
       tags:
       - FT
+  /rubix/v1/nfts/{nft_id}/chain:
+    get:
+      description: This API will return the nft chain for a given nft token ID
+      parameters:
+      - description: NFT Token ID
+        in: path
+        name: nft_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get nft chain by token ID
+      tags:
+      - NFT
+  /rubix/v1/nfts/{nft_id}/children:
+    get:
+      consumes:
+      - application/json
+      description: Returns NFTs whose parent_token_id matches the given parent NFT
+        ID. Originator-only.
+      parameters:
+      - description: Parent NFT token ID
+        in: path
+        name: nft_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get child NFTs of a given parent NFT
+      tags:
+      - NFT
+  /rubix/v1/nfts/{nft_id}/parent:
+    get:
+      consumes:
+      - application/json
+      description: Returns the parent NFT (id + value) of the named NFT, or null when
+        there is no parent. Originator-only.
+      parameters:
+      - description: Child NFT token ID
+        in: path
+        name: nft_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Get the parent NFT of a given child NFT
+      tags:
+      - NFT
   /rubix/v1/nfts/generate:
     post:
       consumes:
@@ -909,6 +714,27 @@ paths:
           schema:
             $ref: '#/definitions/model.BasicResponse'
       summary: Create NFT
+      tags:
+      - NFT
+  /rubix/v1/nfts/subscribe:
+    get:
+      consumes:
+      - application/json
+      description: This API endpoint allows subscribing to a NFT.
+      parameters:
+      - description: NFT token to subscribe to
+        in: query
+        name: nft
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Subscribe to NFT
       tags:
       - NFT
   /rubix/v1/signature:
@@ -1033,6 +859,51 @@ paths:
       summary: Generate Smart Contract
       tags:
       - Smart Contract
+  /rubix/v1/smart_contracts/subscribe:
+    get:
+      consumes:
+      - application/json
+      description: This API endpoint allows subscribing to a smart contract.
+      parameters:
+      - description: Smart contract token to subscribe to
+        in: query
+        name: smartContractToken
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Subscribe to Smart Contract
+      tags:
+      - Smart Contract
+  /rubix/v1/sync-transaction-chain:
+    post:
+      consumes:
+      - application/json
+      description: Returns ordered transaction chains for the requested token IDs,
+        optionally excluding specific transaction IDs
+      operationId: syncTxChain
+      parameters:
+      - description: sync request
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.syncTransactionChainRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.BasicResponse'
+      summary: Sync transaction chains for tokens
+      tags:
+      - tx
   /rubix/v1/tx:
     get:
       consumes:
