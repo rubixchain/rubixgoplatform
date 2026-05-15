@@ -319,9 +319,10 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	// Consensus request
 	c.log.Info("InitiateTransaction: Initiating consensus with quorum", "quorumDID", quorumAddresses[0], "transactionID", transactionId)
 	consensusRequest := models.ConsensusRequest{
-		ReferenceId:        reqID,
-		TransactionInfo:    transactionInfo,
-		InitiatorSignature: initiatorSignature,
+		ReferenceId:          reqID,
+		TransactionInfo:      transactionInfo,
+		InitiatorSignature:   initiatorSignature,
+		TransferNFTOwnership: request.Tokens.TransferNFTOwnership,
 	}
 
 	var consensusResponse models.ConsensusResponse
@@ -850,6 +851,21 @@ func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
 		initiatorDID := sendTokensRequest.TransactionInfo.Initiator
 		if err := c.SyncTransactionChainsFromPeer(initiatorDID, syncTokenIDs, prevTxIDs, []string{currentTxID}, sendTokensRequest.NFTOwnershipTransfer, false); err != nil {
 			c.log.Warn("SendTokens: chain sync from sender failed (non-fatal)", "initiator", initiatorDID, "err", err)
+		}
+	}
+
+	// On NFT transfer, materialise artifact + subscribe before persisting so
+	// wallet state and on-disk files stay in sync.
+	if sendTokensRequest.NFTOwnershipTransfer && sendTokensRequest.TransactionInfo.Tokens != nil {
+		for _, nft := range sendTokensRequest.TransactionInfo.Tokens.NFT {
+			if nft == nil || nft.TokenID == "" {
+				continue
+			}
+			if err := c.ensureNFTArtifactAndSubscription(nft.TokenID); err != nil {
+				c.log.Error("SendTokens: failed to materialise NFT locally", "nft", nft.TokenID, "err", err)
+				crep.Message = fmt.Sprintf("SendTokens: failed to materialise NFT %s: %v", nft.TokenID, err)
+				return c.l.RenderJSON(request, &crep, http.StatusInternalServerError)
+			}
 		}
 	}
 
