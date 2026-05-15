@@ -685,6 +685,35 @@ func (w *Wallet) IsNFT(tokenID string) (bool, error) {
 	return exists, nil
 }
 
+// GetChildNFTs returns every wallet NFT row whose parent_token_id equals
+// parentNFTId. parent_token_id is only populated on the originator, so this
+// returns no rows on sync receivers.
+func (w *Wallet) GetChildNFTs(parentNFTId string) ([]models.Token, error) {
+	rows, err := w.db.Pool().Query(w.Ctx,
+		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
+		 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
+		 FROM tokens WHERE parent_token_id=$1 AND token_type=$2`,
+		parentNFTId, int16(models.GetTokenTypeID(constants.TokenType_NFT)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetChildNFTs: %w", err)
+	}
+	defer rows.Close()
+	var tokens []models.Token
+	for rows.Next() {
+		var t models.Token
+		if err := rows.Scan(
+			&t.TokenID, &t.ParentTokenID, &t.TokenValue, &t.TokenStatus,
+			&t.DID, &t.TransactionID, &t.TokenStateHash, &t.TokenType,
+			&t.LatestPosition, &t.LatestRole, &t.CreatedAt, &t.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("GetChildNFTs scan: %w", err)
+		}
+		tokens = append(tokens, t)
+	}
+	return tokens, rows.Err()
+}
+
 func (w *Wallet) GetTokenByDIDAndTokenType(didStr string, tokenType int16) ([]models.Token, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
 		`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,

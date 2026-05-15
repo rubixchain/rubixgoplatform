@@ -216,6 +216,68 @@ func (s *Server) APIGetNFTChain(req *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(req, true, "Nft chain data retrieved successfully", TokenChainResponse)
 }
 
+// APIGetChildNFTs godoc
+// @Summary      Get child NFTs of a given parent NFT
+// @Description  Returns NFTs whose parent_token_id matches the given parent NFT ID. Originator-only.
+// @Tags         NFT
+// @Accept       json
+// @Produce      json
+// @Param        nft_id  path      string  true  "Parent NFT token ID"
+// @Success      200     {object}  model.BasicResponse
+// @Failure      400     {object}  model.BasicResponse
+// @Router       /rubix/v1/nfts/{nft_id}/children [get]
+func (s *Server) APIGetChildNFTs(req *ensweb.Request) *ensweb.Result {
+	parentNFTId := s.GetRouteVar(req, "nft_id")
+	if err := util.ValidateCIDFormat(parentNFTId); err != nil {
+		return s.BasicResponse(req, false, fmt.Sprintf("parent NFT %s", err.Error()), nil)
+	}
+	children, err := s.c.GetChildNFTs(parentNFTId)
+	if err != nil {
+		return s.BasicResponse(req, false, "failed to get child NFTs, err: "+err.Error(), nil)
+	}
+	message := "got child NFTs successfully"
+	if len(children) == 0 {
+		message = "no child NFTs found"
+	}
+	resp := model.BasicResponse{
+		Status:  true,
+		Message: message,
+		Result:  children,
+	}
+	return s.RenderJSON(req, resp, http.StatusOK)
+}
+
+// APIGetParentNFT godoc
+// @Summary      Get the parent NFT of a given child NFT
+// @Description  Returns the parent NFT (id + value) of the named NFT, or null when there is no parent. Originator-only.
+// @Tags         NFT
+// @Accept       json
+// @Produce      json
+// @Param        nft_id  path      string  true  "Child NFT token ID"
+// @Success      200     {object}  model.BasicResponse
+// @Failure      400     {object}  model.BasicResponse
+// @Router       /rubix/v1/nfts/{nft_id}/parent [get]
+func (s *Server) APIGetParentNFT(req *ensweb.Request) *ensweb.Result {
+	childNFTId := s.GetRouteVar(req, "nft_id")
+	if err := util.ValidateCIDFormat(childNFTId); err != nil {
+		return s.BasicResponse(req, false, fmt.Sprintf("child NFT %s", err.Error()), nil)
+	}
+	parent, err := s.c.GetParentNFT(childNFTId)
+	if err != nil {
+		return s.BasicResponse(req, false, "failed to get parent NFT, err: "+err.Error(), nil)
+	}
+	message := "got parent NFT successfully"
+	if parent == nil {
+		message = "no parent NFT"
+	}
+	resp := model.BasicResponse{
+		Status:  true,
+		Message: message,
+		Result:  parent,
+	}
+	return s.RenderJSON(req, resp, http.StatusOK)
+}
+
 // ShowAccount godoc
 // @Summary      Get NFTs owned by the particular did
 // @Description  This API will get all NFTs owned by the particular did

@@ -99,7 +99,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	// Expand any child-mint entries (those with ParentNFTId set) into
 	// parent-execute + child-deploy pairs before building the transaction info.
 	// Server-generates the child NFT IDs and rewrites request.Tokens.NFT in place.
-	mintedChildren, err := c.expandChildMintEntries(request)
+	mintedChildren, childToParent, err := c.expandChildMintEntries(request)
 	if err != nil {
 		c.log.Error("InitiateTransaction: child-mint expansion failed", "err", err)
 		resp.Message = "InitiateTransaction: child-mint expansion failed: " + err.Error()
@@ -422,6 +422,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		DID:                  initiatorDID,
 		ExecutionRole:        wallet.ExecutionRoleInitiator,
 		TransferNFTOwnership: request.Tokens.TransferNFTOwnership,
+		ChildToParent:        childToParent,
 	})
 	if persistErr != nil {
 		c.log.Error("InitiateTransaction: Failed to persist post-consensus state", "err", persistErr, "transactionID", transactionId)
