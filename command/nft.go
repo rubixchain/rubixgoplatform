@@ -9,6 +9,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core"
 	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -147,4 +148,130 @@ func (cmd *Command) fetchNFT() {
 		return
 	}
 	cmd.log.Info("NFT fetched successfully")
+}
+
+func (cmd *Command) DeployNFT() {
+	if cmd.nft == "" {
+		cmd.log.Info("NFT id cannot be empty")
+		fmt.Print("Enter NFT Id : ")
+		_, err := fmt.Scan(&cmd.nft)
+		if err != nil {
+			cmd.log.Error("Failed to get NFT")
+			return
+		}
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.nft)
+	if len(cmd.nft) != 46 || !strings.HasPrefix(cmd.nft, "Qm") || !is_alphanumeric {
+		cmd.log.Error("Invalid NFT")
+		return
+	}
+	if cmd.deployerAddr == "" {
+		cmd.log.Info("Deployer address cannot be empty")
+		fmt.Print("Enter Deployer DID : ")
+		_, err := fmt.Scan(&cmd.deployerAddr)
+		if err != nil {
+			cmd.log.Error("Failed to get deployer DID")
+			return
+		}
+	}
+	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.deployerAddr)
+	if !strings.HasPrefix(cmd.deployerAddr, "bafybmi") || len(cmd.deployerAddr) != 59 || !is_alphanumeric {
+		cmd.log.Error("Invalid deployer DID")
+		return
+	}
+
+	if cmd.nftValue < 0.001 {
+		cmd.log.Error("Invalid NFT value. NFT value should be atlease 0.001")
+		return
+	}
+
+	nftInfo := models.NFTInfo{
+		NFTId: cmd.nft,
+		Value: cmd.nftValue,
+		Data:  cmd.nftData,
+	}
+	nftDeployRequest := models.TransactionRequest{
+		Initiator: cmd.deployerAddr,
+		Tokens: models.TransactionTokenDetails{
+			NFT: []models.NFTInfo{nftInfo},
+		},
+		Memo: cmd.transComment,
+	}
+
+	br, err := cmd.c.InitiateTransaction(&nftDeployRequest)
+	if err != nil {
+		cmd.log.Error("Failed NFT deployment", "err", err)
+		return
+	}
+	msg, status := cmd.SignatureResponse(br)
+	if !status {
+		cmd.log.Error("Failed to deployed NFT", "msg", msg)
+		return
+	}
+	cmd.log.Info(msg)
+	cmd.log.Info("NFT deployed successfully")
+}
+
+func (cmd *Command) ExecuteNFT() {
+	if cmd.nft == "" {
+		cmd.log.Info("NFT id cannot be empty")
+		fmt.Print("Enter NFT Id : ")
+		_, err := fmt.Scan(&cmd.nft)
+		if err != nil {
+			cmd.log.Error("Failed to get NFT")
+			return
+		}
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.nft)
+	if len(cmd.nft) != 46 || !strings.HasPrefix(cmd.nft, "Qm") || !is_alphanumeric {
+		cmd.log.Error("Invalid NFT")
+		return
+	}
+	if cmd.executorAddr == "" {
+		cmd.log.Info("Executor address cannot be empty")
+		fmt.Print("Enter Executor DID : ")
+		_, err := fmt.Scan(&cmd.executorAddr)
+		if err != nil {
+			cmd.log.Error("Failed to get Executor DID")
+			return
+		}
+	}
+	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.executorAddr)
+	if !strings.HasPrefix(cmd.executorAddr, "bafybmi") || len(cmd.executorAddr) != 59 || !is_alphanumeric {
+		cmd.log.Error("Invalid Executor DID")
+		return
+	}
+
+	if cmd.nftValue < 0.001 {
+		cmd.log.Error("Invalid NFT value. NFT value should be atlease 0.001")
+		return
+	}
+
+	nftInfo := models.NFTInfo{
+		NFTId: cmd.nft,
+		Value: cmd.nftValue,
+		Data:  cmd.nftData,
+	}
+	nftExecuteRequest := models.TransactionRequest{
+		Initiator: cmd.executorAddr,
+		Owner:     cmd.receiverAddr,
+		Tokens: models.TransactionTokenDetails{
+			NFT:                  []models.NFTInfo{nftInfo},
+			TransferNFTOwnership: cmd.isNftTransfer,
+		},
+		Memo: cmd.transComment,
+	}
+
+	br, err := cmd.c.InitiateTransaction(&nftExecuteRequest)
+	if err != nil {
+		cmd.log.Error("Failed NFT execution", "err", err)
+		return
+	}
+	msg, status := cmd.SignatureResponse(br)
+	if !status {
+		cmd.log.Error("Failed to execute NFT", "msg", msg)
+		return
+	}
+	cmd.log.Info(msg)
+	cmd.log.Info("NFT executed successfully")
 }

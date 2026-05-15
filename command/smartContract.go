@@ -8,6 +8,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/client"
 	"github.com/rubixchain/rubixgoplatform/core"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
 func (cmd *Command) generateSmartContractToken() {
@@ -130,4 +131,117 @@ func (cmd *Command) SubscribeContract() {
 		return
 	}
 	cmd.log.Info("New event subscribed successfully")
+}
+
+func (cmd *Command) DeploySmartContract() {
+	if cmd.smartContractToken == "" {
+		cmd.log.Info("smart contract id cannot be empty")
+		fmt.Print("Enter smart contract Id : ")
+		_, err := fmt.Scan(&cmd.nft)
+		if err != nil {
+			cmd.log.Error("Failed to get smart contract")
+			return
+		}
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
+	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !is_alphanumeric {
+		cmd.log.Error("Invalid smart contract")
+		return
+	}
+	if cmd.deployerAddr == "" {
+		cmd.log.Info("Deployer address cannot be empty")
+		fmt.Print("Enter Deployer DID : ")
+		_, err := fmt.Scan(&cmd.deployerAddr)
+		if err != nil {
+			cmd.log.Error("Failed to get Deployer DID")
+			return
+		}
+	}
+	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.deployerAddr)
+	if !strings.HasPrefix(cmd.deployerAddr, "bafybmi") || len(cmd.deployerAddr) != 59 || !is_alphanumeric {
+		cmd.log.Error("Invalid deployer DID")
+		return
+	}
+
+	smartContractInfo := models.SmartContractInfo{
+		SmartContractId: cmd.smartContractToken,
+		Value:           cmd.smartContractValue,
+		Data:            cmd.smartContractData,
+	}
+	sctDeployRequest := models.TransactionRequest{
+		Initiator: cmd.deployerAddr,
+		Tokens: models.TransactionTokenDetails{
+			SmartContract: []models.SmartContractInfo{smartContractInfo},
+		},
+		Memo: cmd.transComment,
+	}
+
+	br, err := cmd.c.InitiateTransaction(&sctDeployRequest)
+	if err != nil {
+		cmd.log.Error("Failed smart contract deployment", "err", err)
+		return
+	}
+	msg, status := cmd.SignatureResponse(br)
+	if !status {
+		cmd.log.Error("Failed to deploy smart contract", "msg", msg)
+		return
+	}
+	cmd.log.Info(msg)
+	cmd.log.Info("smart contract deployed successfully")
+}
+
+func (cmd *Command) ExecuteSmartContract() {
+	if cmd.smartContractToken == "" {
+		cmd.log.Info("smart contract id cannot be empty")
+		fmt.Print("Enter smart contract Id : ")
+		_, err := fmt.Scan(&cmd.nft)
+		if err != nil {
+			cmd.log.Error("Failed to get smart contract")
+			return
+		}
+	}
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.smartContractToken)
+	if len(cmd.smartContractToken) != 46 || !strings.HasPrefix(cmd.smartContractToken, "Qm") || !is_alphanumeric {
+		cmd.log.Error("Invalid smart contract")
+		return
+	}
+	if cmd.executorAddr == "" {
+		cmd.log.Info("Executor address cannot be empty")
+		fmt.Print("Enter Executor DID : ")
+		_, err := fmt.Scan(&cmd.executorAddr)
+		if err != nil {
+			cmd.log.Error("Failed to get Executor DID")
+			return
+		}
+	}
+	is_alphanumeric = regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.executorAddr)
+	if !strings.HasPrefix(cmd.executorAddr, "bafybmi") || len(cmd.executorAddr) != 59 || !is_alphanumeric {
+		cmd.log.Error("Invalid Executor DID")
+		return
+	}
+
+	smartContractInfo := models.SmartContractInfo{
+		SmartContractId: cmd.smartContractToken,
+		Data:            cmd.smartContractData,
+	}
+	sctExecutorRequest := models.TransactionRequest{
+		Initiator: cmd.executorAddr,
+		Tokens: models.TransactionTokenDetails{
+			SmartContract: []models.SmartContractInfo{smartContractInfo},
+		},
+		Memo: cmd.transComment,
+	}
+
+	br, err := cmd.c.InitiateTransaction(&sctExecutorRequest)
+	if err != nil {
+		cmd.log.Error("Failed smart contract execution", "err", err)
+		return
+	}
+	msg, status := cmd.SignatureResponse(br)
+	if !status {
+		cmd.log.Error("Failed to execute smart contract", "msg", msg)
+		return
+	}
+	cmd.log.Info(msg)
+	cmd.log.Info("smart contract executed successfully")
 }

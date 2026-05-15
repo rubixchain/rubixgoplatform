@@ -220,7 +220,7 @@ func (cmd *Command) TransferRBT() {
 		Memo: cmd.transComment,
 	}
 
-	br, err := cmd.c.TransferRBT(&rbtTransferReq)
+	br, err := cmd.c.InitiateTransaction(&rbtTransferReq)
 	if err != nil {
 		cmd.log.Error("Failed RBT transfer", "err", err)
 		return

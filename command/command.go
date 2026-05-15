@@ -70,6 +70,8 @@ const (
 	DumpSmartContractTokenChainCmd string = "dumpsmartcontracttokenchain"
 	GetTokenBlock                  string = "gettokenblock"
 	GetSmartContractData           string = "getsmartcontractdata"
+	DeploySmartContractCmd         string = "deploysmartcontract"
+	ExecuteSmartContractCmd        string = "executesmartcontract"
 	GetPeerID                      string = "get-peer-id"
 	ReleaseAllLockedTokensCmd      string = "releaseAllLockedTokens"
 	CheckQuorumStatusCmd           string = "checkQuorumStatus"
@@ -91,6 +93,8 @@ const (
 	DumpNFTTokenChainCmd           string = "dump-nft-tokenchain"
 	SubscribeNFTCmd                string = "subscribe-nft"
 	FetchNftCmd                    string = "fetch-nft"
+	DeployNftCmd                   string = "deploy-nft"
+	ExecuteNftCmd                  string = "execute-nft"
 	AddUserAPIKeyCmd               string = "adduserapikey"
 	AddPeerDetailsFromExplorer     string = "exppeerdetails"
 	GetFTTxnDetailsCmd             string = "get-ft-txn-details"
@@ -147,6 +151,8 @@ var commands = []string{VersionCmd,
 	DumpSmartContractTokenChainCmd,
 	GetTokenBlock,
 	GetSmartContractData,
+	DeploySmartContractCmd,
+	ExecuteSmartContractCmd,
 	GetPeerID,
 	AddPeerDetailsCmd,
 	RunUnpledge,
@@ -160,6 +166,8 @@ var commands = []string{VersionCmd,
 	DumpNFTTokenChainCmd,
 	SubscribeNFTCmd,
 	FetchNftCmd,
+	DeployNftCmd,
+	ExecuteNftCmd,
 	GetNftsByDidCmd,
 	AddUserAPIKeyCmd,
 	AddPeerDetailsFromExplorer,
@@ -308,6 +316,7 @@ type Command struct {
 	smartContractToken           string
 	publishType                  int
 	smartContractData            string
+	smartContractValue           float64
 	executorAddr                 string
 	latest                       bool
 	quorumAddr                   string
@@ -323,6 +332,7 @@ type Command struct {
 	artifact                     string
 	nft                          string
 	nftData                      string
+	isNftTransfer                bool
 	ftName                       string
 	ftCount                      int
 	creatorDID                   string
@@ -705,6 +715,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.smartContractToken, "sct", "", "Smart contract token")
 	flag.IntVar(&cmd.publishType, "pubType", 0, "Smart contract event publishing type(Deploy & Execute)")
 	flag.StringVar(&cmd.smartContractData, "sctData", "data", "Smart contract execution info")
+	flag.Float64Var(&cmd.smartContractValue, "smartContractValue", 0.0, "Value of the smart contract")
 	flag.StringVar(&cmd.executorAddr, "executorAddr", "", "Smart contract Executor Address")
 	flag.BoolVar(&cmd.latest, "latest", false, "flag to set latest")
 	flag.StringVar(&cmd.quorumAddr, "quorumAddr", "", "Quorum Node Address to check the status of the Quorum")
@@ -718,6 +729,7 @@ func Run(args []string) {
 	flag.StringVar(&cmd.metadata, "metadata", "", "NFT metadata")
 	flag.StringVar(&cmd.artifact, "artifact", "", "NFT artifact")
 	flag.StringVar(&cmd.nftData, "nftData", "", "The nft data")
+	flag.BoolVar(&cmd.isNftTransfer, "nftTransfer", false, "Transfer NFT to receiver")
 	flag.StringVar(&cmd.ftName, "ftName", "", "Name of FT to be created")
 	flag.IntVar(&cmd.ftCount, "ftCount", 0, "Number of FTs to be created")
 	flag.StringVar(&cmd.creatorDID, "creatorDID", "", "DID of creator of FT")
@@ -870,6 +882,10 @@ func Run(args []string) {
 		cmd.getTokenBlock()
 	case GetSmartContractData:
 		cmd.getSmartContractData()
+	case DeploySmartContractCmd:
+		cmd.DeploySmartContract()
+	case ExecuteSmartContractCmd:
+		cmd.ExecuteSmartContract()
 	case GetPeerID:
 		cmd.peerIDCmd()
 	case ReleaseAllLockedTokensCmd:
@@ -906,6 +922,10 @@ func Run(args []string) {
 		cmd.SubscribeNFT()
 	case FetchNftCmd:
 		cmd.fetchNFT()
+	case DeployNftCmd:
+		cmd.DeployNFT()
+	case ExecuteNftCmd:
+		cmd.ExecuteNFT()
 	case AddUserAPIKeyCmd:
 		cmd.addUserAPIKey()
 	case AddPeerDetailsFromExplorer:

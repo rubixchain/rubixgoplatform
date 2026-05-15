@@ -35,7 +35,7 @@ func (rn *RubixNative) TransferRBT(ctx context.Context, in *protos.TransferRBTRe
 		},
 		Memo: in.Comment,
 	}
-	br, err := c.TransferRBT(rbtTransfer)
+	br, err := c.InitiateTransaction(rbtTransfer)
 	if err != nil {
 		return nil, err
 	}

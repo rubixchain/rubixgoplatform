@@ -112,9 +112,9 @@ func (c *Client) FaucetTokenCheck(token string, did string) (*model.BasicRespons
 	return &rm, nil
 }
 
-func (c *Client) TransferRBT(rt *models.TransactionRequest) (*model.BasicResponse, error) {
+func (c *Client) InitiateTransaction(txnRequest *models.TransactionRequest) (*model.BasicResponse, error) {
 	var br model.BasicResponse
-	err := c.sendJSONRequest("POST", setup.APITransaction, nil, rt, &br, time.Minute*2)
+	err := c.sendJSONRequest("POST", setup.APITransaction, nil, txnRequest, &br, time.Minute*2)
 	if err != nil {
 		c.log.Error("Failed RBT Transfer", "err", err)
 		return nil, err
