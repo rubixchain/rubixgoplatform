@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -102,19 +102,19 @@ func (cmd *Command) transferFT() {
 	if cmd.ftName == "" {
 		cmd.log.Error("FT name cannot be empty")
 	}
-	if cmd.quorumType != 0 && cmd.quorumType != 1 && cmd.quorumType != 2 {
-		cmd.log.Error("Quorum type should be either 1 or 2")
-		return
+	
+	ftInfo := models.FTInfo{
+		FTName:      cmd.ftName,
+		NumberOfFts: float64(cmd.ftCount),
+		CreatorDID: cmd.creatorDID,
 	}
-	transferFtReq := model.TransferFTReq{
-		Receiver:      cmd.receiverAddr,
-		Sender:        cmd.senderAddr,
-		FTName:        cmd.ftName,
-		FTCount:       cmd.ftCount,
-		QuorumType:    cmd.quorumType,
-		Comment:       cmd.transComment,
-		CreatorDID:    cmd.creatorDID,
-		OperationType: cmd.operationType,
+	transferFtReq := models.TransactionRequest{
+		Owner:     cmd.receiverAddr,
+		Initiator: cmd.senderAddr,
+		Tokens: models.TransactionTokenDetails{
+			FT: []models.FTInfo{ftInfo},
+		},
+		Memo:    cmd.transComment,
 	}
 
 	br, err := cmd.c.TransferFT(&transferFtReq)

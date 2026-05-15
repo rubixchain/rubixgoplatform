@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 func (cmd *Command) GenerateLocalRBT() {
@@ -160,4 +163,73 @@ func (cmd *Command) FaucetTokenCheck() {
 	fmt.Println(br.Message)
 
 	cmd.log.Info("Validated token details successfully")
+}
+
+func (cmd *Command) TransferRBT() {
+	if cmd.senderAddr == "" {
+		cmd.log.Info("Sender address cannot be empty")
+		fmt.Print("Enter Sender DID : ")
+		_, err := fmt.Scan(&cmd.senderAddr)
+		if err != nil {
+			cmd.log.Error("Failed to get Sender DID")
+			return
+		}
+	}
+	_, senderDID, ok := util.ParseAddress(cmd.senderAddr)
+	if !ok {
+		cmd.log.Error("Invalid sender address")
+	}
+	cmd.senderAddr = senderDID
+
+	if cmd.receiverAddr == "" {
+		cmd.log.Info("Receiver address cannot be empty")
+		fmt.Print("Enter Receiver DID : ")
+		_, err := fmt.Scan(&cmd.receiverAddr)
+		if err != nil {
+			cmd.log.Error("Failed to get Receiver DID")
+			return
+		}
+	}
+
+	_, reciverDID, ok := util.ParseAddress(cmd.receiverAddr)
+	if !ok {
+		cmd.log.Error("Invalid reciver address")
+	}
+	cmd.receiverAddr = reciverDID
+
+	isAlphanumericSender := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.senderAddr)
+	isAlphanumericReceiver := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.receiverAddr)
+	if !isAlphanumericSender || !isAlphanumericReceiver {
+		cmd.log.Error("Invalid sender or receiver address. Please provide valid DID")
+		return
+	}
+	if !strings.HasPrefix(cmd.senderAddr, "bafybmi") || len(cmd.senderAddr) != 59 || !strings.HasPrefix(cmd.receiverAddr, "bafybmi") || len(cmd.receiverAddr) != 59 {
+		cmd.log.Error("Invalid sender or receiver DID")
+		return
+	}
+	if cmd.rbtAmount < 0.001 {
+		cmd.log.Error("Invalid RBT amount. RBT amount should be atlease 0.001")
+		return
+	}
+	rbtTransferReq := models.TransactionRequest{
+		Initiator: cmd.senderAddr,
+		Owner:     cmd.receiverAddr,
+		Tokens: models.TransactionTokenDetails{
+			RBT: cmd.rbtAmount,
+		},
+		Memo: cmd.transComment,
+	}
+
+	br, err := cmd.c.TransferRBT(&rbtTransferReq)
+	if err != nil {
+		cmd.log.Error("Failed RBT transfer", "err", err)
+		return
+	}
+	msg, status := cmd.SignatureResponse(br)
+	if !status {
+		cmd.log.Error("Failed to trasnfer RBT", "msg", msg)
+		return
+	}
+	cmd.log.Info(msg)
+	cmd.log.Info("RBT transferred successfully")
 }

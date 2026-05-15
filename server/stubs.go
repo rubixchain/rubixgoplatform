@@ -47,12 +47,6 @@ func (s *Server) RunUnpledgeHandle(req *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(req, false, "not implemented", nil)
 }
 
-// APIInitiatePinRBT handles the initiate-pin-token endpoint.
-// TODO(phase11-upstream): implement token pinning.
-func (s *Server) APIInitiatePinRBT(req *ensweb.Request) *ensweb.Result {
-	return s.BasicResponse(req, false, "not implemented", nil)
-}
-
 // APIGetFTTxnByDID handles the get-ft-txn-by-did endpoint.
 // TODO(phase11-upstream): implement via PostgreSQL FT transaction queries.
 func (s *Server) APIGetFTTxnByDID(req *ensweb.Request) *ensweb.Result {

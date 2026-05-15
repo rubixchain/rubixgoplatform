@@ -7,6 +7,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
 func (c *Client) GenerateLocalRBT(numTokens int, didStr string, startIndex int) (*model.BasicResponse, error) {
@@ -109,4 +110,14 @@ func (c *Client) FaucetTokenCheck(token string, did string) (*model.BasicRespons
 		return nil, err
 	}
 	return &rm, nil
+}
+
+func (c *Client) TransferRBT(rt *models.TransactionRequest) (*model.BasicResponse, error) {
+	var br model.BasicResponse
+	err := c.sendJSONRequest("POST", setup.APITransaction, nil, rt, &br, time.Minute*2)
+	if err != nil {
+		c.log.Error("Failed RBT Transfer", "err", err)
+		return nil, err
+	}
+	return &br, nil
 }

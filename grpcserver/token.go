@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/protos"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
 const defaultStartIndex = -1
@@ -27,14 +27,15 @@ func (rn *RubixNative) TransferRBT(ctx context.Context, in *protos.TransferRBTRe
 	if err != nil {
 		return nil, err
 	}
-	rt := &model.RBTTransferRequest{
-		Receiver:   in.Receiver,
-		Sender:     rn.c.GetPeerID() + "." + rn.c.GetTokenDID(tkn),
-		TokenCount: in.TokenCount,
-		Type:       int(in.Type),
-		Comment:    in.Comment,
+	rbtTransfer := &models.TransactionRequest{
+		Owner:     in.Receiver,
+		Initiator: rn.c.GetPeerID() + "." + rn.c.GetTokenDID(tkn),
+		Tokens: models.TransactionTokenDetails{
+			RBT: in.TokenCount,
+		},
+		Memo: in.Comment,
 	}
-	br, err := c.TransferRBT(rt)
+	br, err := c.TransferRBT(rbtTransfer)
 	if err != nil {
 		return nil, err
 	}
