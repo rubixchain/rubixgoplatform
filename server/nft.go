@@ -126,16 +126,6 @@ func (s *Server) APISubscribeNFT(request *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(request, true, "NFT subscribed successfully", nil)
 }
 
-// NFT godoc
-// @Summary      Fetch NFT
-// @Description  This API will Fetch NFT
-// @Tags         NFT
-// @ID   	     fetch-nft
-// @Accept       json
-// @Produce      json
-// @Param        input query NewNFTSwaggoInput true "Fetch nft"
-// @Success      200  {object}  model.BasicResponse
-// @Router       /api/fetch-nft [get]
 func (s *Server) APIFetchNft(req *ensweb.Request) *ensweb.Result {
 	var fetchNft core.FetchNFTRequest
 	var err error
