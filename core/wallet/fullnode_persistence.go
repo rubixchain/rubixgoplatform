@@ -871,3 +871,42 @@ func (w *Wallet) PersistFullNodeSyncedTokenChain(
 	}
 	return nil
 }
+
+// GetFullNodeTransactionsByTokenID retrieves all transactions for a token from the fullnode tables in chronological order.
+func (w *Wallet) GetFullNodeTransactionsByTokenID(tokenID string) ([]models.Transactions, error) {
+	// Step 1: Get the index array from fullnode_tokenchain_index
+	var indices []int32
+	err := w.db.Pool().QueryRow(w.Ctx,
+		`SELECT index FROM fullnode_tokenchain_index WHERE token_id = $1`,
+		tokenID,
+	).Scan(&indices)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("GetFullNodeTransactionsByTokenID: no fullnode_tokenchain_index found for token_id %s", tokenID)
+		}
+		return nil, fmt.Errorf("GetFullNodeTransactionsByTokenID: failed to get indices: %w", err)
+	}
+
+	if len(indices) == 0 {
+		return []models.Transactions{}, nil
+	}
+
+	// Step 2 & 3: Get transactions in exact order using unnest WITH ORDINALITY
+	rows, err := w.db.Pool().Query(w.Ctx, `
+		SELECT t.id, t.info, t.signature, t.created_at, t.updated_at
+		FROM unnest($1::int[]) WITH ORDINALITY AS idx(id, ord)
+		JOIN fullnode_tokenchain tc ON tc.id = idx.id
+		JOIN fullnode_transactions t ON t.id = tc.transaction_id
+		ORDER BY idx.ord
+	`, indices)
+	if err != nil {
+		return nil, fmt.Errorf("GetFullNodeTransactionsByTokenID: failed to get transactions: %w", err)
+	}
+
+	transactions, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.Transactions])
+	if err != nil {
+		return nil, fmt.Errorf("GetFullNodeTransactionsByTokenID: failed to collect rows: %w", err)
+	}
+
+	return transactions, nil
+}

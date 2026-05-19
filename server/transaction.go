@@ -99,6 +99,32 @@ func (s *Server) APISyncTransactionChain(req *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(req, true, "ok", data)
 }
 
+// APISyncFullNodeTransactionChain godoc
+// @Summary      Sync transaction chains for tokens from fullnode tables
+// @Description  Returns ordered transaction chains for the requested token IDs from the complete fullnode history, optionally excluding specific transaction IDs
+// @Tags         tx
+// @ID           syncFullNodeTxChain
+// @Accept       json
+// @Produce      json
+// @Param        input body syncTransactionChainRequest true "sync request"
+// @Success      200  {object}  model.BasicResponse
+// @Router       /rubix/v1/fullnode/sync-token-chain [post]
+func (s *Server) APISyncFullNodeTransactionChain(req *ensweb.Request) *ensweb.Result {
+	var syncReq syncTransactionChainRequest
+	err := s.ParseJSON(req, &syncReq)
+	if err != nil {
+		return s.BasicResponse(req, false, "Invalid input", nil)
+	}
+	if len(syncReq.TokenIDs) == 0 {
+		return s.BasicResponse(req, true, "no token_ids provided", nil)
+	}
+	data, err := s.c.GetSyncFullNodeTransactionChainData(syncReq.TokenIDs, syncReq.ExcludeTransactionIDs)
+	if err != nil {
+		return s.BasicResponse(req, false, err.Error(), nil)
+	}
+	return s.BasicResponse(req, true, "ok", data)
+}
+
 // APIGetTransactionsByDID godoc
 // @Summary      Get Transactions by DID
 // @Description  Get Transactions by DID

@@ -742,3 +742,33 @@ func (c *Core) GetSyncTransactionChainData(tokenIDs []string, excludeTxIDs []str
 
 	return result, nil
 }
+
+// GetSyncFullNodeTransactionChainData returns transaction chains from the fullnode tables for the given token IDs,
+// excluding any transactions whose IDs appear in excludeTxIDs.
+func (c *Core) GetSyncFullNodeTransactionChainData(tokenIDs []string, excludeTxIDs []string) (map[string][]models.Transactions, error) {
+	excludeSet := make(map[string]bool, len(excludeTxIDs))
+	for _, id := range excludeTxIDs {
+		excludeSet[id] = true
+	}
+
+	result := make(map[string][]models.Transactions)
+	for _, tokenID := range tokenIDs {
+		txs, err := c.w.GetFullNodeTransactionsByTokenID(tokenID)
+		if err != nil {
+			c.log.Warn("GetSyncFullNodeTransactionChainData: failed to fetch fullnode chain", "tokenID", tokenID, "err", err)
+			continue
+		}
+		if len(excludeSet) > 0 {
+			filtered := make([]models.Transactions, 0, len(txs))
+			for _, tx := range txs {
+				if !excludeSet[tx.ID] {
+					filtered = append(filtered, tx)
+				}
+			}
+			txs = filtered
+		}
+		result[tokenID] = txs
+	}
+
+	return result, nil
+}
