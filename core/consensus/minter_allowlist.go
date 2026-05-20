@@ -19,8 +19,8 @@ type genesisInitiatorLookup interface {
 // ValidateMinterAllowlist checks that every RBT in the transaction was minted
 // by an allowed DID. For part tokens, it checks the whole-token ancestor.
 //
-// The list used depends on the network: AllowedMinters on mainnet,
-// TestnetAllowedMinters on testnet. On localnet the check is skipped.
+// Enforced only on mainnet (uses AllowedMinters). Testnet enforcement is
+// wired but disabled — see the switch below.
 //
 // Must run after TokenChainIntegrityCheck so the local chain is up to date.
 // NFT, FT, and SmartContract entries are skipped.
@@ -57,11 +57,14 @@ func validateMinterAllowlist(
 	case mainnet:
 		table = minterallowlist.AllowedMinters
 		expectedLevel = 1
-	case testnet:
-		table = minterallowlist.TestnetAllowedMinters
-		expectedLevel = 50001
+	// Testnet enforcement is currently disabled. Re-enable by uncommenting
+	// the case below; TestnetAllowedMinters is still defined and tested.
+	// case testnet:
+	// 	table = minterallowlist.TestnetAllowedMinters
+	// 	expectedLevel = 50001
 	default:
-		// Localnet: skip the check.
+		// Testnet and localnet: skip the check.
+		_ = testnet
 		return nil
 	}
 
