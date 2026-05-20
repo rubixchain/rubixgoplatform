@@ -110,6 +110,9 @@ func (s *Server) APISyncTransactionChain(req *ensweb.Request) *ensweb.Result {
 // @Success      200  {object}  model.BasicResponse
 // @Router       /rubix/v1/fullnode/sync-token-chain [post]
 func (s *Server) APISyncFullNodeTransactionChain(req *ensweb.Request) *ensweb.Result {
+	if res := s.checkRateLimit(req); res != nil {
+		return res
+	}
 	var syncReq syncTransactionChainRequest
 	err := s.ParseJSON(req, &syncReq)
 	if err != nil {
@@ -117,6 +120,10 @@ func (s *Server) APISyncFullNodeTransactionChain(req *ensweb.Request) *ensweb.Re
 	}
 	if len(syncReq.TokenIDs) == 0 {
 		return s.BasicResponse(req, true, "no token_ids provided", nil)
+	}
+	// Guard: cap batch size to prevent resource abuse on this public endpoint
+	if len(syncReq.TokenIDs) > 50 {
+		return s.BasicResponse(req, false, "max 50 token IDs per request", nil)
 	}
 	data, err := s.c.GetSyncFullNodeTransactionChainData(syncReq.TokenIDs, syncReq.ExcludeTransactionIDs)
 	if err != nil {

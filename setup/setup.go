@@ -124,13 +124,15 @@ const (
 	// Transactions endpoints
 	APITransaction          string = "/rubix/v1/tx"
 	APIGetTransactionByID   string = "/rubix/v1/tx/{tx_id}"
-	APISyncTransactionChain         string = "/rubix/v1/sync-transaction-chain"
-	APISyncFullNodeTransactionChain string = "/rubix/v1/fullnode/sync-token-chain"
+	APISyncTransactionChain string = "/rubix/v1/sync-transaction-chain"
 	APIGetTransactionsByDID string = "/rubix/v1/tx/{did}/{token_type}"
 
 	// FT endpoints
 	APIListFT   string = "/rubix/v1/fts"
 	APICreateFT string = "/rubix/v1/fts/mint"
+
+	// Fullnode endpoints
+	APISyncFullNodeTransactionChain string = "/rubix/v1/fullnode/sync-token-chain"
 )
 
 // jwt.RegisteredClaims
