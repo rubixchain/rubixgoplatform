@@ -157,9 +157,10 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 
 		cmd.log.Info("Got the request for the signature")
 
-		switch res := br.Result.(type) {
-
-		case map[string]interface{}:
+		res := br.Result
+		switch {
+		case strings.Contains(br.Message, "Password needed"),
+			strings.Contains(br.Message, "Signature needed"):
 			jb, err := json.Marshal(res)
 			if err != nil {
 				return "Invalid response, " + err.Error(), false
@@ -190,12 +191,9 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 				return "Failed signature response, " + err.Error(), false
 			}
 
-		case string:
+		default:
 			// fallback: result is just transaction ID string
 			return br.Message, true
-
-		default:
-			return "Invalid response: unexpected format", false
 		}
 	}
 }
