@@ -16,7 +16,8 @@ type genesisInitiatorLookup interface {
 	GetGenesisInitiatorDID(tokenID string, isFullNode bool) (string, error)
 }
 
-// ValidateMinterAllowlist checks that every RBT in the transaction was minted
+// ValidateMinterAllowlist checks that every RBT in the transaction — both
+// transferred and committed (split parents / SC-committed RBT) — was minted
 // by an allowed DID. For part tokens, it checks the whole-token ancestor.
 //
 // Enforced only on mainnet (uses AllowedMinters). Testnet enforcement is
@@ -45,7 +46,7 @@ func validateMinterAllowlist(
 	syncTxChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error,
 	testnet, mainnet bool,
 ) error {
-	if txnInfo == nil || txnInfo.Tokens == nil {
+	if txnInfo == nil {
 		return nil
 	}
 
@@ -68,7 +69,11 @@ func validateMinterAllowlist(
 		return nil
 	}
 
-	for _, t := range txnInfo.Tokens.RBT {
+	var rbtTokens []*models.TokenInfo
+	if txnInfo.Tokens != nil {
+		rbtTokens = txnInfo.Tokens.RBT
+	}
+	for _, t := range append(rbtTokens, txnInfo.CommittedTokens...) {
 		if t == nil || t.TokenID == "" {
 			continue
 		}
