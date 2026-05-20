@@ -32,7 +32,7 @@ const (
 )
 
 const (
-	version string = "0.2"
+	version string = "0.2_fullnode_sync_test"
 )
 const (
 	VersionCmd                     string = "-v"
