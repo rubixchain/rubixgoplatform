@@ -257,7 +257,11 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 	isTransactionInfoValidated, err := consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, nil, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains, consensusRequest.TransferNFTOwnership)
 	if err != nil || !isTransactionInfoValidated {
 		c.log.Error("initiateConsensusHandler: transaction info validation failed", "err", err)
-		response.Message = "initiateConsensusHandler: transaction info validation failed"
+		if err != nil {
+			response.Message = fmt.Sprintf("initiateConsensusHandler: transaction info validation failed: %v", err)
+		} else {
+			response.Message = "initiateConsensusHandler: transaction info validation failed"
+		}
 		return c.l.RenderJSON(request, response, http.StatusBadRequest)
 	}
 

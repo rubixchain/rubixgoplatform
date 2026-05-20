@@ -1002,6 +1002,10 @@ func ValidateTransaction(
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
 
+	if err := ValidateMinterAllowlist(&txnInfo, isFullnode, w, log, syncTxChains, testnet, mainnet); err != nil {
+		return false, fmt.Errorf("ValidateTransaction: %w", err)
+	}
+
 	// 7. ValidateTokenIDRelatedChecks for each RBT token in Tokens and CommittedTokens and pledged tokens
 	if txnInfo.Tokens.RBT != nil {
 		for _, token := range txnInfo.Tokens.RBT {

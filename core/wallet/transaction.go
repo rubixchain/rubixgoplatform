@@ -231,20 +231,31 @@ func (w *Wallet) GetTransactionIdByIndex(index int16, isFullNode bool) (string, 
 	return txnId, nil
 }
 
+// GetTransactionsByDIDAndTokenType returns transaction history of a given DID and token_type, 
+// and in case of RBT it does not return split/burnt transactions where initiator=owner
 func (w *Wallet) GetTransactionsByDIDAndTokenType(did, tokenType string) ([]models.Transactions, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
 		`SELECT id, info, signature, created_at, updated_at
-		FROM transactions
-		WHERE (info->>'initiator' = $1 OR info->>'owner' = $1)
-		AND (
-			CASE $2
-				WHEN 'rbt'           THEN json_typeof(info->'tokens'->'rbt') = 'array'
-				WHEN 'nft'           THEN json_typeof(info->'tokens'->'nft') = 'array'
-				WHEN 'ft'            THEN json_typeof(info->'tokens'->'ft') = 'array'
-				WHEN 'smartContract' THEN json_typeof(info->'tokens'->'smartContract') = 'array'
-				ELSE FALSE
-			END
-		)`,
+	FROM transactions
+	WHERE (info->>'initiator' = $1 OR info->>'owner' = $1)
+	AND (
+		CASE $2
+			WHEN 'rbt' THEN
+				json_typeof(info->'tokens'->'rbt') = 'array'
+				AND info->>'initiator' != info->>'owner'
+
+			WHEN 'nft' THEN
+				json_typeof(info->'tokens'->'nft') = 'array'
+
+			WHEN 'ft' THEN
+				json_typeof(info->'tokens'->'ft') = 'array'
+
+			WHEN 'smartContract' THEN
+				json_typeof(info->'tokens'->'smartContract') = 'array'
+
+			ELSE FALSE
+		END
+	)`,
 		did, tokenType,
 	)
 	if err != nil {

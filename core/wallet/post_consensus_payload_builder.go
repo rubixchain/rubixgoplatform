@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -32,7 +33,11 @@ type persistenceTokenInput struct {
 //
 // It preserves current token_status from the tokens table and updates only the
 // fields needed for post-consensus persistence.
-func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID string, txInfo *models.TransactionInfo, did, executionRole string, transferNFTOwnership bool, isLocalTransfer bool) ([]models.TokenChain, []models.Token, []string, error) {
+//
+// childToParent (originator-only) maps each new child NFT's token ID to its
+// parent's, so genesis-NFT-deploy states get ParentTokenID set on the
+// originator. Nil on sync receivers.
+func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID string, txInfo *models.TransactionInfo, did, executionRole string, transferNFTOwnership bool, isLocalTransfer bool, childToParent map[string]string) ([]models.TokenChain, []models.Token, []string, error) {
 	if w == nil {
 		return nil, nil, nil, fmt.Errorf("post-consensus persistence: wallet is nil")
 	}
@@ -202,6 +207,12 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 				state.DID = txInfo.Initiator
 			}
 			state.TokenStatus = int16(constants.TokenStatus_Deployed)
+			// Originator-only: record parent NFT lineage for child mints.
+			if input.TokenTypeName == constants.TokenType_NFT && len(childToParent) > 0 {
+				if parent, ok := childToParent[input.TokenID]; ok && parent != "" {
+					state.ParentTokenID = pgtype.Text{String: parent, Valid: true}
+				}
+			}
 		case input.RoleName == constants.TokenRole_Execute:
 			// SmartContract execute: ownership moves to the executor (initiator).
 			// NFT (and anything else) execute: keep the existing owner — state.DID stays
