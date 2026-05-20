@@ -169,6 +169,8 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIListSmartContracts, "GET", s.AuthHandle(s.APIListSmartContracts, true, s.AuthError, false))
 	s.AddRoute(setup.APIListNFTs, "GET", s.AuthHandle(s.APIListNFTs, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetNFTChain, "GET", s.AuthHandle(s.APIGetNFTChain, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetChildNFTs, "GET", s.AuthHandle(s.APIGetChildNFTs, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetParentNFT, "GET", s.AuthHandle(s.APIGetParentNFT, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetSmartContractChain, "GET", s.AuthHandle(s.APIGetSmartContractChain, true, s.AuthError, false))
 
 	// Transactions
