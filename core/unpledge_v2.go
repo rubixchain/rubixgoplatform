@@ -215,7 +215,7 @@ func (c *Core) UnpledgeV2(
 	// Step 2: Update tokens status to FREE
 	if _, err := unpledgeTx.Exec(ctx, `
 		UPDATE tokens SET token_status = $2, latest_role = $3, updated_at = NOW(),
-		latest_position = latest_position + 1, transaction_id = $4
+		latest_position = latest_position + 1, transaction_id = $4, lock_reference_id=NULL
 		WHERE token_id = ANY($1::text[])
 	`, pledgeTokens, int16(constants.TokenStatus_Free), unpledgeRoleID, proofTx.ID); err != nil {
 		return fmt.Errorf("UnpledgeV2: update token status for mainTxID %q: %w", mainTxID, err)
