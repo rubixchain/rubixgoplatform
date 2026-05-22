@@ -65,6 +65,10 @@ func BuildTransactionInfoFromRequest(
 	var totalAmount float64
 	var allCommittedTokens []*models.TokenInfo
 
+	// nftHasDeploy lets us pin txInfo.Owner = Initiator for deploys, so the
+	// chain doesn't disagree with the deployer's wallet under chain-walked auth.
+	var nftHasDeploy bool
+
 	// nftCurrentOwner is captured from the wallet's tokens row when an existing
 	// NFT is locked for execution. It is used below to pin txInfo.Owner for
 	// NFT-only execute transactions so the chain payload accurately reflects the
@@ -277,6 +281,7 @@ func BuildTransactionInfoFromRequest(
 				} else {
 					// DEPLOYMENT MODE: Token doesn't exist, prepare for deployment
 					log.Info("BuildTransactionInfoFromRequest: NFT does not exist - DEPLOYMENT MODE", "nftID", nftInfo.NFTId, "value", nftInfo.Value)
+					nftHasDeploy = true
 					// Add NFT to transaction tokens (will be deployed during consensus)
 					txTokens.NFT = append(txTokens.NFT, &models.TokenInfo{
 						TokenID:               nftInfo.NFTId,
@@ -428,6 +433,18 @@ func BuildTransactionInfoFromRequest(
 		len(req.Tokens.FT) == 0 &&
 		len(req.Tokens.SmartContract) == 0 {
 		txInfoOwner = nftCurrentOwner
+	}
+
+	// NFT deploy: deployer is the owner. Pin Owner to Initiator and reject
+	// mixed RBT/FT/SC (the single Owner scalar can't carry both meanings).
+	if nftHasDeploy {
+		if req.Tokens.RBT > 0 || len(req.Tokens.FT) > 0 || len(req.Tokens.SmartContract) > 0 {
+			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: NFT deploy cannot be combined with RBT/FT/SC in a single transaction")
+		}
+		if req.Owner != "" && req.Owner != req.Initiator {
+			log.Info("BuildTransactionInfoFromRequest: overriding user-supplied Owner on NFT deploy", "requestedOwner", req.Owner, "initiator", req.Initiator)
+		}
+		txInfoOwner = req.Initiator
 	}
 
 	txInfo := &models.TransactionInfo{

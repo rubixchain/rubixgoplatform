@@ -400,6 +400,7 @@ func TestValidateTransaction_FailsOnInvalidInfoFields(t *testing.T) {
 		false, false, false,
 		func(string, string) error { return nil },
 		func(string, []string, map[string]string, []string) error { return nil },
+		false, // transferNFTOwnership
 	)
 	if err == nil {
 		t.Fatal("expected error because of invalid epoch, got nil")
@@ -427,6 +428,7 @@ func TestValidateTransaction_FailsOnTxIDMismatch(t *testing.T) {
 		false, false, false,
 		func(string, string) error { return nil },
 		func(string, []string, map[string]string, []string) error { return nil },
+		false, // transferNFTOwnership
 	)
 	if err == nil || !strings.Contains(err.Error(), "transaction ID mismatch") {
 		t.Fatalf("expected tx ID mismatch error, got: %v", err)

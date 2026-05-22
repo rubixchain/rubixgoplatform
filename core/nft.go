@@ -91,34 +91,61 @@ func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.Basic
 	return basicResponse
 }
 
+// ensureNFTArtifactAndSubscription fetches IPFS artifacts (if missing) and
+// subscribes to the NFT topic. Skips chain sync — callers handle that
+// separately to avoid double-syncing in the receiver-transfer flow.
+func (c *Core) ensureNFTArtifactAndSubscription(nftID string) error {
+	if nftID == "" {
+		return fmt.Errorf("ensureNFTArtifactAndSubscription: empty nftID")
+	}
+
+	nftFolderPath := path.Join(c.nftDir, nftID)
+	if _, err := os.Stat(nftFolderPath); os.IsNotExist(err) {
+		c.log.Info("ensureNFTArtifactAndSubscription: NFT not found locally, fetching from network", "nft_token", nftID)
+
+		nft, err := c.fetchContractInfo(nftID)
+		if err != nil {
+			c.log.Error("ensureNFTArtifactAndSubscription: failed to fetch NFT metadata", "nft_token", nftID, "err", err)
+			return fmt.Errorf("ensureNFTArtifactAndSubscription: failed to fetch NFT metadata for %s: %w", nftID, err)
+		}
+
+		if err := c.GetNFTFromIpfs(nftID, nft.ArtifactHash); err != nil {
+			c.log.Error("ensureNFTArtifactAndSubscription: failed to fetch NFT artifact from IPFS", "nft_token", nftID, "artifact_hash", nft.ArtifactHash, "err", err)
+			return fmt.Errorf("ensureNFTArtifactAndSubscription: failed to fetch NFT artifact for %s: %w", nftID, err)
+		}
+
+		c.log.Info("ensureNFTArtifactAndSubscription: NFT fetched successfully", "nft_token", nftID)
+	} else {
+		c.log.Debug("ensureNFTArtifactAndSubscription: NFT folder already exists, skipping fetch", "nft_token", nftID, "path", nftFolderPath)
+	}
+
+	if err := c.ps.SubscribeTopic(nftID, c.NFTCallBack); err != nil {
+		if err.Error() == "topic already subscribed" {
+			c.log.Debug("ensureNFTArtifactAndSubscription: already subscribed to NFT topic", "topic", nftID)
+		} else {
+			c.log.Error("ensureNFTArtifactAndSubscription: failed to subscribe to NFT topic", "topic", nftID, "err", err)
+			return fmt.Errorf("ensureNFTArtifactAndSubscription: failed to subscribe to NFT topic %s: %w", nftID, err)
+		}
+	}
+
+	return nil
+}
+
 func (c *Core) SubscribeNFTSetup(requestID string, topic string) error {
 	reqID = requestID
 
-	// Subscribe to NFT topic
-	err := c.ps.SubscribeTopic(topic, c.NFTCallBack)
-	if err != nil {
-		c.log.Error("SubscribeNFTSetup: Failed to subscribe to NFT topic", "topic", topic, "err", err)
-		return fmt.Errorf("failed to subscribe to NFT topic %s: %w", topic, err)
+	if err := c.ensureNFTArtifactAndSubscription(topic); err != nil {
+		return err
 	}
 
-	// Check if NFT folder exists
-	nftFolderPath := path.Join(c.nftDir, topic)
-	if _, err := os.Stat(nftFolderPath); os.IsNotExist(err) {
-		c.log.Info("SubscribeNFTSetup: NFT not found locally, fetching from network", "nft_token", topic)
-
-		// Fetch NFT from IPFS
-		fetchRequest := &FetchNFTRequest{
-			NFT: topic,
+	// Explicit subscribers need the existing chain; helper skips chain sync.
+	nft, err := c.fetchContractInfo(topic)
+	if err != nil {
+		c.log.Warn("SubscribeNFTSetup: chain sync metadata lookup failed (continuing)", "nft_token", topic, "err", err)
+	} else if nft.PeerID != "" {
+		if err := c.syncNFTTransaction(topic, nft); err != nil {
+			c.log.Warn("SubscribeNFTSetup: chain sync failed (will rely on future pubsub events)", "nft_token", topic, "err", err)
 		}
-		response := c.FetchNFT(fetchRequest)
-		if !response.Status {
-			c.log.Error("SubscribeNFTSetup: Failed to fetch NFT", "nft_token", topic, "error", response.Message)
-			return fmt.Errorf("failed to fetch NFT %s: %s", topic, response.Message)
-		}
-
-		c.log.Info("SubscribeNFTSetup: NFT fetched successfully", "nft_token", topic)
-	} else {
-		c.log.Debug("SubscribeNFTSetup: NFT already exists locally", "nft_token", topic, "path", nftFolderPath)
 	}
 
 	c.log.Info("SubscribeNFTSetup: Successfully subscribed to NFT", "topic", topic)

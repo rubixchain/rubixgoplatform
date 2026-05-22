@@ -675,9 +675,15 @@ func (pc *PostConsensusPersistenceCoordinator) upsertTokenStates(ctx context.Con
 // For ExecutionRoleInitiator: decrement denom count for each sent token.
 // For ExecutionRoleQuorum (pledge): no change — pledged tokens are tracked via token_status, not denom.
 func (pc *PostConsensusPersistenceCoordinator) upsertTokenDenomDeltas(ctx context.Context, tx pgx.Tx, did string, tokenStates []models.Token, executionRole string, isLocalTransfer bool, ownerDID string) error {
+	rbtTypeID := int16(models.GetTokenTypeID(constants.TokenType_RBT))
+
 	denomDelta := make(map[float64]int64)
 	for _, state := range tokenStates {
 		if state.TokenValue == 0 {
+			continue
+		}
+		// Only RBT contributes to token_denom; NFT/FT/SC have their own accounting.
+		if state.TokenType != rbtTypeID {
 			continue
 		}
 		switch executionRole {
@@ -712,6 +718,9 @@ func (pc *PostConsensusPersistenceCoordinator) upsertTokenDenomDeltas(ctx contex
 
 		for _, state := range tokenStates {
 			if state.TokenValue == 0 {
+				continue
+			}
+			if state.TokenType != rbtTypeID {
 				continue
 			}
 
