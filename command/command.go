@@ -858,10 +858,6 @@ func Run(args []string) {
 		cmd.TransferRBT()
 	case GetRBTBalanceCmd:
 		cmd.GetRBTBalance()
-	case DumpTokenChainCmd:
-		cmd.dumpTokenChain()
-	case DecodeTokenChainCmd:
-		cmd.decodeTokenChain()
 	case RegsiterDIDCmd:
 		cmd.RegsiterDIDCmd()
 	case SetupDIDCmd:
@@ -878,16 +874,8 @@ func Run(args []string) {
 		cmd.generateSmartContractToken()
 	case FetchSmartContract:
 		cmd.fetchSmartContract()
-	case DumpSmartContractTokenChainCmd:
-		cmd.dumpSmartContractTokenChain()
-	case GetTokenBlock:
-		cmd.getTokenBlock()
-	case GetSmartContractData:
-		cmd.getSmartContractData()
 	case GetPeerID:
 		cmd.peerIDCmd()
-	case ReleaseAllLockedTokensCmd:
-		cmd.releaseAllLockedTokens()
 	case CheckQuorumStatusCmd:
 		cmd.checkQuorumStatus()
 	case AddPeerDetailsCmd:
@@ -912,16 +900,12 @@ func Run(args []string) {
 		cmd.FaucetTokenCheck()
 	case CreateFTCmd:
 		cmd.createFT()
-	case DumpFTTokenChainCmd:
-		cmd.dumpFTTokenchain()
 	case TransferFTCmd:
 		cmd.transferFT()
 	case GetFTBalanceCmd:
 		cmd.getFTinfo()
 	case ValidateTokenCmd:
 		cmd.ValidateToken()
-	case DumpNFTTokenChainCmd:
-		cmd.dumpNFTTokenChain()
 	case SubscribeNFTCmd:
 		cmd.SubscribeNFT()
 	case FetchNftCmd:

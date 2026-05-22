@@ -16,7 +16,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -95,52 +94,6 @@ func (c *Core) GetPeerFromExplorer(didStr string) (*models.DID, error) {
 	}
 
 	return peerInfo, nil
-}
-
-func (c *Core) GetDIDAccess(req *model.GetDIDAccess) *model.DIDAccessResponse {
-	resp := &model.DIDAccessResponse{
-		BasicResponse: model.BasicResponse{
-			Status: false,
-		},
-	}
-	_, ok := c.ValidateDIDToken(req.Token, setup.ChanllegeTokenType, req.DID)
-	if !ok {
-		resp.Message = "Invalid token"
-		return resp
-	}
-	dc := did.InitDIDLite(req.DID, c.didDir, nil)
-	ok, err := dc.SignVerify([]byte(req.Token), req.Signature)
-	if err != nil {
-		if strings.Contains(err.Error(), "NLSS DID detected") || strings.Contains(err.Error(), "incompatible key format") {
-			c.log.Error("NLSS DID detected during authentication. NLSS DIDs are DEPRECATED. Please use BIP DID", "did", req.DID, "error", err)
-			resp.Message = "NLSS DID detected. Please use BIP DID"
-		} else {
-			c.log.Error("Failed to verify DID signature", "err", err)
-			resp.Message = "Failed to verify DID signature"
-		}
-		return resp
-	}
-	if !ok {
-		resp.Message = "Invalid signature"
-		return resp
-	}
-	expiresAt := time.Now().Add(time.Minute * 10)
-	tkn := c.generateDIDToken(setup.AccessTokenType, req.DID, true, expiresAt)
-	resp.Status = true
-	resp.Message = "Access granted"
-	resp.Token = tkn
-	return resp
-}
-
-func (c *Core) GetDIDChallenge(d string) *model.DIDAccessResponse {
-	expiresAt := time.Now().Add(time.Minute * 1)
-	return &model.DIDAccessResponse{
-		BasicResponse: model.BasicResponse{
-			Status:  true,
-			Message: "Challenge generated",
-		},
-		Token: c.generateDIDToken(setup.ChanllegeTokenType, d, false, expiresAt),
-	}
 }
 
 func (c *Core) checkPassword(didStr string, pwd string) bool {
@@ -319,7 +272,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*models.DID, error) {
 
 	// If peerID still missing, try resolving (via explorer or peer fetch)
 	if peerID == "" {
-		if !c.testnet || !c.localnet{
+		if !c.testnet || !c.localnet {
 			peerInfo, err := c.GetPeerFromExplorer(didStr)
 			if err != nil {
 				return nil, fmt.Errorf("explorer lookup failed: %w", err)

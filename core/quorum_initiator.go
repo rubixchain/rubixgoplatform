@@ -70,17 +70,6 @@ const (
 
 // PingSetup will setup the ping route
 func (c *Core) QuorumSetup() {
-	c.l.AddRoute(APICreditStatus, "GET", c.creditStatus)
-	c.l.AddRoute(APIQuorumConsensus, "POST", c.quorumConensus)
-	c.l.AddRoute(APIQuorumCredit, "POST", c.quorumCredit)
-	c.l.AddRoute(APIUpdatePledgeToken, "POST", c.updatePledgeToken)
-	c.l.AddRoute(APISignatureRequest, "POST", c.signatureRequest)
-	c.l.AddRoute(APISendReceiverToken, "POST", c.updateReceiverTokenHandle)
-	c.l.AddRoute(APIConfirmTokenTransfer, "POST", c.confirmTokenTransfer)
-	c.l.AddRoute(APIUnlockTokens, "POST", c.unlockTokens)
-	c.l.AddRoute(APIUpdateTokenHashDetails, "POST", c.updateTokenHashDetails)
-	c.l.AddRoute(APIAddUnpledgeDetails, "POST", c.addUnpledgeDetails)
-	c.l.AddRoute(APISendFTToken, "POST", c.updateReceiverFTHandle)
 	c.l.AddRoute(APICheckPinRole, "GET", c.checkPinRole)
 	c.l.AddRoute(APIInitiateConsensus, "POST", c.initiateConsensusHandler)
 	c.l.AddRoute(APIRequestPledgeToken, "POST", c.requestPledgeTokenHandler)

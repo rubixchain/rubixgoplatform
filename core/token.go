@@ -1802,100 +1802,100 @@ func (c *Core) generateTestRBT(reqID string, numTokens int, did string) (*token.
 	return &tokendetail, nil
 }
 
-func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse {
-	br := model.BasicResponse{
-		Status: false,
-	}
-	//Cheking if token is valid
-	b, err := c.getFromIPFS(tokenID)
+// func (c *Core) FaucetTokenCheck(tokenID string, did string) model.BasicResponse {
+// 	br := model.BasicResponse{
+// 		Status: false,
+// 	}
+// 	//Cheking if token is valid
+// 	b, err := c.getFromIPFS(tokenID)
 
-	if err != nil {
-		c.log.Error("failed to get token details from ipfs", "err", err, "token", tokenID)
-		br.Message = "Cannot find token details"
-		return br
-	}
+// 	if err != nil {
+// 		c.log.Error("failed to get token details from ipfs", "err", err, "token", tokenID)
+// 		br.Message = "Cannot find token details"
+// 		return br
+// 	}
 
-	tokenval := string(b)
-	tokencontent := strings.Split(tokenval, ",")
-	if len(tokencontent) != 3 {
-		br.Message = "Non-faucet token"
-		return br
-	}
+// 	tokenval := string(b)
+// 	tokencontent := strings.Split(tokenval, ",")
+// 	if len(tokencontent) != 3 {
+// 		br.Message = "Non-faucet token"
+// 		return br
+// 	}
 
-	faucetName := strings.TrimSpace(strings.Split(tokencontent[0], ":")[1])
-	if faucetName != token.FaucetName {
-		br.Message = "Invalid faucet name"
-		return br
-	}
+// 	faucetName := strings.TrimSpace(strings.Split(tokencontent[0], ":")[1])
+// 	if faucetName != token.FaucetName {
+// 		br.Message = "Invalid faucet name"
+// 		return br
+// 	}
 
-	tokenLevel, err := strconv.Atoi(strings.TrimSpace(strings.Split(tokencontent[1], ":")[1]))
-	if err != nil {
-		br.Message = "Invalid token level"
-		return br
-	}
+// 	tokenLevel, err := strconv.Atoi(strings.TrimSpace(strings.Split(tokencontent[1], ":")[1]))
+// 	if err != nil {
+// 		br.Message = "Invalid token level"
+// 		return br
+// 	}
 
-	tokenNumber, err := strconv.Atoi(strings.TrimSpace(strings.Split(tokencontent[2], ":")[1]))
-	if err != nil {
-		br.Message = "Invalid token number"
-		return br
-	}
-	if tokenNumber > token.TokenMap[tokenLevel] {
-		br.Message = "Invalid token number"
-		return br
-	}
+// 	tokenNumber, err := strconv.Atoi(strings.TrimSpace(strings.Split(tokencontent[2], ":")[1]))
+// 	if err != nil {
+// 		br.Message = "Invalid token number"
+// 		return br
+// 	}
+// 	if tokenNumber > token.TokenMap[tokenLevel] {
+// 		br.Message = "Invalid token number"
+// 		return br
+// 	}
 
-	u, _ := url.Parse(c.faucetURL)
+// 	u, _ := url.Parse(c.faucetURL)
 
-	u.Path = path.Join(u.Path, "/api/current-token-value")
+// 	u.Path = path.Join(u.Path, "/api/current-token-value")
 
-	currentTokenValueURL := u.String()
+// 	currentTokenValueURL := u.String()
 
-	// Get the current value from Faucet
-	resp, err := http.Get(currentTokenValueURL)
-	if err != nil {
-		br.Status = false
-		br.Message = "Unable to fetch latest value"
-		return br
-	}
-	defer resp.Body.Close()
+// 	// Get the current value from Faucet
+// 	resp, err := http.Get(currentTokenValueURL)
+// 	if err != nil {
+// 		br.Status = false
+// 		br.Message = "Unable to fetch latest value"
+// 		return br
+// 	}
+// 	defer resp.Body.Close()
 
-	var tokendetail token.FaucetToken
+// 	var tokendetail token.FaucetToken
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		br.Status = false
-		br.Message = "Unable to fetch latest value"
-		return br
-	}
-	//Populating the tokendetail with current token number and current token level received from Faucet.
-	err = json.Unmarshal(body, &tokendetail)
-	if err != nil {
-		br.Status = false
-		br.Message = "Unable to fetch latest value"
-		return br
-	}
-	if tokenLevel > tokendetail.TokenLevel {
-		br.Message = "Invalid token level"
-		return br
-	}
+// 	body, err := io.ReadAll(resp.Body)
+// 	if err != nil {
+// 		br.Status = false
+// 		br.Message = "Unable to fetch latest value"
+// 		return br
+// 	}
+// 	//Populating the tokendetail with current token number and current token level received from Faucet.
+// 	err = json.Unmarshal(body, &tokendetail)
+// 	if err != nil {
+// 		br.Status = false
+// 		br.Message = "Unable to fetch latest value"
+// 		return br
+// 	}
+// 	if tokenLevel > tokendetail.TokenLevel {
+// 		br.Message = "Invalid token level"
+// 		return br
+// 	}
 
-	// TODO(phase07): block-based token chain validation removed
-	// Previously: GetGenesisTokenBlock + GetSigner to verify faucet DID
-	br.Message = "Token chain validation temporarily unavailable (block removal in progress)"
-	return br
+// 	// TODO(phase07): block-based token chain validation removed
+// 	// Previously: GetGenesisTokenBlock + GetSigner to verify faucet DID
+// 	br.Message = "Token chain validation temporarily unavailable (block removal in progress)"
+// 	return br
 
-	response, err := c.ValidateTokenOwner(TokenChainInput{}, did)
-	if err != nil {
-		c.log.Error("msg", response.Message, "err", err)
-		br.Message = "Token Details : " + tokenval + " Couldn't validate token chain"
-		return br
-	}
+// 	response, err := c.ValidateTokenOwner(TokenChainInput{}, did)
+// 	if err != nil {
+// 		c.log.Error("msg", response.Message, "err", err)
+// 		br.Message = "Token Details : " + tokenval + " Couldn't validate token chain"
+// 		return br
+// 	}
 
-	br.Status = true
-	br.Message = "Token owner validated successfully. Token details = " + tokenval
+// 	br.Status = true
+// 	br.Message = "Token owner validated successfully. Token details = " + tokenval
 
-	return br
-}
+// 	return br
+// }
 
 // This function might not be needed since we are going from the tokenHash structure.
 func (c *Core) ValidateToken(token string) (*model.BasicResponse, error) {
@@ -1989,7 +1989,7 @@ func VerifyTokens(serverURL string, tokens []string) (TokenVerificationResponse,
 // detected gap or linkage break. The block-based min/max ID concept has been removed —
 // chain integrity is now defined by position sequentiality and previous_transaction_id linkage.
 func (c *Core) GetMissingBlockSequence(tokenSyncInfo TokenSyncInfo) error {
-	chain, err := c.w.GetTokenChainByTokenID(tokenSyncInfo.TokenID,false)
+	chain, err := c.w.GetTokenChainByTokenID(tokenSyncInfo.TokenID, false)
 	if err != nil {
 		c.log.Error("Failed to fetch token chain", "token", tokenSyncInfo.TokenID, "error", err)
 		return fmt.Errorf("failed to fetch token chain for %s: %w", tokenSyncInfo.TokenID, err)

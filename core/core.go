@@ -129,11 +129,7 @@ type Core struct {
 	defaultSetup         bool
 	tokenSyncManager     *TokenSyncManager
 	ipfsProviderStore    *IPFSProviderStore
-	asyncPinManager      *AsyncPinManager
 	perfTracker          *PerformanceTracker
-	tokenPool            *TokenInfoPool
-	batchSyncTokenPool   *BatchSyncTokenInfoPool
-	tokenSlicePool       *TokenSlicePool
 	pendingTokenMonitor  *PendingTokenMonitor
 	publishTokenChain    bool
 	fullNode             bool
@@ -254,9 +250,6 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 	// Initialize token sync manager
 	c.tokenSyncManager = NewTokenSyncManager(c.log)
 
-	// Initialize async pin manager with 4 workers by default
-	c.asyncPinManager = NewAsyncPinManager(c, 4)
-
 	// Initialize performance tracker
 	perfConfig := &PerformanceConfig{
 		Enabled:        true, // TODO: Make this configurable
@@ -271,11 +264,6 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 		// Continue without performance tracking
 		c.perfTracker = &PerformanceTracker{enabled: false}
 	}
-
-	// Initialize token pools for memory optimization
-	c.tokenPool = NewTokenInfoPool()
-	c.batchSyncTokenPool = NewBatchSyncTokenInfoPool()
-	c.tokenSlicePool = NewTokenSlicePool()
 
 	// Initialize pending token monitor for self-healing
 	// Check every 5 minutes for tokens pending > 10 minutes
@@ -503,6 +491,12 @@ func (c *Core) GetConfig() *types.RubixConfig {
 	return c.cfg
 }
 
+// GetWallet returns the wallet instance for direct access in dev/test scenarios.
+// In production, wallet operations go through Core methods.
+func (c *Core) GetWallet() *wallet.Wallet {
+	return c.w
+}
+
 func (c *Core) AddWebReq(req *ensweb.Request) {
 	c.rlock.Lock()
 	defer c.rlock.Unlock()
@@ -602,11 +596,11 @@ func (c *Core) SetupForienDIDQuorum(didStr string, selfDID string) (types.DIDCry
 
 func (c *Core) FetchDID(did string) error {
 	didDir := path.Join(c.didDir, did)
-	
+
 	pubKeyPath := path.Join(didDir, constants.PubKeyFileName)
 	_, dirErr := os.Stat(didDir)
 	_, pubKeyErr := os.Stat(pubKeyPath)
-	
+
 	if os.IsNotExist(dirErr) || os.IsNotExist(pubKeyErr) {
 		err := os.MkdirAll(didDir, os.ModeDir|os.ModePerm)
 		if err != nil {

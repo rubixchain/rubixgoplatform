@@ -19,22 +19,6 @@ const (
 	DIDRootDir string = "root"
 )
 
-func (s *Server) APIGetDIDAccess(req *ensweb.Request) *ensweb.Result {
-	var da model.GetDIDAccess
-	err := s.ParseJSON(req, &da)
-	if err != nil {
-		return s.BasicResponse(req, false, "Invalid request", nil)
-	}
-	resp := s.c.GetDIDAccess(&da)
-	return s.RenderJSON(req, resp, http.StatusOK)
-}
-
-func (s *Server) APIGetDIDChallenge(req *ensweb.Request) *ensweb.Result {
-	did := s.GetQuery(req, "did")
-	resp := s.c.GetDIDChallenge(did)
-	return s.RenderJSON(req, resp, http.StatusOK)
-}
-
 // CreateDID godoc
 // @Summary      Create DID
 // @Description  Creates a new DID with the provided public key, password, and mnemonic.
