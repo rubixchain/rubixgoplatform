@@ -121,6 +121,26 @@ func (c *Core) requestPledgeTokenHandler(request *ensweb.Request) *ensweb.Result
 		}
 	}
 
+	// Ensure locked RBT tokens are released if the pledge fails at any step.
+	// This defer must be registered BEFORE ReqPledgeToken because
+	// LockTokensForSplit (called inside ReqPledgeToken) commits the
+	// lock to DB immediately. If ReqPledgeToken itself fails (e.g.
+	// insufficient balance), the lock must still be released.
+	c.log.Debug("requestPledgeTokenHandler: Registering deferred token cleanup")
+	pledgeSucceeded := false
+	defer func() {
+		if !pledgeSucceeded {
+			c.log.Warn("requestPledgeTokenHandler: Transaction failed, releasing locked tokens", "did", did)
+			if releaseErr := c.w.ReleaseAllLockedRBTTokensForDID(c.w.Ctx, did, pledgeTokenRequest.ReferenceId); releaseErr != nil {
+				c.log.Error("requestPledgeTokenHandler: failed to release locked RBT tokens after pledge failure", "err", releaseErr, "did", did)
+			} else {
+				c.log.Info("requestPledgeTokenHandler: released locked RBT tokens after failed transaction", "did", did)
+			}
+		} else {
+			c.log.Debug("requestPledgeTokenHandler: Transaction succeeded, tokens will be transferred", "did", did)
+		}
+	}()
+
 	// Strict minimal liquidity guard (260409-0ko):
 	// Cheap pre-check to short-circuit pledge requests when the quorum clearly
 	// does not have enough free RBT balance. This avoids entering
@@ -147,11 +167,6 @@ func (c *Core) requestPledgeTokenHandler(request *ensweb.Request) *ensweb.Result
 	pledgeTokenResponse, err := consensus.ReqPledgeToken(dc, c.w, pledgeTokenRequest.TransactionValue, c.networkMode, c.log, c.ps, pledgeTokenRequest.ReferenceId)
 	if err != nil {
 		c.log.Error("requestPledgeTokenHandler : Failed to process pledge token request", "err", err)
-		// Release ALL locked tokens since pledge selection failed — LockTokensForSplit locked them
-		// but no subset was successfully selected, so all must be returned to Free.
-		if releaseErr := c.w.ReleaseAllLockedRBTTokensForDID(c.w.Ctx, did, pledgeTokenRequest.ReferenceId); releaseErr != nil {
-			c.log.Error("requestPledgeTokenHandler: failed to release locked tokens after pledge failure", "err", releaseErr)
-		}
 		response.Message = "requestPledgeTokenHandler : " + err.Error()
 		return c.l.RenderJSON(request, &response, http.StatusInternalServerError)
 	}
@@ -165,6 +180,7 @@ func (c *Core) requestPledgeTokenHandler(request *ensweb.Request) *ensweb.Result
 			selectedTokenIDs = append(selectedTokenIDs, t.TokenID)
 		}
 	}
+	pledgeSucceeded = true
 	if releaseErr := c.w.ReleaseNonSelectedLockedRBTTokensForDID(c.w.Ctx, did, selectedTokenIDs, pledgeTokenRequest.ReferenceId); releaseErr != nil {
 		c.log.Error("requestPledgeTokenHandler: failed to release non-selected locked tokens", "err", releaseErr)
 	} else {
