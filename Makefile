@@ -1,6 +1,6 @@
 GIT_COMMIT := $(shell git rev-parse HEAD)
 PREV_COMMIT := $(shell git rev-parse HEAD~1)
-LDFLAGS := -ldflags "-X github.com/rubixchain/rubixgoplatform/command.GitCommit=$(GIT_COMMIT) -X github.com/rubixchain/rubixgoplatform/command.PrevCommit=$(PREV_COMMIT)"
+LDFLAGS := -ldflags "-X github.com/rubixchain/rubixgoplatform/command.currentCommit=$(GIT_COMMIT) -X github.com/rubixchain/rubixgoplatform/command.previousCommit=$(PREV_COMMIT)"
 
 compile-linux:
 	echo "Compiling for Linux OS"
