@@ -1,20 +1,24 @@
+GIT_COMMIT := $(shell git rev-parse HEAD)
+PREV_COMMIT := $(shell git rev-parse HEAD~1)
+LDFLAGS := -ldflags "-X github.com/rubixchain/rubixgoplatform/command.GitCommit=$(GIT_COMMIT) -X github.com/rubixchain/rubixgoplatform/command.PrevCommit=$(PREV_COMMIT)"
+
 compile-linux:
 	echo "Compiling for Linux OS"
 	go env -w GOOS=linux
 	go env -w CGO_ENABLED=1
-	go build -o linux/rubixgoplatform
+	go build $(LDFLAGS) -o linux/rubixgoplatform
 compile-windows:
 	echo "Compiling for Windows OS"
 	go env -w GOOS=windows
 	go env -w CGO_ENABLED=1
-	go build -o windows/rubixgoplatform.exe
+	go build $(LDFLAGS) -o windows/rubixgoplatform.exe
 
 compile-mac:
 	echo "Compiling for MacOS arm64"
 	go env -w GOOS=darwin
 	go env -w GOARCH=arm64
 	go env -w CGO_ENABLED=1
-	go build -o mac/rubixgoplatform
+	go build $(LDFLAGS) -o mac/rubixgoplatform
 
 clean:
 	rm -f linux/rubixgoplatform windows/rubixgoplatform.exe mac/rubixgoplatform
