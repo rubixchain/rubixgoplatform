@@ -34,6 +34,11 @@ const (
 const (
 	version string = "0.2"
 )
+
+var (
+	GitCommit  string = "unknown"
+	PrevCommit string = "unknown"
+)
 const (
 	VersionCmd                     string = "-v"
 	HelpCmd                        string = "-h"
@@ -354,7 +359,9 @@ type Command struct {
 
 func showVersion() {
 	fmt.Printf("\n****************************************\n\n")
-	fmt.Printf("Rubix Core Version : %s\n", version)
+	fmt.Printf("Rubix Core Version  : %s\n", version)
+	fmt.Printf("Git Commit          : %s\n", GitCommit)
+	fmt.Printf("Previous Commit     : %s\n", PrevCommit)
 	fmt.Printf("\n****************************************\n\n")
 }
 
