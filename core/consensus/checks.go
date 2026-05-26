@@ -792,7 +792,17 @@ func TokenChainIntegrityCheck(
 	}
 	for tokenType, tokens := range tokenLists {
 		for _, t := range tokens {
+			//If the previous transaction id is empty, then it is the genesis transaction.
+			//In that case, first check whether the same token details are present in the tokenchain table or not,
+			//If it is present, then check whether its transactionId is same as the current transactionID or not.
+			//If it is not same, it should through an error, it it is same,just continue.
 			if t.PreviousTransactionID == "" {
+				//get the token details from the tokenchain table
+				latestTransactionID, err := w.GetLatestTransactionIdByTokenId(t.TokenID, isFullnode)
+				if err == nil && latestTransactionID != currentTxID {
+					return fmt.Errorf("TokenChainIntigrityCheck: token details already exist in the tokenchain table, so once again genesis transaction is not allowed, for token %s: latestTransactionID %s != currentTxID %s", t.TokenID, latestTransactionID, currentTxID)
+				}
+				//If there is no token with the same tokenID, then it is the first transaction of the token, so skip the check.
 				continue
 			}
 			allTokens = append(allTokens, tokenCheck{
@@ -1002,6 +1012,7 @@ func ValidateTransaction(
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
 
+	//If transaction is a genesis transaction fullnode should do the below check addordingly
 	if err := ValidateMinterAllowlist(&txnInfo, isFullnode, w, log, syncTxChains, testnet, mainnet); err != nil {
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
