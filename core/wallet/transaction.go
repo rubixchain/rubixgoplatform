@@ -106,12 +106,11 @@ func (w *Wallet) GetLatestTransaction(tokenId string, isFullNode bool) (*models.
 	return w.GetTransactionByID(latestTxnId, isFullNode)
 }
 
-// get latest transaction id of the given token id
+// GetGenesisTransactionIdByTokenId returns the mint (position-0) transaction id for a token.
 func (w *Wallet) GetGenesisTransactionIdByTokenId(tokenID string, isFullNode bool) (string, error) {
 	var row pgx.Row
-	var err error
 	if isFullNode {
-		row, err = w.db.Pool().Query(w.Ctx,
+		row = w.db.Pool().QueryRow(w.Ctx,
 			`SELECT transaction_id 
      		FROM fullnode_tokenchain 
      		WHERE id = (
@@ -122,7 +121,7 @@ func (w *Wallet) GetGenesisTransactionIdByTokenId(tokenID string, isFullNode boo
 			tokenID,
 		)
 	} else {
-		row, err = w.db.Pool().Query(w.Ctx,
+		row = w.db.Pool().QueryRow(w.Ctx,
 			`SELECT transaction_id 
      		FROM tokenchain 
      		WHERE id = (
@@ -133,15 +132,12 @@ func (w *Wallet) GetGenesisTransactionIdByTokenId(tokenID string, isFullNode boo
 			tokenID,
 		)
 	}
-	if err != nil {
-		return "", fmt.Errorf("GetGenesisTransactionIdByTokenId: %w", err)
-	}
 	var genesisTxnId string
 	if err := row.Scan(&genesisTxnId); err != nil {
 		if err == pgx.ErrNoRows {
-			return "", fmt.Errorf("genesis transaction id not found for the token %s", tokenID)
+			return "", fmt.Errorf("genesis transaction id not found for the token %s, genesisTransactionId: %s", tokenID, genesisTxnId)
 		}
-		return "", fmt.Errorf("GetTransactionIdByIndex scan: %w", err)
+		return "", fmt.Errorf("GetGenesisTransactionIdByTokenId scan: %w", err)
 	}
 	return genesisTxnId, nil
 }
@@ -159,7 +155,7 @@ func (w *Wallet) ReturnLatestTransactionIdByTokenId(tokenID string) (string, err
 		)`,
 		tokenID,
 	)
-	
+
 	var latestTxnId string
 	if err := row.Scan(&latestTxnId); err != nil {
 		if err == pgx.ErrNoRows {
@@ -169,7 +165,6 @@ func (w *Wallet) ReturnLatestTransactionIdByTokenId(tokenID string) (string, err
 	}
 	return latestTxnId, nil
 }
-
 
 // get latest transaction id of the given token id
 func (w *Wallet) GetLatestTransactionIdByTokenId(tokenID string, isFullNode bool) (string, error) {
@@ -231,7 +226,7 @@ func (w *Wallet) GetTransactionIdByIndex(index int16, isFullNode bool) (string, 
 	return txnId, nil
 }
 
-// GetTransactionsByDIDAndTokenType returns transaction history of a given DID and token_type, 
+// GetTransactionsByDIDAndTokenType returns transaction history of a given DID and token_type,
 // and in case of RBT it does not return split/burnt transactions where initiator=owner
 func (w *Wallet) GetTransactionsByDIDAndTokenType(did, tokenType string) ([]models.Transactions, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
