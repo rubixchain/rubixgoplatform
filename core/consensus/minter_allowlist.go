@@ -18,7 +18,8 @@ type genesisInitiatorLookup interface {
 
 // ValidateMinterAllowlist checks that every RBT in the transaction — both
 // transferred and committed (split parents / SC-committed RBT) — was minted
-// by an allowed DID. For part tokens, it checks the whole-token ancestor.
+// by an allowed DID. On fullnodes, pledged quorum tokens are checked too.
+// For part tokens, it checks the whole-token ancestor.
 //
 // Enforced only on mainnet (uses AllowedMinters). Testnet enforcement is
 // wired but disabled — see the switch below.
@@ -60,20 +61,29 @@ func validateMinterAllowlist(
 		expectedLevel = 1
 	// Testnet enforcement is currently disabled. Re-enable by uncommenting
 	// the case below; TestnetAllowedMinters is still defined and tested.
-	// case testnet:
-	// 	table = minterallowlist.TestnetAllowedMinters
-	// 	expectedLevel = 50001
+	case testnet:
+		table = minterallowlist.TestnetAllowedMinters
+		expectedLevel = 50001
 	default:
 		// Testnet and localnet: skip the check.
 		_ = testnet
 		return nil
 	}
 
-	var rbtTokens []*models.TokenInfo
+	tokensToCheck := make([]*models.TokenInfo, 0)
 	if txnInfo.Tokens != nil {
-		rbtTokens = txnInfo.Tokens.RBT
+		tokensToCheck = append(tokensToCheck, txnInfo.Tokens.RBT...)
 	}
-	for _, t := range append(rbtTokens, txnInfo.CommittedTokens...) {
+	tokensToCheck = append(tokensToCheck, txnInfo.CommittedTokens...)
+	if isFullnode {
+		for _, q := range txnInfo.Quorums {
+			if q == nil {
+				continue
+			}
+			tokensToCheck = append(tokensToCheck, q.Tokens...)
+		}
+	}
+	for _, t := range tokensToCheck {
 		if t == nil || t.TokenID == "" {
 			continue
 		}
@@ -104,6 +114,21 @@ func validateMinterAllowlist(
 					t.TokenID, wholeID, syncErr)
 			}
 			minter, lookupErr = w.GetGenesisInitiatorDID(wholeID, isFullnode)
+		}
+		// Fallback: if local genesis lookup still fails and the current
+		// transaction declares itself as the mint for this whole token
+		// (PartIndex == 0 and PreviousTransactionID is empty), then the
+		// transaction we are about to persist IS the genesis. In that case
+		// the minter is the transaction initiator — no DB row exists yet
+		// because the genesis chain row is created by this very transaction.
+		if lookupErr != nil && elems.PartIndex == 0 && t.PreviousTransactionID == "" {
+			if txnInfo.Initiator == "" {
+				return fmt.Errorf("ValidateMinterAllowlist: genesis transaction for token %s has empty initiator", t.TokenID)
+			}
+			log.Debug("ValidateMinterAllowlist: local genesis missing; current transaction is the genesis, using initiator as minter",
+				"tokenID", t.TokenID, "wholeID", wholeID, "initiator", txnInfo.Initiator)
+			minter = txnInfo.Initiator
+			lookupErr = nil
 		}
 		if lookupErr != nil {
 			log.Error("ValidateMinterAllowlist: cannot resolve genesis initiator",

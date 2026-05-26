@@ -76,7 +76,6 @@ func (w *Wallet) PersistFullNodeTransaction(ctx context.Context, req *FullNodePe
 	if ctx == nil {
 		ctx = w.Ctx
 	}
-	w.log.Debug("PersistFullNodeTransaction: previous txnID is: ***", req.TransactionInfo.Tokens.SmartContract[0].PreviousTransactionID)
 
 	inputs, affectedTokenIDs, err := collectFullNodeTokenInputs(req.TransactionInfo)
 	if err != nil {
