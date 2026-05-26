@@ -20,8 +20,8 @@ type genesisInitiatorLookup interface {
 // transferred and committed (split parents / SC-committed RBT) — was minted
 // by an allowed DID. For part tokens, it checks the whole-token ancestor.
 //
-// Enforced only on mainnet (uses AllowedMinters). Testnet enforcement is
-// wired but disabled — see the switch below.
+// Enforced on mainnet (uses AllowedMinters) and testnet (uses
+// TestnetAllowedMinters). Localnet is skipped.
 //
 // Must run after TokenChainIntegrityCheck so the local chain is up to date.
 // NFT, FT, and SmartContract entries are skipped.
@@ -58,14 +58,11 @@ func validateMinterAllowlist(
 	case mainnet:
 		table = minterallowlist.AllowedMinters
 		expectedLevel = 1
-	// Testnet enforcement is currently disabled. Re-enable by uncommenting
-	// the case below; TestnetAllowedMinters is still defined and tested.
-	// case testnet:
-	// 	table = minterallowlist.TestnetAllowedMinters
-	// 	expectedLevel = 50001
+	case testnet:
+		table = minterallowlist.TestnetAllowedMinters
+		expectedLevel = 50001
 	default:
-		// Testnet and localnet: skip the check.
-		_ = testnet
+		// Localnet: skip the check.
 		return nil
 	}
 
