@@ -100,19 +100,19 @@ func (w *Wallet) PersistFullNodeTransaction(ctx context.Context, req *FullNodePe
 	for _, input := range inputs {
 		roleName := input.roleName
 		if roleName == constants.TokenRole_Transfer && input.tokenInfo.PreviousTransactionID == "" {
-			roleName = constants.TokenRole_Mint
+			input.roleName = constants.TokenRole_Mint
 		}
 		w.log.Debug("PersistFullNodeTransaction:PreviousTransactionID1 is :", input.tokenInfo.PreviousTransactionID)
 		if roleName == constants.TokenRole_Execute && input.tokenInfo.PreviousTransactionID == "" {
 			w.log.Debug("PersistFullNodeTransaction:PreviousTransactionID2 is :", input.tokenInfo.PreviousTransactionID)
-			roleName = constants.TokenRole_Deploy
+			input.roleName = constants.TokenRole_Deploy
 		}
 
 		//If roleName is commit and if length of req.TransactionInfo.quorums is = 0, then the roleName should be burnt
 		if roleName == constants.TokenRole_Commit && len(req.TransactionInfo.Quorums) == 0 {
-			roleName = constants.TokenRole_Burn
+			input.roleName = constants.TokenRole_Burn
 		}
-		roleID := models.GetTokenRoleID(roleName)
+		roleID := models.GetTokenRoleID(input.roleName)
 		if roleID <= 0 {
 			return fmt.Errorf("fullnode persistence: unsupported token role %q for token %q", roleName, input.tokenInfo.TokenID)
 		}
@@ -186,6 +186,8 @@ func collectFullNodeTokenInputs(txInfo *models.TransactionInfo) ([]fullNodeToken
 			if _, exists := seen[token.TokenID]; exists {
 				return fmt.Errorf("fullnode persistence: duplicate token %q in transaction payload", token.TokenID)
 			}
+			fmt.Println("collectFullNodeTokenInputs: Previous transactionID is: ", token.PreviousTransactionID, "tokenID", token.TokenID)
+
 			seen[token.TokenID] = struct{}{}
 			inputs = append(inputs, fullNodeTokenInput{
 				tokenInfo: token,
@@ -324,10 +326,11 @@ func buildFullNodeTokenChainRow(transactionID string, latestRow *models.TokenCha
 }
 
 func deriveFullNodeTokenState(existing fullNodeTokenState, txInfo *models.TransactionInfo, input fullNodeTokenInput, transactionID string, roleID int16, position int64) fullNodeTokenState {
+	fmt.Println("deriveFullNodeTokenState: input role name is:", input.roleName, "input tokenID is:", input.tokenInfo.TokenID, "input roleID is:", roleID)
 	state := existing
 	if !state.exists {
 		state.tokenID = input.tokenInfo.TokenID
-		state.tokenStatus = int16(constants.TokenStatus_Free)
+		state.tokenStatus = int16(constants.TokenStatus_Free) //by default we are storing it as free but this values get updated depending on the role
 	}
 	if input.tokenInfo.TokenValue > 0 {
 		state.tokenValue = input.tokenInfo.TokenValue
@@ -344,9 +347,6 @@ func deriveFullNodeTokenState(existing fullNodeTokenState, txInfo *models.Transa
 		}
 	}
 
-	if input.tokenInfo.Data != "" {
-		state.tokenStateHash = input.tokenInfo.Data
-	}
 	if txInfo.Owner != "" {
 		state.did = txInfo.Owner
 	}
@@ -371,10 +371,21 @@ func deriveFullNodeTokenState(existing fullNodeTokenState, txInfo *models.Transa
 		state.tokenStatus = int16(constants.TokenStatus_Executed)
 	case constants.TokenRole_Pledge:
 		state.tokenStatus = int16(constants.TokenStatus_Pledged)
+	case constants.TokenRole_Unpledge:
+		state.tokenStatus = int16(constants.TokenStatus_Free)
 	case constants.TokenRole_Transfer:
-		state.tokenStatus = int16(constants.TokenStatus_Transferred)
+		state.tokenStatus = int16(constants.TokenStatus_Free)
 	case constants.TokenRole_Mint:
-		state.tokenStatus = int16(constants.TokenStatus_Generated)
+		state.tokenStatus = int16(constants.TokenStatus_Free)
+	}
+	if input.tokenType == constants.TokenType_RBT {
+		parentTokenID, err := util.TokenID(input.tokenInfo.TokenID).GetParentToken()
+		if err != nil {
+			return fullNodeTokenState{}
+		}
+		if parentTokenID != "" {
+			state.parentTokenID = pgtype.Text{String: parentTokenID, Valid: true}
+		}
 	}
 	state.transactionID = transactionID
 	state.latestPosition = position
@@ -725,7 +736,14 @@ func (w *Wallet) PersistFullNodeSyncedTokenChain(
 			for _, t := range list {
 				if t != nil && t.TokenID == tokenID {
 					tokenValue = t.TokenValue
-					tokenStateHash = t.Data
+					//if token_Value is 0 and token is of RBT type.
+					if tokenValue == 0 && tokenType == constants.TokenType_RBT {
+						tokenValue, err = util.GetTokenValueFromTokenID(tokenID)
+						if err != nil {
+							return fmt.Errorf("PersistFullNodeSyncedTokenChain: derive token value for transfer token %q: %w", tokenID, err)
+						}
+					}
+
 					foundIn = "transfer"
 					break
 				}
@@ -817,20 +835,50 @@ func (w *Wallet) PersistFullNodeSyncedTokenChain(
 		tokenState.tokenID = tokenID
 		// tokenState.tokenStatus = int16(constants.TokenStatus_Free)
 	}
+	if tokenValue > 0 {
+		tokenState.tokenValue = tokenValue
+	}
+
+	//if the token is an RBT, we need to get the parent token ID and set it in the token state
+	if tokenType == constants.TokenType_RBT {
+		parentTokenID, err := util.TokenID(tokenID).GetParentToken()
+		if err != nil {
+			return fmt.Errorf("PersistFullNodeSyncedTokenChain: get parent token for RBT token %q: %w", tokenID, err)
+		}
+		if parentTokenID != "" {
+			tokenState.parentTokenID = pgtype.Text{String: parentTokenID, Valid: true}
+		}
+	}
+
 	//we have to derive the token_status depending on the role of the token in the transaction.
 	switch lastRole {
 	case int16(models.GetTokenRoleID(constants.TokenRole_Mint)):
-		tokenState.tokenStatus = int16(constants.TokenStatus_Generated)
+		tokenState.tokenStatus = int16(constants.TokenStatus_Free)
 	case int16(models.GetTokenRoleID(constants.TokenRole_Transfer)):
-		tokenState.tokenStatus = int16(constants.TokenStatus_Transferred)
+		tokenState.tokenStatus = int16(constants.TokenStatus_Free)
 	case int16(models.GetTokenRoleID(constants.TokenRole_Commit)):
+		tokenValue, err := util.GetTokenValueFromTokenID(tokenID)
+		if err != nil {
+			return fmt.Errorf("PersistFullNodeSyncedTokenChain: derive token value for unpledge token %q: %w", tokenID, err)
+		}
+		tokenState.tokenValue = tokenValue
 		tokenState.tokenStatus = int16(constants.TokenStatus_Committed)
 	case int16(models.GetTokenRoleID(constants.TokenRole_Pledge)):
 		tokenState.tokenStatus = int16(constants.TokenStatus_Pledged)
 	case int16(models.GetTokenRoleID(constants.TokenRole_Unpledge)):
 		tokenState.tokenStatus = int16(constants.TokenStatus_Free)
+		tokenValue, err := util.GetTokenValueFromTokenID(tokenID)
+		if err != nil {
+			return fmt.Errorf("PersistFullNodeSyncedTokenChain: derive token value for unpledge token %q: %w", tokenID, err)
+		}
+		tokenState.tokenValue = tokenValue
 	case int16(models.GetTokenRoleID(constants.TokenRole_Burn)):
 		tokenState.tokenStatus = int16(constants.TokenStatus_Burnt)
+		tokenValue, err := util.GetTokenValueFromTokenID(tokenID)
+		if err != nil {
+			return fmt.Errorf("PersistFullNodeSyncedTokenChain: derive token value for unpledge token %q: %w", tokenID, err)
+		}
+		tokenState.tokenValue = tokenValue
 	case int16(models.GetTokenRoleID(constants.TokenRole_Uncommit)):
 		tokenState.tokenStatus = int16(constants.TokenStatus_Free)
 	case int16(models.GetTokenRoleID(constants.TokenRole_Execute)):
@@ -841,9 +889,6 @@ func (w *Wallet) PersistFullNodeSyncedTokenChain(
 		tokenState.tokenStatus = int16(constants.TokenStatus_Free)
 	}
 
-	if tokenValue > 0 {
-		tokenState.tokenValue = tokenValue
-	}
 	if tokenStateHash != "" {
 		tokenState.tokenStateHash = tokenStateHash
 	}

@@ -259,6 +259,24 @@ func (w *Wallet) GetTokenChainByTokenID(tokenID string, isFullNode bool) ([]mode
 	return result, nil
 }
 
+// GetGenesisInitiatorDID returns the DID that minted the token.
+func (w *Wallet) GetGenesisInitiatorDID(tokenID string, isFullNode bool) (string, error) {
+	genesisTx, err := w.GetGenesisTransaction(tokenID, isFullNode)
+	if err != nil {
+		return "", fmt.Errorf("GetGenesisInitiatorDID: %w", err)
+	}
+	var parsed struct {
+		Initiator string `json:"initiator"`
+	}
+	if err := json.Unmarshal(genesisTx.Info, &parsed); err != nil {
+		return "", fmt.Errorf("GetGenesisInitiatorDID: unmarshal info for token %s: %w", tokenID, err)
+	}
+	if parsed.Initiator == "" {
+		return "", fmt.Errorf("GetGenesisInitiatorDID: empty initiator in genesis info for token %s", tokenID)
+	}
+	return parsed.Initiator, nil
+}
+
 // GetTokenChainByTokenIDAndPrevTxnId fetches up to 100 tokenchain rows for a token
 // starting from the row whose previous_transaction_id matches txnID.
 // Pass txnID = "" to fetch from genesis (position = 0) — handles the first-sync case

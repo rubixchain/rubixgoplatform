@@ -119,15 +119,8 @@ func ValidateTokenOwnershipByPrevTxn(txnInfo *models.TransactionInfo, isFullnode
 
 	prevTxnTokensMap := make(map[string][]string)
 
-	// Only RBT and FT tokens are checked for ownership by previous transaction.
-	// NFT and SmartContract tokens are excluded because the Owner field in
-	// TransactionInfo represents the RBT counterparty/receiver, not the NFT/SC
-	// token owner. For NFT/SC execution (non-ownership-transfer), any DID with
-	// access can execute — the initiator does not need to match the previous
-	// transaction's Owner. Ownership enforcement for NFT transfers is handled
-	// at the initiator node via QueryAndLockForExecution's checkOwnership flag.
-	// So the onwership validation for NFTs will only be a matter when the
-	// Transfer ownership flag is true. Which we are not passing in here. Which needs to be passed inorder to validate the ownership transfer.
+	// RBT and FT only. NFT-transfer authorization is in ValidateNFTTransferAuthorization;
+	// NFT/SC execute is open to any subscriber by design.
 	tokenLists := [][]*models.TokenInfo{
 		txnInfo.Tokens.RBT,
 		txnInfo.Tokens.FT,
@@ -332,6 +325,89 @@ func ValidateTokenOwnershipByPrevTxn(txnInfo *models.TransactionInfo, isFullnode
 	return nil
 
 }
+
+// getNFTCurrentOwnerFromChain returns the most recent Deploy or Transfer
+// entry's owner. Execute is owner-neutral and skipped.
+func getNFTCurrentOwnerFromChain(nftID string, isFullnode bool, w *wallet.Wallet) (string, error) {
+	if nftID == "" {
+		return "", fmt.Errorf("getNFTCurrentOwnerFromChain: empty NFT id")
+	}
+
+	chain, err := w.GetTokenChainByTokenID(nftID, isFullnode)
+	if err != nil {
+		return "", fmt.Errorf("getNFTCurrentOwnerFromChain: failed to read chain for NFT %s: %w", nftID, err)
+	}
+	if len(chain) == 0 {
+		return "", fmt.Errorf("getNFTCurrentOwnerFromChain: chain not found for NFT %s", nftID)
+	}
+
+	deployRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Deploy))
+	transferRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
+
+	for i := len(chain) - 1; i >= 0; i-- {
+		row := chain[i]
+		if row.Role != deployRoleID && row.Role != transferRoleID {
+			continue
+		}
+		tx, err := w.GetTransactionByID(row.TransactionID, isFullnode)
+		if err != nil {
+			return "", fmt.Errorf("getNFTCurrentOwnerFromChain: failed to fetch tx %s for NFT %s: %w", row.TransactionID, nftID, err)
+		}
+		if tx == nil {
+			return "", fmt.Errorf("getNFTCurrentOwnerFromChain: tx %s not found for NFT %s", row.TransactionID, nftID)
+		}
+		var info models.TransactionInfo
+		if err := json.Unmarshal(tx.Info, &info); err != nil {
+			return "", fmt.Errorf("getNFTCurrentOwnerFromChain: failed to unmarshal tx %s for NFT %s: %w", row.TransactionID, nftID, err)
+		}
+		if info.Owner == "" {
+			return "", fmt.Errorf("getNFTCurrentOwnerFromChain: tx %s for NFT %s has empty owner at role %d", row.TransactionID, nftID, row.Role)
+		}
+		return info.Owner, nil
+	}
+
+	return "", fmt.Errorf("getNFTCurrentOwnerFromChain: no Deploy or Transfer entry in chain for NFT %s", nftID)
+}
+
+// ValidateNFTTransferAuthorization enforces that the initiator is the chain
+// owner of every NFT being transferred. transferNFTOwnership is sourced from
+// the ConsensusRequest envelope; TransactionInfo does not carry it.
+func ValidateNFTTransferAuthorization(txnInfo *models.TransactionInfo, transferNFTOwnership bool, isFullnode bool, w *wallet.Wallet) error {
+	if !transferNFTOwnership {
+		return nil
+	}
+	if txnInfo == nil || txnInfo.Tokens == nil || len(txnInfo.Tokens.NFT) == 0 {
+		return fmt.Errorf("ValidateNFTTransferAuthorization: transferNFTOwnership=true but no NFT in transaction")
+	}
+	if txnInfo.Initiator == "" {
+		return fmt.Errorf("ValidateNFTTransferAuthorization: initiator required for NFT transfer")
+	}
+	if txnInfo.Owner == "" {
+		return fmt.Errorf("ValidateNFTTransferAuthorization: receiver (owner) required for NFT transfer")
+	}
+
+	for _, nft := range txnInfo.Tokens.NFT {
+		if nft == nil || nft.TokenID == "" {
+			return fmt.Errorf("ValidateNFTTransferAuthorization: invalid NFT entry in transaction")
+		}
+		if nft.PreviousTransactionID == "" {
+			return fmt.Errorf("ValidateNFTTransferAuthorization: NFT %s has no PreviousTransactionID — cannot transfer a non-existent NFT", nft.TokenID)
+		}
+		currentOwner, err := getNFTCurrentOwnerFromChain(nft.TokenID, isFullnode, w)
+		if err != nil {
+			return fmt.Errorf("ValidateNFTTransferAuthorization: NFT %s: %w", nft.TokenID, err)
+		}
+		if txnInfo.Initiator != currentOwner {
+			return fmt.Errorf("ValidateNFTTransferAuthorization: NFT %s: not authorized to transfer — initiator %s is not the current owner %s", nft.TokenID, txnInfo.Initiator, currentOwner)
+		}
+		if txnInfo.Owner == currentOwner {
+			return fmt.Errorf("ValidateNFTTransferAuthorization: NFT %s: transfer must change ownership (current owner %s == new owner %s)", nft.TokenID, currentOwner, txnInfo.Owner)
+		}
+	}
+
+	return nil
+}
+
 func ValidateNewTokenContent(tokenID string, isQuorum bool, testnet bool, mainnet bool, localnet bool, log logger.Logger) error {
 	devidedParts := strings.Split(tokenID, "_")
 
@@ -439,32 +515,15 @@ func ValidateTransactionValueAndPledge(txnInfo *models.TransactionInfo) error {
 		transactionValue = rubixmath.AddFloat(transactionValue, tokenValue)
 	}
 
-	// NOTE: NFT and SmartContract value checks are commented out for now.
-	// Fullnode can only independently verify RBT values from token IDs.
-	// NFT/SC values are self-reported by the initiator and cannot be cross-checked.
-	// Uncomment when independent value verification is available for these asset types.
-
-	// // Count NFT token values
-	// // NFT value is optional - if not set or 0, default pledge requirement is 1 RBT
-	// for _, t := range txnInfo.Tokens.NFT {
-	// 	var tokenValue float64
-	// 	if t.TokenValue > 0 {
-	// 		tokenValue = t.TokenValue
-	// 	} else {
-	// 		// NFT with no explicit value requires 1 RBT pledge
-	// 		tokenValue = 1.0
-	// 	}
-	// 	transactionValue = rubixmath.AddFloat(transactionValue, tokenValue)
-	// }
-
-	// // Count SmartContract token values
-	// // SC value is mandatory and must be present in TokenValue field
-	// for _, t := range txnInfo.Tokens.SmartContract {
-	// 	if t.TokenValue <= 0 {
-	// 		return fmt.Errorf("SmartContract token %s has invalid value %v: value must be greater than 0", t.TokenID, t.TokenValue)
-	// 	}
-	// 	transactionValue = rubixmath.AddFloat(transactionValue, t.TokenValue)
-	// }
+	// NFT TokenValue is self-reported and floored to MinDecimalUnit to match
+	// what the builder requests. SC pledge accounting is intentionally skipped.
+	for _, t := range txnInfo.Tokens.NFT {
+		tokenValue := t.TokenValue
+		if tokenValue < rubixmath.MinDecimalUnit() {
+			tokenValue = rubixmath.MinDecimalUnit()
+		}
+		transactionValue = rubixmath.AddFloat(transactionValue, tokenValue)
+	}
 
 	totalPledgeValue := rubixmath.ZeroFloat()
 	for _, quorum := range txnInfo.Quorums {
@@ -733,7 +792,17 @@ func TokenChainIntegrityCheck(
 	}
 	for tokenType, tokens := range tokenLists {
 		for _, t := range tokens {
+			//If the previous transaction id is empty, then it is the genesis transaction.
+			//In that case, first check whether the same token details are present in the tokenchain table or not,
+			//If it is present, then check whether its transactionId is same as the current transactionID or not.
+			//If it is not same, it should through an error, it it is same,just continue.
 			if t.PreviousTransactionID == "" {
+				//get the token details from the tokenchain table
+				latestTransactionID, err := w.GetLatestTransactionIdByTokenId(t.TokenID, isFullnode)
+				if err == nil && latestTransactionID != currentTxID {
+					return fmt.Errorf("TokenChainIntigrityCheck: token details already exist in the tokenchain table, so once again genesis transaction is not allowed, for token %s: latestTransactionID %s != currentTxID %s", t.TokenID, latestTransactionID, currentTxID)
+				}
+				//If there is no token with the same tokenID, then it is the first transaction of the token, so skip the check.
 				continue
 			}
 			allTokens = append(allTokens, tokenCheck{
@@ -894,6 +963,7 @@ func ValidateIPFSPinChecks(txnInfo *models.TransactionInfo, isFullnode bool, che
 //   - testnet, mainnet, localnet: network mode flags
 //   - checkPinned: function to check IPFS pin status (tokenID, prevTxnID) → error
 //   - syncTxChains: callback to sync transaction chains from peer (injected from core to avoid cyclic import)
+//   - transferNFTOwnership: from ConsensusRequest envelope. Fullnode passes false.
 func ValidateTransaction(
 	tx *models.Transactions,
 	isFullnode bool,
@@ -906,6 +976,7 @@ func ValidateTransaction(
 	localnet bool,
 	checkPinned func(tokenID, previousTxnID string) error,
 	syncTxChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error,
+	transferNFTOwnership bool,
 ) (bool, error) {
 	var txnInfo models.TransactionInfo
 	if err := json.Unmarshal(tx.Info, &txnInfo); err != nil {
@@ -934,6 +1005,15 @@ func ValidateTransaction(
 	}
 
 	if err := ValidateTokenOwnershipByPrevTxn(&txnInfo, isFullnode, w); err != nil {
+		return false, fmt.Errorf("ValidateTransaction: %w", err)
+	}
+
+	if err := ValidateNFTTransferAuthorization(&txnInfo, transferNFTOwnership, isFullnode, w); err != nil {
+		return false, fmt.Errorf("ValidateTransaction: %w", err)
+	}
+
+	//If transaction is a genesis transaction fullnode should do the below check addordingly
+	if err := ValidateMinterAllowlist(&txnInfo, isFullnode, w, log, syncTxChains, testnet, mainnet); err != nil {
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
 
