@@ -64,10 +64,6 @@ const (
 	APIValidateTokenChain               string = "/api/validate-token-chain"
 	APIGenerateFaucetTestToken          string = "/api/generate-faucettest-token"
 	APIFaucetTokenCheck                 string = "/api/faucet-token-check"
-	APIDumpFTTokenChainBlock            string = "/api/dump-ft-token-chain"
-	APIInitiateFTTransfer               string = "/api/initiate-ft-transfer"
-	APIFixFTCreator                     string = "/api/fix-ft-creator"
-	APIGetFTCreatorStats                string = "/api/get-ft-creator-stats"
 	APIValidateToken                    string = "/api/validate-token"
 	APIAddUserAPIKey                    string = "/api/add-user-api-key"
 	APIDumpNFTTokenChain                string = "/api/dump-nft-token-chain"
@@ -77,9 +73,6 @@ const (
 	APIAddPeerDetailsFromExplorer       string = "/api/add-peer-details-from-explorer"
 	APIGetFTTxnByDID                    string = "/api/get-ft-txn-by-did"
 	APIUpdateTokenStatus                string = "/api/update-token-status"
-	APIGetTokenStatus                   string = "/api/get-token-status"
-	APIMigrateFTTransactions            string = "/api/migrate-ft-transactions"
-	APIGetFTMigrationStatus             string = "/api/get-ft-migration-status"
 	APIRetryFailedFTDownloads           string = "/api/retry-failed-ft-downloads"
 	APIGetFailedFTDownloadStatus        string = "/api/get-failed-ft-download-status"
 	APIRecoverLostTokens                string = "/api/recover-lost-tokens"
@@ -124,7 +117,7 @@ const (
 	// Transactions endpoints
 	APITransaction          string = "/rubix/v1/tx"
 	APIGetTransactionByID   string = "/rubix/v1/tx/{tx_id}"
-	APISyncTransactionChain  string = "/rubix/v1/sync-transaction-chain"
+	APISyncTransactionChain string = "/rubix/v1/sync-transaction-chain"
 	APIGetTransactionsByDID string = "/rubix/v1/tx/{did}/{token_type}"
 
 	// FT endpoints

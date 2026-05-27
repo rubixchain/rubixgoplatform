@@ -94,7 +94,6 @@ const (
 	ValidateTokenchainCmd          string = "validatetokenchain"
 	FaucetTokenChainValidate       string = "faucettokenchainvalidate"
 	CreateFTCmd                    string = "createft"
-	DumpFTTokenChainCmd            string = "dump-ft"
 	TransferFTCmd                  string = "transfer-ft"
 	ValidateTokenCmd               string = "validatetoken"
 	DumpNFTTokenChainCmd           string = "dump-nft-tokenchain"
@@ -165,7 +164,6 @@ var commands = []string{VersionCmd,
 	CheckQuorumStatusCmd,
 	ValidateTokenchainCmd,
 	CreateFTCmd,
-	DumpFTTokenChainCmd,
 	TransferFTCmd,
 	GetFTBalanceCmd,
 	ValidateTokenCmd,
@@ -349,7 +347,6 @@ type Command struct {
 	disableTrustedNetwork        bool
 	backupDB                     bool
 	fullNode                     bool
-	publishTokenChainDetails     bool
 	dumpFullnodeTokenChain       bool
 	assetType                    string
 	enableDeExp                  bool
@@ -563,7 +560,6 @@ func (cmd *Command) runApp() {
 		&cmd.cfg,
 		cmd.log,
 		userConfig.Core.NetworkMode,
-		cmd.publishTokenChainDetails,
 		cmd.fullNode,
 		cmd.faucetURL,
 	)
@@ -601,8 +597,6 @@ func (cmd *Command) runApp() {
 	// Start the pending token monitor for self-healing
 	rubixCore.StartPendingTokenMonitor()
 
-	// Unlock any locked FTs
-	rubixCore.UnlockFTs()
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM)
 	signal.Notify(ch, syscall.SIGINT)
@@ -734,7 +728,6 @@ func Run(args []string) {
 	flag.BoolVar(&cmd.enableTrustedNetwork, "enableTrustedNetwork", true, "Enable trusted network mode (skips DHT checks) - enabled by default")
 	flag.BoolVar(&cmd.disableTrustedNetwork, "disableTrustedNetwork", false, "Disable trusted network mode to enable full DHT checks")
 	flag.BoolVar(&cmd.backupDB, "backupDB", false, "Create backup of database before starting node")
-	flag.BoolVar(&cmd.publishTokenChainDetails, "publishTokenchain", false, "Publish tokenchain details to pubsub")
 	flag.BoolVar(&cmd.fullNode, "fullnode", false, "receive all published transactions and tokenchain details")
 	flag.BoolVar(&cmd.dumpFullnodeTokenChain, "fullnodetoken", false, "dump tokenchain from fullnode storage")
 	flag.StringVar(&cmd.assetType, "assettype", "rbt", "DID of the signer")
@@ -889,8 +882,6 @@ func Run(args []string) {
 		cmd.FaucetTokenCheck()
 	case CreateFTCmd:
 		cmd.createFT()
-	case TransferFTCmd:
-		cmd.transferFT()
 	case GetFTBalanceCmd:
 		cmd.getFTinfo()
 	case ValidateTokenCmd:
@@ -922,10 +913,6 @@ func Run(args []string) {
 			return
 		}
 		cmd.setAsyncFTStatus(val == "true")
-	case FixFTCreatorCmd:
-		cmd.fixFTCreator()
-	case GetFTCreatorStatsCmd:
-		cmd.getFTCreatorStats()
 	case RemoveStaleDIDCmd:
 		cmd.RemoveStaleDID()
 	case GetDIDBalanceCmd:

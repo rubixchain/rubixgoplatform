@@ -544,7 +544,7 @@ func (w *Wallet) ReleaseTokens(tokens []*models.TokenInfo, referenceID string) {
 	}
 }
 
-// ReleaseTokens sets the status of a slice of tokens back to Free (unlocked).
+// ReleaseReferenceID sets the status of a slice of tokens back to Free (unlocked).
 // It accepts the same []*models.TokenInfo slice returned by CollectRBTTokens.
 // This is a best-effort operation: errors are logged but do not abort the loop.
 func (w *Wallet) ReleaseReferenceID(referenceId string) error {
@@ -770,7 +770,7 @@ func (w *Wallet) GetWholeRBTs(numToken int, didStr string) (remainingAmount int,
 func (w *Wallet) IsRBTExists(id string) bool {
 	var exists bool
 	_ = w.db.Pool().QueryRow(w.Ctx,
-		`SELECT EXISTS(SELECT 1 FROM tokens WHERE token_id=$1 AND token_type=$2)`, 
+		`SELECT EXISTS(SELECT 1 FROM tokens WHERE token_id=$1 AND token_type=$2)`,
 		id,
 		models.GetTokenTypeID(constants.TokenType_RBT),
 	).Scan(&exists)

@@ -36,7 +36,6 @@ const (
 	APISendReceiverToken               string = "/api/send-receiver-token"
 	APIConfirmTokenTransfer            string = "/api/confirm-token-transfer"
 	APIRollbackTransaction             string = "/api/rollback-transaction"
-	APISyncTokenChain                  string = "/api/sync-token-chain"
 	APISyncTransactionChain            string = "/api/sync-transaction-chain"
 	APIDhtProviderCheck                string = "/api/dht-provider-check"
 	APIMapDIDArbitration               string = "/api/map-did-arbitration"
@@ -55,10 +54,7 @@ const (
 	APISendFTToken                     string = "/api/send-ft-token"
 	APIGetPrevQrmFromPrevSenderPath    string = "/api/get-prev-qrms-info-from-sender"
 	APICheckPinRole                    string = "/api/check-pin-role"
-	APISyncGenesisAndLatestBlock       string = "/api/sync-gennesis-n-lastest-block"
 	APISyncGenesisAndLatestTransaction string = "/api/sync-genesis-n-lastest-transaction"
-	APIUpdateStatus                    string = "/api/update-status"
-	APIGetTokenStatus                  string = "/api/get-token-status"
 	APIInitiateConsensus               string = "/api/initiate-consensus"
 	APISendTokens                      string = "/api/send-tokens"
 	APIRequestPledgeToken              string = "/api/request-pledge-token"
@@ -127,7 +123,6 @@ type Core struct {
 	ipfsProviderStore    *IPFSProviderStore
 	perfTracker          *PerformanceTracker
 	pendingTokenMonitor  *PendingTokenMonitor
-	publishTokenChain    bool
 	fullNode             bool
 	txnProcessor         *DynamicTxnProcessor
 	RetryTokenSyncTicker *time.Ticker
@@ -147,21 +142,20 @@ func newRubixContext() context.Context {
 }
 
 func NewCore(cfg *types.RubixConfig, log logger.Logger,
-	networkMode string, publishTokenChainDetails bool,
+	networkMode string,
 	fullNode bool, faucetURL string,
 ) (*Core, error) {
 	var err error
 
 	c := &Core{
-		cfg:               cfg,
-		webReq:            make(map[string]*did.DIDChan),
-		qc:                make(map[string]types.DIDCrypto),
-		pqc:               make(map[string]types.DIDCrypto),
-		secret:            func() []byte { b := make([]byte, 32); cryptorand.Read(b); return b }(),
-		publishTokenChain: publishTokenChainDetails,
-		fullNode:          fullNode,
-		faucetURL:         faucetURL,
-		Ctx:               newRubixContext(),
+		cfg:       cfg,
+		webReq:    make(map[string]*did.DIDChan),
+		qc:        make(map[string]types.DIDCrypto),
+		pqc:       make(map[string]types.DIDCrypto),
+		secret:    func() []byte { b := make([]byte, 32); cryptorand.Read(b); return b }(),
+		fullNode:  fullNode,
+		faucetURL: faucetURL,
+		Ctx:       newRubixContext(),
 	}
 
 	switch networkMode {
@@ -308,17 +302,10 @@ func (c *Core) SetupCore() error {
 	c.CheckQuorumStatusSetup()
 	c.peerSetup()
 	c.removePeerSetup()
-	c.SetupToken()
 	c.QuorumSetup()
 	c.PinService()
 	api.SetupAPI(c.l, c.w, c.log)
 	c.TransactionSetup()
-
-	//c.UnlockFTs()
-	// c.selfTransferService()
-
-	// Start token sync cleanup routine
-	go c.tokenSyncCleanupRoutine()
 
 	return nil
 }
@@ -673,21 +660,6 @@ func (c *Core) GetAsyncFTResponse() bool {
 // SetAsyncFTResponse sets the async FT response config flag at runtime
 func (c *Core) SetAsyncFTResponse(val bool) {
 	c.cfg.AsyncFTResponse = val
-}
-
-// tokenSyncCleanupRoutine periodically cleans up stale token sync entries
-func (c *Core) tokenSyncCleanupRoutine() {
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			if c.tokenSyncManager != nil {
-				c.tokenSyncManager.CleanupStaleSync(10 * time.Minute)
-			}
-		}
-	}
 }
 
 // GetSyncTransactionChainData returns transaction chains for the given token IDs,

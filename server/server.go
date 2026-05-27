@@ -119,27 +119,15 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIAddPeerDetails, "POST", s.AuthHandle(s.APIAddPeerDetails, false, s.AuthError, true))
 	s.AddRoute(setup.APIGetPledgedTokenDetails, "GET", s.AuthHandle(s.APIGetPledgedTokenDetails, false, s.AuthError, true))
 	s.AddRoute(setup.APIGenerateFaucetTestToken, "POST", s.AuthHandle(s.APIGenerateFaucetTestToken, true, s.AuthError, false))
-	s.AddRoute(setup.APIDumpFTTokenChainBlock, "POST", s.AuthHandle(s.APIDumpFTTokenChainBlock, true, s.AuthError, false))
-	s.AddRoute(setup.APIInitiateFTTransfer, "POST", s.AuthHandle(s.APIInitiateFTTransfer, true, s.AuthError, true))
 	s.AddRoute(setup.APIGetFtByDid, "GET", s.AuthHandle(s.APIGetFTInfo, true, s.AuthError, false))
-	s.AddRoute(setup.APIFixFTCreator, "POST", s.AuthHandle(s.APIFixFTCreator, true, s.AuthError, false))
-	s.AddRoute(setup.APIGetFTCreatorStats, "GET", s.AuthHandle(s.APIGetFTCreatorStats, true, s.AuthError, false))
 	s.AddRoute(setup.APIValidateToken, "GET", s.AuthHandle(s.APIValidateToken, false, s.AuthError, false))
 	s.AddRoute(setup.APISubscribeNFT, "GET", s.AuthHandle(s.APISubscribeNFT, true, s.AuthError, false))
 	s.AddRoute(setup.APIFetchNft, "GET", s.AuthHandle(s.APIFetchNft, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetNftByDid, "GET", s.AuthHandle(s.APIGetNFTsByDid, true, s.AuthError, false))
-	s.AddRoute(setup.APIGetFTTokenchain, "GET", s.AuthHandle(s.APIGetFTTokenchain, true, s.AuthError, false))
 
 	s.AddRoute(setup.APIAddPeerDetailsFromExplorer, "POST", s.AuthHandle(s.APIAddPeerDetailsFromExplorer, false, s.AuthError, true))
-	s.AddRoute(setup.APIUpdateTokenStatus, "PUT", s.AuthHandle(s.APIUpdateTokenStatus, false, s.AuthError, false))
-	s.AddRoute(setup.APIGetTokenStatus, "GET", s.AuthHandle(s.APIGetTokenStatus, false, s.AuthError, false))
 	s.AddRoute(setup.APIArbitrarySign, "POST", s.AuthHandle(s.APIArbitrarySignature, true, s.AuthError, true))
 	s.AddRoute(setup.APISignVerification, "GET", s.AuthHandle(s.APISignVerification, false, s.AuthError, false))
-	s.AddRoute(setup.APIMigrateFTTransactions, "POST", s.AuthHandle(s.APIMigrateFTTransactions, false, s.AuthError, false))
-	s.AddRoute(setup.APIGetFTMigrationStatus, "GET", s.AuthHandle(s.APIGetFTMigrationStatus, false, s.AuthError, false))
-	// Token recovery doesn't need authentication - anyone should be able to recover their tokens
-	s.AddRoute(setup.APIRecoverLostTokens, "POST", s.APIRecoverLostTokens)
-	s.AddRoute(setup.APIRemoteRecoverTokens, "POST", s.APIRemoteRecoverTokens)
 
 	//Below are De-Explorer APIs
 	s.AddRoute(setup.APIRemoveStaleDID, "POST", s.AuthHandle(s.APIRemoveStaleDID, true, s.AuthError, false))

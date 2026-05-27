@@ -20,19 +20,6 @@ func (c *Client) DumpTokenChain(token string, blockID string, fullnodeToken bool
 	return &drep, nil
 }
 
-func (c *Client) DumpFTTokenChain(token string, blockID string) (*model.TCDumpReply, error) {
-	dr := &model.TCDumpRequest{
-		Token:   token,
-		BlockID: blockID,
-	}
-	var drep model.TCDumpReply
-	err := c.sendJSONRequest("POST", setup.APIDumpFTTokenChainBlock, nil, dr, &drep)
-	if err != nil {
-		return nil, err
-	}
-	return &drep, nil
-}
-
 func (c *Client) DumpSmartContractTokenChain(token string, blockID string) (*model.TCDumpReply, error) {
 	dr := &model.TCDumpRequest{
 		Token:   token,

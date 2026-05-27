@@ -16,7 +16,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
-	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/token"
 	tokenmap "github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/types"
@@ -33,29 +32,6 @@ const workerCount = 8             // Tune according to hardware/network
 
 type TokenPublish struct {
 	Token string `json:"token"`
-}
-
-type TCBSyncRequest struct {
-	Token       string `json:"token"`
-	TokenType   int    `json:"token_type"`
-	BlockID     string `json:"block_id"`
-	BlockHeight uint64 `json:"block_height"`
-}
-
-type TCBSyncReply struct {
-	Status      bool                `json:"status"`
-	Message     string              `json:"message"`
-	NextBlockID string              `json:"next_block_id"`
-	TCBlock     [][]byte            `json:"tc_block"`
-	TokenChain  []models.TokenChain `json:"token_chain,omitempty"`
-}
-
-type TCBSyncGenesisAndLatestBlockReply struct {
-	Status       bool     `json:"status"`
-	Message      string   `json:"message"`
-	TCBlocks     [][]byte `json:"tc_blocks"`
-	GenesisBlock []byte   `json:"tc_genesis_block"`
-	LatestBlock  []byte   `json:"tc_latest_block"`
 }
 
 // TokenVerificationRequest struct
@@ -79,12 +55,6 @@ type TokenSyncInfo struct {
 type PubSubEnvelope struct {
 	Type string          `json:"type"` // "token" or "txn"
 	Data json.RawMessage `json:"data"`
-}
-
-func (c *Core) SetupToken() {
-	c.l.AddRoute(APIUpdateStatus, "PUT", c.updateStatus)
-	c.l.AddRoute(APIGetTokenStatus, "GET", c.getTokenStatus)
-	c.l.AddRoute(setup.APIRecoverLostTokens, "POST", c.recoverLostTokensHandler)
 }
 
 func (c *Core) GetAllTokens(did string, tt string) (*model.TokenResponse, error) {
@@ -302,72 +272,6 @@ func (c *Core) generateLocalRBT(reqID string, num int, did string, startIndex in
 	return nil
 }
 
-func (c *Core) syncTokenChain(req *ensweb.Request) *ensweb.Result {
-	var tr TCBSyncRequest
-
-	// Parse request
-	if err := c.l.ParseJSON(req, &tr); err != nil {
-		c.log.Warn("Failed to parse request", "error", err)
-		return c.l.RenderJSON(req, &TCBSyncReply{
-			Status:  false,
-			Message: "Failed to parse request",
-		}, http.StatusBadRequest)
-	}
-
-	// Fetch token chain from PostgreSQL
-	chain, err := c.w.GetTokenChainByTokenID(tr.Token, false)
-	if err != nil {
-		c.log.Error("Error fetching token chain", "error", err)
-		return c.l.RenderJSON(req, &TCBSyncReply{
-			Status:  false,
-			Message: "Error fetching token chain",
-		}, http.StatusInternalServerError)
-	}
-
-	// Validate chain: empty check
-	if len(chain) == 0 {
-		c.log.Warn("Token chain is empty", "token", tr.Token)
-		return c.l.RenderJSON(req, &TCBSyncReply{
-			Status:  false,
-			Message: "Token chain is empty for token: " + tr.Token,
-		}, http.StatusNotFound)
-	}
-
-	// Validate chain: linkage check — broken linkage is a hard error; tokenchain integrity is a strict invariant
-	for i := 1; i < len(chain); i++ {
-		prev := chain[i].PreviousTransactionID
-		if prev == nil || *prev != chain[i-1].TransactionID {
-			c.log.Error("Token chain linkage broken", "token", tr.Token, "position", chain[i].Position,
-				"expected_prev", chain[i-1].TransactionID, "got_prev", prev)
-			return c.l.RenderJSON(req, &TCBSyncReply{
-				Status:  false,
-				Message: fmt.Sprintf("invalid tokenchain: broken linkage at position %d for token %s", chain[i].Position, tr.Token),
-			}, http.StatusInternalServerError)
-		}
-	}
-
-	// Validate chain: position contiguity — positions must be strictly sequential (0, 1, 2, ...)
-	for i := 1; i < len(chain); i++ {
-		if chain[i].Position != chain[i-1].Position+1 {
-			c.log.Error("Token chain position gap", "token", tr.Token,
-				"position", chain[i].Position, "prev_position", chain[i-1].Position)
-			return c.l.RenderJSON(req, &TCBSyncReply{
-				Status:  false,
-				Message: fmt.Sprintf("invalid tokenchain: position gap at index %d (got %d, expected %d) for token %s", i, chain[i].Position, chain[i-1].Position+1, tr.Token),
-			}, http.StatusInternalServerError)
-		}
-	}
-
-	c.log.Debug("no.of chain entries sending through sync token chain API ", len(chain))
-
-	// Success response — TokenChain carries structured data; serialization happens at API boundary via RenderJSON
-	return c.l.RenderJSON(req, &TCBSyncReply{
-		Status:     true,
-		Message:    "Sent all token chain entries",
-		TokenChain: chain,
-	}, http.StatusOK)
-}
-
 func (c *Core) updateStatus(req *ensweb.Request) *ensweb.Result {
 	var updateReq model.UpdateTokenStatusReq
 
@@ -417,90 +321,6 @@ func (c *Core) getTokenStatus(req *ensweb.Request) *ensweb.Result {
 	}
 
 	return c.l.RenderJSON(req, &resp, http.StatusOK)
-}
-
-// recoverLostTokensHandler handles P2P requests for token recovery
-func (c *Core) recoverLostTokensHandler(req *ensweb.Request) *ensweb.Result {
-	var recoveryReq struct {
-		SenderDID     string `json:"sender_did"`
-		TransactionID string `json:"transaction_id"`
-	}
-
-	// Parse request
-	if err := c.l.ParseJSON(req, &recoveryReq); err != nil {
-		c.log.Warn("Failed to parse recovery request", "error", err)
-		return c.l.RenderJSON(req, &struct {
-			Status  bool   `json:"status"`
-			Message string `json:"message"`
-		}{
-			Status:  false,
-			Message: "Failed to parse request",
-		}, http.StatusBadRequest)
-	}
-
-	c.log.Info("Received P2P token recovery request",
-		"sender_did", recoveryReq.SenderDID,
-		"transaction_id", recoveryReq.TransactionID)
-
-	// Perform the recovery
-	result, err := c.RecoverLostTokens(recoveryReq.SenderDID, recoveryReq.TransactionID)
-	if err != nil {
-		c.log.Error("Token recovery failed",
-			"sender_did", recoveryReq.SenderDID,
-			"transaction_id", recoveryReq.TransactionID,
-			"error", err)
-		return c.l.RenderJSON(req, &struct {
-			Status  bool   `json:"status"`
-			Message string `json:"message"`
-		}{
-			Status:  false,
-			Message: err.Error(),
-		}, http.StatusOK)
-	}
-
-	// Return success response
-	return c.l.RenderJSON(req, &struct {
-		Status  bool                 `json:"status"`
-		Message string               `json:"message"`
-		Result  *TokenRecoveryResult `json:"result"`
-	}{
-		Status:  true,
-		Message: "Token recovery successful",
-		Result:  result,
-	}, http.StatusOK)
-}
-
-func (c *Core) UpdateTokenStatus(updateReq *model.UpdateTokenStatusReq) error {
-	p, err := c.getPeer(updateReq.DID)
-	if err != nil {
-		c.log.Error("Failed to get peer", "err", err)
-		return err
-	}
-	defer p.Close()
-	var updateResp model.BasicResponse
-
-	err = p.SendJSONRequest("PUT", APIUpdateStatus, nil, &updateReq, &updateResp, false)
-	if !updateResp.Status {
-		c.log.Error("Failed to update status", "err", err)
-		return fmt.Errorf(updateResp.Message)
-	}
-	return nil
-}
-
-func (c *Core) GetTokenStatus(getTokenStatusReq *model.GetTokenStatusReq) (model.TokenStatusResponse, error) {
-	var resp model.TokenStatusResponse
-	p, err := c.getPeer(getTokenStatusReq.DID)
-	if err != nil {
-		c.log.Error("Failed to get peer", "err", err)
-		return resp, err
-	}
-	defer p.Close()
-	err = p.SendJSONRequest("GET", APIGetTokenStatus, nil, &getTokenStatusReq, &resp, false)
-	if err != nil {
-		c.log.Error("Failed to get status", "err", err)
-		return resp, err
-	}
-	return resp, nil
 }
 
 func (c *Core) getFromIPFS(path string) ([]byte, error) {
@@ -1107,28 +927,6 @@ func (c *Core) StoreSmartContractFilesToPSQL(smartContractHash string, smartCont
 
 	c.log.Info("Successfully stored all smart contract files")
 	return nil
-}
-
-// Store double spent tokens in fullnode DB for later analysis
-func (c *Core) StoreDoubleSpentTokenInfo(doubleSpentTokenInfo *model.DoubleSpentTokenInfo) error {
-	err := c.w.AddDoubleSpentTokenInfo(doubleSpentTokenInfo)
-	if err != nil {
-		return err
-	}
-
-	switch doubleSpentTokenInfo.AssetType {
-	case RBTTokenType:
-		err = c.w.RemoveSyncedRBTFromTable(doubleSpentTokenInfo.TokenID)
-	case FTTokenType:
-		err = c.w.RemoveSyncedFTFromTable(doubleSpentTokenInfo.TokenID)
-	case NFTTokenType:
-		err = c.w.RemoveSyncedNFTFromTable(doubleSpentTokenInfo.TokenID)
-	case SmartContractTokenType:
-		err = c.w.RemoveSyncedSmartContractFromTable(doubleSpentTokenInfo.TokenID)
-	default:
-		err = fmt.Errorf("invalid asset type, failed to remove double spent token from table, token : %v", doubleSpentTokenInfo.TokenID)
-	}
-	return err
 }
 
 func (c *Core) relaseToken(release *bool, token string) {

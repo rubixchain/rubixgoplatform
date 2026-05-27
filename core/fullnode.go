@@ -9,7 +9,6 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/consensus"
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
@@ -239,24 +238,6 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 	return nil
 }
 
-// Handle failed transactions after all retries
-func (c *Core) handleFailedTransaction(txnEvent *models.EventTransaction, lastErr error) {
-	c.log.Error("Transaction processing failed permanently",
-		"txnID", txnEvent.TransactionID,
-		"error", lastErr)
-
-	failedTxn := &model.FailedTransaction{
-		TxnID:      txnEvent.TransactionID,
-		Error:      lastErr.Error(),
-		FailedAt:   time.Now(),
-		RetryCount: c.txnProcessor.maxRetries,
-	}
-
-	if err := c.w.StoreFailedTransaction(failedTxn); err != nil {
-		c.log.Error("Failed to store failed transaction", "txnID", txnEvent.TransactionID, "error", err)
-	}
-}
-
 // Graceful shutdown
 func (c *Core) ShutdownTxnProcessor() {
 	if c.txnProcessor != nil {
@@ -280,28 +261,6 @@ func (c *Core) ShutdownTxnProcessor() {
 			c.log.Warn("Transaction workers shutdown timeout - forcing termination")
 		}
 	}
-}
-
-// This function process incoming transaction history details and add it to Fullnode transaction history table
-func (c *Core) processIncomingTransactionHistory(txns []model.FullNodeTxnHistoryInfo) {
-	for _, t := range txns {
-		err := c.w.AddTransactionsToFullNodeTransactionHistoryTable(&t)
-		if err != nil {
-			c.log.Error("Failed to store txn history", "txn", t.TransactionID, "err", err)
-		}
-		// ensuring correct txn amount is stored with fullnode
-		storedTxn, err := c.w.ReadFullNodeTransactionHistoryTable(t.TransactionID)
-		if err == nil && storedTxn.TransactionValue != t.TransactionValue {
-			err = c.w.UpdateFullNodeTransactionHistoryTable(&t)
-			if err != nil {
-				errMsg := fmt.Sprintf("failed to update transaction amount for transaction id : %v, stored value is : %v and received value is : %v", t.TransactionID, storedTxn.TransactionValue, t.TransactionValue)
-				c.log.Error(errMsg)
-
-			}
-		}
-	}
-
-	c.log.Info("Stored transaction history batch", "count", len(txns))
 }
 
 func (c *Core) checkTokenStateHashPinned(tokenID string, previousTransactionID string) error {
