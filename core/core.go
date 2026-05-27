@@ -18,7 +18,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/service"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -117,8 +116,6 @@ type Core struct {
 	testnet              bool
 	networkMode          string
 	version              string
-	quorumRequest        map[string]*ConsensusStatus
-	pd                   map[string]*PledgeDetails
 	webReq               map[string]*did.DIDChan
 	w                    *wallet.Wallet
 	qc                   map[string]types.DIDCrypto
@@ -126,7 +123,6 @@ type Core struct {
 	secret               []byte
 	quorumCount          int
 	noBalanceQuorumCount int
-	defaultSetup         bool
 	tokenSyncManager     *TokenSyncManager
 	ipfsProviderStore    *IPFSProviderStore
 	perfTracker          *PerformanceTracker
@@ -139,9 +135,6 @@ type Core struct {
 	mainnet              bool
 	localnet             bool
 	Ctx                  context.Context
-	qm                   *QuorumManager
-	srv                  *service.Service
-
 	// Unpledge mismatch audit log — lazy-init on first mismatch event.
 	// See core/unpledge_v2.go:writeUnpledgeMismatch.
 	unpledgeAuditLog     *os.File
@@ -154,26 +147,21 @@ func newRubixContext() context.Context {
 }
 
 func NewCore(cfg *types.RubixConfig, log logger.Logger,
-	networkMode string, defaultSetup bool, publishTokenChainDetails bool,
+	networkMode string, publishTokenChainDetails bool,
 	fullNode bool, faucetURL string,
 ) (*Core, error) {
 	var err error
 
 	c := &Core{
 		cfg:               cfg,
-		quorumRequest:     make(map[string]*ConsensusStatus),
-		pd:                make(map[string]*PledgeDetails),
 		webReq:            make(map[string]*did.DIDChan),
 		qc:                make(map[string]types.DIDCrypto),
 		pqc:               make(map[string]types.DIDCrypto),
 		secret:            func() []byte { b := make([]byte, 32); cryptorand.Read(b); return b }(),
-		defaultSetup:      defaultSetup,
 		publishTokenChain: publishTokenChainDetails,
 		fullNode:          fullNode,
 		faucetURL:         faucetURL,
 		Ctx:               newRubixContext(),
-		qm:                &QuorumManager{},
-		srv:               service.New(),
 	}
 
 	switch networkMode {
@@ -242,10 +230,6 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 	c.ipfsProviderStore = NewIPFSProviderStore(rubixDB.Pool(), c.log, func() string {
 		return c.peerID
 	})
-
-	if c.testnet && c.defaultSetup {
-		c.AddDefaulTestnetQuorums()
-	}
 
 	// Initialize token sync manager
 	c.tokenSyncManager = NewTokenSyncManager(c.log)

@@ -563,7 +563,6 @@ func (cmd *Command) runApp() {
 		&cmd.cfg,
 		cmd.log,
 		userConfig.Core.NetworkMode,
-		cmd.defaultSetup,
 		cmd.publishTokenChainDetails,
 		cmd.fullNode,
 		cmd.faucetURL,

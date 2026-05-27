@@ -25,7 +25,7 @@ func setupDev() (*core.Core, types.RubixConfig) {
 
 	lg := logger.New(&logger.LoggerOptions{Name: "dev-v2"})
 
-	c, err := core.NewCore(&cfg, lg, "localnet", false, false, false, "")
+	c, err := core.NewCore(&cfg, lg, "localnet", false, false, "")
 	if err != nil {
 		log.Fatal(err)
 	}

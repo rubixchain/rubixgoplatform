@@ -94,14 +94,11 @@ func (c *Core) CheckQuorumStatus(peerID string, did string) (string, bool, error
 	q := make(map[string]string)
 	if peerID == "" {
 		fmt.Println("peerID is empty in CheckQuorumStatus")
-		peerID = c.qm.GetPeerID(did, c.peerID)
-		if peerID == "" {
-			qPeerDIDInfo, err := c.GetPeerDIDInfo(did)
-			if err != nil {
-				return "Quorum Connection Error 1", false, fmt.Errorf("1 unable to find Quorum DID info and peer for %v", did)
-			}
-			peerID = qPeerDIDInfo.PeerID
+		qPeerDIDInfo, err := c.GetPeerDIDInfo(did)
+		if err != nil {
+			return "Quorum Connection Error 1", false, fmt.Errorf("1 unable to find Quorum DID info and peer for %v", did)
 		}
+		peerID = qPeerDIDInfo.PeerID
 	}
 	if peerID == "" {
 		return "Quorum Connection Error", false, fmt.Errorf("2 unable to find Quorum DID info and peer for %v", did)
