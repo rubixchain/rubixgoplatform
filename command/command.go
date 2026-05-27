@@ -603,16 +603,6 @@ func (cmd *Command) runApp() {
 
 	// Unlock any locked FTs
 	rubixCore.UnlockFTs()
-
-	if cmd.publishTokenChainDetails {
-		rubixCore.PublishTCDetails()
-	}
-
-	if cmd.fullNode {
-		cmd.log.Info("Node is running as a Full node")
-		rubixCore.SubscribeTCDetails()
-	}
-
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM)
 	signal.Notify(ch, syscall.SIGINT)

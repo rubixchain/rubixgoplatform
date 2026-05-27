@@ -118,7 +118,6 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APICheckQuorumStatus, "GET", s.AuthHandle(s.APICheckQuorumStatus, false, s.AuthError, false))
 	s.AddRoute(setup.APIAddPeerDetails, "POST", s.AuthHandle(s.APIAddPeerDetails, false, s.AuthError, true))
 	s.AddRoute(setup.APIGetPledgedTokenDetails, "GET", s.AuthHandle(s.APIGetPledgedTokenDetails, false, s.AuthError, true))
-	s.AddRoute(setup.APICheckPinnedState, "DELETE", s.AuthHandle(s.APICheckPinnedState, false, s.AuthError, true))
 	s.AddRoute(setup.APIGenerateFaucetTestToken, "POST", s.AuthHandle(s.APIGenerateFaucetTestToken, true, s.AuthError, false))
 	s.AddRoute(setup.APIDumpFTTokenChainBlock, "POST", s.AuthHandle(s.APIDumpFTTokenChainBlock, true, s.AuthError, false))
 	s.AddRoute(setup.APIInitiateFTTransfer, "POST", s.AuthHandle(s.APIInitiateFTTransfer, true, s.AuthError, true))
