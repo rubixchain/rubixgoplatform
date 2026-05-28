@@ -2,44 +2,17 @@ package core
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
-
-// Struct to match the API response
-type APIResponse struct {
-	Message string  `json:"message"`
-	Data    DIDInfo `json:"data"`
-}
-
-type DIDInfo struct {
-	UserDID string `json:"user_did"`
-	PeerID  string `json:"peer_id"`
-}
-
-func (c *Core) checkPassword(didStr string, pwd string) bool {
-	privKey, err := ioutil.ReadFile(util.SanitizeDirPath(c.didDir) + didStr + "/" + constants.PvtKeyFileName)
-	if err != nil {
-		c.log.Error("Private ket file does not exist", "did", didStr)
-		return false
-	}
-	_, _, err = crypto.DecodeKeyPair(pwd, privKey, nil)
-	if err != nil {
-		c.log.Error("Invalid password", "did", didStr)
-		return false
-	}
-	return true
-}
 
 // InitDIDModule initialises the DID sub-system without the full
 // SetupCore() side-effects (listener, pubsub, peer manager).

@@ -577,11 +577,6 @@ func isTOCTOUConflict(err error) bool {
 	return strings.Contains(msg, "TOCTOU conflict")
 }
 
-func retryBackoff(attempt int) time.Duration {
-	// 50ms → 100ms → 150ms
-	return time.Duration(attempt*50) * time.Millisecond
-}
-
 // sendTokensToReceiver sends transaction tokens to the receiver asynchronously.
 // This function is designed to run as a goroutine and handles all errors internally.
 // It will not block or fail the main transaction flow.
