@@ -13,7 +13,6 @@ import (
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/core/api"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -119,10 +118,8 @@ type Core struct {
 	secret               []byte
 	quorumCount          int
 	noBalanceQuorumCount int
-	tokenSyncManager     *TokenSyncManager
 	ipfsProviderStore    *IPFSProviderStore
 	perfTracker          *PerformanceTracker
-	pendingTokenMonitor  *PendingTokenMonitor
 	fullNode             bool
 	txnProcessor         *DynamicTxnProcessor
 	RetryTokenSyncTicker *time.Ticker
@@ -225,9 +222,6 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 		return c.peerID
 	})
 
-	// Initialize token sync manager
-	c.tokenSyncManager = NewTokenSyncManager(c.log)
-
 	// Initialize performance tracker
 	perfConfig := &PerformanceConfig{
 		Enabled:        true, // TODO: Make this configurable
@@ -242,10 +236,6 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 		// Continue without performance tracking
 		c.perfTracker = &PerformanceTracker{enabled: false}
 	}
-
-	// Initialize pending token monitor for self-healing
-	// Check every 5 minutes for tokens pending > 10 minutes
-	c.pendingTokenMonitor = NewPendingTokenMonitor(c, 5*time.Minute, 10*time.Minute)
 
 	// Wrap storage with tracking if performance tracker is enabled
 	// TODO: update the following
@@ -303,8 +293,6 @@ func (c *Core) SetupCore() error {
 	c.peerSetup()
 	c.removePeerSetup()
 	c.QuorumSetup()
-	c.PinService()
-	api.SetupAPI(c.l, c.w, c.log)
 	c.TransactionSetup()
 
 	return nil
@@ -362,11 +350,6 @@ func (c *Core) Start() (bool, string) {
 	// 	// }
 	// }
 	return true, "Setup Complete"
-}
-
-// TODO:: need to add more test
-func (c *Core) NodeStatus() bool {
-	return true
 }
 
 // IPFSOperations returns the IPFS operations wrapper
@@ -634,22 +617,6 @@ func (c *Core) InitialiseDID(didStr string) (types.DIDCrypto, error) {
 		return nil, err
 	}
 	return did.InitDIDLite(didStr, c.didDir, nil), nil
-}
-
-// StartPendingTokenMonitor starts the self-healing monitor for pending tokens
-func (c *Core) StartPendingTokenMonitor() {
-	if c.pendingTokenMonitor != nil {
-		c.pendingTokenMonitor.Start()
-		c.log.Info("Started pending token monitor for self-healing")
-	}
-}
-
-// StopPendingTokenMonitor stops the pending token monitor
-func (c *Core) StopPendingTokenMonitor() {
-	if c.pendingTokenMonitor != nil {
-		c.pendingTokenMonitor.Stop()
-		c.log.Info("Stopped pending token monitor")
-	}
 }
 
 // GetAsyncFTResponse returns the current value of the async FT response config flag

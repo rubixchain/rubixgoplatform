@@ -3,8 +3,8 @@ package client
 import (
 	"regexp"
 
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
 func (c *Client) AddPeerDetailsFromExplorer(did string) (string, bool) {
@@ -17,7 +17,7 @@ func (c *Client) AddPeerDetailsFromExplorer(did string) (string, bool) {
 	}
 	q := make(map[string]string)
 	q["did"] = did
-	var rm model.BasicResponse
+	var rm models.BasicResponse
 	err := c.sendJSONRequest("POST", setup.APIAddPeerDetailsFromExplorer, q, nil, &rm)
 	if err != nil {
 		return err.Error(), false
@@ -29,7 +29,7 @@ func (c *Client) AddUserAPIKey(did string, apiKey string) (string, bool) {
 	q := make(map[string]string)
 	q["did"] = did
 	q["apiKey"] = apiKey
-	var rm model.BasicResponse
+	var rm models.BasicResponse
 	err := c.sendJSONRequest("POST", setup.APIAddUserAPIKey, q, nil, &rm)
 	if err != nil {
 		return err.Error(), false

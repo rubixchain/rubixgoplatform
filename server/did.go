@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -26,8 +26,8 @@ const (
 // @Accept       json
 // @Produce      json
 // @Param        request  body      types.DIDCreate  true  "Create DID Request"
-// @Success      200      {object}  model.BasicResponse
-// @Failure      400      {object}  model.BasicResponse
+// @Success      200      {object}  models.BasicResponse
+// @Failure      400      {object}  models.BasicResponse
 // @Router       /rubix/v1/dids/create [post]
 func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 	var didCreate types.DIDCreate
@@ -42,7 +42,7 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 		s.log.Error("failed to create did", "err", err)
 		return s.BasicResponse(req, false, err.Error(), nil)
 	}
-	didResp := model.DIDResult{
+	didResp := models.DIDResult{
 		DID:    did,
 		PeerID: s.c.GetPeerID(),
 	}
@@ -55,8 +55,8 @@ func (s *Server) APICreateDID(req *ensweb.Request) *ensweb.Result {
 // @Tags         DID
 // @Accept       json
 // @Produce      json
-// @Success      200  {object}  model.BasicResponse
-// @Failure      500  {object}  model.BasicResponse
+// @Success      200  {object}  models.BasicResponse
+// @Failure      500  {object}  models.BasicResponse
 // @Router       /rubix/v1/dids [get]
 func (s *Server) APIGetAllDID(req *ensweb.Request) *ensweb.Result {
 	ok := s.validateAccess(req)
@@ -65,7 +65,7 @@ func (s *Server) APIGetAllDID(req *ensweb.Request) *ensweb.Result {
 	}
 
 	didList := s.c.GetDIDs()
-	didResponse := model.BasicResponse{
+	didResponse := models.BasicResponse{
 		Status:  true,
 		Message: "Got all DIDs",
 		Result:  didList,
@@ -91,12 +91,12 @@ func (s *Server) didResponse(req *ensweb.Request, reqID string) *ensweb.Result {
 	if ok {
 		return s.RenderJSON(req, sr, http.StatusOK)
 	}
-	br, ok := ch.(*model.BasicResponse)
+	br, ok := ch.(*models.BasicResponse)
 	if ok {
 		s.c.RemoveWebReq(reqID)
 		return s.RenderJSON(req, br, http.StatusOK)
 	}
-	return s.RenderJSON(req, &model.BasicResponse{Status: false, Message: "Invalid response"}, http.StatusOK)
+	return s.RenderJSON(req, &models.BasicResponse{Status: false, Message: "Invalid response"}, http.StatusOK)
 }
 
 // RegisterDID godoc
@@ -106,8 +106,8 @@ func (s *Server) didResponse(req *ensweb.Request, reqID string) *ensweb.Result {
 // @Accept       json
 // @Produce      json
 // @Param        did  path      string  true  "DID to register (e.g. did:bafybmih2cqn6okxy2sepgp75jq5dkopuohnbd3pfrrylmqnrz43ttihkky)"
-// @Success      200  {object}  model.BasicResponse
-// @Failure      400  {object}  model.BasicResponse
+// @Success      200  {object}  models.BasicResponse
+// @Failure      400  {object}  models.BasicResponse
 // @Router       /rubix/v1/dids/{did}/register [post]
 func (s *Server) APIRegisterDID(req *ensweb.Request) *ensweb.Result {
 	didStr := s.GetRouteVar(req, "did")
@@ -171,12 +171,12 @@ func (s *Server) APISetupDID(req *ensweb.Request) *ensweb.Result {
 // @ID          arbitrary-signature
 // @Accept      json
 // @Produce     json
-// @Param       input body model.ArbitrarySignRequest true "Arbitrary Signature Request"
-// @Success     200 {object} model.BasicResponse
-// @Failure     400 {object} model.BasicResponse
+// @Param       input body models.ArbitrarySignRequest true "Arbitrary Signature Request"
+// @Success     200 {object} models.BasicResponse
+// @Failure     400 {object} models.BasicResponse
 // @Router      /rubix/v1/signature/arbitrary [post]
 func (s *Server) APIArbitrarySignature(req *ensweb.Request) *ensweb.Result {
-	var signReq model.ArbitrarySignRequest
+	var signReq models.ArbitrarySignRequest
 	err := s.ParseJSON(req, &signReq)
 	if err != nil {
 		s.log.Error("failed to parse sign input ", "err ", err)
@@ -198,11 +198,11 @@ func (s *Server) APIArbitrarySignature(req *ensweb.Request) *ensweb.Result {
 // @Param       signer_did        query string true "DID of the signer"
 // @Param       signed_msg   query string true "Signed message"
 // @Param       signature  query string true "Signature to verify"
-// @Success     200 {object} model.BasicResponse
-// @Failure     400 {object} model.BasicResponse
+// @Success     200 {object} models.BasicResponse
+// @Failure     400 {object} models.BasicResponse
 // @Router      /rubix/v1/signature/verify [get]
 func (s *Server) APISignVerification(req *ensweb.Request) *ensweb.Result {
-	var verificationReq model.SignVerificationRequest
+	var verificationReq models.SignVerificationRequest
 	verificationReq.SignerDID = s.GetQuery(req, "signer_did")
 	verificationReq.SignedMsg = s.GetQuery(req, "signed_msg")
 	verificationReq.Signature = s.GetQuery(req, "signature")
@@ -247,8 +247,8 @@ func (s *Server) APIRemoveStaleDID(req *ensweb.Request) *ensweb.Result {
 // @Accept       json
 // @Produce      json
 // @Param        did  path      string  true  "DID (e.g. did:bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)"
-// @Success      200  {object}  model.BasicResponse
-// @Failure      400  {object}  model.BasicResponse
+// @Success      200  {object}  models.BasicResponse
+// @Failure      400  {object}  models.BasicResponse
 // @Router       /rubix/v1/dids/{did}/balances [get]
 func (s *Server) APIGetDIDBalance(req *ensweb.Request) *ensweb.Result {
 	did := s.GetRouteVar(req, "did")
@@ -264,7 +264,7 @@ func (s *Server) APIGetDIDBalance(req *ensweb.Request) *ensweb.Result {
 	assetsBalance := types.DIDBalances{
 		DID: did,
 	}
-	ac := model.BasicResponse{
+	ac := models.BasicResponse{
 		Status: true,
 	}
 	rbtInfo, err := s.c.GetRbtByDid(did)

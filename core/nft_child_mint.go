@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -15,9 +14,9 @@ import (
 // else IPFS-add of (parentNFTId + uuid). Child value inherits parent's when
 // the request omits it. childToParent feeds post-consensus persistence so
 // the originator's tokens.parent_token_id gets set.
-func (c *Core) expandChildMintEntries(request *models.TransactionRequest) ([]model.MintedChild, map[string]string, error) {
+func (c *Core) expandChildMintEntries(request *models.TransactionRequest) ([]models.MintedChild, map[string]string, error) {
 	// Non-nil slice/map so JSON marshals as "[]" / {} when no children minted.
-	empty := []model.MintedChild{}
+	empty := []models.MintedChild{}
 	emptyMap := map[string]string{}
 
 	if request == nil || len(request.Tokens.NFT) == 0 {
@@ -122,7 +121,7 @@ func (c *Core) expandChildMintEntries(request *models.TransactionRequest) ([]mod
 	}
 
 	// Emit a deploy entry per child-mint entry; pass others through unchanged.
-	mintedChildren := make([]model.MintedChild, 0)
+	mintedChildren := make([]models.MintedChild, 0)
 	childToParent := make(map[string]string)
 	for _, n := range request.Tokens.NFT {
 		if n.ParentNFTId == "" {
@@ -157,7 +156,7 @@ func (c *Core) expandChildMintEntries(request *models.TransactionRequest) ([]mod
 			Data:  n.Data,
 		})
 
-		mintedChildren = append(mintedChildren, model.MintedChild{
+		mintedChildren = append(mintedChildren, models.MintedChild{
 			ParentNFTId: n.ParentNFTId,
 			ChildNFTId:  childID,
 		})

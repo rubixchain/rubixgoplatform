@@ -10,7 +10,6 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -118,7 +117,7 @@ func (c *Core) peerStatus(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 
 	}
-	ps := model.PeerStatusResponse{
+	ps := models.PeerStatusResponse{
 		Version:   c.version,
 		DIDExists: exist,
 	}
@@ -166,7 +165,7 @@ func (c *Core) getPeer(addr string) (*ipfsport.Peer, error) {
 	// 		q["selfDID_type"] = strconv.Itoa(selfDetails.Type)
 	// 	}
 	// }
-	var ps model.PeerStatusResponse
+	var ps models.PeerStatusResponse
 	err = p.SendJSONRequest("GET", APIPeerStatus, q, nil, &ps, false)
 	if err != nil {
 		return nil, err
@@ -182,26 +181,6 @@ func (c *Core) getPeer(addr string) (*ipfsport.Peer, error) {
 /*
 This methos returns the peer connection to the PeerId supplied as Input.
 */
-func (c *Core) connectPeer(peerID string) (*ipfsport.Peer, error) {
-	p, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
-	if err != nil {
-		return nil, err
-	}
-	/* q := make(map[string]string)
-	q["did"] = ""
-	var ps model.PeerStatusResponse
-	err = p.SendJSONRequest("GET", APIPeerStatus, q, nil, &ps, false)
-	if err != nil {
-		return nil, err
-	}
-	if !ps.DIDExists {
-		p.Close()
-		return nil, fmt.Errorf("did not exist with the peer")
-	} */
-	// TODO:: Valid the peer version before proceesing
-	return p, nil
-}
-
 func (c *Core) AddPeerDetails(peerDetail models.DID) error {
 	// Defensive: resolve AlgoID if caller did not set it (zero value).
 	// The did_algo table uses 1-based GENERATED ALWAYS AS IDENTITY,
@@ -221,37 +200,6 @@ func (c *Core) AddPeerDetails(peerDetail models.DID) error {
 	}
 	c.log.Info("PeerDetails added to DIDPeerTable", "did", peerDetail.DID)
 	return nil
-}
-
-func (c *Core) isDIDInArbitaryAddr(peerDID string) (bool, *models.DID, error) {
-	arbitaryAddr := []string{"12D3KooWHwsKu3GS9rh5X5eS9RTKGFy6NcdX1bV1UHcH8sQ8WqCM.bafybmicttgw2qx4grueyytrgln35vq2hbyhznv6ks4fabeakm47u72c26u",
-		"12D3KooWQ2as3FNtvL1MKTeo7XAuBZxSv8QqobxX4AmURxyNe5mX.bafybmicro2m4kove5vsetej63xq4csobtlzchb2c34lp6dnakzkwtq2mmy",
-		"12D3KooWJUJz2ipK78LAiwhc1QUVDvSMjZNBHt4vSAeVAq6FsneA.bafybmics43ef7ldgrogzurh7vukormpgscq4um44bss6mfuopsbjorbyaq",
-		"12D3KooWC5fHUg2yzAHydgenodN52MYPKhpK4DKRfS8TSm3idSUV.bafybmif5qnkfnkkrffxvoofah3fjzkmieohjbgyte35rrjrn3goufaiykq",
-		"12D3KooWDd7c7DAVb38a9vfCFpqxh5nHbDQ4CYjMJuFfBgzpiagK.bafybmie4iynumz2v3obbtkqirxrejjoljjs3l76frvl43wgalqqgprze6q"}
-
-	for _, addr := range arbitaryAddr {
-		// Split into two parts: [PeerID, DID]
-		arbPeerID, arbDID, ok := util.ParseAddress(addr)
-		if !ok {
-			c.log.Error("failed to parse asdvisory addr ", addr)
-			continue //check if the peerDID matches with any other addr in the list
-		}
-		// Compare the arbitrary DID (second part) with the peerDID
-		if arbDID == peerDID {
-			peer := models.DID{
-				DID:    arbDID,
-				PeerID: arbPeerID,
-			}
-			err := c.AddPeerDetails(peer)
-			if err != nil {
-				c.log.Error("failed to save peer details of Advisory node ", addr)
-				return true, &peer, fmt.Errorf("failed to save peer details of Advisory node")
-			}
-			return true, nil, nil
-		}
-	}
-	return false, nil, nil
 }
 
 func (c *Core) publishStalePeer(pm *PeerMap) error {

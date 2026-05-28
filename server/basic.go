@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rubixchain/rubixgoplatform/core/model"
+	model "github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -29,16 +29,6 @@ func (s *Server) APIStart(req *ensweb.Request) *ensweb.Result {
 func (s *Server) APIShutdown(req *ensweb.Request) *ensweb.Result {
 	go s.shutDown()
 	return s.BasicResponse(req, true, "Shutting down...", nil)
-}
-
-// APIStart will setup the core
-func (s *Server) APINodeStatus(req *ensweb.Request) *ensweb.Result {
-	ok := s.c.NodeStatus()
-	if ok {
-		return s.BasicResponse(req, true, "Node is up and running", nil)
-	} else {
-		return s.BasicResponse(req, false, "Node is down, please check logs", nil)
-	}
 }
 
 func (s *Server) shutDown() {

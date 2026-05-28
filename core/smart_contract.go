@@ -11,7 +11,6 @@ import (
 	"path"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -58,8 +57,8 @@ func (c *Core) GenerateSmartContractToken(requestID string, smartContractTokenRe
 
 // generateSmartContractToken uses folder-based IPFS approach (same as NFT)
 // Adds the entire smart contract folder to IPFS instead of individual files
-func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRequest *GenerateSmartContractRequest) *model.BasicResponse {
-	basicResponse := &model.BasicResponse{
+func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRequest *GenerateSmartContractRequest) *models.BasicResponse {
+	basicResponse := &models.BasicResponse{
 		Status: false,
 	}
 
@@ -118,33 +117,33 @@ func (c *Core) generateSmartContractToken(requestID string, smartContractTokenRe
 
 // FetchSmartContract fetches a smart contract from IPFS and stores it locally.
 // It handles the complete lifecycle: folder management, metadata fetching, file storage, and token chain sync.
-func (c *Core) FetchSmartContract(requestID string, smartContractToken string) *model.BasicResponse {
+func (c *Core) FetchSmartContract(requestID string, smartContractToken string) *models.BasicResponse {
 	c.log.Info("FetchSmartContract: Fetching smart contract", "request_id", requestID, "token", smartContractToken)
 
 	scFolderPath, err := c.prepareSmartContractFolder(smartContractToken)
 	if err != nil {
 		c.log.Error("FetchSmartContract: Failed to prepare smart contract folder", "token", smartContractToken, "err", err)
-		return &model.BasicResponse{Status: false, Message: err.Error()}
+		return &models.BasicResponse{Status: false, Message: err.Error()}
 	}
 
 	metadata, err := c.fetchContractInfo(smartContractToken)
 	if err != nil {
 		c.log.Error("FetchSmartContract: Failed to fetch smart contract metadata", "token", smartContractToken, "err", err)
-		return &model.BasicResponse{Status: false, Message: err.Error()}
+		return &models.BasicResponse{Status: false, Message: err.Error()}
 	}
 
 	if err := c.storeSmartContractFiles(scFolderPath, metadata); err != nil {
 		c.log.Error("FetchSmartContract: Failed to store smart contract files", "token", smartContractToken, "err", err)
-		return &model.BasicResponse{Status: false, Message: err.Error()}
+		return &models.BasicResponse{Status: false, Message: err.Error()}
 	}
 
 	if err := c.syncSmartContractTransaction(smartContractToken, metadata); err != nil {
 		c.log.Warn("FetchSmartContract: Failed to sync transaction chain", "token", smartContractToken, "err", err)
-		return &model.BasicResponse{Status: false, Message: err.Error()}
+		return &models.BasicResponse{Status: false, Message: err.Error()}
 	}
 
 	c.log.Info("FetchSmartContract: Successfully fetched smart contract", "token", smartContractToken)
-	return &model.BasicResponse{
+	return &models.BasicResponse{
 		Status:  true,
 		Message: "Successfully fetched smart contract",
 		Result:  metadata,
@@ -450,24 +449,24 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 }
 
 // RegisterCallBackURL registers a callback URL for smart contract events.
-func (c *Core) RegisterCallBackURL(req *model.RegisterCallBackUrlReq) *model.BasicResponse {
+func (c *Core) RegisterCallBackURL(req *models.RegisterCallBackUrlReq) *models.BasicResponse {
 	// Validate input
 	if req.SmartContractToken == "" {
-		return &model.BasicResponse{Status: false, Message: "smart contract token is required"}
+		return &models.BasicResponse{Status: false, Message: "smart contract token is required"}
 	}
 	if req.CallBackURL == "" {
-		return &model.BasicResponse{Status: false, Message: "callback URL is required"}
+		return &models.BasicResponse{Status: false, Message: "callback URL is required"}
 	}
 
 	// Register the callback URL in the database
 	err := c.w.RegisterCallbackURL(req.SmartContractToken, req.CallBackURL)
 	if err != nil {
 		c.log.Error("Failed to register callback URL", "smart_contract", req.SmartContractToken, "err", err)
-		return &model.BasicResponse{Status: false, Message: fmt.Sprintf("failed to register callback URL: %v", err)}
+		return &models.BasicResponse{Status: false, Message: fmt.Sprintf("failed to register callback URL: %v", err)}
 	}
 
 	c.log.Info("Callback URL registered successfully", "smart_contract", req.SmartContractToken, "callback_url", req.CallBackURL)
-	return &model.BasicResponse{Status: true, Message: "callback URL registered successfully"}
+	return &models.BasicResponse{Status: true, Message: "callback URL registered successfully"}
 }
 
 func (c *Core) GetAllSmartcontracts() ([]models.Token, error) {

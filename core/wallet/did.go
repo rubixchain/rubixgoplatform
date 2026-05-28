@@ -119,3 +119,20 @@ func (w *Wallet) IsLocalDID(did string) (bool, error) {
 	return local, nil
 
 }
+
+func (w *Wallet) RemoveDID(did string) error {
+	result, err := w.db.Pool().Exec(w.Ctx,
+		`DELETE FROM dids WHERE did = $1`,
+		did,
+	)
+	if err != nil {
+		return fmt.Errorf("RemoveDID: %w", err)
+	}
+
+	rowsAffected := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("RemoveDID: no row found with did %v", did)
+	}
+
+	return nil
+}

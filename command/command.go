@@ -28,10 +28,6 @@ import (
 )
 
 const (
-	ConfigFile string = "api_config.json"
-)
-
-const (
 	version string = "0.2"
 )
 
@@ -375,84 +371,6 @@ func showHelp() {
 	}
 }
 
-// backupDatabase creates a timestamped backup of the database
-// func (cmd *Command) backupDatabase() error {
-// 	// Determine database path based on config
-// 	var dbPath string
-// 	if cmd.cfg.CfgData.StorageConfig.DBType == "sqlite3" || cmd.cfg.CfgData.StorageConfig.DBType == "" {
-// 		// For SQLite, DBAddress contains the file path
-// 		dbPath = cmd.cfg.CfgData.StorageConfig.DBAddress
-// 		if dbPath == "" {
-// 			// Default SQLite database path
-// 			dbPath = filepath.Join(cmd.nodeConfigPath, "rubixdata.db")
-// 		}
-// 	} else {
-// 		// For other database types, we can't do file-based backup
-// 		cmd.log.Info("Database backup is only supported for SQLite databases")
-// 		return nil
-// 	}
-
-// 	// Check if database file exists
-// 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-// 		cmd.log.Info("No database file found to backup", "path", dbPath)
-// 		return nil
-// 	}
-
-// 	// Create backup directory
-// 	backupDir := filepath.Join(cmd.nodeConfigPath, "db_backups")
-// 	if err := os.MkdirAll(backupDir, 0755); err != nil {
-// 		return fmt.Errorf("failed to create backup directory: %w", err)
-// 	}
-
-// 	// Generate backup filename with timestamp
-// 	timestamp := time.Now().Format("20060102_150405")
-// 	backupFileName := fmt.Sprintf("rubixdata_backup_%s.db", timestamp)
-// 	backupPath := filepath.Join(backupDir, backupFileName)
-
-// 	// Copy database file
-// 	sourceFile, err := os.Open(dbPath)
-// 	if err != nil {
-// 		return fmt.Errorf("failed to open source database: %w", err)
-// 	}
-// 	defer sourceFile.Close()
-
-// 	destFile, err := os.Create(backupPath)
-// 	if err != nil {
-// 		return fmt.Errorf("failed to create backup file: %w", err)
-// 	}
-// 	defer destFile.Close()
-
-// 	// Copy the file
-// 	_, err = io.Copy(destFile, sourceFile)
-// 	if err != nil {
-// 		return fmt.Errorf("failed to copy database: %w", err)
-// 	}
-
-// 	// Also backup WAL and SHM files if they exist (for SQLite WAL mode)
-// 	walPath := dbPath + "-wal"
-// 	if _, err := os.Stat(walPath); err == nil {
-// 		if err := cmd.copyFile(walPath, backupPath+"-wal"); err != nil {
-// 			cmd.log.Warn("Failed to backup WAL file", "err", err)
-// 		}
-// 	}
-
-// 	shmPath := dbPath + "-shm"
-// 	if _, err := os.Stat(shmPath); err == nil {
-// 		if err := cmd.copyFile(shmPath, backupPath+"-shm"); err != nil {
-// 			cmd.log.Warn("Failed to backup SHM file", "err", err)
-// 		}
-// 	}
-
-// 	cmd.log.Info("Database backup completed successfully", "backup_path", backupPath)
-
-// 	// Clean up old backups (keep only last 10)
-// 	if err := cmd.cleanupOldBackups(backupDir); err != nil {
-// 		cmd.log.Warn("Failed to cleanup old backups", "err", err)
-// 	}
-
-// 	return nil
-// }
-
 // copyFile is a helper function to copy a file
 func (cmd *Command) copyFile(src, dst string) error {
 	sourceFile, err := os.Open(src)
@@ -469,41 +387,6 @@ func (cmd *Command) copyFile(src, dst string) error {
 
 	_, err = io.Copy(destFile, sourceFile)
 	return err
-}
-
-// cleanupOldBackups removes old backup files, keeping only the most recent ones
-func (cmd *Command) cleanupOldBackups(backupDir string) error {
-	files, err := os.ReadDir(backupDir)
-	if err != nil {
-		return err
-	}
-
-	// Filter backup files
-	var backupFiles []os.DirEntry
-	for _, file := range files {
-		if strings.HasPrefix(file.Name(), "rubixdata_backup_") && strings.HasSuffix(file.Name(), ".db") {
-			backupFiles = append(backupFiles, file)
-		}
-	}
-
-	// If we have more than 10 backups, remove the oldest ones
-	if len(backupFiles) > 10 {
-		// Files are already sorted by name (which includes timestamp)
-		for i := 0; i < len(backupFiles)-10; i++ {
-			oldBackup := filepath.Join(backupDir, backupFiles[i].Name())
-			if err := os.Remove(oldBackup); err != nil {
-				cmd.log.Warn("Failed to remove old backup", "file", oldBackup, "err", err)
-			} else {
-				cmd.log.Info("Removed old backup", "file", oldBackup)
-			}
-
-			// Also remove associated WAL and SHM files if they exist
-			os.Remove(oldBackup + "-wal")
-			os.Remove(oldBackup + "-shm")
-		}
-	}
-
-	return nil
 }
 
 // Get preferred outbound ip of this machine
@@ -594,9 +477,6 @@ func (cmd *Command) runApp() {
 	cmd.log.Info("Starting server...")
 	go s.Start()
 
-	// Start the pending token monitor for self-healing
-	rubixCore.StartPendingTokenMonitor()
-
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM)
 	signal.Notify(ch, syscall.SIGINT)
@@ -607,8 +487,6 @@ func (cmd *Command) runApp() {
 	case <-sc:
 	}
 
-	// Stop the pending token monitor
-	rubixCore.StopPendingTokenMonitor()
 	s.Shutdown()
 	cmd.log.Info("Shutting down...")
 }
@@ -647,7 +525,6 @@ func Run(args []string) {
 	flag.StringVar(&cmd.nodeConfigPath, "p", "./", "Working directory path")
 	flag.StringVar(&cmd.logFile, "logFile", "", "Log file name")
 	flag.StringVar(&cmd.logLevel, "logLevel", "debug", "Log level")
-	flag.StringVar(&cmd.cfgFile, "c", ConfigFile, "Configuration file for the core")
 	flag.UintVar(&cmd.node, "n", 0, "Node number")
 	flag.StringVar(&cmd.encKey, "k", "TestKeyBasic#2022", "Config file encryption key")
 	flag.BoolVar(&cmd.start, "s", false, "Start the core")
@@ -836,8 +713,6 @@ func Run(args []string) {
 		cmd.GenerateLocalRBT()
 	case GenerateMainnetRBTCmd:
 		cmd.GenerateMainnetRBT()
-	case TransferRBTCmd:
-		cmd.TransferRBT()
 	case GetRBTBalanceCmd:
 		cmd.GetRBTBalance()
 	case RegsiterDIDCmd:
@@ -846,8 +721,6 @@ func Run(args []string) {
 		cmd.SetupDIDCmd()
 	case ShutDownCmd:
 		cmd.ShutDownCmd()
-	case GetTxnDetailsCmd:
-		cmd.getTxnDetails()
 	case SubscribeContractCmd:
 		cmd.SubscribeContract()
 	case CreateNFTCmd:
@@ -862,20 +735,6 @@ func Run(args []string) {
 		cmd.checkQuorumStatus()
 	case AddPeerDetailsCmd:
 		cmd.AddPeerDetails()
-	case GetPledgedTokenDetailsCmd:
-		cmd.GetPledgedTokenDetails()
-	case CheckPinnedState:
-		cmd.CheckPinnedState()
-	case SelfTransferRBT:
-		cmd.SelfTransferRBT()
-	case RunUnpledge:
-		cmd.RunUnpledge()
-	case UnpledgePOWPledgeTokens:
-		cmd.UnpledgePOWBasedPledgedTokens()
-	case PinTokenCmd:
-		cmd.PinRBT()
-	case ValidateTokenchainCmd:
-		cmd.ValidateTokenchain()
 	case GenerateFaucetTestRBTCmd:
 		cmd.GenerateFaucetTestRBT()
 	case FaucetTokenCheck:
@@ -884,8 +743,6 @@ func Run(args []string) {
 		cmd.createFT()
 	case GetFTBalanceCmd:
 		cmd.getFTinfo()
-	case ValidateTokenCmd:
-		cmd.ValidateToken()
 	case SubscribeNFTCmd:
 		cmd.SubscribeNFT()
 	case FetchNftCmd:
@@ -894,25 +751,10 @@ func Run(args []string) {
 		cmd.addUserAPIKey()
 	case AddPeerDetailsFromExplorer:
 		cmd.addPeerDetailsFromExplorer()
-	case GetFTTxnDetailsCmd:
-		cmd.getFTTxnDetails()
 	case ArbitrarySignCmd:
 		cmd.ArbitrarySign()
 	case VerifySignatureCmd:
 		cmd.SignVerification()
-	case AsyncFTStatusCmd:
-		cmd.asyncFTStatus()
-	case SetAsyncFTStatusCmd:
-		if len(os.Args) < 3 {
-			fmt.Println("Usage: setasyncftstatus <true|false>")
-			return
-		}
-		val := strings.ToLower(os.Args[2])
-		if val != "true" && val != "false" {
-			fmt.Println("Usage: setasyncftstatus <true|false>")
-			return
-		}
-		cmd.setAsyncFTStatus(val == "true")
 	case RemoveStaleDIDCmd:
 		cmd.RemoveStaleDID()
 	case GetDIDBalanceCmd:
@@ -964,14 +806,4 @@ func getpassword(msg string) (string, error) {
 		return "", err
 	}
 	return string(bytePassword), nil
-}
-
-func (cmd *Command) asyncFTStatus() {
-	status := cmd.c.GetAsyncFTResponse()
-	fmt.Printf("Async FT Response is currently: %v\n", status)
-}
-
-func (cmd *Command) setAsyncFTStatus(val bool) {
-	cmd.c.SetAsyncFTResponse(val)
-	fmt.Printf("Async FT Response set to: %v\n", val)
 }

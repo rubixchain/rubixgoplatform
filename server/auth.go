@@ -3,7 +3,7 @@ package server
 import (
 	"net/http"
 
-	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -27,5 +27,5 @@ func (s *Server) validateAccess(req *ensweb.Request) bool {
 }
 
 func (s *Server) AuthError(req *ensweb.Request) *ensweb.Result {
-	return s.RenderJSON(req, &model.BasicResponse{Status: false, Message: "unauthorized access"}, http.StatusUnauthorized)
+	return s.RenderJSON(req, &models.BasicResponse{Status: false, Message: "unauthorized access"}, http.StatusUnauthorized)
 }

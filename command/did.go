@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -126,7 +126,7 @@ func (cmd *Command) SetupDIDCmd() {
 	cmd.log.Info("DID registered successfully")
 }
 
-func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.Duration) (string, bool) {
+func (cmd *Command) SignatureResponse(br *models.BasicResponse, timeout ...time.Duration) (string, bool) {
 	pwdSet := false
 	password := cmd.privPWD
 
@@ -146,7 +146,7 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 				return errMsg, false
 			}
 
-			signMap := model.Signature{}
+			signMap := models.ArbitrarySignature{}
 			err = json.Unmarshal(jsonbytes, &signMap)
 			if err != nil {
 				errMsg := "Invalid response, " + err.Error()

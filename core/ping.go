@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
@@ -18,12 +17,12 @@ type PingRequest struct {
 
 // PingResponse is the model for ping response
 type PingResponse struct {
-	model.BasicResponse
+	models.BasicResponse
 }
 
 type GetPeerInfoResponse struct {
 	PeerInfo models.DID
-	model.BasicResponse
+	models.BasicResponse
 }
 
 // PingSetup will setup the ping route
@@ -41,7 +40,7 @@ func (c *Core) CheckQuorumStatusSetup() {
 func (c *Core) PingRecevied(req *ensweb.Request) *ensweb.Result {
 	c.log.Info("Ping Received")
 	resp := &PingResponse{
-		BasicResponse: model.BasicResponse{
+		BasicResponse: models.BasicResponse{
 			Status: false,
 		},
 	}
@@ -71,7 +70,7 @@ func (c *Core) CheckQuorumStatusResponse(req *ensweb.Request) *ensweb.Result { /
 	did := c.l.GetQuery(req, "did")
 	c.log.Info("Checking Quorum Status")
 	resp := &PingResponse{
-		BasicResponse: model.BasicResponse{
+		BasicResponse: models.BasicResponse{
 			Status: false,
 		},
 	}
@@ -123,7 +122,7 @@ func (c *Core) GetPeerInfoResponse(req *ensweb.Request) *ensweb.Result { //PingR
 	peerDID := c.l.GetQuery(req, "did")
 
 	resp := &GetPeerInfoResponse{
-		BasicResponse: model.BasicResponse{
+		BasicResponse: models.BasicResponse{
 			Status: false,
 		},
 	}

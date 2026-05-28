@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
@@ -25,7 +24,7 @@ import (
 
 // CreateFTs stubs FT creation; replaced by InitiateTransaction in Phase 09.
 func (c *Core) CreateFTs(reqID string, createFTRequest types.CreateFTReq) {
-	br := model.BasicResponse{
+	br := models.BasicResponse{
 		Status: false,
 	}
 	if err := c.createFTs(reqID, createFTRequest); err != nil {

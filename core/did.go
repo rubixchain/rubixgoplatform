@@ -1,19 +1,14 @@
 package core
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"path"
 	"strings"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/core/model"
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/types"
@@ -30,70 +25,6 @@ type APIResponse struct {
 type DIDInfo struct {
 	UserDID string `json:"user_did"`
 	PeerID  string `json:"peer_id"`
-}
-
-func (c *Core) GetPeerFromExplorer(didStr string) (*models.DID, error) {
-	c.log.Debug("GetPeerFromExplorer: Fetching peer from explorer", "did", didStr)
-
-	url := "https://rexplorer.azurewebsites.net/api/user/get-did-info/" + didStr
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("failed to request explorer: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("explorer returned status: %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read explorer response: %w", err)
-	}
-
-	c.log.Debug("Explorer raw response", "body", string(body))
-
-	// First, parse basic structure
-	var genericResp struct {
-		Message string          `json:"message"`
-		Data    json.RawMessage `json:"data"`
-	}
-	if err := json.Unmarshal(body, &genericResp); err != nil {
-		return nil, fmt.Errorf("failed to parse explorer response: %w", err)
-	}
-
-	if strings.Contains(genericResp.Message, "Deployer not found") {
-		c.log.Error("Deployer not found for DID", "did", didStr)
-		return nil, fmt.Errorf("peer not found in explorer for DID: %s", didStr)
-	}
-
-	// Parse full response
-	var apiResp APIResponse
-	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return nil, fmt.Errorf("failed to parse DID data: %w", err)
-	}
-
-	c.log.Debug("Explorer response parsed", "userDID", apiResp.Data.UserDID, "peerID", apiResp.Data.PeerID)
-
-	// Fetch DID content to local node
-	if err := c.FetchDID(apiResp.Data.UserDID); err != nil {
-		c.log.Error("Failed to fetch DID", "did", apiResp.Data.UserDID, "err", err)
-		return nil, fmt.Errorf("failed to fetch DID from network: %w", err)
-	}
-
-	peerInfo := &models.DID{
-		DID:    apiResp.Data.UserDID,
-		PeerID: apiResp.Data.PeerID,
-	}
-
-	// Add peer to table (upsert logic should be inside AddPeerDetails)
-	if err := c.AddPeerDetails(*peerInfo); err != nil {
-		c.log.Error("Failed to add peer details to table", "did", peerInfo.DID, "err", err)
-		// Return peerInfo anyway, in case caller can proceed
-		return peerInfo, nil
-	}
-
-	return peerInfo, nil
 }
 
 func (c *Core) checkPassword(didStr string, pwd string) bool {
@@ -173,8 +104,8 @@ func (c *Core) IsDIDExist(did string) bool {
 	return err == nil
 }
 
-func (c *Core) AddDID(dc *types.DIDCreate) *model.BasicResponse {
-	br := &model.BasicResponse{
+func (c *Core) AddDID(dc *types.DIDCreate) *models.BasicResponse {
+	br := &models.BasicResponse{
 		Status: false,
 	}
 	ds, err := c.d.CreateDID(dc)
@@ -182,12 +113,12 @@ func (c *Core) AddDID(dc *types.DIDCreate) *model.BasicResponse {
 		br.Message = err.Error()
 		return br
 	}
-	dt := wallet.DID{
+	dt := models.DID{
 		DID: ds,
 		// DIDDir: dc.Dir,
 		// Config: dc.Config,
 	}
-	err = c.w.CreateDID(&dt)
+	err = c.w.CreateOrUpdateDID(&dt)
 	if err != nil {
 		c.log.Error("Failed to create did in the wallet", "err", err)
 		br.Message = err.Error()
@@ -202,7 +133,7 @@ func (c *Core) AddDID(dc *types.DIDCreate) *model.BasicResponse {
 
 func (c *Core) RegisterDID(reqID string, did string) {
 	err := c.registerDID(reqID, did)
-	br := model.BasicResponse{
+	br := models.BasicResponse{
 		Status:  true,
 		Message: "DID registered successfully",
 	}
@@ -259,33 +190,14 @@ func (c *Core) registerDID(reqID string, did string) error {
 func (c *Core) GetPeerDIDInfo(didStr string) (*models.DID, error) {
 	c.log.Debug("GetPeerDIDInfo: Resolving peer info", "did", didStr)
 
-	var peerID string
-
-	// 1. Try dids table first
-	peerID, _ = c.w.GetPeerID(didStr)
-	if peerID != "" {
-		return &models.DID{
-			DID:    didStr,
-			PeerID: peerID,
-		}, nil
+	peerID, err := c.w.GetPeerID(didStr)
+	if err != nil {
+		c.log.Error("GetPeerDIDInfo: Failed to get peer ID", "did", didStr, "error", err)
+		return nil, err
 	}
 
-	// If peerID still missing, try resolving (via explorer or peer fetch)
 	if peerID == "" {
-		if !c.testnet || !c.localnet {
-			peerInfo, err := c.GetPeerFromExplorer(didStr)
-			if err != nil {
-				return nil, fmt.Errorf("explorer lookup failed: %w", err)
-			}
-			return peerInfo, nil
-		}
-
-		// Testnet: Cannot resolve peer without peerID
-		// Calling getPeer(didStr) here creates a circular dependency:
-		// GetPeerDIDInfo -> getPeer -> GetPeerDIDInfo -> ...
-		// In testnet mode, peer information must be available locally or provided explicitly
-		c.log.Error("PeerID not found in local storage", "did", didStr, "register the DID info")
-		return nil, fmt.Errorf("peerID of  DID %s not found in local storage. Peer information not registered. register did to continue", didStr)
+		return nil, fmt.Errorf("peer ID not found for DID: %s", didStr)
 	}
 
 	return &models.DID{
@@ -294,7 +206,7 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*models.DID, error) {
 	}, nil
 }
 
-func (c *Core) ArbitrarySign(reqID string, signReq *model.ArbitrarySignRequest) {
+func (c *Core) ArbitrarySign(reqID string, signReq *models.ArbitrarySignRequest) {
 	signResp := c.arbitrarySign(reqID, signReq)
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
@@ -303,8 +215,8 @@ func (c *Core) ArbitrarySign(reqID string, signReq *model.ArbitrarySignRequest) 
 	}
 	dc.OutChan <- signResp
 }
-func (c *Core) arbitrarySign(reqID string, signReq *model.ArbitrarySignRequest) *model.BasicResponse {
-	signResp := &model.BasicResponse{
+func (c *Core) arbitrarySign(reqID string, signReq *models.ArbitrarySignRequest) *models.BasicResponse {
+	signResp := &models.BasicResponse{
 		Status: false,
 	}
 
@@ -342,7 +254,7 @@ func (c *Core) arbitrarySign(reqID string, signReq *model.ArbitrarySignRequest) 
 		signResp.Message = "arbitrary sign failed, verification failed, signature is invalid"
 	} else {
 		signResp.Message = "arbitrary sign successful"
-		signMap := model.Signature{
+		signMap := models.ArbitrarySignature{
 			Signature: signature,
 		}
 		signResp.Result = signMap
@@ -352,8 +264,8 @@ func (c *Core) arbitrarySign(reqID string, signReq *model.ArbitrarySignRequest) 
 	return signResp
 }
 
-func (c *Core) ArbitrarySignVerification(reqID string, verificationReq *model.SignVerificationRequest) (*model.BasicResponse, error) {
-	verificationResp := &model.BasicResponse{
+func (c *Core) ArbitrarySignVerification(reqID string, verificationReq *models.SignVerificationRequest) (*models.BasicResponse, error) {
+	verificationResp := &models.BasicResponse{
 		Status: false,
 	}
 
@@ -409,8 +321,8 @@ func (c *Core) RemoveStaleDIDFromNetwork(reqID string, staleDID string) {
 }
 
 // remove stale DIDs from DIDTable and from peers' PeerDIDTable
-func (c *Core) removeStaleDIDFromNetwork(reqID, staleDID string) (model.BasicResponse, error) {
-	response := model.BasicResponse{
+func (c *Core) removeStaleDIDFromNetwork(reqID, staleDID string) (models.BasicResponse, error) {
+	response := models.BasicResponse{
 		Status: false,
 	}
 

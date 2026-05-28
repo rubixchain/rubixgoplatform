@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/core/consensus"
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/types/models"
@@ -70,7 +69,6 @@ const (
 
 // PingSetup will setup the ping route
 func (c *Core) QuorumSetup() {
-	c.l.AddRoute(APICheckPinRole, "GET", c.checkPinRole)
 	c.l.AddRoute(APIInitiateConsensus, "POST", c.initiateConsensusHandler)
 	c.l.AddRoute(APIRequestPledgeToken, "POST", c.requestPledgeTokenHandler)
 }
@@ -78,7 +76,7 @@ func (c *Core) QuorumSetup() {
 func (c *Core) requestPledgeTokenHandler(request *ensweb.Request) *ensweb.Result {
 	did := c.l.GetQuery(request, "did")
 	var pledgeTokenRequest models.PledgeTokenRequest
-	response := model.BasicResponse{Status: false}
+	response := models.BasicResponse{Status: false}
 	err := c.l.ParseJSON(request, &pledgeTokenRequest)
 	c.log.Debug("Request for pledge tokens", "did", did)
 	if err != nil {

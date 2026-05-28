@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -26,7 +26,7 @@ func (s *Server) APIGetAllTokens(req *ensweb.Request) *ensweb.Result {
 }
 
 func (s *Server) APIGenerateLocalRBT(req *ensweb.Request) *ensweb.Result {
-	var tr model.GenerateLocalRBTRequest
+	var tr models.GenerateLocalRBTRequest
 	err := s.ParseJSON(req, &tr)
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)
@@ -50,7 +50,7 @@ func (s *Server) APIGenerateLocalRBT(req *ensweb.Request) *ensweb.Result {
 }
 
 func (s *Server) APIGenerateMainnetRBT(req *ensweb.Request) *ensweb.Result {
-	var tr model.GenerateLocalRBTRequest
+	var tr models.GenerateLocalRBTRequest
 	err := s.ParseJSON(req, &tr)
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)
@@ -105,7 +105,7 @@ func (s *Server) APIGetRbtByDid(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 		return s.BasicResponse(req, false, err.Error(), nil)
 	}
-	ac := model.BasicResponse{
+	ac := models.BasicResponse{
 		Status:  true,
 		Message: "Got account info successfully",
 		Result:  info,
@@ -145,24 +145,8 @@ func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, resp.ID)
 }
 
-func (s *Server) APIGetPledgedTokenDetails(req *ensweb.Request) *ensweb.Result {
-	pledgedTokenInfo, err := s.c.GetPledgedInfo()
-	if err != nil {
-		return s.BasicResponse(req, false, err.Error(), nil)
-	}
-	tokenstateresponse := model.TokenStateResponse{
-		BasicResponse: model.BasicResponse{
-			Status:  true,
-			Message: "Got pledged tokens with token states info successfully",
-		},
-		PledgedTokenStateDetails: make([]model.PledgedTokenStateDetails, 0),
-	}
-	tokenstateresponse.PledgedTokenStateDetails = append(tokenstateresponse.PledgedTokenStateDetails, pledgedTokenInfo...)
-	return s.RenderJSON(req, tokenstateresponse, http.StatusOK)
-}
-
 func (s *Server) APIGenerateFaucetTestToken(req *ensweb.Request) *ensweb.Result {
-	var tr model.FaucetRBTGenerateRequest
+	var tr models.FaucetRBTGenerateRequest
 	err := s.ParseJSON(req, &tr)
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)
@@ -183,14 +167,4 @@ func (s *Server) APIGenerateFaucetTestToken(req *ensweb.Request) *ensweb.Result 
 	s.c.AddWebReq(req)
 	go s.c.GenerateFaucetTestTokens(req.ID, tr.TokenCount, tr.DID)
 	return s.didResponse(req, req.ID)
-}
-
-func (s *Server) APIValidateToken(req *ensweb.Request) *ensweb.Result {
-	token := s.GetQuery(req, "token")
-	br, err := s.c.ValidateToken(token)
-	if err != nil {
-		s.log.Error("Failed to validate token ", err)
-		return s.BasicResponse(req, false, "Failed to validate token : "+err.Error(), nil)
-	}
-	return s.RenderJSON(req, br, http.StatusOK)
 }

@@ -89,54 +89,6 @@ func (cmd *Command) GenerateMainnetRBT() {
 	cmd.log.Info("Mainnet RBT generated successfully")
 }
 
-func (cmd *Command) ValidateTokenchain() {
-	if cmd.did == "" {
-		cmd.log.Info("Tokenchain-validator did cannot be empty")
-		fmt.Print("Enter tokenchain-validator DID : ")
-		_, err := fmt.Scan(&cmd.did)
-		if err != nil {
-			cmd.log.Error("Failed to get tokenchain-validator DID")
-			return
-		}
-	}
-	br, err := cmd.c.ValidateTokenchain(cmd.did, cmd.smartContractChainValidation, cmd.token, cmd.blockCount)
-	if err != nil {
-		cmd.log.Error("failed to validate token chain", "err", err)
-		return
-	}
-
-	if !br.Status {
-		cmd.log.Error("failed to validate token chain", "msg", br.Message)
-		return
-	}
-
-	cmd.log.Info("Tokenchain validated successfully", "msg", br.Message)
-}
-
-func (cmd *Command) ValidateToken() {
-	if cmd.token == "" {
-		cmd.log.Info("Token cannot be empty")
-		fmt.Print("Enter Token : ")
-		_, err := fmt.Scan(&cmd.token)
-		if err != nil {
-			cmd.log.Error("Failed to get tokenhash")
-			return
-		}
-	}
-	br, err := cmd.c.ValidateToken(cmd.token)
-	if err != nil {
-		cmd.log.Error("failed to validate token", "err", err)
-		return
-	}
-
-	if !br.Status {
-
-		cmd.log.Error("failed to validate token %s", cmd.token, "msg", br.Message)
-		return
-	}
-	cmd.log.Info("Token %s validated successfully ", cmd.token, "msg", br.Message)
-}
-
 func (cmd *Command) GenerateFaucetTestRBT() {
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
 	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !is_alphanumeric {

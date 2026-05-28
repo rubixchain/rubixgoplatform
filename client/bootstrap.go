@@ -1,15 +1,15 @@
 package client
 
 import (
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
 func (c *Client) AddBootStrap(peers []string) (string, bool) {
-	m := model.BootStrapPeers{
+	m := models.BootStrapPeers{
 		Peers: peers,
 	}
-	var rm model.BasicResponse
+	var rm models.BasicResponse
 	err := c.sendJSONRequest("POST", setup.APIAddBootStrap, nil, &m, &rm)
 	if err != nil {
 		return err.Error(), false
@@ -18,10 +18,10 @@ func (c *Client) AddBootStrap(peers []string) (string, bool) {
 }
 
 func (c *Client) RemoveBootStrap(peers []string) (string, bool) {
-	m := model.BootStrapPeers{
+	m := models.BootStrapPeers{
 		Peers: peers,
 	}
-	var rm model.BasicResponse
+	var rm models.BasicResponse
 	err := c.sendJSONRequest("POST", setup.APIRemoveBootStrap, nil, &m, &rm)
 	if err != nil {
 		return err.Error(), false
@@ -30,7 +30,7 @@ func (c *Client) RemoveBootStrap(peers []string) (string, bool) {
 }
 
 func (c *Client) RemoveAllBootStrap() (string, bool) {
-	var rm model.BasicResponse
+	var rm models.BasicResponse
 	err := c.sendJSONRequest("POST", setup.APIRemoveAllBootStrap, nil, nil, &rm)
 	if err != nil {
 		return err.Error(), false
@@ -39,7 +39,7 @@ func (c *Client) RemoveAllBootStrap() (string, bool) {
 }
 
 func (c *Client) GetAllBootStrap() ([]string, string, bool) {
-	var rm model.BootStrapResponse
+	var rm models.BootStrapResponse
 	err := c.sendJSONRequest("GET", setup.APIGetAllBootStrap, nil, nil, &rm)
 	if err != nil {
 		return nil, err.Error(), false

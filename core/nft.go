@@ -12,7 +12,6 @@ import (
 	"path"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
@@ -41,8 +40,8 @@ func (c *Core) CreateNFTRequest(requestID string, createNFTRequest NFTReq) {
 	didChannel.OutChan <- createNFTResponse
 }
 
-func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *model.BasicResponse {
-	basicResponse := &model.BasicResponse{
+func (c *Core) createNFT(requestID string, createNFTRequest NFTReq) *models.BasicResponse {
+	basicResponse := &models.BasicResponse{
 		Status: false,
 	}
 	nftFolderHash, err := c.ipfsOps.AddDir(createNFTRequest.NFTPath)
@@ -226,10 +225,10 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 	c.log.Info("NFTCallBack: Transaction chain synced successfully", "nft_token", nft)
 }
 
-func (c *Core) FetchNFT(fetchNFTRequest *FetchNFTRequest) *model.BasicResponse {
+func (c *Core) FetchNFT(fetchNFTRequest *FetchNFTRequest) *models.BasicResponse {
 	c.log.Info("FetchNFT: Starting NFT fetch", "nft_token", fetchNFTRequest.NFT)
 
-	basicResponse := &model.BasicResponse{
+	basicResponse := &models.BasicResponse{
 		Status: false,
 	}
 
@@ -444,9 +443,4 @@ func (c *Core) GetNFTChain(nftID string) ([]models.TokenChainResponse, error) {
 		return nil, err
 	}
 	return nftTokenChain, nil
-}
-
-// DumpTokenChain stubs a token chain dump operation.
-func (c *Core) DumpTokenChain(req *model.TCDumpRequest) *model.TCDumpReply {
-	return &model.TCDumpReply{}
 }
