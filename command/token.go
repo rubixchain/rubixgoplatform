@@ -120,20 +120,3 @@ func (cmd *Command) GenerateFaucetTestRBT() {
 	cmd.log.Info("Test RBT generated successfully")
 }
 
-func (cmd *Command) FaucetTokenCheck() {
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.token)
-
-	if len(cmd.token) != 46 || !strings.HasPrefix(cmd.token, "Qm") || !is_alphanumeric {
-		cmd.log.Error("Invalid token")
-		return
-	}
-
-	br, err := cmd.c.FaucetTokenCheck(cmd.token, cmd.did)
-	if err != nil {
-		cmd.log.Info("Cannot get token details")
-		return
-	}
-	fmt.Println(br.Message)
-
-	cmd.log.Info("Validated token details successfully")
-}

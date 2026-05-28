@@ -370,18 +370,6 @@ type FaucetRBTGenerateRequest struct {
 	DID        string `json:"did"`
 }
 
-type DIDAccessResponse struct {
-	BasicResponse
-	Token string `json:"token"`
-}
-
-type GetDIDAccess struct {
-	DID       string `json:"did"`
-	Password  string `json:"password"`
-	Token     string `json:"token"`
-	Signature []byte `json:"signature"`
-}
-
 type QuorumListResponse struct {
 	Status  bool     `json:"status"`
 	Message string   `json:"message"`

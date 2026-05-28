@@ -86,7 +86,6 @@ const (
 	UnpledgePOWPledgeTokens        string = "unpledge-pow-pledge-tokens"
 	PinTokenCmd                    string = "pinToken"
 	GenerateFaucetTestRBTCmd       string = "generatefaucetrbt"
-	FaucetTokenCheck               string = "faucettokencheck"
 	ValidateTokenchainCmd          string = "validatetokenchain"
 	FaucetTokenChainValidate       string = "faucettokenchainvalidate"
 	CreateFTCmd                    string = "createft"
@@ -95,7 +94,6 @@ const (
 	DumpNFTTokenChainCmd           string = "dump-nft-tokenchain"
 	SubscribeNFTCmd                string = "subscribe-nft"
 	FetchNftCmd                    string = "fetch-nft"
-	AddUserAPIKeyCmd               string = "adduserapikey"
 	AddPeerDetailsFromExplorer     string = "exppeerdetails"
 	GetFTTxnDetailsCmd             string = "get-ft-txn-details"
 	ArbitrarySignCmd               string = "sign"
@@ -167,7 +165,6 @@ var commands = []string{VersionCmd,
 	SubscribeNFTCmd,
 	FetchNftCmd,
 	GetNftsByDidCmd,
-	AddUserAPIKeyCmd,
 	AddPeerDetailsFromExplorer,
 	GetFTTxnDetailsCmd,
 	ArbitrarySignCmd,
@@ -333,7 +330,6 @@ type Command struct {
 	ftCount                      int
 	creatorDID                   string
 	defaultSetup                 bool
-	apiKey                       string
 	nftValue                     float64
 	ftNumStartIndex              int
 	message                      string
@@ -596,7 +592,6 @@ func Run(args []string) {
 	flag.IntVar(&cmd.ftCount, "ftCount", 0, "Number of FTs to be created")
 	flag.StringVar(&cmd.creatorDID, "creatorDID", "", "DID of creator of FT")
 	flag.BoolVar(&cmd.defaultSetup, "defaultSetup", false, "Add Faucet Quorums")
-	flag.StringVar(&cmd.apiKey, "apikey", "", "Give the API Key corresponding to the DID")
 	flag.Float64Var(&cmd.nftValue, "nftValue", 0.0, "Value of the NFT")
 	flag.IntVar(&cmd.ftNumStartIndex, "ftStartIndex", 0, "Start index of the FTs to be created")
 	flag.StringVar(&cmd.message, "message", "", "Value to be signed on")
@@ -737,8 +732,6 @@ func Run(args []string) {
 		cmd.AddPeerDetails()
 	case GenerateFaucetTestRBTCmd:
 		cmd.GenerateFaucetTestRBT()
-	case FaucetTokenCheck:
-		cmd.FaucetTokenCheck()
 	case CreateFTCmd:
 		cmd.createFT()
 	case GetFTBalanceCmd:
@@ -747,8 +740,6 @@ func Run(args []string) {
 		cmd.SubscribeNFT()
 	case FetchNftCmd:
 		cmd.fetchNFT()
-	case AddUserAPIKeyCmd:
-		cmd.addUserAPIKey()
 	case AddPeerDetailsFromExplorer:
 		cmd.addPeerDetailsFromExplorer()
 	case ArbitrarySignCmd:

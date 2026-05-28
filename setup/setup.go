@@ -19,8 +19,6 @@ const (
 	APIRemoveBootStrap            string = "/api/remove-bootstrap"
 	APIRemoveAllBootStrap         string = "/api/remove-all-bootstrap"
 	APIGetAllBootStrap            string = "/api/get-all-bootstrap"
-	APIGetDIDChallenge            string = "/api/getdidchallenge"
-	APIGetDIDAccess               string = "/api/logindid"
 	APIGetAllTokens               string = "/api/getalltokens"
 	APIAddQuorum                  string = "/api/addquorum"
 	APIGetAllQuorum               string = "/api/getallquorum"
@@ -35,8 +33,6 @@ const (
 	APICheckQuorumStatus          string = "/api/check-quorum-status"
 	APIAddPeerDetails             string = "/api/add-peer-details"
 	APIGenerateFaucetTestToken    string = "/api/generate-faucettest-token"
-	APIFaucetTokenCheck           string = "/api/faucet-token-check"
-	APIAddUserAPIKey              string = "/api/add-user-api-key"
 	APIAddPeerDetailsFromExplorer string = "/api/add-peer-details-from-explorer"
 
 	// signatures endpoints

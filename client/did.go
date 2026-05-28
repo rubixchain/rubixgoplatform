@@ -14,32 +14,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
-func (c *Client) GetDIDChallenge(did string) (string, error) {
-	q := make(map[string]string)
-	q["did"] = did
-	var resp model.DIDAccessResponse
-	err := c.sendJSONRequest("GET", setup.APIGetDIDChallenge, q, nil, &resp)
-	if err != nil {
-		return "", err
-	}
-	if !resp.Status {
-		return "", fmt.Errorf(resp.Message)
-	}
-	return resp.Token, nil
-}
-
-func (c *Client) GetDIDAccess(req *model.GetDIDAccess) (string, error) {
-	var resp model.DIDAccessResponse
-	err := c.sendJSONRequest("POST", setup.APIGetDIDAccess, nil, req, &resp)
-	if err != nil {
-		return "", err
-	}
-	if !resp.Status {
-		return "", fmt.Errorf(resp.Message)
-	}
-	return resp.Token, nil
-}
-
 func (c *Client) GetAllDIDs() (*model.BasicResponse, error) {
 	var ac model.BasicResponse
 	err := c.sendJSONRequest("GET", setup.APIGetAllDID, nil, nil, &ac)
