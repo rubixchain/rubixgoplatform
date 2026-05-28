@@ -37,74 +37,50 @@ var (
 )
 
 const (
-	VersionCmd                     string = "-v"
-	HelpCmd                        string = "-h"
-	RunCmd                         string = "run"
-	PingCmd                        string = "ping"
-	AddBootStrapCmd                string = "addbootstrap"
-	RemoveBootStrapCmd             string = "removebootstrap"
-	RemoveAllBootStrapCmd          string = "removeallbootstrap"
-	GetAllBootStrapCmd             string = "getallbootstrap"
-	CreateDIDCmd                   string = "createdid"
-	GetAllDIDCmd                   string = "getalldid"
-	AddQuorumCmd                   string = "addquorum"
-	GetAllQuorumCmd                string = "getallquorum"
-	RemoveAllQuorumCmd             string = "removeallquorum"
-	SetupQuorumCmd                 string = "setupquorum"
-	GenerateLocalRBTCmd            string = "generatelocalrbt"
-	GenerateMainnetRBTCmd          string = "generatemainnetrbt"
-	TransferRBTCmd                 string = "transferrbt"
-	DumpTokenChainCmd              string = "dumptokenchain"
-	DecodeTokenChainCmd            string = "decodetokenchain"
-	RegsiterDIDCmd                 string = "registerdid"
-	SetupDIDCmd                    string = "setupdid"
-	ShutDownCmd                    string = "shutdown"
-	MirgateNodeCmd                 string = "migratenode"
-	LockTokensCmd                  string = "locktokens"
-	SetupDBCmd                     string = "setupdb"
-	GetTxnDetailsCmd               string = "gettxndetails"
-	CreateNFTCmd                   string = "create-nft"
-	GetAllNFTCmd                   string = "getallnft"
-	GenerateSmartContractToken     string = "generatesct"
-	FetchSmartContract             string = "fetchsct"
-	SubscribeContractCmd           string = "subscribesct"
-	DumpSmartContractTokenChainCmd string = "dumpsmartcontracttokenchain"
-	GetTokenBlock                  string = "gettokenblock"
-	GetSmartContractData           string = "getsmartcontractdata"
-	GetPeerID                      string = "get-peer-id"
-	CheckQuorumStatusCmd           string = "checkQuorumStatus"
-	AddPeerDetailsCmd              string = "addpeerdetails"
-	SelfTransferRBT                string = "self-transfer-rbt"
-	RunUnpledge                    string = "run-unpledge"
-	UnpledgePOWPledgeTokens        string = "unpledge-pow-pledge-tokens"
-	PinTokenCmd                    string = "pinToken"
-	GenerateFaucetTestRBTCmd       string = "generatefaucetrbt"
-	ValidateTokenchainCmd          string = "validatetokenchain"
-	CreateFTCmd                    string = "createft"
-	TransferFTCmd                  string = "transfer-ft"
-	ValidateTokenCmd               string = "validatetoken"
-	DumpNFTTokenChainCmd           string = "dump-nft-tokenchain"
-	SubscribeNFTCmd                string = "subscribe-nft"
-	FetchNftCmd                    string = "fetch-nft"
-	AddPeerDetailsFromExplorer     string = "exppeerdetails"
-	GetFTTxnDetailsCmd             string = "get-ft-txn-details"
-	ArbitrarySignCmd               string = "sign"
-	VerifySignatureCmd             string = "verify-signature"
-	AsyncFTStatusCmd               string = "asyncftstatus"
-	SetAsyncFTStatusCmd            string = "setasyncftstatus"
-	FixFTCreatorCmd                string = "fix-ft-creator"
-	GetFTCreatorStatsCmd           string = "get-ft-creator-stats"
-	RemoveStaleDIDCmd              string = "removedid"
-	InitCmd                        string = "init"
+	VersionCmd                 string = "-v"
+	HelpCmd                    string = "-h"
+	RunCmd                     string = "run"
+	PingCmd                    string = "ping"
+	AddBootStrapCmd            string = "addbootstrap"
+	RemoveBootStrapCmd         string = "removebootstrap"
+	RemoveAllBootStrapCmd      string = "removeallbootstrap"
+	GetAllBootStrapCmd         string = "getallbootstrap"
+	CreateDIDCmd               string = "createdid"
+	GetAllDIDCmd               string = "getalldid"
+	AddQuorumCmd               string = "addquorum"
+	GetAllQuorumCmd            string = "getallquorum"
+	RemoveAllQuorumCmd         string = "removeallquorum"
+	SetupQuorumCmd             string = "setupquorum"
+	GenerateLocalRBTCmd        string = "generatelocalrbt"
+	GenerateMainnetRBTCmd      string = "generatemainnetrbt"
+	RegsiterDIDCmd             string = "registerdid"
+	SetupDIDCmd                string = "setupdid"
+	ShutDownCmd                string = "shutdown"
+	CreateNFTCmd               string = "create-nft"
+	GenerateSmartContractToken string = "generatesct"
+	FetchSmartContract         string = "fetchsct"
+	SubscribeContractCmd       string = "subscribesct"
+	GetPeerID                  string = "get-peer-id"
+	CheckQuorumStatusCmd       string = "checkQuorumStatus"
+	AddPeerDetailsCmd          string = "addpeerdetails"
+	GenerateFaucetTestRBTCmd   string = "generatefaucetrbt"
+	CreateFTCmd                string = "createft"
+	SubscribeNFTCmd            string = "subscribe-nft"
+	FetchNftCmd                string = "fetch-nft"
+	AddPeerDetailsFromExplorer string = "exppeerdetails"
+	ArbitrarySignCmd           string = "sign"
+	VerifySignatureCmd         string = "verify-signature"
+	RemoveStaleDIDCmd          string = "removedid"
+	InitCmd                    string = "init"
 
 	// balance commands
 	GetDIDBalanceCmd string = "getdidbalance"
-	GetNftsByDidCmd  string = "getnftbalance"
 	GetFTBalanceCmd  string = "getftbalance"
 	GetRBTBalanceCmd string = "getrbtbalance"
 )
 
-var commands = []string{VersionCmd,
+var commands = []string{
+	VersionCmd,
 	HelpCmd,
 	RunCmd,
 	PingCmd,
@@ -120,56 +96,32 @@ var commands = []string{VersionCmd,
 	SetupQuorumCmd,
 	GenerateLocalRBTCmd,
 	GenerateMainnetRBTCmd,
-	TransferRBTCmd,
 	GetRBTBalanceCmd,
-	DumpTokenChainCmd,
-	DecodeTokenChainCmd,
 	RegsiterDIDCmd,
-	SetupDBCmd,
+	SetupDIDCmd,
 	ShutDownCmd,
-	MirgateNodeCmd,
-	LockTokensCmd,
-	SetupDBCmd,
-	GetTxnDetailsCmd,
 	SubscribeContractCmd,
 	CreateNFTCmd,
-	GetAllNFTCmd,
-	ShutDownCmd,
 	GenerateSmartContractToken,
 	FetchSmartContract,
-	SubscribeContractCmd,
-	DumpSmartContractTokenChainCmd,
-	GetTokenBlock,
-	GetSmartContractData,
 	GetPeerID,
 	AddPeerDetailsCmd,
-	SelfTransferRBT,
-	RunUnpledge,
-	UnpledgePOWPledgeTokens,
-	PinTokenCmd,
 	CheckQuorumStatusCmd,
-	ValidateTokenchainCmd,
+	GenerateFaucetTestRBTCmd,
 	CreateFTCmd,
-	TransferFTCmd,
 	GetFTBalanceCmd,
-	ValidateTokenCmd,
-	DumpNFTTokenChainCmd,
 	SubscribeNFTCmd,
 	FetchNftCmd,
-	GetNftsByDidCmd,
 	AddPeerDetailsFromExplorer,
-	GetFTTxnDetailsCmd,
 	ArbitrarySignCmd,
 	VerifySignatureCmd,
-	AsyncFTStatusCmd,
-	SetAsyncFTStatusCmd,
-	FixFTCreatorCmd,
-	GetFTCreatorStatsCmd,
 	RemoveStaleDIDCmd,
 	GetDIDBalanceCmd,
+	InitCmd,
 }
 
-var commandsHelp = []string{"To get tool version",
+var commandsHelp = []string{
+	"To get tool version",
 	"To get help",
 	"To run the rubix core",
 	"This command will be used to ping the peer",
@@ -179,67 +131,34 @@ var commandsHelp = []string{"To get tool version",
 	"This command will get all bootstrap peers from the configuration",
 	"This command will create DID",
 	"This command will get all DID address",
-	"This command will add quorurm list to node",
-	"This command will get all quorurm list from node",
-	"This command will delete all quorurm list from node",
-	"This command will setup node as quorurm",
+	"This command will add quorum list to node",
+	"This command will get all quorum list from node",
+	"This command will delete all quorum list from node",
+	"This command will setup node as quorum",
 	"This command will generate test RBT token",
 	"This command will generate mainnet RBT tokens",
-	"This command will trasnfer RBT",
-	"This command will help to get account information",
-	"This command enable explorer service on the node",
-	"This command will dump the token chain into file",
-	"This command will decode the token chain into file",
+	"This command will give the RBT balance",
 	"This command will register DID peer map across the network",
 	"This command will setup the DID with peer",
 	"This command will shutdown the rubix node",
-	"This command will migrate node to newer node",
-	"This command will lock the tokens on the arbitary node",
-	"This command will setup the DB",
-	"This command will get transaction details",
-	"This command will publish a smart contract token",
 	"This command will subscribe to a smart contract token",
 	"This command will create NFT",
-	"This command will get all NFTs",
-	"This command will deploy the smart contract token",
-	"This command will execute the fetched smart contract",
-	"This command will shutdown the rubix node",
 	"This command will generate a smart contract token",
 	"This command will fetch a smart contract token",
-	"This command will publish a smart contract token",
-	"This command will subscribe to a smart contract token",
-	"This command will dump the smartcontract token chain",
-	"This command gets token block",
-	"This command gets the smartcontract data from latest block",
 	"This command will fetch the peer ID of the node",
 	"This command is to add the peer details manually",
-	"This command will initiate a self RBT transfer",
-	"This command will unpledge all the pledged tokens",
-	"This command will unpledge all PoW based pledge tokens and drop the unpledgequeue table",
-	"This command will pin the token",
-	"This command will recover the token",
 	"This command will check the quorum status",
-	"This command will validate the token chain",
+	"This command will generate a faucet RBT token",
 	"This command will create FT",
-	"This command will dump the token chain of FT",
-	"This command will transfer FT",
 	"This command will give the balance of FTs",
-	"This command will validate the token",
-	"This command will deploy NFT",
-	"This command will execute NFT",
 	"This command will subscribe NFT",
 	"This command will fetch NFT",
-	"This command will get all NFTs owned by the did",
-	"",
-	"",
-	"",
-	"This command will get FT transaction details by DID",
-	"This command will check the async FT response status",
-	"This command will set the async FT response status",
-	"This command will fix FT tokens that have peer ID as CreatorDID",
-	"This command will get statistics about FT token creators",
-	"",
-	"",
+	"This command will add peer details from the explorer",
+	"This command will sign an arbitrary message with the signer DID",
+	"This command will verify a signed message",
+	"This command will remove a stale DID",
+	"This command will give the DID balance",
+	"This command will initialise the node",
 }
 
 type Command struct {
