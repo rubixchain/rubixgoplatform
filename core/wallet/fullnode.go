@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -144,4 +145,74 @@ func (w *Wallet) GetLatestFullNodeTransactionAndRoleByTokenID(tokenID string) (*
 	}
 
 	return tx, tokenRoleInTx, nil
+}
+
+// syncChainRow is the raw join shape used by GetFullNodeSyncedChain.
+type syncChainRow struct {
+	TransactionID         string          `db:"transaction_id"`
+	Role                  int16           `db:"role"`
+	PreviousTransactionID *string         `db:"previous_transaction_id"`
+	Info                  json.RawMessage `db:"info"`
+}
+
+// GetFullNodeSyncedChain returns the per-token transaction chain in
+// chronological order for the sync-from-fullnode API. Each entry carries the
+// canonical transaction ID, the role this transaction plays for this token in
+// fullnode_tokenchain, and the previous_transaction_id stored there — none of
+// which are derivable from TransactionInfo alone (unpledge entries reuse some
+// other transaction's Info, so the unpledged token's previous-tx pointer lives
+// only in fullnode_tokenchain).
+func (w *Wallet) GetFullNodeSyncedChain(tokenID string) ([]types.SyncedTxn, error) {
+	var indices []int32
+	err := w.db.Pool().QueryRow(w.Ctx,
+		`SELECT index FROM fullnode_tokenchain_index WHERE token_id = $1`,
+		tokenID,
+	).Scan(&indices)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("GetFullNodeSyncedChain: no fullnode_tokenchain_index found for token_id %s", tokenID)
+		}
+		return nil, fmt.Errorf("GetFullNodeSyncedChain: failed to get indices: %w", err)
+	}
+
+	if len(indices) == 0 {
+		return []types.SyncedTxn{}, nil
+	}
+
+	rows, err := w.db.Pool().Query(w.Ctx, `
+		SELECT tc.transaction_id, tc.role, tc.previous_transaction_id, t.info
+		FROM unnest($1::int[]) WITH ORDINALITY AS idx(id, ord)
+		JOIN fullnode_tokenchain tc ON tc.id = idx.id
+		JOIN fullnode_transactions t ON t.id = tc.transaction_id
+		ORDER BY idx.ord
+	`, indices)
+	if err != nil {
+		return nil, fmt.Errorf("GetFullNodeSyncedChain: failed to query chain rows: %w", err)
+	}
+
+	chainRows, err := pgx.CollectRows(rows, pgx.RowToStructByName[syncChainRow])
+	if err != nil {
+		return nil, fmt.Errorf("GetFullNodeSyncedChain: failed to collect rows: %w", err)
+	}
+
+	result := make([]types.SyncedTxn, 0, len(chainRows))
+	for i := range chainRows {
+		row := &chainRows[i]
+		var info models.TransactionInfo
+		if err := json.Unmarshal(row.Info, &info); err != nil {
+			return nil, fmt.Errorf("GetFullNodeSyncedChain: failed to parse Info for txID %q (token %q): %w", row.TransactionID, tokenID, err)
+		}
+		var prev string
+		if row.PreviousTransactionID != nil {
+			prev = *row.PreviousTransactionID
+		}
+		result = append(result, types.SyncedTxn{
+			ID:                    row.TransactionID,
+			Role:                  row.Role,
+			PreviousTransactionID: prev,
+			Info:                  &info,
+		})
+	}
+
+	return result, nil
 }

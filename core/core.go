@@ -602,11 +602,11 @@ func (c *Core) SetupForienDIDQuorum(didStr string, selfDID string) (types.DIDCry
 
 func (c *Core) FetchDID(did string) error {
 	didDir := path.Join(c.didDir, did)
-	
+
 	pubKeyPath := path.Join(didDir, constants.PubKeyFileName)
 	_, dirErr := os.Stat(didDir)
 	_, pubKeyErr := os.Stat(pubKeyPath)
-	
+
 	if os.IsNotExist(dirErr) || os.IsNotExist(pubKeyErr) {
 		err := os.MkdirAll(didDir, os.ModeDir|os.ModePerm)
 		if err != nil {
@@ -736,21 +736,6 @@ func (c *Core) GetSyncTransactionChainData(tokenIDs []string, excludeTxIDs []str
 				}
 			}
 			txs = filtered
-		}
-		result[tokenID] = txs
-	}
-
-	return result, nil
-}
-
-// GetTransactionInfoFromFullnode returns transaction info from the fullnode tables for the given token IDs.
-func (c *Core) GetTransactionInfoFromFullnode(tokenIDs []string) (map[string][]models.Transactions, error) {
-	result := make(map[string][]models.Transactions)
-	for _, tokenID := range tokenIDs {
-		txs, err := c.w.GetFullNodeTransactionsByTokenID(tokenID)
-		if err != nil {
-			c.log.Warn("GetTransactionInfoFromFullnode: failed to fetch fullnode chain", "tokenID", tokenID, "err", err)
-			continue
 		}
 		result[tokenID] = txs
 	}

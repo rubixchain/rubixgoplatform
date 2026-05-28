@@ -322,3 +322,22 @@ func (c *Core) checkTokenStateHashPinned(tokenID string, previousTransactionID s
 
 	return nil
 }
+
+// GetTransactionInfoFromFullnode returns per-token transaction chains for the
+// sync-from-fullnode API. Each entry carries the canonical transaction ID,
+// the role this transaction plays for the token, and previous_transaction_id —
+// fields the explorer needs to validate chain contiguity (especially for
+// unpledge entries, whose previous-tx pointer is not in TransactionInfo).
+func (c *Core) GetTransactionInfoFromFullnode(tokenIDs []string) (map[string][]types.SyncedTxn, error) {
+	result := make(map[string][]types.SyncedTxn)
+	for _, tokenID := range tokenIDs {
+		chain, err := c.w.GetFullNodeSyncedChain(tokenID)
+		if err != nil {
+			c.log.Warn("GetTransactionInfoFromFullnode: failed to fetch fullnode chain", "tokenID", tokenID, "err", err)
+			continue
+		}
+		result[tokenID] = chain
+	}
+
+	return result, nil
+}
