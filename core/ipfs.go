@@ -25,18 +25,6 @@ const (
 	LocalnetSwarmKeyFilename string = "localnetswarm.key"
 )
 
-type DHTAddr struct {
-	Addrs []string `json:"Addrs"`
-	ID    string   `json:"ID"`
-}
-
-type DHTResponse struct {
-	Extra     string    `json:"Extra"`
-	ID        string    `json:"ID"`
-	Responses []DHTAddr `json:"Responses"`
-	Type      int       `json:"Type"`
-}
-
 // initIPFS wiill initialize IPFS configuration
 func (c *Core) initIPFS(ipfsdir string) error {
 	c.ipfsApp = "./ipfs"
@@ -512,37 +500,3 @@ func (c *Core) GetAllBootStrap() []string {
 	return c.cfg.MainnetBootstrap
 }
 
-func (c *Core) GetDHTddrs(cid string) ([]string, error) {
-	cmd := exec.Command(c.ipfsApp, "dht", "findprovs", cid)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		c.log.Error("failed to open command stdout", "err", err)
-		return nil, err
-	}
-	err = cmd.Start()
-	if err != nil {
-		c.log.Error("failed to start command", "err", err)
-		return nil, err
-	}
-	ids := make([]string, 0)
-	scanner := bufio.NewScanner(stdout)
-	for scanner.Scan() {
-		m := scanner.Text()
-		if strings.Contains(m, "Error") {
-			return nil, fmt.Errorf(m)
-		}
-		if !strings.HasPrefix(m, "Qm") {
-			ids = append(ids, m)
-		}
-	}
-	return ids, nil
-}
-
-func (c *Core) ipfsRepoGc() {
-	cmd := exec.Command(c.ipfsApp, "ipfs", "repo", "gc")
-	err := cmd.Start()
-	if err != nil {
-		c.log.Error("failed to start command", "err", err)
-		//return nil, err
-	}
-}

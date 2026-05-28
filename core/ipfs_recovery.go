@@ -366,37 +366,6 @@ func (rm *IPFSRecoveryManager) restoreBootstrapPeers() error {
 	return nil
 }
 
-// GetRecoveryStats returns recovery statistics
-func (rm *IPFSRecoveryManager) GetRecoveryStats() map[string]interface{} {
-	rm.mu.RLock()
-	defer rm.mu.RUnlock()
-
-	return map[string]interface{}{
-		"is_recovering":   rm.isRecovering,
-		"recovery_count":  rm.recoveryCount,
-		"max_recoveries":  rm.maxRecoveries,
-		"last_crash_time": rm.lastCrashTime,
-		"restart_delay":   rm.restartDelay,
-		"health_timeout":  rm.healthTimeout,
-	}
-}
-
-// SetMaxRecoveries sets the maximum number of recovery attempts
-func (rm *IPFSRecoveryManager) SetMaxRecoveries(max int) {
-	rm.mu.Lock()
-	defer rm.mu.Unlock()
-	rm.maxRecoveries = max
-	rm.log.Info("Updated max recovery attempts", "max", max)
-}
-
-// SetRestartDelay sets the delay between restart attempts
-func (rm *IPFSRecoveryManager) SetRestartDelay(delay time.Duration) {
-	rm.mu.Lock()
-	defer rm.mu.Unlock()
-	rm.restartDelay = delay
-	rm.log.Info("Updated restart delay", "delay", delay)
-}
-
 // Stop stops the recovery manager
 func (rm *IPFSRecoveryManager) Stop() {
 	rm.recoveryCancel()

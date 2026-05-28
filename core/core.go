@@ -352,30 +352,6 @@ func (c *Core) Start() (bool, string) {
 	return true, "Setup Complete"
 }
 
-// IPFSOperations returns the IPFS operations wrapper
-func (c *Core) IPFSOperations() *IPFSOperations {
-	return c.ipfsOps
-}
-
-// GetIPFSStats returns IPFS health and scalability statistics
-func (c *Core) GetIPFSStats() map[string]interface{} {
-	stats := make(map[string]interface{})
-
-	if c.ipfsHealth != nil {
-		stats["health"] = c.ipfsHealth.GetStats()
-	}
-
-	if c.ipfsScalability != nil {
-		stats["scalability"] = c.ipfsScalability.GetScalabilityStats()
-	}
-
-	if c.ipfsRecovery != nil {
-		stats["recovery"] = c.ipfsRecovery.GetRecoveryStats()
-	}
-
-	return stats
-}
-
 func (c *Core) StopCore() {
 	// Initialize shutdown manager if not already done
 	if c.shutdownMgr == nil {

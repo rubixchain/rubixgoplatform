@@ -174,42 +174,6 @@ func (sm *IPFSScalabilityManager) UpdateMetrics(responseTime time.Duration, succ
 	}
 }
 
-// GetScalabilityStats returns scalability statistics
-func (sm *IPFSScalabilityManager) GetScalabilityStats() map[string]interface{} {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-
-	healthStats := sm.core.ipfsHealth.GetStats()
-
-	return map[string]interface{}{
-		"current_load":         healthStats["current_load"],
-		"max_concurrent":       healthStats["max_concurrent"],
-		"available_slots":      healthStats["available_slots"],
-		"avg_response_time":    sm.avgResponseTime,
-		"success_rate":         sm.successRate,
-		"error_rate":           sm.errorRate,
-		"scale_up_threshold":   sm.scaleUpThreshold,
-		"scale_down_threshold": sm.scaleDownThreshold,
-		"last_adjustment":      sm.lastAdjustment,
-	}
-}
-
-// SetScaleUpThreshold sets the threshold for scaling up
-func (sm *IPFSScalabilityManager) SetScaleUpThreshold(threshold int) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	sm.scaleUpThreshold = threshold
-	sm.log.Info("Updated scale up threshold", "threshold", threshold)
-}
-
-// SetScaleDownThreshold sets the threshold for scaling down
-func (sm *IPFSScalabilityManager) SetScaleDownThreshold(threshold int) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	sm.scaleDownThreshold = threshold
-	sm.log.Info("Updated scale down threshold", "threshold", threshold)
-}
-
 // Stop stops the scalability manager
 func (sm *IPFSScalabilityManager) Stop() {
 	sm.scalingCancel()
