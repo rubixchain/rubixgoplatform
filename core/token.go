@@ -201,8 +201,8 @@ func (c *Core) GenerateMainnetRBT(reqID string, num int, did string, startIndex 
 }
 
 func (c *Core) generateMainnetRBT(reqID string, num int, did string, startIndex int) error {
-	if !c.mainnet {
-		return fmt.Errorf("generateMainnetRBT is only available in 'mainnet' mode")
+	if !c.testnet {
+		return fmt.Errorf("generateMainnetRBT is only available in 'testnet' mode")
 	}
 
 	dc, err := c.SetupDID(reqID, did)
@@ -224,6 +224,7 @@ func (c *Core) generateMainnetRBT(reqID string, num int, did string, startIndex 
 		if err != nil {
 			return fmt.Errorf("PersistGenesisTokenRecord: GetMainnetTokenLevelAndNumber(%d): %w", globalIndex, err)
 		}
+		mapLevel += constants.TestnetRBT_Level_Offset
 		tokenID := fmt.Sprintf("%d_%d", mapLevel, numInLevel)
 
 		if _, err = c.w.PersistGenesisTokenRecord(tx, dc, c.ps, tokenID, did, constants.NetworkMode_Mainnet, currentTime); err != nil {
