@@ -331,11 +331,6 @@ func (c *Core) ListFTs() ([]*models.FT, error) {
 	return c.w.ListFTs()
 }
 
-// IsAsyncFTResponse returns whether FT responses are async.
-func (c *Core) IsAsyncFTResponse() bool {
-	return c.cfg.AsyncFTResponse
-}
-
 // GetPreciseFractionalValue computes the fractional value of an FT.
 func (c *Core) GetPreciseFractionalValue(a, b int) (float64, error) {
 	if b == 0 || a == 0 {
