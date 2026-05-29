@@ -227,7 +227,7 @@ func (c *Core) generateMainnetRBT(reqID string, num int, did string, startIndex 
 		mapLevel += constants.TestnetRBT_Level_Offset
 		tokenID := fmt.Sprintf("%d_%d", mapLevel, numInLevel)
 
-		if _, err = c.w.PersistGenesisTokenRecord(tx, dc, c.ps, tokenID, did, constants.NetworkMode_Mainnet, currentTime); err != nil {
+		if _, err = c.w.PersistGenesisTokenRecord(tx, dc, c.ps, tokenID, did, constants.NetworkMode_Testnet, currentTime); err != nil {
 			if strings.Contains(err.Error(), "already exists") {
 				c.log.Warn("Mainnet token already exists, skipping", "tokenID", tokenID)
 				tx.Rollback(c.w.Ctx) //nolint:errcheck
