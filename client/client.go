@@ -36,11 +36,6 @@ func NewClient(cfg *srvcfg.Config, log logger.Logger, timeout ...time.Duration) 
 	return c, nil
 }
 
-func (c *Client) SetAuthToken(token string) {
-	c.authToken = token
-	c.setAuth = true
-}
-
 func (c *Client) basicRequest(method string, path string, model interface{}) (*http.Request, error) {
 	r, err := c.JSONRequest(method, path, model)
 	if err != nil {

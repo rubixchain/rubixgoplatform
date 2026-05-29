@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -22,7 +21,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/server"
 	"github.com/rubixchain/rubixgoplatform/types"
 	srvcfg "github.com/rubixchain/rubixgoplatform/wrapper/config"
-	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 	"golang.org/x/term"
 )
@@ -170,7 +168,6 @@ type Command struct {
 	nodeConfigPath               string
 	logFile                      string
 	logLevel                     string
-	cfgFile                      string
 	testnet                      bool
 	mainnet                      bool
 	localnet                     bool
@@ -212,10 +209,6 @@ type Command struct {
 	timeout                      time.Duration
 	txnID                        string
 	role                         string
-	date                         time.Time
-	grpcAddr                     string
-	grpcPort                     int
-	grpcSecure                   bool
 	deployerAddr                 string
 	binaryCodePath               string
 	rawCodePath                  string
@@ -276,24 +269,6 @@ func showHelp() {
 	for i := range commands {
 		fmt.Printf("     %20s : %s\n\n", commands[i], commandsHelp[i])
 	}
-}
-
-// copyFile is a helper function to copy a file
-func (cmd *Command) copyFile(src, dst string) error {
-	sourceFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer sourceFile.Close()
-
-	destFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer destFile.Close()
-
-	_, err = io.Copy(destFile, sourceFile)
-	return err
 }
 
 // Get preferred outbound ip of this machine
@@ -667,38 +642,6 @@ func Run(args []string) {
 	default:
 		cmd.log.Error("Invalid command")
 	}
-}
-
-func (cmd *Command) basicClient(method string, path string, model interface{}) (ensweb.Client, *http.Request, error) {
-	cfg := srvcfg.Config{
-		ServerAddress: cmd.addr,
-		ServerPort:    cmd.port,
-	}
-	c, err := ensweb.NewClient(&cfg, cmd.log)
-	if err != nil {
-		return c, nil, fmt.Errorf("failed to get new client, " + err.Error())
-	}
-	r, err := c.JSONRequest(method, path, model)
-	if err != nil {
-		return c, nil, fmt.Errorf("failed to create http request, " + err.Error())
-	}
-	return c, r, nil
-}
-
-func (cmd *Command) multiformClient(method string, path string, field map[string]string, files map[string]string) (ensweb.Client, *http.Request, error) {
-	cfg := srvcfg.Config{
-		ServerAddress: cmd.addr,
-		ServerPort:    cmd.port,
-	}
-	c, err := ensweb.NewClient(&cfg, cmd.log)
-	if err != nil {
-		return c, nil, fmt.Errorf("failed to get new client, " + err.Error())
-	}
-	r, err := c.MultiFormRequest(method, path, field, files)
-	if err != nil {
-		return c, nil, fmt.Errorf("failed to create http request, " + err.Error())
-	}
-	return c, r, nil
 }
 
 func getpassword(msg string) (string, error) {

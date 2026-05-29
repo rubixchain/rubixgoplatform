@@ -27,7 +27,6 @@ const (
 	APIGenerateLocalRBT           string = "/api/generate-local-rbt"
 	APIGenerateMainnetRBT         string = "/api/generate-mainnet-rbt"
 	APISetupDID                   string = "/api/setup-did"
-	APIAddNFTSale                 string = "/api/addnftsale"
 	APIFetchSmartContract         string = "/api/fetch-smart-contract"
 	APIPeerID                     string = "/api/get-peer-id"
 	APICheckQuorumStatus          string = "/api/check-quorum-status"

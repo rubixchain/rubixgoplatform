@@ -77,15 +77,12 @@ const (
 	MaxDecimalPlaces         int    = 3
 )
 
-var dbWriteSem = make(chan struct{}, 1)
-
 type Core struct {
 	cfg                  *types.RubixConfig
 	log                  logger.Logger
 	peerID               string
 	lock                 sync.RWMutex
 	ipfsLock             sync.RWMutex
-	qlock                sync.RWMutex
 	rlock                sync.Mutex
 	ipfs                 *ipfsnode.Shell
 	ipfsState            bool
@@ -116,8 +113,6 @@ type Core struct {
 	qc                   map[string]types.DIDCrypto
 	pqc                  map[string]types.DIDCrypto
 	secret               []byte
-	quorumCount          int
-	noBalanceQuorumCount int
 	ipfsProviderStore    *IPFSProviderStore
 	perfTracker          *PerformanceTracker
 	fullNode             bool
@@ -321,34 +316,6 @@ func (c *Core) Start() (bool, string) {
 		c.log.Error("failed to start ping port", "err", err)
 		return false, "Failed to start ping port"
 	}
-	//c.w.ReleaseAllLockedTokens()
-	// exp := model.ExploreModel{
-	// 	Cmd:    ExpPeerStatusCmd,
-	// 	PeerID: c.peerID,
-	// 	Status: "On",
-	// }
-	// err = c.PublishExplorer(&exp)
-	// if err != nil {
-	// 	c.log.Error("Failed to publish message to explorer", "err", err)
-	// 	return false, "Failed to publish message to explorer"
-	// }
-	// dt, err := c.w.GetAllDIDs()
-	// if err == nil && len(dt) > 0 {
-	// 	list := make([]string, 0)
-	// 	for _, d := range dt {
-	// 		list = append(list, d.DID)
-	// 	}
-	// 	// exp = model.ExploreModel{
-	// 	// 	Cmd:     ExpDIDPeerMapCmd,
-	// 	// 	PeerID:  c.peerID,
-	// 	// 	DIDList: list,
-	// 	// }
-	// 	// err = c.PublishExplorer(&exp)
-	// 	// if err != nil {
-	// 	// 	c.log.Error("Failed to publish message to explorer", "err", err)
-	// 	// 	return false, "Failed to publish message to explorer"
-	// 	// }
-	// }
 	return true, "Setup Complete"
 }
 

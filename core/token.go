@@ -13,18 +13,12 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
+	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/token"
 	tokenmap "github.com/rubixchain/rubixgoplatform/token"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
-
-const defaultBatchSize = 500                             // Tweak according to RAM/network
-const delayInPublshingTxnHistory = 30 * time.Millisecond // Throttle interval, tune further
-const delayInPublishingTCDetails = 2 * time.Second
-
-const subscriberBufferSize = 1000 // process up to this many idle batches
-const workerCount = 8             // Tune according to hardware/network
 
 type TokenPublish struct {
 	Token string `json:"token"`
@@ -106,13 +100,13 @@ func (c *Core) GetRbtByDid(did string) (types.RBTBalance, error) {
 		switch t.TokenStatus {
 		case constants.TokenStatus_Free:
 			info.RBTBalance = info.RBTBalance + t.TokenValue
-			info.RBTBalance = floatPrecision(info.RBTBalance, MaxDecimalPlaces)
+			info.RBTBalance = rubixmath.FloatPrecision(info.RBTBalance)
 		case constants.TokenStatus_Locked:
 			info.LockedRBT = info.LockedRBT + t.TokenValue
-			info.LockedRBT = floatPrecision(info.LockedRBT, MaxDecimalPlaces)
+			info.LockedRBT = rubixmath.FloatPrecision(info.LockedRBT)
 		case constants.TokenStatus_Pledged:
 			info.PledgedRBT = info.PledgedRBT + t.TokenValue
-			info.PledgedRBT = floatPrecision(info.PledgedRBT, MaxDecimalPlaces)
+			info.PledgedRBT = rubixmath.FloatPrecision(info.PledgedRBT)
 		}
 	}
 	return info, nil
