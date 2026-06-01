@@ -147,7 +147,7 @@ func (w *Wallet) GetLatestFullNodeTransactionAndRoleByTokenID(tokenID string) (*
 	return tx, tokenRoleInTx, nil
 }
 
-// syncChainRow is the raw join shape used by GetFullNodeSyncedChain.
+// syncChainRow is the row shape used by GetFullNodeSyncedChain.
 type syncChainRow struct {
 	TransactionID         string          `db:"transaction_id"`
 	Role                  int16           `db:"role"`
@@ -155,13 +155,9 @@ type syncChainRow struct {
 	Info                  json.RawMessage `db:"info"`
 }
 
-// GetFullNodeSyncedChain returns the per-token transaction chain in
-// chronological order for the sync-from-fullnode API. Each entry carries the
-// canonical transaction ID, the role this transaction plays for this token in
-// fullnode_tokenchain, and the previous_transaction_id stored there — none of
-// which are derivable from TransactionInfo alone (unpledge entries reuse some
-// other transaction's Info, so the unpledged token's previous-tx pointer lives
-// only in fullnode_tokenchain).
+// GetFullNodeSyncedChain returns the transaction chain for a token in
+// chronological order, with role and previous_transaction_id from
+// fullnode_tokenchain.
 func (w *Wallet) GetFullNodeSyncedChain(tokenID string) ([]types.SyncedTxn, error) {
 	var indices []int32
 	err := w.db.Pool().QueryRow(w.Ctx,

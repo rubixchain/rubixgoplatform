@@ -25,10 +25,7 @@ func (c *Core) SubscribeTxnSetup() {
 		c.initDynamicTxnProcessor()
 	}
 
-	// Public sync-token-chain API served over libp2p (same listener Rubix
-	// nodes use to sync token chains among themselves). Fullnode-only because
-	// the underlying tables (fullnode_tokenchain, fullnode_transactions) only
-	// exist on fullnodes. Handler below in this file.
+	// Register the sync-token-chain route on the libp2p listener.
 	c.l.AddRoute(setup.APISyncTransactionInfoFromFullnode, "POST", c.syncTransactionInfoFromFullnodeOverLibp2p)
 
 	topic := constants.Event_RubixTxns
@@ -332,11 +329,8 @@ func (c *Core) checkTokenStateHashPinned(tokenID string, previousTransactionID s
 	return nil
 }
 
-// GetTransactionInfoFromFullnode returns per-token transaction chains for the
-// sync-from-fullnode API. Each entry carries the canonical transaction ID,
-// the role this transaction plays for the token, and previous_transaction_id —
-// fields the explorer needs to validate chain contiguity (especially for
-// unpledge entries, whose previous-tx pointer is not in TransactionInfo).
+// GetTransactionInfoFromFullnode returns the transaction chain for each
+// requested token ID. Tokens that fail to load are logged and skipped.
 func (c *Core) GetTransactionInfoFromFullnode(tokenIDs []string) (map[string][]types.SyncedTxn, error) {
 	result := make(map[string][]types.SyncedTxn)
 	for _, tokenID := range tokenIDs {
@@ -351,11 +345,8 @@ func (c *Core) GetTransactionInfoFromFullnode(tokenIDs []string) (map[string][]t
 	return result, nil
 }
 
-// syncTransactionInfoFromFullnodeOverLibp2p mirrors the HTTP handler in
-// server/fullnode.go but runs on the libp2p-fronted listener c.l. Same wire
-// shape, same validation, same response envelope. Authorisation here is the
-// libp2p layer itself (peer must be on the same swarm + must speak the
-// protocol). API-key / HTTP auth has no role on this path.
+// syncTransactionInfoFromFullnodeOverLibp2p handles the sync-token-chain
+// request received over the libp2p listener.
 func (c *Core) syncTransactionInfoFromFullnodeOverLibp2p(req *ensweb.Request) *ensweb.Result {
 	var syncReq types.SyncTransactionInfoFromFullnodeRequest
 	if err := c.l.ParseJSON(req, &syncReq); err != nil {
