@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -11,8 +12,10 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/consensus"
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
+	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 // Enhanced subscription setup with error handling
@@ -21,6 +24,12 @@ func (c *Core) SubscribeTxnSetup() {
 	if c.fullNode {
 		c.initDynamicTxnProcessor()
 	}
+
+	// Public sync-token-chain API served over libp2p (same listener Rubix
+	// nodes use to sync token chains among themselves). Fullnode-only because
+	// the underlying tables (fullnode_tokenchain, fullnode_transactions) only
+	// exist on fullnodes. Handler below in this file.
+	c.l.AddRoute(setup.APISyncTransactionInfoFromFullnode, "POST", c.syncTransactionInfoFromFullnodeOverLibp2p)
 
 	topic := constants.Event_RubixTxns
 	err := c.ps.SubscribeTopic(topic, c.TxnCallBack)
@@ -340,4 +349,27 @@ func (c *Core) GetTransactionInfoFromFullnode(tokenIDs []string) (map[string][]t
 	}
 
 	return result, nil
+}
+
+// syncTransactionInfoFromFullnodeOverLibp2p mirrors the HTTP handler in
+// server/fullnode.go but runs on the libp2p-fronted listener c.l. Same wire
+// shape, same validation, same response envelope. Authorisation here is the
+// libp2p layer itself (peer must be on the same swarm + must speak the
+// protocol). API-key / HTTP auth has no role on this path.
+func (c *Core) syncTransactionInfoFromFullnodeOverLibp2p(req *ensweb.Request) *ensweb.Result {
+	var syncReq types.SyncTransactionInfoFromFullnodeRequest
+	if err := c.l.ParseJSON(req, &syncReq); err != nil {
+		return c.l.RenderJSON(req, &model.BasicResponse{Status: false, Message: "Invalid input"}, http.StatusOK)
+	}
+	if len(syncReq.TokenIDs) == 0 {
+		return c.l.RenderJSON(req, &model.BasicResponse{Status: true, Message: "no token_ids provided"}, http.StatusOK)
+	}
+	if len(syncReq.TokenIDs) > 50 {
+		return c.l.RenderJSON(req, &model.BasicResponse{Status: false, Message: "max 50 token IDs per request"}, http.StatusOK)
+	}
+	data, err := c.GetTransactionInfoFromFullnode(syncReq.TokenIDs)
+	if err != nil {
+		return c.l.RenderJSON(req, &model.BasicResponse{Status: false, Message: err.Error()}, http.StatusOK)
+	}
+	return c.l.RenderJSON(req, &model.BasicResponse{Status: true, Message: "ok", Result: data}, http.StatusOK)
 }

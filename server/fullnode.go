@@ -1,12 +1,9 @@
 package server
 
 import (
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
-
-type syncTransactionInfoFromFullnodeRequest struct {
-	TokenIDs []string `json:"token_ids"`
-}
 
 // APISyncTransactionInfoFromFullnode godoc
 // @Summary      Sync transaction info for tokens from fullnode tables
@@ -15,11 +12,11 @@ type syncTransactionInfoFromFullnodeRequest struct {
 // @ID           syncTransactionInfoFromFullnode
 // @Accept       json
 // @Produce      json
-// @Param        input body syncTransactionInfoFromFullnodeRequest true "sync request"
+// @Param        input body types.SyncTransactionInfoFromFullnodeRequest true "sync request"
 // @Success      200  {object}  model.BasicResponse
 // @Router       /rubix/v1/fullnode/sync-token-chain [post]
 func (s *Server) APISyncTransactionInfoFromFullnode(req *ensweb.Request) *ensweb.Result {
-	var syncReq syncTransactionInfoFromFullnodeRequest
+	var syncReq types.SyncTransactionInfoFromFullnodeRequest
 	err := s.ParseJSON(req, &syncReq)
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)
