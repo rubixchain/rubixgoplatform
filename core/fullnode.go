@@ -25,8 +25,8 @@ func (c *Core) SubscribeTxnSetup() {
 		c.initDynamicTxnProcessor()
 	}
 
-	// Register the sync-token-chain route on the libp2p listener.
-	c.l.AddRoute(setup.APISyncTransactionInfoFromFullnode, "POST", c.syncTransactionInfoFromFullnodeOverLibp2p)
+	// Register the sync-txn-info-chain route on the libp2p listener.
+	c.l.AddRoute(setup.APISyncTransactionInfoFromFullnode, "POST", c.syncTransactionInfoFromFullnode)
 
 	topic := constants.Event_RubixTxns
 	err := c.ps.SubscribeTopic(topic, c.TxnCallBack)
@@ -345,9 +345,9 @@ func (c *Core) GetTransactionInfoFromFullnode(tokenIDs []string) (map[string][]t
 	return result, nil
 }
 
-// syncTransactionInfoFromFullnodeOverLibp2p handles the sync-token-chain
+// syncTransactionInfoFromFullnode handles the sync-txn-info-chain
 // request received over the libp2p listener.
-func (c *Core) syncTransactionInfoFromFullnodeOverLibp2p(req *ensweb.Request) *ensweb.Result {
+func (c *Core) syncTransactionInfoFromFullnode(req *ensweb.Request) *ensweb.Result {
 	var syncReq types.SyncTransactionInfoFromFullnodeRequest
 	if err := c.l.ParseJSON(req, &syncReq); err != nil {
 		return c.l.RenderJSON(req, &model.BasicResponse{Status: false, Message: "Invalid input"}, http.StatusOK)

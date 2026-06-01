@@ -132,7 +132,7 @@ const (
 	APICreateFT string = "/rubix/v1/fts/mint"
 
 	// Fullnode endpoints
-	APISyncTransactionInfoFromFullnode string = "/rubix/v1/fullnode/sync-token-chain"
+	APISyncTransactionInfoFromFullnode string = "/rubix/v1/fullnode/sync-txn-info-chain"
 )
 
 // jwt.RegisteredClaims

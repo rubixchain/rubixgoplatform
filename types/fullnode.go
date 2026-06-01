@@ -3,7 +3,7 @@ package types
 import "github.com/rubixchain/rubixgoplatform/types/models"
 
 // SyncTransactionInfoFromFullnodeRequest is the request body for the
-// sync-token-chain endpoint.
+// sync-txn-info-chain endpoint.
 type SyncTransactionInfoFromFullnodeRequest struct {
 	TokenIDs []string `json:"token_ids"`
 }
