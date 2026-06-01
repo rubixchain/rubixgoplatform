@@ -510,27 +510,13 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		// Receiver sync needed — but skip network round-trip if receiver is on this node.
 		// In that case, the initiator persistence (with isLocalTransfer=true) has already
 		// recorded receiver-side token state via BuildPersistencePayload.
-		var isOwnerDIDLocal bool
-		isOwnerDIDLocal, err = c.w.IsLocalDID(nextOwnerDID)
-		if err != nil {
-			c.log.Error("InitiateTransaction: Failed to check if owner DID is local", "ownerDID", nextOwnerDID, "err", err)
-			resp.Message = "InitiateTransaction: Failed to check if owner DID is local: " + err.Error()
-			return resp
-		}
+		// Unknown owner DID returns ErrNoRows; treat as not-local and proceed to async sync.
+		isOwnerDIDLocal, _ := c.w.IsLocalDID(nextOwnerDID)
 
 		if !isOwnerDIDLocal {
-			c.log.Info("InitiateTransaction: Sending tokens to receiver (synchronous)", "receiver", nextOwnerDID, "transactionID", transactionId)
-			asyncMode := false
-			if asyncMode {
-				go c.sendTokensToReceiver(nextOwnerDID, transactionId, transactionInfo, signatureTobePublished, request)
-			} else {
-				if err := c.sendTokensToReceiverSync(nextOwnerDID, transactionId, transactionInfo, signatureTobePublished, request); err != nil {
-					c.log.Error("InitiateTransaction: receiver sync failed", "err", err)
-					resp.Status = false
-					resp.Message = "Transaction failed: receiver sync failed: " + err.Error()
-					return resp
-				}
-			}
+			// Best-effort push to the receiver. Failure does not fail the transaction.
+			c.log.Info("InitiateTransaction: Notifying receiver asynchronously", "receiver", nextOwnerDID, "transactionID", transactionId)
+			go c.sendTokensToReceiver(nextOwnerDID, transactionId, transactionInfo, signatureTobePublished, request)
 		} else {
 			c.log.Info("InitiateTransaction: Owner DID is local — receiver state handled by initiator persistence", "receiver", nextOwnerDID, "transactionID", transactionId)
 		}
@@ -649,103 +635,23 @@ func (c *Core) sendTokensToReceiver(
 	)
 
 	if err != nil {
-		c.log.Warn("sendTokensToReceiver: Failed to sync tokens to receiver (will retry later)",
+		c.log.Warn("sendTokensToReceiver: Failed to sync tokens with the receiver",
 			"receiver", receiverDID,
 			"transactionID", transactionID,
 			"err", err)
+		return
+	}
+	if !sendTokensResponse.Status {
+		c.log.Warn("sendTokensToReceiver: Receiver rejected the tokens",
+			"receiver", receiverDID,
+			"transactionID", transactionID,
+			"message", sendTokensResponse.Message)
 		return
 	}
 
 	c.log.Info("sendTokensToReceiver: Receiver sync completed successfully",
 		"receiver", receiverDID,
 		"transactionID", transactionID)
-}
-
-// sendTokensToReceiver sends transaction tokens to the receiver synchronously.
-// This function is designed avoid running as a goroutine and handles all errors externally.
-// It will block or fail the main transaction flow.
-func (c *Core) sendTokensToReceiverSync(
-	receiverDID string,
-	transactionID string,
-	txInfo *models.TransactionInfo,
-	signature *models.Signature,
-	request *models.TransactionRequest,
-) error {
-	c.log.Debug("sendTokensToReceiver: Starting async receiver sync",
-		"receiver", receiverDID,
-		"transactionID", transactionID)
-
-	// Get receiver peer connection
-	receiverPeer, err := c.getPeer(receiverDID)
-	if err != nil {
-		c.log.Warn("sendTokensToReceiver: Receiver offline, will sync later",
-			"receiver", receiverDID,
-			"transactionID", transactionID,
-			"err", err)
-		return fmt.Errorf("sendTokensToReceiver: Receiver offline, will sync later ",
-			" receiver: ", receiverDID,
-			" transactionID: ", transactionID,
-			" err: ", err)
-	}
-	defer receiverPeer.Close()
-
-	// Prepare sync request
-	// For smartcontracts we need not send the token information to the receiver, we just need to publish it.
-	// For NFTs we need to check the particular boolean in the request for sending.
-	// For RBTs we need to send the entire token information.
-	var sendTokensRequest models.SendTokensRequest
-	var sendTokensResponse model.BasicResponse
-	sendTokensRequest.Tokens = txInfo.Tokens
-	sendTokensRequest.TransactionInfo = txInfo
-	sendTokensRequest.Signature = signature
-	if request.HasNFT() {
-		sendTokensRequest.NFTOwnershipTransfer = request.Tokens.TransferNFTOwnership
-	}
-
-	// prepare did info to share with receiver
-	algoID, err := c.w.GetDidAlgoIDByName(constants.DidAlgo_SECP256K1)
-	if err != nil {
-		errMsg := fmt.Sprintf("sendTokensToReceiver: failed to get algo ID of Initiator, will sync later; receiver: %s, transactionID: %s, err: %s", receiverDID, transactionID, err)
-		c.log.Warn(errMsg)
-		return fmt.Errorf(errMsg)
-	}
-	sendTokensRequest.InitiatorPeerInfo = &models.DID{
-		DID:    txInfo.Initiator,
-		PeerID: c.peerID,
-		AlgoID: algoID,
-	}
-
-	// Send tokens to receiver with 2-minute timeout
-	// SendJSONRequest has built-in retry logic (3 attempts with exponential backoff)
-	err = receiverPeer.SendJSONRequest(
-		"POST",
-		APISendTokens,
-		nil,
-		&sendTokensRequest,
-		&sendTokensResponse,
-		true,
-		2*time.Minute, // Timeout for the entire operation
-	)
-
-	if err != nil {
-		c.log.Warn("sendTokensToReceiver: Failed to sync tokens to receiver (will retry later)",
-			"receiver", receiverDID,
-			"transactionID", transactionID,
-			"err", err)
-		return fmt.Errorf("sendTokensToReceiver: Failed to sync tokens to receiver (will retry later)",
-			" receiver: ", receiverDID,
-			" transactionID: ", transactionID,
-			" err: ", err)
-	}
-	if !sendTokensResponse.Status {
-		return fmt.Errorf("receiver rejected: %s", sendTokensResponse.Message)
-	}
-
-	c.log.Info("sendTokensToReceiver: Receiver sync completed successfully",
-		"receiver", receiverDID,
-		"transactionID", transactionID)
-
-	return nil
 }
 
 // This has been added here since this is part of the transaction flow.

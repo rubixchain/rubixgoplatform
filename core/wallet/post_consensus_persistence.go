@@ -76,10 +76,7 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 	}
 
 	// Check if the transaction is local
-	isLocalTransfer, err := pc.wallet.IsLocalDID(req.TransactionInfo.Owner)
-	if err != nil {
-		return fmt.Errorf("post-consensus persistence: failed to check if owner DID is local: %w", err)
-	}
+	isLocalTransfer, _ := pc.wallet.IsLocalDID(req.TransactionInfo.Owner)
 
 	// Ideally local transfer will only happen on the initiator side.
 	// The following prevents any invariant state where a non-initiator node mistakenly
