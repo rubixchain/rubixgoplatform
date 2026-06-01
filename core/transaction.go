@@ -510,13 +510,8 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		// Receiver sync needed — but skip network round-trip if receiver is on this node.
 		// In that case, the initiator persistence (with isLocalTransfer=true) has already
 		// recorded receiver-side token state via BuildPersistencePayload.
-		var isOwnerDIDLocal bool
-		isOwnerDIDLocal, err = c.w.IsLocalDID(nextOwnerDID)
-		if err != nil {
-			c.log.Error("InitiateTransaction: Failed to check if owner DID is local", "ownerDID", nextOwnerDID, "err", err)
-			resp.Message = "InitiateTransaction: Failed to check if owner DID is local: " + err.Error()
-			return resp
-		}
+		// Unknown owner DID returns ErrNoRows; treat as not-local and proceed to async sync.
+		isOwnerDIDLocal, _ := c.w.IsLocalDID(nextOwnerDID)
 
 		if !isOwnerDIDLocal {
 			// Best-effort push to the receiver. Failure does not fail the transaction.
