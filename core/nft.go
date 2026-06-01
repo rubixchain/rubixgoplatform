@@ -7,6 +7,7 @@ package core
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -104,16 +105,22 @@ func (c *Core) ensureNFTArtifactAndSubscription(nftID string) error {
 
 		nft, err := c.fetchContractInfo(nftID)
 		if err != nil {
-			c.log.Error("ensureNFTArtifactAndSubscription: failed to fetch NFT metadata", "nft_token", nftID, "err", err)
-			return fmt.Errorf("ensureNFTArtifactAndSubscription: failed to fetch NFT metadata for %s: %w", nftID, err)
-		}
+			// Child NFTs have no metadata/artifact, so skip the fetch and
+			// rely on chain sync. Other errors are still fatal.
+			if errors.Is(err, ErrContractMetadataInvalid) {
+				c.log.Info("ensureNFTArtifactAndSubscription: NFT has no contract metadata (child NFT), skipping artifact fetch", "nft_token", nftID)
+			} else {
+				c.log.Error("ensureNFTArtifactAndSubscription: failed to fetch NFT metadata", "nft_token", nftID, "err", err)
+				return fmt.Errorf("ensureNFTArtifactAndSubscription: failed to fetch NFT metadata for %s: %w", nftID, err)
+			}
+		} else {
+			if err := c.GetNFTFromIpfs(nftID, nft.ArtifactHash); err != nil {
+				c.log.Error("ensureNFTArtifactAndSubscription: failed to fetch NFT artifact from IPFS", "nft_token", nftID, "artifact_hash", nft.ArtifactHash, "err", err)
+				return fmt.Errorf("ensureNFTArtifactAndSubscription: failed to fetch NFT artifact for %s: %w", nftID, err)
+			}
 
-		if err := c.GetNFTFromIpfs(nftID, nft.ArtifactHash); err != nil {
-			c.log.Error("ensureNFTArtifactAndSubscription: failed to fetch NFT artifact from IPFS", "nft_token", nftID, "artifact_hash", nft.ArtifactHash, "err", err)
-			return fmt.Errorf("ensureNFTArtifactAndSubscription: failed to fetch NFT artifact for %s: %w", nftID, err)
+			c.log.Info("ensureNFTArtifactAndSubscription: NFT fetched successfully", "nft_token", nftID)
 		}
-
-		c.log.Info("ensureNFTArtifactAndSubscription: NFT fetched successfully", "nft_token", nftID)
 	} else {
 		c.log.Debug("ensureNFTArtifactAndSubscription: NFT folder already exists, skipping fetch", "nft_token", nftID, "path", nftFolderPath)
 	}
