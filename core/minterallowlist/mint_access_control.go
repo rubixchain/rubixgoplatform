@@ -26,13 +26,10 @@ var AllowedMinters = []MintAccessRange{
 	{DID: "bafybmifmwqhlscye636ui5ajybavpvyfb6gf25m3kkxhm7pewc6slh3yue", Level: 1, StartTokenNumber: 4000001, EndTokenNumber: 4300000},
 }
 
-// TestnetAllowedMinters lists the testnet faucet DIDs and their token-number
-// ranges.
+// TestnetAllowedMinters lists the testnet faucet DID and its token-number
+// range.
 var TestnetAllowedMinters = []MintAccessRange{
 	{DID: "bafybmiairxfiplfpwvzzgslubbx3dwqrutwhrgtypnzyb752rrjbthgrwm", Level: 50001, StartTokenNumber: 1, EndTokenNumber: 4300000},
-	{DID: "bafybmifduxb6ot7ta6bwdbedhiymuzsfwzgsf6ovb7tdwahacmogczgrha", Level: 50001, StartTokenNumber: 1, EndTokenNumber: 4300000},
-	{DID: "bafybmihiwapl23qumkcipzmqr6rkbbyyy2n5jdnxsqrpj7djpdkk3t5i2e", Level: 50001, StartTokenNumber: 1, EndTokenNumber: 4300000},
-	{DID: "bafybmicbaadhaa76j7jlft6vxfqyzisehbekmnpa7r5g2jwqbn6dikfp4y", Level: 50001, StartTokenNumber: 1, EndTokenNumber: 4300000},
 }
 
 // ValidateMinterAuthorization returns true if (did, level, number) is in the

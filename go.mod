@@ -3,6 +3,7 @@ module github.com/rubixchain/rubixgoplatform
 go 1.22
 
 require (
+	github.com/fxamacker/cbor v1.5.1
 	github.com/gorilla/sessions v1.2.1
 	github.com/ipfs/go-ipfs-api v0.3.0
 	github.com/ipfs/go-ipfs-files v0.1.1
@@ -41,6 +42,7 @@ require (
 	github.com/multiformats/go-varint v0.0.6 // indirect
 	github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
+	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/sync v0.2.0 // indirect
 	golang.org/x/sys v0.8.0 // indirect
 	golang.org/x/text v0.9.0 // indirect
