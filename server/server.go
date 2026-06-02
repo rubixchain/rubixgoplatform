@@ -165,6 +165,10 @@ func (s *Server) RegisterRoutes() {
 	// Token recovery doesn't need authentication - anyone should be able to recover their tokens
 	s.AddRoute(setup.APIRecoverLostTokens, "POST", s.APIRecoverLostTokens)
 	s.AddRoute(setup.APIRemoteRecoverTokens, "POST", s.APIRemoteRecoverTokens)
+	// Wallet recovery from a published fullnode. Auth is enforced at the
+	// fullnode end via DID signature, so the HTTP route does not need
+	// AuthHandle here.
+	s.AddRoute(setup.APIRecoverWalletFromFullnode, "POST", s.APIRecoverWalletFromFullnode)
 
 	//Below are De-Explorer APIs
 	s.AddRoute(setup.APIRemoveStaleDID, "POST", s.AuthHandle(s.APIRemoveStaleDID, true, s.AuthError, false))

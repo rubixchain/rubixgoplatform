@@ -20,12 +20,11 @@ import (
 
 // Enhanced subscription setup with error handling
 func (c *Core) SubscribeTxnSetup() {
-	// The transaction processor and the sync-txn-info-chain endpoint only make
-	// sense on a fullnode — non-fullnodes don't have the fullnode_* tables
-	// the endpoint reads from. Gating both keeps the libp2p surface small.
+	// Only fullnodes serve these endpoints
 	if c.fullNode {
 		c.initDynamicTxnProcessor()
 		c.l.AddRoute(setup.APISyncTransactionInfoFromFullnode, "POST", c.syncTransactionInfoFromFullnode)
+		c.registerRecoveryRoute()
 	}
 
 	topic := constants.Event_RubixTxns
@@ -329,120 +328,22 @@ func (c *Core) checkTokenStateHashPinned(tokenID string, previousTransactionID s
 	return nil
 }
 
-// Pagination budget and request safety caps for the sync-txn-info-chain endpoint.
+// Safety limits for the sync-txn-info-chain endpoint. PageSize is a server
+// constant so total_pages stays stable across a single download run.
 const (
-	syncResponseSizeBudget  = 2 * 1024 * 1024 // ~2 MB soft target response body size
-	syncResponseHardCap     = 8 * 1024 * 1024 // 8 MB absolute response cap; even K=0 honors this
-	syncPerTokenSafetyCap   = 100             // hard cap on entries fetched per token per call
-	maxSyncTokensPerReq     = 50
-	syncMaxRequestBodyBytes = 16 * 1024 // 16 KB cap on the request body; legitimate payloads are <5 KB
-	syncMaxOffset           = 10_000_000
-
-	// Fixed overhead in bytes added when estimating a SyncedTxn's marshalled
-	// size. Covers id, role, previous_transaction_id, JSON keys, separators
-	// — bounded by tokenchain row shape and well above worst case.
-	syncedTxnFixedOverheadBytes = 256
+	syncDefaultPageSize     = 100         // chain entries per page when caller omits it
+	syncMaxPageSize         = 1000        // upper bound on caller-supplied page_size
+	maxSyncTokensPerReq     = 50          // max token_ids a single request may carry
+	syncMaxRequestBodyBytes = 64 * 1024   // request body size cap
+	syncMaxOffsetRows       = 100_000_000 // refuse to OFFSET past this many rows
 )
 
-// GetTransactionInfoFromFullnodePage returns a page of chain entries for the
-// requested tokens. All tokens advance by the same K entries from `offset` to
-// `offset+K`. K is chosen so the marshalled total stays under
-// syncResponseSizeBudget; at least 1 entry is always returned per non-empty
-// token so progress is guaranteed even when a single entry exceeds the budget.
-// Per-token fetch errors are logged and that token is omitted from the result.
-func (c *Core) GetTransactionInfoFromFullnodePage(tokenIDs []string, offset int) (
-	data map[string][]types.SyncedTxn,
-	advancedBy int,
-	hasMore bool,
-	err error,
-) {
-	type tokenState struct {
-		entries        []types.SyncedTxn
-		sizes          []int // marshalled size per entry, aligned with entries
-		hasMorePastCap bool
-	}
-
-	states := make(map[string]*tokenState, len(tokenIDs))
-	for _, tokenID := range tokenIDs {
-		entries, hasMoreCap, ferr := c.w.GetFullNodeSyncedChainPage(tokenID, offset, syncPerTokenSafetyCap)
-		if ferr != nil {
-			c.log.Warn("GetTransactionInfoFromFullnodePage: failed to fetch fullnode chain page",
-				"tokenID", tokenID, "offset", offset, "err", ferr)
-			continue
-		}
-		sizes := make([]int, len(entries))
-		for i := range entries {
-			// Info is already json.RawMessage from the DB, so its byte length
-			// is exact. The fixed overhead bounds id/role/prev/JSON syntax.
-			// Avoiding a per-entry json.Marshal here removes a full marshal
-			// pass — RenderJSON does the only real marshal.
-			sizes[i] = len(entries[i].Info) + syncedTxnFixedOverheadBytes
-		}
-		states[tokenID] = &tokenState{entries: entries, sizes: sizes, hasMorePastCap: hasMoreCap}
-	}
-
-	// Choose K: largest K within safety cap such that summed step sizes stay
-	// under the soft budget AND the hard cap. The hard cap is enforced at
-	// every K — including K=0 — so a pathological payload can never produce
-	// a multi-hundred-MB response. The soft budget is bypassed only at K=0
-	// to guarantee forward progress on long chains.
-	K := 0
-	total := 0
-	exceededHardCapAtZero := false
-	for K < syncPerTokenSafetyCap {
-		stepSize := 0
-		anyAdvance := false
-		for _, st := range states {
-			if K < len(st.entries) {
-				stepSize += st.sizes[K]
-				anyAdvance = true
-			}
-		}
-		if !anyAdvance {
-			break // all tokens drained within safety cap
-		}
-		if total+stepSize > syncResponseHardCap {
-			if K == 0 {
-				exceededHardCapAtZero = true
-			}
-			break
-		}
-		if K > 0 && total+stepSize > syncResponseSizeBudget {
-			break
-		}
-		total += stepSize
-		K++
-	}
-
-	if exceededHardCapAtZero {
-		return nil, 0, false, fmt.Errorf(
-			"sync response would exceed %d byte hard cap at K=0; request fewer token_ids per call",
-			syncResponseHardCap,
-		)
-	}
-
-	data = make(map[string][]types.SyncedTxn, len(states))
-	for tokenID, st := range states {
-		n := K
-		if n > len(st.entries) {
-			n = len(st.entries)
-		}
-		data[tokenID] = st.entries[:n]
-		if n < len(st.entries) || st.hasMorePastCap {
-			hasMore = true
-		}
-	}
-	advancedBy = K
-	return data, advancedBy, hasMore, nil
-}
-
-// syncTransactionInfoFromFullnode handles the sync-txn-info-chain request
-// over the libp2p listener. Paginated by size: caller passes offset and
-// re-requests with offset += advanced_by until has_more is false.
+// syncTransactionInfoFromFullnode serves the libp2p endpoint an explorer (or
+// any peer) calls to fetch chain entries for a list of tokens. Pagination
+// is by absolute page_number — the caller can detect a missed page later
+// and re-fetch just that page by its number. Full contract is on
+// types.SyncTransactionInfoFromFullnodeRequest.
 func (c *Core) syncTransactionInfoFromFullnode(req *ensweb.Request) *ensweb.Result {
-	// Cap request body size for this endpoint only. Legitimate payloads are
-	// well under 5 KB (50 token IDs + offset); anything larger is malformed
-	// or malicious.
 	if httpReq := req.GetHTTPRequest(); httpReq != nil && httpReq.Body != nil {
 		httpReq.Body = http.MaxBytesReader(req.GetHTTPWritter(), httpReq.Body, syncMaxRequestBodyBytes)
 	}
@@ -459,8 +360,8 @@ func (c *Core) syncTransactionInfoFromFullnode(req *ensweb.Request) *ensweb.Resu
 		return c.l.RenderJSON(req, &model.BasicResponse{Status: false, Message: fmt.Sprintf("max %d token IDs per request", maxSyncTokensPerReq)}, http.StatusOK)
 	}
 
-	// Dedup and drop empty IDs. A duplicate or empty entry would otherwise
-	// run a redundant (or zero-result) DB query and waste a token slot.
+	// Dedup token_ids and drop any empty entries so they don't skew the count
+	// or waste a slot.
 	tokenIDs := make([]string, 0, len(syncReq.TokenIDs))
 	seen := make(map[string]struct{}, len(syncReq.TokenIDs))
 	for _, t := range syncReq.TokenIDs {
@@ -477,24 +378,103 @@ func (c *Core) syncTransactionInfoFromFullnode(req *ensweb.Request) *ensweb.Resu
 		return c.l.RenderJSON(req, &model.BasicResponse{Status: false, Message: "token_ids contains no non-empty values"}, http.StatusOK)
 	}
 
-	offset := syncReq.Offset
-	if offset < 0 {
-		offset = 0
+	// Clamp page size; default when zero. Page size must stay constant
+	// across a single download so total_pages is stable.
+	pageSize := syncReq.PageSize
+	if pageSize <= 0 {
+		pageSize = syncDefaultPageSize
 	}
-	if offset > syncMaxOffset {
-		return c.l.RenderJSON(req, &model.BasicResponse{Status: false, Message: fmt.Sprintf("offset exceeds max %d", syncMaxOffset)}, http.StatusOK)
+	if pageSize > syncMaxPageSize {
+		pageSize = syncMaxPageSize
 	}
 
-	data, advancedBy, hasMore, err := c.GetTransactionInfoFromFullnodePage(tokenIDs, offset)
+	// Default to page 1 when the request omits page_number. We validate
+	// upper bound after counting total_pages.
+	pageNumber := syncReq.PageNumber
+	if pageNumber <= 0 {
+		pageNumber = 1
+	}
+
+	// Find tokens whose KnownPositions claim doesn't match the fullnode's
+	// chain at that position. They're reported back in DivergentTokens and
+	// get their full chain (the count/page queries see them as having no
+	// known position).
+	divergent, err := c.w.DetectDivergentSyncTokens(syncReq.KnownPositions)
+	if err != nil {
+		c.log.Warn("syncTransactionInfoFromFullnode: divergence check failed", "err", err)
+		return c.l.RenderJSON(req, &model.BasicResponse{Status: false, Message: "fullnode divergence check failed"}, http.StatusOK)
+	}
+	divergentSet := make(map[string]struct{}, len(divergent))
+	for _, t := range divergent {
+		divergentSet[t] = struct{}{}
+	}
+	// Build the thresholds map for the count/page queries: non-divergent
+	// tokens contribute their claimed position; divergent tokens are left
+	// out so the queries default them to -1 (= full chain).
+	thresholds := make(map[string]int64, len(syncReq.KnownPositions))
+	for tokenID, tip := range syncReq.KnownPositions {
+		if _, isDivergent := divergentSet[tokenID]; isDivergent {
+			continue
+		}
+		thresholds[tokenID] = tip.Position
+	}
+
+	totalItems, err := c.w.CountFullNodeSyncedChainEntries(tokenIDs, thresholds)
+	if err != nil {
+		c.log.Warn("syncTransactionInfoFromFullnode: count failed", "err", err)
+		return c.l.RenderJSON(req, &model.BasicResponse{Status: false, Message: "fullnode count failed"}, http.StatusOK)
+	}
+	totalPages := 0
+	if totalItems > 0 {
+		totalPages = (totalItems + pageSize - 1) / pageSize
+	}
+
+	// Nothing to send: still return success with empty data so the caller
+	// knows it's fully in sync.
+	if totalItems == 0 {
+		result := types.SyncTransactionInfoFromFullnodeResult{
+			Data:            map[string][]types.SyncedTxn{},
+			DivergentTokens: divergent,
+			PageNumber:      pageNumber,
+			TotalPages:      0,
+			PageSize:        pageSize,
+			TotalItems:      0,
+		}
+		return c.l.RenderJSON(req, &model.BasicResponse{Status: true, Message: "ok", Result: result}, http.StatusOK)
+	}
+
+	// Out-of-range page numbers are an obvious client bug — reject loudly
+	// instead of returning an empty page.
+	if pageNumber > totalPages {
+		return c.l.RenderJSON(req, &model.BasicResponse{Status: false, Message: fmt.Sprintf("page_number %d exceeds total_pages %d", pageNumber, totalPages)}, http.StatusOK)
+	}
+
+	offset := (pageNumber - 1) * pageSize
+	if offset > syncMaxOffsetRows {
+		return c.l.RenderJSON(req, &model.BasicResponse{Status: false, Message: fmt.Sprintf("page offset would exceed safety cap (%d rows)", syncMaxOffsetRows)}, http.StatusOK)
+	}
+
+	keys, entries, err := c.w.GetFullNodeSyncedChainPageByOffset(tokenIDs, thresholds, offset, pageSize)
 	if err != nil {
 		c.log.Warn("syncTransactionInfoFromFullnode: page fetch failed",
-			"offset", offset, "tokenCount", len(tokenIDs), "err", err)
+			"page_number", pageNumber, "page_size", pageSize, "err", err)
 		return c.l.RenderJSON(req, &model.BasicResponse{Status: false, Message: err.Error()}, http.StatusOK)
 	}
+
+	// Group entries by token_id for the response. Order within each token
+	// stays correct because the query already sorts by (token_id, position).
+	data := make(map[string][]types.SyncedTxn, len(tokenIDs))
+	for i := range entries {
+		data[keys[i]] = append(data[keys[i]], entries[i])
+	}
+
 	result := types.SyncTransactionInfoFromFullnodeResult{
-		Data:       data,
-		HasMore:    hasMore,
-		AdvancedBy: advancedBy,
+		Data:            data,
+		DivergentTokens: divergent,
+		PageNumber:      pageNumber,
+		TotalPages:      totalPages,
+		PageSize:        pageSize,
+		TotalItems:      totalItems,
 	}
 	return c.l.RenderJSON(req, &model.BasicResponse{Status: true, Message: "ok", Result: result}, http.StatusOK)
 }

@@ -133,6 +133,13 @@ const (
 
 	// Fullnode endpoints
 	APISyncTransactionInfoFromFullnode string = "/rubix/v1/fullnode/sync-txn-info-chain"
+	APIRecoverFromFullnode             string = "/rubix/v1/fullnode/recover-from-fullnode"
+
+	// Operator-facing HTTP endpoint on the recovering normal node that triggers
+	// fullnode-backed recovery (orchestrates fetching fullnodes.json, dialing
+	// a fullnode over libp2p, calling APIRecoverFromFullnode in a paginated
+	// loop, and persisting results locally).
+	APIRecoverWalletFromFullnode string = "/rubix/v1/recover-from-fullnode"
 )
 
 // jwt.RegisteredClaims

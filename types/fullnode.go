@@ -2,35 +2,67 @@ package types
 
 import "encoding/json"
 
-// SyncTransactionInfoFromFullnodeRequest is the request body for the
-// sync-txn-info-chain endpoint. Offset paginates the per-token chain:
-// for each requested token the server returns entries [offset, offset+K),
-// where K is chosen server-side so the total marshalled response stays
-// under a size budget (~2 MB).
-type SyncTransactionInfoFromFullnodeRequest struct {
-	TokenIDs []string `json:"token_ids"`
-	Offset   int      `json:"offset,omitempty"`
-}
-
-// SyncTransactionInfoFromFullnodeResult is the BasicResponse.Result payload.
-// AdvancedBy is the K the server applied — the explorer must use it to
-// compute the next request's offset (offset += AdvancedBy). HasMore is true
-// if any requested token has more entries past offset+AdvancedBy.
-type SyncTransactionInfoFromFullnodeResult struct {
-	Data       map[string][]SyncedTxn `json:"data"`
-	HasMore    bool                   `json:"has_more"`
-	AdvancedBy int                    `json:"advanced_by"`
-}
-
-// SyncedTxn is one entry of a token's transaction chain.
+// SyncTransactionInfoFromFullnodeRequest is the body of a sync-txn-info-chain
+// call. The caller (typically an explorer) names the tokens it wants to sync
+// and which page of chain entries to fetch.
 //
-// Info is carried as json.RawMessage so the server can stream the stored
-// transaction-info bytes through without an unmarshal+remarshal round trip.
-// The wire format is unchanged — clients still see a JSON object that
-// matches TransactionInfo.
+// KnownPositions lets the caller say "for token X, I already have entries up
+// to position P, and my tx at P is T". The server uses this to skip entries
+// the caller already has, and to detect chain divergence (if the server's tx
+// at P differs from T, the token is divergent — see DivergentTokens in the
+// result).
+//
+// PageNumber is 1-indexed. If omitted, the server returns page 1. Page size
+// is a server constant clamped from PageSize (0 -> default) so total_pages
+// stays a stable index across the run.
+type SyncTransactionInfoFromFullnodeRequest struct {
+	TokenIDs       []string                 `json:"token_ids"`
+	KnownPositions map[string]TokenChainTip `json:"known_positions,omitempty"`
+	PageNumber     int                      `json:"page_number,omitempty"`
+	PageSize       int                      `json:"page_size,omitempty"`
+}
+
+// TokenChainTip is the (position, tx_id) pair the caller uses to say "I have
+// this token's chain up to here". The server checks BOTH fields — a position
+// match alone could miss a chain that diverged at that position.
+type TokenChainTip struct {
+	Position      int64  `json:"position"`
+	TransactionID string `json:"transaction_id"`
+}
+
+// SyncTransactionInfoFromFullnodeResult is the response body.
+//
+// Data groups this page's chain entries by token_id, with entries inside each
+// list ordered by position ascending.
+//
+// DivergentTokens lists tokens whose KnownPositions claim didn't match the
+// server's chain at that position. The server sends their full chain (from
+// position 0) and the caller should treat any prior local data for those
+// tokens as stale and replace it.
+//
+// PageNumber, TotalPages, PageSize and TotalItems together let the caller
+// detect gaps after a run (e.g. "I have pages 1, 2, 4 of 5 — page 3 is
+// missing") and re-fetch a specific page by its number. Loop while
+// PageNumber < TotalPages.
+type SyncTransactionInfoFromFullnodeResult struct {
+	Data            map[string][]SyncedTxn `json:"data"`
+	DivergentTokens []string               `json:"divergent_tokens,omitempty"`
+	PageNumber      int                    `json:"page_number"`
+	TotalPages      int                    `json:"total_pages"`
+	PageSize        int                    `json:"page_size"`
+	TotalItems      int                    `json:"total_items"`
+}
+
+// SyncedTxn is one entry on a token's chain.
+//
+// Info is the stored transaction-info JSON, passed through as raw bytes (no
+// unmarshal+remarshal on the server). Position is the entry's chain position
+// on the fullnode — the caller uses it to update KnownPositions for the next
+// request.
 type SyncedTxn struct {
 	ID                    string          `json:"id"`
 	Role                  int16           `json:"role"`
+	Position              int64           `json:"position"`
 	PreviousTransactionID string          `json:"previous_transaction_id"`
 	Info                  json.RawMessage `json:"info"`
 }

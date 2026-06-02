@@ -1,0 +1,503 @@
+package wallet
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/types/models"
+)
+
+// ownedTokenRow is the intermediate row shape the recovery query produces.
+// Carries the current state of one token owned by the recovering DID; one
+// row per owned token (independent of the token's chain depth).
+type ownedTokenRow struct {
+	TokenID        string
+	TokenType      string
+	DID            string
+	TokenStatus    int16
+	TokenValue     float64
+	TokenStateHash string
+	TransactionID  string
+	LatestPosition int64
+	LatestRole     int16
+	ParentTokenID  *string // RBT only
+}
+
+// RecoverableToken is the exported shape returned by ListOwnedTokensByDID.
+// One per owned token regardless of chain depth.
+type RecoverableToken struct {
+	TokenID        string
+	TokenType      string
+	DID            string
+	TokenStatus    int16
+	TokenValue     float64
+	TokenStateHash string
+	TransactionID  string
+	LatestPosition int64
+	LatestRole     int16
+	ParentTokenID  string
+}
+
+// ListOwnedTokensByDID returns every token currently held by `did` across
+// the three fullnode state tables (RBT / FT / NFT) regardless of token_status.
+// Smart Contract tokens are intentionally excluded — SC ownership uses a
+// different model and is deferred.
+//
+// The recovery handler uses this list to assemble the per-token chain
+// payload. It is not paginated at the token level; pagination is done at
+// the chain-entry level so that pages stay uniformly sized even when one
+// token has a huge chain and another has a tiny one.
+func (w *Wallet) ListOwnedTokensByDID(ctx context.Context, did string) ([]RecoverableToken, error) {
+	if ctx == nil {
+		ctx = w.Ctx
+	}
+	if did == "" {
+		return nil, fmt.Errorf("ListOwnedTokensByDID: did is required")
+	}
+
+	q := `
+		SELECT token_id, token_type, did, token_status, token_value,
+		       token_state_hash, transaction_id, latest_position, latest_role,
+		       parent_token_id
+		FROM (
+			SELECT token_id, $2::text AS token_type, did, token_status, token_value,
+			       token_state_hash, transaction_id, latest_position, latest_role,
+			       parent_token_id::text AS parent_token_id
+			FROM fullnode_rbt
+			WHERE did = $1
+			UNION ALL
+			SELECT token_id, $3::text AS token_type, did, token_status, token_value,
+			       token_state_hash, transaction_id, latest_position, latest_role,
+			       NULL::text AS parent_token_id
+			FROM fullnode_ft
+			WHERE did = $1
+			UNION ALL
+			SELECT token_id, $4::text AS token_type, did, token_status, token_value,
+			       token_state_hash, transaction_id, latest_position, latest_role,
+			       NULL::text AS parent_token_id
+			FROM fullnode_nft
+			WHERE did = $1
+		) AS owned
+		ORDER BY token_id ASC
+	`
+
+	rows, err := w.db.Pool().Query(ctx, q,
+		did,
+		constants.TokenType_RBT,
+		constants.TokenType_FT,
+		constants.TokenType_NFT,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("ListOwnedTokensByDID: query: %w", err)
+	}
+	defer rows.Close()
+
+	var result []RecoverableToken
+	for rows.Next() {
+		var r ownedTokenRow
+		if err := rows.Scan(
+			&r.TokenID, &r.TokenType, &r.DID, &r.TokenStatus, &r.TokenValue,
+			&r.TokenStateHash, &r.TransactionID, &r.LatestPosition, &r.LatestRole,
+			&r.ParentTokenID,
+		); err != nil {
+			return nil, fmt.Errorf("ListOwnedTokensByDID: scan: %w", err)
+		}
+		parent := ""
+		if r.ParentTokenID != nil {
+			parent = *r.ParentTokenID
+		}
+		result = append(result, RecoverableToken{
+			TokenID:        r.TokenID,
+			TokenType:      r.TokenType,
+			DID:            r.DID,
+			TokenStatus:    r.TokenStatus,
+			TokenValue:     r.TokenValue,
+			TokenStateHash: r.TokenStateHash,
+			TransactionID:  r.TransactionID,
+			LatestPosition: r.LatestPosition,
+			LatestRole:     r.LatestRole,
+			ParentTokenID:  parent,
+		})
+	}
+	return result, rows.Err()
+}
+
+// RecoveredChainRow is one (transaction + tokenchain) row pair returned by
+// the per-page recovery query. The handler maps these directly to
+// RecoveredTransaction wire entries.
+type RecoveredChainRow struct {
+	TokenID               string          `db:"token_id"`
+	TransactionID         string          `db:"transaction_id"`
+	Role                  int16           `db:"role"`
+	Position              int64           `db:"position"`
+	PreviousTransactionID *string         `db:"previous_transaction_id"`
+	Info                  json.RawMessage `db:"info"`
+	Signature             json.RawMessage `db:"signature"`
+}
+
+// CountRecoverableChainEntries returns the total number of chain entries the
+// fullnode has queued to send for the recovering DID, after applying the
+// per-token `thresholds` filter (entries with `position > thresholds[token]`
+// qualify; tokens absent from the map default to -1 → full chain).
+//
+// Powers TotalPages on the recover-from-fullnode endpoint.
+func (w *Wallet) CountRecoverableChainEntries(ctx context.Context, did string, thresholds map[string]int64) (int, error) {
+	if ctx == nil {
+		ctx = w.Ctx
+	}
+	if did == "" {
+		return 0, fmt.Errorf("CountRecoverableChainEntries: did is required")
+	}
+
+	// Owned token set: union across the three state tables.
+	// We materialise the threshold pairs via unnest so the planner can filter
+	// fullnode_tokenchain by per-token position threshold in a single round trip.
+	thresholdTokens, thresholdValues := mapToParallelArrays(thresholds)
+
+	var count int
+	err := w.db.Pool().QueryRow(ctx, `
+		WITH owned AS (
+			SELECT token_id FROM fullnode_rbt WHERE did = $1
+			UNION ALL
+			SELECT token_id FROM fullnode_ft  WHERE did = $1
+			UNION ALL
+			SELECT token_id FROM fullnode_nft WHERE did = $1
+		),
+		thresholds AS (
+			SELECT * FROM unnest($2::text[], $3::bigint[]) AS t(token_id, threshold)
+		)
+		SELECT COUNT(*)
+		FROM fullnode_tokenchain tc
+		JOIN owned o ON o.token_id = tc.token_id
+		LEFT JOIN thresholds th ON th.token_id = tc.token_id
+		WHERE tc.position > COALESCE(th.threshold, -1)
+	`, did, thresholdTokens, thresholdValues).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("CountRecoverableChainEntries: %w", err)
+	}
+	return count, nil
+}
+
+// GetRecoverableChainPageByOffset returns up to `limit` chain entries (with
+// joined transaction info + signature) for the recovering DID, ordered by
+// (token_id, position), at the given OFFSET. Per-token thresholds filter as
+// in CountRecoverableChainEntries.
+//
+// The returned rows are already enriched with token_type via the joined
+// state table — the handler can group them by token_id and look up the
+// current state from a separate map prebuilt from ListOwnedTokensByDID.
+func (w *Wallet) GetRecoverableChainPageByOffset(
+	ctx context.Context,
+	did string,
+	thresholds map[string]int64,
+	offset, limit int,
+) ([]RecoveredChainRow, error) {
+	if ctx == nil {
+		ctx = w.Ctx
+	}
+	if limit <= 0 {
+		return nil, nil
+	}
+	if did == "" {
+		return nil, fmt.Errorf("GetRecoverableChainPageByOffset: did is required")
+	}
+	thresholdTokens, thresholdValues := mapToParallelArrays(thresholds)
+
+	rows, err := w.db.Pool().Query(ctx, `
+		WITH owned AS (
+			SELECT token_id FROM fullnode_rbt WHERE did = $1
+			UNION ALL
+			SELECT token_id FROM fullnode_ft  WHERE did = $1
+			UNION ALL
+			SELECT token_id FROM fullnode_nft WHERE did = $1
+		),
+		thresholds AS (
+			SELECT * FROM unnest($2::text[], $3::bigint[]) AS t(token_id, threshold)
+		)
+		SELECT tc.token_id, tc.transaction_id, tc.role, tc.position,
+		       tc.previous_transaction_id, t.info, t.signature
+		FROM fullnode_tokenchain tc
+		JOIN fullnode_transactions t ON t.id = tc.transaction_id
+		JOIN owned o ON o.token_id = tc.token_id
+		LEFT JOIN thresholds th ON th.token_id = tc.token_id
+		WHERE tc.position > COALESCE(th.threshold, -1)
+		ORDER BY tc.token_id ASC, tc.position ASC
+		LIMIT $4 OFFSET $5
+	`, did, thresholdTokens, thresholdValues, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("GetRecoverableChainPageByOffset: query: %w", err)
+	}
+	defer rows.Close()
+
+	var out []RecoveredChainRow
+	for rows.Next() {
+		var r RecoveredChainRow
+		if err := rows.Scan(
+			&r.TokenID, &r.TransactionID, &r.Role, &r.Position,
+			&r.PreviousTransactionID, &r.Info, &r.Signature,
+		); err != nil {
+			return nil, fmt.Errorf("GetRecoverableChainPageByOffset: scan: %w", err)
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// DetectDivergentRecoveryTokens returns the subset of tokens whose KnownTokens
+// claim does not match the fullnode's chain at the claimed position. Same
+// semantics as DetectDivergentSyncTokens but scoped to one DID's owned token
+// set — divergence on a token the DID doesn't actually own is reported as
+// divergent (the client should not have claimed it).
+func (w *Wallet) DetectDivergentRecoveryTokens(ctx context.Context, did string, known map[string]types.TokenChainTip) ([]string, error) {
+	if ctx == nil {
+		ctx = w.Ctx
+	}
+	if len(known) == 0 {
+		return nil, nil
+	}
+	tokenIDs := make([]string, 0, len(known))
+	positions := make([]int64, 0, len(known))
+	claimedTxIDs := make([]string, 0, len(known))
+	for tokenID, tip := range known {
+		if tokenID == "" {
+			continue
+		}
+		tokenIDs = append(tokenIDs, tokenID)
+		positions = append(positions, tip.Position)
+		claimedTxIDs = append(claimedTxIDs, tip.TransactionID)
+	}
+	if len(tokenIDs) == 0 {
+		return nil, nil
+	}
+
+	rows, err := w.db.Pool().Query(ctx, `
+		WITH owned AS (
+			SELECT token_id FROM fullnode_rbt WHERE did = $1
+			UNION ALL
+			SELECT token_id FROM fullnode_ft  WHERE did = $1
+			UNION ALL
+			SELECT token_id FROM fullnode_nft WHERE did = $1
+		)
+		SELECT input.token_id
+		FROM unnest($2::text[], $3::bigint[], $4::text[]) AS input(token_id, position, claimed_tx_id)
+		LEFT JOIN owned o ON o.token_id = input.token_id
+		LEFT JOIN fullnode_tokenchain tc
+		  ON tc.token_id = input.token_id AND tc.position = input.position
+		WHERE o.token_id IS NULL
+		   OR tc.transaction_id IS NULL
+		   OR tc.transaction_id <> input.claimed_tx_id
+	`, did, tokenIDs, positions, claimedTxIDs)
+	if err != nil {
+		return nil, fmt.Errorf("DetectDivergentRecoveryTokens: %w", err)
+	}
+	defer rows.Close()
+
+	divergent := make([]string, 0)
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err != nil {
+			return nil, fmt.Errorf("DetectDivergentRecoveryTokens scan: %w", err)
+		}
+		divergent = append(divergent, t)
+	}
+	return divergent, rows.Err()
+}
+
+// mapToParallelArrays converts a map[string]int64 into the two parallel slices
+// the unnest pattern expects. Returns single-element ("",-1) placeholders for
+// an empty input so the SQL unnest doesn't degenerate to zero rows (which
+// would make the LEFT JOIN match nothing). The placeholder token "" can never
+// match a real token_id, so it's harmless.
+func mapToParallelArrays(m map[string]int64) ([]string, []int64) {
+	if len(m) == 0 {
+		return []string{""}, []int64{-1}
+	}
+	keys := make([]string, 0, len(m))
+	values := make([]int64, 0, len(m))
+	for k, v := range m {
+		keys = append(keys, k)
+		values = append(values, v)
+	}
+	return keys, values
+}
+
+// ReadLocalKnownState returns a map of token_id -> {position, tx_id} for
+// tokens owned by `did` in the local `tokens` table. Used by a normal node
+// to build the KnownTokens field of a recovery request, so the fullnode can
+// skip entries the client already has and detect chain divergence.
+func (w *Wallet) ReadLocalKnownState(ctx context.Context, did string) (map[string]types.TokenChainTip, error) {
+	if ctx == nil {
+		ctx = w.Ctx
+	}
+	rows, err := w.db.Pool().Query(ctx,
+		`SELECT token_id, transaction_id, latest_position FROM tokens WHERE did = $1 AND transaction_id <> ''`,
+		did,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("ReadLocalKnownState: query: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[string]types.TokenChainTip)
+	for rows.Next() {
+		var tokenID, txID string
+		var pos int64
+		if err := rows.Scan(&tokenID, &txID, &pos); err != nil {
+			return nil, fmt.Errorf("ReadLocalKnownState: scan: %w", err)
+		}
+		out[tokenID] = types.TokenChainTip{Position: pos, TransactionID: txID}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("ReadLocalKnownState: iterate: %w", err)
+	}
+	return out, nil
+}
+
+// PersistRecoveredTokenChainPage atomically writes a page worth of chain
+// entries plus the current token state for a single token recovered from a
+// fullnode. This replaces the old PersistRecoveredPledgedToken helper and
+// supports the multi-tx-per-token recovery model.
+//
+// Why a dedicated helper (and not PersistPostConsensus): PersistPostConsensus
+// enforces strict chain continuity — each new chain row must continue the
+// local chain at position = latest+1 with prev_tx_id matching the local tail.
+// Recovery from a fullnode doesn't fit that model: we're cloning the
+// fullnode's chain verbatim (with its global positions and prev_tx_ids),
+// not appending a single transition. Bypassing the continuity check here
+// keeps PersistPostConsensus's invariants intact for the normal transfer
+// path that other code relies on.
+//
+// Idempotent: chain rows use ON CONFLICT (token_id, position) DO NOTHING and
+// the tokens row uses ON CONFLICT (token_id) DO UPDATE. The caller may call
+// this multiple times for the same token across pages — each call appends
+// any new chain entries and re-applies the current state (which is the same
+// across all pages for a given token).
+//
+// `did` is the local wallet DID (the one that owns the token).
+// `tokenTypeName` is one of constants.TokenType_RBT / _FT / _NFT.
+// `chainEntries` are the entries to write for this token on this page, in
+// chronological position order.
+// `state` carries the fullnode's current state for the token; written to
+// the tokens row.
+func (w *Wallet) PersistRecoveredTokenChainPage(
+	ctx context.Context,
+	did string,
+	tokenTypeName string,
+	state *models.Token,
+	chainEntries []RecoveredChainRow,
+) error {
+	if w == nil {
+		return fmt.Errorf("PersistRecoveredTokenChainPage: wallet is nil")
+	}
+	if state == nil {
+		return fmt.Errorf("PersistRecoveredTokenChainPage: state is required")
+	}
+	if state.TokenID == "" {
+		return fmt.Errorf("PersistRecoveredTokenChainPage: state.TokenID is empty")
+	}
+	if did == "" {
+		return fmt.Errorf("PersistRecoveredTokenChainPage: did is empty")
+	}
+	tokenTypeID := models.GetTokenTypeID(tokenTypeName)
+	if tokenTypeID <= 0 {
+		return fmt.Errorf("PersistRecoveredTokenChainPage: unsupported token type %q", tokenTypeName)
+	}
+	if ctx == nil {
+		ctx = w.Ctx
+	}
+
+	dbtx, err := w.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("PersistRecoveredTokenChainPage: begin tx: %w", err)
+	}
+	defer dbtx.Rollback(ctx) //nolint:errcheck
+
+	// 1. Insert each chain entry's underlying transaction row + the
+	// tokenchain row verbatim, preserving global positions and prev_tx_ids.
+	for i := range chainEntries {
+		e := &chainEntries[i]
+		if e.TransactionID == "" {
+			return fmt.Errorf("PersistRecoveredTokenChainPage: chain entry %d has empty tx id (token %q)", i, state.TokenID)
+		}
+		if len(e.Info) == 0 {
+			return fmt.Errorf("PersistRecoveredTokenChainPage: chain entry %d has empty Info (token %q tx %q)", i, state.TokenID, e.TransactionID)
+		}
+		if _, err := dbtx.Exec(ctx, `
+			INSERT INTO transactions (id, info, signature, created_at, updated_at)
+			VALUES ($1, $2, $3, NOW(), NOW())
+			ON CONFLICT (id) DO NOTHING
+		`, e.TransactionID, e.Info, e.Signature); err != nil {
+			return fmt.Errorf("PersistRecoveredTokenChainPage: insert transactions (tx %q): %w", e.TransactionID, err)
+		}
+		if _, err := dbtx.Exec(ctx, `
+			INSERT INTO tokenchain (token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+			ON CONFLICT (token_id, position) DO NOTHING
+		`, state.TokenID, e.TransactionID, e.PreviousTransactionID, e.Role, e.Position); err != nil {
+			return fmt.Errorf("PersistRecoveredTokenChainPage: insert tokenchain (tx %q pos %d): %w", e.TransactionID, e.Position, err)
+		}
+	}
+
+	// 2. Upsert the tokens row. latest_position uses state.LatestPosition
+	// (the fullnode's global position) so future operations on this wallet
+	// continue the chain from the correct tip. Re-applying on every page
+	// for the same token is idempotent.
+	if _, err := dbtx.Exec(ctx, `
+		INSERT INTO tokens (
+			token_id, parent_token_id, token_value, token_status, did,
+			transaction_id, token_state_hash, token_type,
+			latest_position, latest_role, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+		ON CONFLICT (token_id) DO UPDATE SET
+			token_value     = EXCLUDED.token_value,
+			token_status    = EXCLUDED.token_status,
+			did             = EXCLUDED.did,
+			transaction_id  = EXCLUDED.transaction_id,
+			token_state_hash = EXCLUDED.token_state_hash,
+			latest_position = EXCLUDED.latest_position,
+			latest_role     = EXCLUDED.latest_role,
+			updated_at      = NOW()
+	`,
+		state.TokenID,
+		state.ParentTokenID,
+		state.TokenValue,
+		state.TokenStatus,
+		did,
+		state.TransactionID,
+		state.TokenStateHash,
+		int16(tokenTypeID),
+		state.LatestPosition,
+		state.LatestRole,
+	); err != nil {
+		return fmt.Errorf("PersistRecoveredTokenChainPage: upsert tokens (token %q): %w", state.TokenID, err)
+	}
+
+	// 3. Rebuild tokenchain_index from the current tokenchain rows for this
+	// token. Done on every call — perfect would be once at end of recovery,
+	// but the cost is bounded by the chain depth and keeps the helper self-
+	// contained (no separate "finalise" step the caller must remember).
+	var index []int32
+	if err := dbtx.QueryRow(ctx,
+		`SELECT COALESCE(array_agg(id ORDER BY position), '{}')
+		 FROM tokenchain WHERE token_id = $1`,
+		state.TokenID,
+	).Scan(&index); err != nil {
+		return fmt.Errorf("PersistRecoveredTokenChainPage: read tokenchain_index (token %q): %w", state.TokenID, err)
+	}
+	if _, err := dbtx.Exec(ctx, `
+		INSERT INTO tokenchain_index (token_id, index, created_at, updated_at)
+		VALUES ($1, $2, NOW(), NOW())
+		ON CONFLICT (token_id) DO UPDATE SET
+			index = EXCLUDED.index,
+			updated_at = NOW()
+	`, state.TokenID, index); err != nil {
+		return fmt.Errorf("PersistRecoveredTokenChainPage: upsert tokenchain_index (token %q): %w", state.TokenID, err)
+	}
+
+	if err := dbtx.Commit(ctx); err != nil {
+		return fmt.Errorf("PersistRecoveredTokenChainPage: commit: %w", err)
+	}
+	return nil
+}
