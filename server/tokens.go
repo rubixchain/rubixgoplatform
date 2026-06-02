@@ -214,7 +214,7 @@ func (s *Server) APIValidateTokenChain(req *ensweb.Request) *ensweb.Result {
 }
 
 func (s *Server) APIGenerateFaucetTestToken(req *ensweb.Request) *ensweb.Result {
-	var tr model.FaucetRBTGenerateRequest
+	var tr model.GenerateLocalRBTRequest
 	err := s.ParseJSON(req, &tr)
 	if err != nil {
 		return s.BasicResponse(req, false, "Invalid input", nil)
@@ -224,7 +224,7 @@ func (s *Server) APIGenerateFaucetTestToken(req *ensweb.Request) *ensweb.Result 
 		s.log.Error("Invalid DID")
 		return s.BasicResponse(req, false, "Invalid DID", nil)
 	}
-	if tr.TokenCount <= 0 {
+	if tr.NumberOfTokens <= 0 {
 		s.log.Error("Invalid level number, level should be greater than 0")
 		return s.BasicResponse(req, false, "Invalid level number, level should be greater than 0", nil)
 	}
@@ -233,7 +233,7 @@ func (s *Server) APIGenerateFaucetTestToken(req *ensweb.Request) *ensweb.Result 
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
-	go s.c.GenerateFaucetTestTokens(req.ID, tr.TokenCount, tr.DID)
+	go s.c.GenerateFaucetTestTokens(req.ID, tr.NumberOfTokens, tr.DID, tr.StartIndex)
 	return s.didResponse(req, req.ID)
 }
 

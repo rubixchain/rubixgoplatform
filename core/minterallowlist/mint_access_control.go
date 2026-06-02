@@ -30,6 +30,7 @@ var AllowedMinters = []MintAccessRange{
 // range.
 var TestnetAllowedMinters = []MintAccessRange{
 	{DID: "bafybmiairxfiplfpwvzzgslubbx3dwqrutwhrgtypnzyb752rrjbthgrwm", Level: 50001, StartTokenNumber: 1, EndTokenNumber: 4300000},
+	{DID: "bafybmifduxb6ot7ta6bwdbedhiymuzsfwzgsf6ovb7tdwahacmogczgrha", Level: 50001, StartTokenNumber: 1, EndTokenNumber: 4300000},
 }
 
 // ValidateMinterAuthorization returns true if (did, level, number) is in the

@@ -86,10 +86,11 @@ func (c *Client) ValidateTokenchain(userDID string, smartContractChainValidation
 	return &br, nil
 }
 
-func (c *Client) GenerateFaucetTestRBT(numTokens int, didStr string) (*model.BasicResponse, error) {
-	m := model.FaucetRBTGenerateRequest{
-		TokenCount: numTokens,
+func (c *Client) GenerateFaucetTestRBT(numTokens int, didStr string, startIndex int) (*model.BasicResponse, error) {
+	m := model.GenerateLocalRBTRequest{
+		NumberOfTokens: numTokens,
 		DID:        didStr,
+		StartIndex:     startIndex,
 	}
 	var rm model.BasicResponse
 	err := c.sendJSONRequest("POST", setup.APIGenerateFaucetTestToken, nil, &m, &rm)

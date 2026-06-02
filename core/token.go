@@ -202,7 +202,7 @@ func (c *Core) GenerateMainnetRBT(reqID string, num int, did string, startIndex 
 
 func (c *Core) generateMainnetRBT(reqID string, num int, did string, startIndex int) error {
 	if !c.testnet {
-		return fmt.Errorf("generateMainnetRBT is only available in 'testnet' mode")
+		return fmt.Errorf("generateMainnetRBT is only available in 'mainnet' mode")
 	}
 
 	dc, err := c.SetupDID(reqID, did)
@@ -224,10 +224,9 @@ func (c *Core) generateMainnetRBT(reqID string, num int, did string, startIndex 
 		if err != nil {
 			return fmt.Errorf("PersistGenesisTokenRecord: GetMainnetTokenLevelAndNumber(%d): %w", globalIndex, err)
 		}
-		mapLevel += constants.TestnetRBT_Level_Offset
 		tokenID := fmt.Sprintf("%d_%d", mapLevel, numInLevel)
 
-		if _, err = c.w.PersistGenesisTokenRecord(tx, dc, c.ps, tokenID, did, constants.NetworkMode_Testnet, currentTime); err != nil {
+		if _, err = c.w.PersistGenesisTokenRecord(tx, dc, c.ps, tokenID, did, constants.NetworkMode_Mainnet, currentTime); err != nil {
 			if strings.Contains(err.Error(), "already exists") {
 				c.log.Warn("Mainnet token already exists, skipping", "tokenID", tokenID)
 				tx.Rollback(c.w.Ctx) //nolint:errcheck
@@ -1672,14 +1671,14 @@ func (c *Core) GetpinnedTokens(did string) ([]models.Token, error) {
 	return requiredTokens, nil
 }
 
-func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string) {
+func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string, startIndex int) {
 
 	br := model.BasicResponse{
 		Status:  true,
 		Message: "",
 	}
 
-	tokenDetails, err := c.generateTestRBT(reqID, tokenCount, did)
+	tokenDetails, err := c.generateTestRBT(reqID, tokenCount, did, startIndex)
 	if err != nil {
 		c.log.Error("Failed to get token details from generateTestTokensFaucet", "err", err)
 		br.Status = false
@@ -1698,32 +1697,35 @@ func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string
 	// }
 
 	// Send a POST request to update the token details to the faucet server
-	jsonData, err := json.Marshal(tokenDetails)
-	if err != nil {
-		c.log.Error("Error marshaling JSON:", "err", err)
-		br.Status = false
-		br.Message = br.Message + ",  " + err.Error()
-		return
-	}
-	u, _ := url.Parse(c.faucetURL)
-	u.Path = path.Join(u.Path, "/api/update-token-value")
-	updatedTokenValueURL := u.String()
+	// jsonData, err := json.Marshal(tokenDetails)
+	// if err != nil {
+	// 	c.log.Error("Error marshaling JSON:", "err", err)
+	// 	br.Status = false
+	// 	br.Message = br.Message + ",  " + err.Error()
+	// 	return
+	// }
+	// u, _ := url.Parse(c.faucetURL)
+	// u.Path = path.Join(u.Path, "/api/update-token-value")
+	// updatedTokenValueURL := u.String()
 
-	resp, err := http.Post(updatedTokenValueURL, "application/json", bytes.NewBuffer(jsonData))
-	if err != nil {
-		c.log.Error("Failed to update latest token number in Faucet", "err", err)
-		br.Status = false
-		br.Message = br.Message + ",  " + err.Error()
-		return
-	}
-	defer resp.Body.Close()
+	// resp, err := http.Post(updatedTokenValueURL, "application/json", bytes.NewBuffer(jsonData))
+	// if err != nil {
+	// 	c.log.Error("Failed to update latest token number in Faucet", "err", err)
+	// 	br.Status = false
+	// 	br.Message = br.Message + ",  " + err.Error()
+	// 	return
+	// }
+	// defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusOK {
-		br.Message = br.Message + ",  " + "Successfully updated token details."
-	} else {
-		br.Status = false
-		br.Message = br.Message + ",  " + "Failed to update token details. Status code:" + strconv.Itoa(resp.StatusCode)
-	}
+	// c.log.Debug("*** server resp", resp)
+	// if resp.StatusCode == http.StatusOK {
+	// 	br.Message = br.Message + ",  " + "Successfully updated token details."
+	// } else {
+	// 	br.Status = false
+	// 	br.Message = br.Message + ",  " + "Failed to update token details. Status code:" + strconv.Itoa(resp.StatusCode)
+	// }
+	br.Message = "Successfully created tokens."
+	br.Status = true
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
 		c.log.Error("Failed to get did channels")
@@ -1737,7 +1739,7 @@ func (c *Core) getTestTokensID(tokenLevel int, tokenNumber int) (string, error) 
 	return idStrVal, nil
 }
 
-func (c *Core) generateTestRBT(reqID string, numTokens int, did string) (*token.FaucetToken, error) {
+func (c *Core) generateTestRBT(reqID string, numTokens int, did string, startIndex int) (*token.FaucetToken, error) {
 	if !c.testnet {
 		return nil, fmt.Errorf("generate test token is available in test net")
 	}
@@ -1746,26 +1748,27 @@ func (c *Core) generateTestRBT(reqID string, numTokens int, did string) (*token.
 		return nil, fmt.Errorf("DID does not exist")
 	}
 
-	u, _ := url.Parse(c.faucetURL)
+	// u, _ := url.Parse(c.faucetURL)
 
-	u.Path = path.Join(u.Path, "/api/current-token-value")
+	// u.Path = path.Join(u.Path, "/api/current-token-value")
 
-	getTokenValueURL := u.String()
-	// Get the current value from Faucet
-	resp, err := http.Get(getTokenValueURL)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+	// getTokenValueURL := u.String()
+	// // Get the current value from Faucet
+	// resp, err := http.Get(getTokenValueURL)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// defer resp.Body.Close()
 
 	var tokendetail token.FaucetToken
 
-	body, err := io.ReadAll(resp.Body)
-	//Populating the tokendetail with current token number and current token level received from Faucet.
-	json.Unmarshal(body, &tokendetail)
-	if err != nil {
-		return nil, err
-	}
+	// body, err := io.ReadAll(resp.Body)
+	// //Populating the tokendetail with current token number and current token level received from Faucet.
+	// json.Unmarshal(body, &tokendetail)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
 	//Updating the Faucet token details with each new token
 	for i := 0; i < numTokens; i++ {
 		currentTime := int(time.Now().Unix())
@@ -1776,11 +1779,20 @@ func (c *Core) generateTestRBT(reqID string, numTokens int, did string) (*token.
 		}
 		defer tx.Rollback(c.w.Ctx) //nolint:errcheck
 
-		tokendetail.CurrentTokenNumber += 1
+		// tokendetail.CurrentTokenNumber += 1
+		globalIndex := startIndex + i
+		mapLevel, numInLevel, err := tokenmap.GetMainnetTokenLevelAndNumber(globalIndex)
+		if err != nil {
+			return nil, fmt.Errorf("PersistGenesisTokenRecord: GetMainnetTokenLevelAndNumber(%d): %w", globalIndex, err)
+		}
+		mapLevel += constants.TestnetRBT_Level_Offset
+		tokendetail.TokenLevel = mapLevel
+		tokendetail.CurrentTokenNumber = numInLevel
+		// tokenID := fmt.Sprintf("%d_%d", mapLevel, numInLevel)
 
 		//If the latest token number to be generated is more than the max token value of previous token, increase the token level
-		levelOffset := tokendetail.TokenLevel - constants.TestnetRBT_Level_Offset
-		maxTokens := token.TokenMap[levelOffset]
+		// levelOffset := tokendetail.TokenLevel - constants.TestnetRBT_Level_Offset
+		maxTokens := token.TokenMap[mapLevel]
 		if tokendetail.CurrentTokenNumber == maxTokens+1 {
 			tokendetail.TokenLevel += 1
 			tokendetail.CurrentTokenNumber = 1
@@ -1798,6 +1810,7 @@ func (c *Core) generateTestRBT(reqID string, numTokens int, did string) (*token.
 		}
 
 		tokendetail.TotalCount += 1
+		tokendetail.CurrentTokenNumber += 1
 	}
 
 	return &tokendetail, nil
