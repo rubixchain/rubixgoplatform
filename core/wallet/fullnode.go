@@ -147,7 +147,7 @@ func (w *Wallet) GetLatestFullNodeTransactionAndRoleByTokenID(tokenID string) (*
 	return tx, tokenRoleInTx, nil
 }
 
-// syncChainRow is the row shape used by GetFullNodeSyncedChain.
+// syncChainRow is the row shape used by GetFullNodeSyncedChainPage.
 type syncChainRow struct {
 	TransactionID         string          `db:"transaction_id"`
 	Role                  int16           `db:"role"`
@@ -155,60 +155,55 @@ type syncChainRow struct {
 	Info                  json.RawMessage `db:"info"`
 }
 
-// GetFullNodeSyncedChain returns the transaction chain for a token in
-// chronological order, with role and previous_transaction_id from
-// fullnode_tokenchain.
-func (w *Wallet) GetFullNodeSyncedChain(tokenID string) ([]types.SyncedTxn, error) {
-	var indices []int32
-	err := w.db.Pool().QueryRow(w.Ctx,
-		`SELECT index FROM fullnode_tokenchain_index WHERE token_id = $1`,
-		tokenID,
-	).Scan(&indices)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("GetFullNodeSyncedChain: no fullnode_tokenchain_index found for token_id %s", tokenID)
-		}
-		return nil, fmt.Errorf("GetFullNodeSyncedChain: failed to get indices: %w", err)
+// GetFullNodeSyncedChainPage returns entries [offset, offset+limit) of the
+// token's chain in chronological order, plus has_more indicating whether more
+// entries exist past offset+limit. Uses the (token_id, position) primary key
+// for an indexed range scan.
+func (w *Wallet) GetFullNodeSyncedChainPage(tokenID string, offset, limit int) ([]types.SyncedTxn, bool, error) {
+	if limit <= 0 {
+		return []types.SyncedTxn{}, false, nil
 	}
 
-	if len(indices) == 0 {
-		return []types.SyncedTxn{}, nil
-	}
-
+	// Fetch limit+1 to detect has_more without a second query.
 	rows, err := w.db.Pool().Query(w.Ctx, `
 		SELECT tc.transaction_id, tc.role, tc.previous_transaction_id, t.info
-		FROM unnest($1::int[]) WITH ORDINALITY AS idx(id, ord)
-		JOIN fullnode_tokenchain tc ON tc.id = idx.id
+		FROM fullnode_tokenchain tc
 		JOIN fullnode_transactions t ON t.id = tc.transaction_id
-		ORDER BY idx.ord
-	`, indices)
+		WHERE tc.token_id = $1
+		ORDER BY tc.position ASC
+		LIMIT $2 OFFSET $3
+	`, tokenID, limit+1, offset)
 	if err != nil {
-		return nil, fmt.Errorf("GetFullNodeSyncedChain: failed to query chain rows: %w", err)
+		return nil, false, fmt.Errorf("GetFullNodeSyncedChainPage: query: %w", err)
 	}
 
 	chainRows, err := pgx.CollectRows(rows, pgx.RowToStructByName[syncChainRow])
 	if err != nil {
-		return nil, fmt.Errorf("GetFullNodeSyncedChain: failed to collect rows: %w", err)
+		return nil, false, fmt.Errorf("GetFullNodeSyncedChainPage: collect rows: %w", err)
+	}
+
+	hasMore := len(chainRows) > limit
+	if hasMore {
+		chainRows = chainRows[:limit]
 	}
 
 	result := make([]types.SyncedTxn, 0, len(chainRows))
 	for i := range chainRows {
 		row := &chainRows[i]
-		var info models.TransactionInfo
-		if err := json.Unmarshal(row.Info, &info); err != nil {
-			return nil, fmt.Errorf("GetFullNodeSyncedChain: failed to parse Info for txID %q (token %q): %w", row.TransactionID, tokenID, err)
-		}
 		var prev string
 		if row.PreviousTransactionID != nil {
 			prev = *row.PreviousTransactionID
 		}
+		// Pass the stored Info bytes through without parsing. The explorer
+		// unmarshals on its side. A corrupt row no longer fails the whole
+		// page — the explorer can detect and skip it.
 		result = append(result, types.SyncedTxn{
 			ID:                    row.TransactionID,
 			Role:                  row.Role,
 			PreviousTransactionID: prev,
-			Info:                  &info,
+			Info:                  row.Info,
 		})
 	}
 
-	return result, nil
+	return result, hasMore, nil
 }
