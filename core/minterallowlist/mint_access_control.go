@@ -29,8 +29,10 @@ var AllowedMinters = []MintAccessRange{
 // TestnetAllowedMinters lists the testnet faucet DID and its token-number
 // range.
 var TestnetAllowedMinters = []MintAccessRange{
-	{DID: "bafybmiairxfiplfpwvzzgslubbx3dwqrutwhrgtypnzyb752rrjbthgrwm", Level: 50001, StartTokenNumber: 1, EndTokenNumber: 4300000},
-	{DID: "bafybmifduxb6ot7ta6bwdbedhiymuzsfwzgsf6ovb7tdwahacmogczgrha", Level: 50001, StartTokenNumber: 1, EndTokenNumber: 4300000},
+	{DID: "bafybmiairxfiplfpwvzzgslubbx3dwqrutwhrgtypnzyb752rrjbthgrwm", Level: 50001, StartTokenNumber: 1, EndTokenNumber: 2000000},
+	{DID: "bafybmifduxb6ot7ta6bwdbedhiymuzsfwzgsf6ovb7tdwahacmogczgrha", Level: 50001, StartTokenNumber: 1, EndTokenNumber: 1000000},
+	{DID: "bafybmihiwapl23qumkcipzmqr6rkbbyyy2n5jdnxsqrpj7djpdkk3t5i2e", Level: 50001, StartTokenNumber: 2000001, EndTokenNumber: 3000000},
+	{DID: "bafybmicbaadhaa76j7jlft6vxfqyzisehbekmnpa7r5g2jwqbn6dikfp4y", Level: 50001, StartTokenNumber: 3000001, EndTokenNumber: 4300000},
 }
 
 // ValidateMinterAuthorization returns true if (did, level, number) is in the
@@ -43,4 +45,3 @@ func ValidateMinterAuthorization(table []MintAccessRange, did string, level, num
 	}
 	return false
 }
-
