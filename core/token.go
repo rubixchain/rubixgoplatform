@@ -1678,7 +1678,7 @@ func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string
 		Message: "",
 	}
 
-	tokenDetails, err := c.generateTestRBT(reqID, tokenCount, did, startIndex)
+	_, err := c.generateTestRBT(reqID, tokenCount, did, startIndex)
 	if err != nil {
 		c.log.Error("Failed to get token details from generateTestTokensFaucet", "err", err)
 		br.Status = false
