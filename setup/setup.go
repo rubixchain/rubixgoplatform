@@ -50,8 +50,6 @@ const (
 	APIGetFtByDid    string = "/rubix/v1/dids/{did}/balances/ft"
 	APIGetNftByDid   string = "/rubix/v1/dids/{did}/balances/nft"
 
-	APIRemoveStaleDID string = "/api/remove-stale-did"
-
 	APIGenerateSmartContract string = "/rubix/v1/smart_contracts/generate"
 	APIListSmartContracts    string = "/rubix/v1/smart_contracts"
 	APIGetSmartContractChain string = "/rubix/v1/smart_contracts/{contract_id}/chain"

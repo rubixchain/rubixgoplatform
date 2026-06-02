@@ -286,7 +286,6 @@ func (c *Core) SetupCore() error {
 	c.PingSetup()
 	c.CheckQuorumStatusSetup()
 	c.peerSetup()
-	c.removePeerSetup()
 	c.QuorumSetup()
 	c.TransactionSetup()
 

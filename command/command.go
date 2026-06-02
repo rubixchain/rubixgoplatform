@@ -68,7 +68,6 @@ const (
 	AddPeerDetailsFromExplorer string = "exppeerdetails"
 	ArbitrarySignCmd           string = "sign"
 	VerifySignatureCmd         string = "verify-signature"
-	RemoveStaleDIDCmd          string = "removedid"
 	InitCmd                    string = "init"
 
 	// balance commands
@@ -114,7 +113,6 @@ var commands = []string{
 	AddPeerDetailsFromExplorer,
 	ArbitrarySignCmd,
 	VerifySignatureCmd,
-	RemoveStaleDIDCmd,
 	GetDIDBalanceCmd,
 	GetNftsByDidCmd,
 	InitCmd,
@@ -156,7 +154,6 @@ var commandsHelp = []string{
 	"This command will add peer details from the explorer",
 	"This command will sign an arbitrary message with the signer DID",
 	"This command will verify a signed message",
-	"This command will remove a stale DID",
 	"This command will give the DID balance",
 	"This command will give the NFT balance of a DID",
 	"This command will initialise the node",
@@ -635,8 +632,6 @@ func Run(args []string) {
 		cmd.ArbitrarySign()
 	case VerifySignatureCmd:
 		cmd.SignVerification()
-	case RemoveStaleDIDCmd:
-		cmd.RemoveStaleDID()
 	case GetDIDBalanceCmd:
 		cmd.GetDIDBalance()
 	case GetNftsByDidCmd:

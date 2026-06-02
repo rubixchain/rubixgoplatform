@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
@@ -27,11 +25,6 @@ type PeerMap struct {
 func (c *Core) peerSetup() error {
 	c.l.AddRoute(APIPeerStatus, "GET", c.peerStatus)
 	return c.ps.SubscribeTopic(constants.Event_RubixDID, c.peerCallback)
-}
-
-// removePeerSetup will setup the ping route
-func (c *Core) removePeerSetup() error {
-	return c.ps.SubscribeTopic(constants.Event_RemoveRubixDID, c.removeStalePeerCallback)
 }
 
 func (c *Core) publishPeerMap(pm *PeerMap) error {
@@ -202,57 +195,3 @@ func (c *Core) AddPeerDetails(peerDetail models.DID) error {
 	return nil
 }
 
-func (c *Core) publishStalePeer(pm *PeerMap) error {
-	if c.ps != nil {
-		err := c.ps.Publish(constants.Event_RemoveRubixDID, pm)
-		if err != nil {
-			c.log.Error("Failed to publish peer map message", "err", err)
-			return err
-		}
-	}
-	return nil
-}
-
-func (c *Core) removeStalePeerCallback(peerID string, topic string, data []byte) {
-	var stalePeer PeerMap
-	err := json.Unmarshal(data, &stalePeer)
-	c.log.Debug("Peer DID Removal")
-	if err != nil {
-		c.log.Error("failed to parse stale did", "err", err)
-		return
-	}
-
-	if stalePeer.PeerID == c.peerID {
-		return
-	}
-
-	// verify the signature
-	h := util.CalculateHash([]byte(stalePeer.PeerID+stalePeer.DID+stalePeer.Time), "SHA3-256")
-	dc, err := c.InitialiseDID(stalePeer.DID)
-	if err != nil {
-		c.log.Error("failed to initialise stale peer")
-		return
-	}
-	signatureBytes, err := util.Base64ToBytes(stalePeer.Signature)
-	if err != nil {
-		c.log.Error("peerCallback: failed to parse signature, err", err)
-		return
-	}
-	st, err := dc.SignVerify(h, signatureBytes)
-	if err != nil || !st {
-		if err != nil && (strings.Contains(err.Error(), "NLSS DID detected") || strings.Contains(err.Error(), "incompatible key format")) {
-			c.log.Error("NLSS DID detected during stale peer removal. NLSS DIDs are DEPRECATED.", "did", stalePeer.DID, "error", err)
-		} else {
-			c.log.Error("failed to remove stale peer, signature verification failed, err ", err)
-		}
-		return
-	}
-
-	c.log.Debug("removing peer ", stalePeer.DID, stalePeer.PeerID)
-
-	// remove provided peer did and peer-id from PeerDIDTable
-	_ = c.w.RemoveDID(stalePeer.DID)
-
-	// remove peer-did folder
-	os.RemoveAll(path.Join(c.didDir, stalePeer.DID))
-}

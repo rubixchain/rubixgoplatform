@@ -316,38 +316,3 @@ func (cmd *Command) SignVerification() {
 	}
 	cmd.log.Info("signature verification result", result)
 }
-
-func (cmd *Command) RemoveStaleDID() {
-	if cmd.did == "" {
-		cmd.log.Info("DID cannot be empty")
-		fmt.Print("Enter DID : ")
-		_, err := fmt.Scan(&cmd.did)
-		if err != nil {
-			cmd.log.Error("Failed to get DID")
-			return
-		}
-	}
-	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
-	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !isAlphanumeric {
-		cmd.log.Error("Invalid DID")
-		return
-	}
-	br, err := cmd.c.RemoveStaleDID(cmd.did)
-	if err != nil {
-		cmd.log.Error("Failed to remove DID from network", "err", err)
-		return
-	}
-
-	if !br.Status {
-		cmd.log.Error("Failed to remove DID from network", "msg", br.Message)
-		return
-	}
-
-	msg, status := cmd.SignatureResponse(br)
-
-	if !status {
-		cmd.log.Error("Failed to remove DID from network, " + msg)
-		return
-	}
-	cmd.log.Info("DID removed from network successfully")
-}
