@@ -75,6 +75,7 @@ const (
 	GetDIDBalanceCmd string = "getdidbalance"
 	GetFTBalanceCmd  string = "getftbalance"
 	GetRBTBalanceCmd string = "getrbtbalance"
+	GetNftsByDidCmd  string = "getnftbalance"
 )
 
 var commands = []string{
@@ -115,6 +116,7 @@ var commands = []string{
 	VerifySignatureCmd,
 	RemoveStaleDIDCmd,
 	GetDIDBalanceCmd,
+	GetNftsByDidCmd,
 	InitCmd,
 }
 
@@ -156,6 +158,7 @@ var commandsHelp = []string{
 	"This command will verify a signed message",
 	"This command will remove a stale DID",
 	"This command will give the DID balance",
+	"This command will give the NFT balance of a DID",
 	"This command will initialise the node",
 }
 
@@ -636,6 +639,8 @@ func Run(args []string) {
 		cmd.RemoveStaleDID()
 	case GetDIDBalanceCmd:
 		cmd.GetDIDBalance()
+	case GetNftsByDidCmd:
+		cmd.getNFTsByDid()
 	case InitCmd:
 		cmd.init()
 
