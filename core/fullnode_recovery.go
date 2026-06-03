@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -12,6 +13,39 @@ import (
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
+
+// renderFixedLengthJSON writes a JSON response with an explicit
+// Content-Length header so the HTTP server uses identity transfer rather
+// than chunked transfer encoding.
+//
+// Why this matters: the default c.l.RenderJSON uses json.NewEncoder which
+// streams output incrementally; Go's HTTP server then has to use
+// Transfer-Encoding: chunked because the length isn't known at WriteHeader
+// time. When combined with `Connection: close` on the libp2p p2p-forward
+// stream, chunked responses larger than ~3955 bytes intermittently get
+// truncated mid-stream — the client receives the first frame and then sees
+// EOF. Small responses that fit in a single Write happen to dodge this
+// because Go can pre-compute Content-Length for them automatically.
+//
+// Marshalling to bytes first lets us set Content-Length explicitly, which
+// switches the response to identity encoding, which the stream reliably
+// delivers in one piece.
+func renderFixedLengthJSON(req *ensweb.Request, body interface{}, status int) *ensweb.Result {
+	data, err := json.Marshal(body)
+	if err != nil {
+		w := req.GetHTTPWritter()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"status":false,"message":"marshal failed"}`))
+		return &ensweb.Result{Status: http.StatusInternalServerError, Done: true}
+	}
+	w := req.GetHTTPWritter()
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	w.WriteHeader(status)
+	_, _ = w.Write(data)
+	return &ensweb.Result{Status: status, Done: true}
+}
 
 // Page size / safety constants for the recover-from-fullnode endpoint.
 //
@@ -250,5 +284,8 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 		"total_pages", totalPages,
 		"total_items", totalItems,
 		"tokens_in_response", len(out))
-	return c.l.RenderJSON(req, &model.BasicResponse{Status: true, Message: "ok", Result: result}, http.StatusOK)
+	// Use fixed-length encoding (Content-Length set, no Transfer-Encoding:
+	// chunked) — see renderFixedLengthJSON for why this matters for the
+	// libp2p p2p-forward path.
+	return renderFixedLengthJSON(req, &model.BasicResponse{Status: true, Message: "ok", Result: result}, http.StatusOK)
 }
