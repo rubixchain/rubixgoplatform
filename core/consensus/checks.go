@@ -1012,9 +1012,11 @@ func ValidateTransaction(
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
 
-	//If transaction is a genesis transaction fullnode should do the below check addordingly
-	if err := ValidateMinterAllowlist(&txnInfo, isFullnode, w, log, syncTxChains, testnet, mainnet); err != nil {
-		return false, fmt.Errorf("ValidateTransaction: %w", err)
+	if !testnet {  // skip ValidateMinterAllowlist in testnet while minting tokens
+		//If transaction is a genesis transaction fullnode should do the below check addordingly
+		if err := ValidateMinterAllowlist(&txnInfo, isFullnode, w, log, syncTxChains, testnet, mainnet); err != nil {
+			return false, fmt.Errorf("ValidateTransaction: %w", err)
+		}
 	}
 
 	// 7. ValidateTokenIDRelatedChecks for each RBT token in Tokens and CommittedTokens and pledged tokens
