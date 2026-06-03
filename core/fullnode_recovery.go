@@ -43,16 +43,23 @@ func (c *Core) registerRecoveryRoute() {
 // page_number with per-token (position, tx_id) cursors for incremental
 // re-sync. See types.RecoverFromFullnodeRequest for the full contract.
 func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
+	c.log.Info("recoverFromFullnodeHandler: HIT")
 	if httpReq := req.GetHTTPRequest(); httpReq != nil && httpReq.Body != nil {
 		httpReq.Body = http.MaxBytesReader(req.GetHTTPWritter(), httpReq.Body, recoverMaxRequestBodyBytes)
 	}
 
 	var recReq types.RecoverFromFullnodeRequest
 	if err := c.l.ParseJSON(req, &recReq); err != nil {
-		c.log.Debug("recoverFromFullnodeHandler: parse request body failed", "err", err)
+		c.log.Warn("recoverFromFullnodeHandler: parse request body failed", "err", err)
 		return c.l.RenderJSON(req, &model.BasicResponse{Status: false, Message: "Invalid input"}, http.StatusOK)
 	}
+	c.log.Info("recoverFromFullnodeHandler: parsed",
+		"did", recReq.DID,
+		"page_number", recReq.PageNumber,
+		"page_size", recReq.PageSize,
+		"known_count", len(recReq.KnownTokens))
 	if recReq.DID == "" {
+		c.log.Info("recoverFromFullnodeHandler: empty DID, returning early")
 		return c.l.RenderJSON(req, &model.BasicResponse{Status: false, Message: "did is required"}, http.StatusOK)
 	}
 
@@ -97,18 +104,23 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 		thresholds[tokenID] = tip.Position
 	}
 
+	c.log.Info("recoverFromFullnodeHandler: about to count chain entries", "did", recReq.DID)
 	totalItems, err := c.w.CountRecoverableChainEntries(c.w.Ctx, recReq.DID, thresholds)
 	if err != nil {
 		c.log.Warn("recoverFromFullnodeHandler: count failed",
 			"did", recReq.DID, "err", err)
 		return c.l.RenderJSON(req, &model.BasicResponse{Status: false, Message: "fullnode count failed"}, http.StatusOK)
 	}
+	c.log.Info("recoverFromFullnodeHandler: count returned",
+		"did", recReq.DID, "total_items", totalItems)
 	totalPages := 0
 	if totalItems > 0 {
 		totalPages = (totalItems + pageSize - 1) / pageSize
 	}
 
 	if totalItems == 0 {
+		c.log.Info("recoverFromFullnodeHandler: returning empty (no owned tokens)",
+			"did", recReq.DID, "page_number", pageNumber)
 		result := types.RecoverFromFullnodeResult{
 			Tokens:          []types.RecoveredToken{},
 			DivergentTokens: divergent,
@@ -219,5 +231,11 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 		PageSize:        pageSize,
 		TotalItems:      totalItems,
 	}
+	c.log.Info("recoverFromFullnodeHandler: returning",
+		"did", recReq.DID,
+		"page_number", pageNumber,
+		"total_pages", totalPages,
+		"total_items", totalItems,
+		"tokens_in_response", len(out))
 	return c.l.RenderJSON(req, &model.BasicResponse{Status: true, Message: "ok", Result: result}, http.StatusOK)
 }
