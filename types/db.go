@@ -67,14 +67,14 @@ type PortConfig struct {
 // RubixCfgData provides a nested accessor for config fields used by
 // ipfs_health, ipfs_recovery, quorum_recv, token_state_validator, and unpledge_optimized.
 type RubixCfgData struct {
-	Ports          PortConfig
-	IPFSRecovery   *IPFSRecoveryConfig
-	TrustedNetwork bool
-	BootStrap      []string
-	TestBootStrap  []string
+	Ports           PortConfig
+	IPFSRecovery    *IPFSRecoveryConfig
+	TrustedNetwork  bool
+	BootStrap       []string
+	TestBootStrap   []string
 	AsyncFTResponse bool
-	UnpledgeConfig UnpledgePoolConfig
-	NodeConfigDir  string
+	UnpledgeConfig  UnpledgePoolConfig
+	NodeConfigDir   string
 }
 
 type RubixConfig struct {
@@ -97,6 +97,5 @@ type RubixConfig struct {
 	LocalnetBootStrap       []string
 	EnableOptimizedUnpledge bool
 	AsyncFTResponse         bool
-	TrustedNetwork          bool
 	NodePort                int
 }

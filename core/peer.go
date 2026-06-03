@@ -41,7 +41,6 @@ func (c *Core) publishPeerMap(pm *PeerMap) error {
 func (c *Core) peerCallback(peerID string, topic string, data []byte) {
 	var m PeerMap
 	err := json.Unmarshal(data, &m)
-	c.log.Debug("Peer DID Update for ", m.PeerID, " DID ", m.DID)
 	if err != nil {
 		c.log.Error("failed to parse explorer data", "err", err)
 		return
@@ -194,4 +193,3 @@ func (c *Core) AddPeerDetails(peerDetail models.DID) error {
 	c.log.Info("PeerDetails added to DIDPeerTable", "did", peerDetail.DID)
 	return nil
 }
-

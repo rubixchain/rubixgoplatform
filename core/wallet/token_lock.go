@@ -445,7 +445,6 @@ func SelectTokensFromTokenDenomForLocking(
 	return denomArrForTokenSelection, nil
 }
 
-
 // LockTokensForSplit selects and locks the minimum set of free RBT tokens needed
 // for the given amount, using a three-phase approach:
 //
@@ -455,7 +454,6 @@ func SelectTokensFromTokenDenomForLocking(
 //
 // Returns only the selected (now-locked) tokens; callers must eventually release or consume them.
 func (w *Wallet) LockTokensForSplit(ctx context.Context, ownerDID string, amount float64, referenceID string) ([]models.Token, error) {
-	w.log.Info("LockTokensForSplit: locking tokens for split", "ownerDID", ownerDID, "amount", amount)
 	retryCtx, cancel := context.WithTimeout(ctx, lockTokensForSplitRetryBudget)
 	defer cancel()
 	deadline := time.Now().Add(lockTokensForSplitRetryBudget)
@@ -560,7 +558,7 @@ func (w *Wallet) lockTokensForSplitOnce(
 
 		tokensToLockForTransaction = append(tokensToLockForTransaction, denomTokens...)
 	}
-	
+
 	return w.lockSelectedTokens(ctx, tx, tokensToLockForTransaction, referenceID)
 }
 

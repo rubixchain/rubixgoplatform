@@ -101,7 +101,6 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIRemoveAllQuorum, "GET", s.AuthHandle(s.APIRemoveAllQuorum, true, s.AuthError, true))
 	s.AddRoute(setup.APISetupQuorum, "POST", s.AuthHandle(s.APISetupQuorum, true, s.AuthError, true))
 	s.AddRoute(setup.APIGenerateLocalRBT, "POST", s.AuthHandle(s.APIGenerateLocalRBT, true, s.AuthError, false))
-	s.AddRoute(setup.APIGenerateMainnetRBT, "POST", s.AuthHandle(s.APIGenerateMainnetRBT, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetRbtByDid, "GET", s.AuthHandle(s.APIGetRbtByDid, true, s.AuthError, false))
 	s.AddRoute(setup.APISignatureResponse, "POST", s.AuthHandle(s.APISignatureResponse, true, s.AuthError, false))
 	s.AddRoute(setup.APIRegisterDID, "POST", s.AuthHandle(s.APIRegisterDID, true, s.AuthError, false))
@@ -120,7 +119,6 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIFetchNft, "GET", s.AuthHandle(s.APIFetchNft, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetNftByDid, "GET", s.AuthHandle(s.APIGetNFTsByDid, true, s.AuthError, false))
 
-	s.AddRoute(setup.APIAddPeerDetailsFromExplorer, "POST", s.AuthHandle(s.APIAddPeerDetailsFromExplorer, false, s.AuthError, true))
 	s.AddRoute(setup.APIArbitrarySign, "POST", s.AuthHandle(s.APIArbitrarySignature, true, s.AuthError, true))
 	s.AddRoute(setup.APISignVerification, "GET", s.AuthHandle(s.APISignVerification, false, s.AuthError, false))
 

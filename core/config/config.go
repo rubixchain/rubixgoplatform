@@ -138,7 +138,6 @@ func CreateRubixConfigFromUserConfig(userConfig types.UserConfig, nodeDir string
 	rubixConfig.DidDir = filepath.Join(rubixConfig.NetworkDir, "dids")
 	rubixConfig.NFTDir = filepath.Join(rubixConfig.NetworkDir, "nfts")
 	rubixConfig.SmartContractDir = filepath.Join(rubixConfig.NetworkDir, "smart_contracts")
-	rubixConfig.TrustedNetwork = userConfig.Core.EnableTrustedNetwork
 	rubixConfig.PortConfig.IPFSPort = (constants.IPFSPort + uint16(userConfig.Core.NodeIndex))
 	rubixConfig.PortConfig.SendPort = (constants.SendPort + uint16(userConfig.Core.NodeIndex))
 	// ReceiverPort is spaced by MaxPeerConn so the derived Listener (+10) and

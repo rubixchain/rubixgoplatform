@@ -242,8 +242,6 @@ func (w *Wallet) PledgeTokens(tokenInfos []*models.TokenInfo, transaction *model
 		w.log.Error("PledgeTokens: Failed to insert unpledge sequence info", "transactionID", transaction.ID, "err", err)
 		return err
 	}
-	w.log.Info("PledgeTokens: Unpledge sequence info inserted", "transactionID", transaction.ID, "quorumDID", did, "tokenIDs", tokenIDs)
-
 	w.log.Debug("PledgeTokens: Committing transaction", "transactionID", transaction.ID)
 	if err := tx.Commit(w.Ctx); err != nil {
 		w.log.Error("PledgeTokens: Commit failed", "transactionID", transaction.ID, "err", err)

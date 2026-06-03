@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	model "github.com/rubixchain/rubixgoplatform/types/models"
@@ -130,23 +129,4 @@ func (s *Server) APIRemoveAllQuorum(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "Failed to remove all quorums", nil)
 	}
 	return s.BasicResponse(req, true, "Removed all quorums successfully", nil)
-}
-
-// APIAddPeerDetailsFromExplorer will add peer details from explorer
-func (s *Server) APIAddPeerDetailsFromExplorer(req *ensweb.Request) *ensweb.Result {
-	did := s.GetQuery(req, "did")
-	if did == "" {
-		s.log.Error("DID cannot be empty")
-		return s.BasicResponse(req, false, "DID cannot be empty", nil)
-	}
-	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(did)
-	if !strings.HasPrefix(did, "bafybmi") || len(did) != 59 || !is_alphanumeric {
-		s.log.Error("Invalid DID")
-		return s.BasicResponse(req, false, "Invalid DID", nil)
-	}
-	_, err := s.c.GetPeerDIDInfo(did)
-	if err != nil {
-		return s.BasicResponse(req, false, "Failed to add peer details from explorer, "+err.Error(), nil)
-	}
-	return s.BasicResponse(req, true, "Peer details added successfully", nil)
 }

@@ -19,20 +19,6 @@ func (c *Client) GenerateLocalRBT(numTokens int, didStr string, startIndex int) 
 	return &rm, nil
 }
 
-func (c *Client) GenerateMainnetRBT(numTokens int, didStr string, startIndex int) (*models.BasicResponse, error) {
-	m := models.GenerateLocalRBTRequest{
-		NumberOfTokens: numTokens,
-		DID:            didStr,
-		StartIndex:     startIndex,
-	}
-	var rm models.BasicResponse
-	err := c.sendJSONRequest("POST", setup.APIGenerateMainnetRBT, nil, &m, &rm)
-	if err != nil {
-		return nil, err
-	}
-	return &rm, nil
-}
-
 func (c *Client) GetAllTokens(didStr string, tokenType string) (*models.TokenResponse, error) {
 	q := make(map[string]string)
 	q["type"] = tokenType
@@ -57,4 +43,3 @@ func (c *Client) GenerateFaucetTestRBT(numTokens int, didStr string) (*models.Ba
 	}
 	return &rm, nil
 }
-

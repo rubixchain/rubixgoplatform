@@ -25,7 +25,6 @@ const (
 	APIRemoveAllQuorum            string = "/api/removeallquorum"
 	APISetupQuorum                string = "/api/setup-quorum"
 	APIGenerateLocalRBT           string = "/api/generate-local-rbt"
-	APIGenerateMainnetRBT         string = "/api/generate-mainnet-rbt"
 	APISetupDID                   string = "/api/setup-did"
 	APIFetchSmartContract         string = "/api/fetch-smart-contract"
 	APIPeerID                     string = "/api/get-peer-id"

@@ -159,21 +159,11 @@ func (c *Core) SubscribeNFTSetup(requestID string, topic string) error {
 }
 
 func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
-	c.log.Info("NFTCallBack: Received pubsub message",
-		"peerID", peerID,
-		"topic", topic,
-		"dataLen", len(data),
-		"rawData", string(data),
-	)
 
 	// Skip self-echo: when the node publishes an NFT event, it may receive
 	// its own message back via pubsub. Syncing from ourselves would race
 	// with the ongoing transaction's persistence and potentially corrupt
 	// token state.
-	if peerID == c.peerID {
-		c.log.Debug("NFTCallBack: Ignoring self-published event", "topic", topic)
-		return
-	}
 
 	var newEvent models.EventNFTPublishInfo
 	err := json.Unmarshal(data, &newEvent)
@@ -183,13 +173,6 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 	}
 
 	nft := newEvent.NFTid
-	c.log.Info("NFTCallBack: Parsed NFT event",
-		"nftID", nft,
-		"transactionID", newEvent.TransactionID,
-		"initiator", newEvent.Initiator,
-		"epoch", newEvent.Epoch,
-		"hasData", newEvent.NFTData != "",
-	)
 
 	if nft == "" {
 		c.log.Error("NFTCallBack: NFTid is empty after unmarshal — cannot proceed",
@@ -214,7 +197,7 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 	}
 
 	publisherAddress := peerID + "." + initiatorDid
-	c.log.Info("NFTCallBack: Syncing transaction chain from publisher",
+	c.log.Debug("NFTCallBack: Syncing transaction chain from publisher",
 		"nft_token", nft,
 		"peerAddress", publisherAddress,
 	)

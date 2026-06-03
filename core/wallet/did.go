@@ -8,7 +8,6 @@ import (
 )
 
 func (w *Wallet) CreateOrUpdateDID(didInfo *models.DID) error {
-	w.log.Debug("Adding to dids -", didInfo.DID, "peerid ", didInfo.PeerID, " isLocal:", didInfo.Local)
 	if _, err := w.db.Pool().Exec(w.Ctx, `
 		INSERT INTO dids(did, peer_id, local, algo_id)
 		VALUES ($1, $2, $3, $4)
@@ -102,7 +101,6 @@ func (w *Wallet) IsDIDExists(did string) (bool, error) {
 
 	return exists, nil
 }
-
 
 func (w *Wallet) IsLocalDID(did string) (bool, error) {
 	var local bool

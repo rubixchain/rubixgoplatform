@@ -50,7 +50,6 @@ const (
 	RemoveAllQuorumCmd         string = "removeallquorum"
 	SetupQuorumCmd             string = "setupquorum"
 	GenerateLocalRBTCmd        string = "generatelocalrbt"
-	GenerateMainnetRBTCmd      string = "generatemainnetrbt"
 	RegsiterDIDCmd             string = "registerdid"
 	SetupDIDCmd                string = "setupdid"
 	ShutDownCmd                string = "shutdown"
@@ -93,7 +92,6 @@ var commands = []string{
 	RemoveAllQuorumCmd,
 	SetupQuorumCmd,
 	GenerateLocalRBTCmd,
-	GenerateMainnetRBTCmd,
 	GetRBTBalanceCmd,
 	RegsiterDIDCmd,
 	SetupDIDCmd,
@@ -134,7 +132,6 @@ var commandsHelp = []string{
 	"This command will delete all quorum list from node",
 	"This command will setup node as quorum",
 	"This command will generate test RBT token",
-	"This command will generate mainnet RBT tokens",
 	"This command will give the RBT balance",
 	"This command will register DID peer map across the network",
 	"This command will setup the DID with peer",
@@ -240,7 +237,6 @@ type Command struct {
 	signature                    string
 	signerDID                    string
 	enableTrustedNetwork         bool
-	disableTrustedNetwork        bool
 	backupDB                     bool
 	fullNode                     bool
 	dumpFullnodeTokenChain       bool
@@ -309,15 +305,6 @@ func (cmd *Command) runApp() {
 	}
 	cmd.cfg = rubixConfig
 	cmd.cfg.CfgData.Ports = cmd.cfg.PortConfig
-
-	if cmd.disableTrustedNetwork {
-		cmd.cfg.TrustedNetwork = false
-		cmd.log.Info("Trusted network mode explicitly disabled via -disableTrustedNetwork flag")
-	} else {
-		// Trusted network is enabled by default
-		cmd.cfg.TrustedNetwork = true
-		cmd.log.Info("Trusted network mode enabled (default)")
-	}
 
 	sc := make(chan bool, 1)
 
@@ -484,7 +471,6 @@ func Run(args []string) {
 	flag.StringVar(&cmd.signature, "signature", "", "signature to be verified")
 	flag.StringVar(&cmd.signerDID, "signerdid", "", "DID of the signer")
 	flag.BoolVar(&cmd.enableTrustedNetwork, "enableTrustedNetwork", true, "Enable trusted network mode (skips DHT checks) - enabled by default")
-	flag.BoolVar(&cmd.disableTrustedNetwork, "disableTrustedNetwork", false, "Disable trusted network mode to enable full DHT checks")
 	flag.BoolVar(&cmd.backupDB, "backupDB", false, "Create backup of database before starting node")
 	flag.BoolVar(&cmd.fullNode, "fullnode", false, "receive all published transactions and tokenchain details")
 	flag.BoolVar(&cmd.dumpFullnodeTokenChain, "fullnodetoken", false, "dump tokenchain from fullnode storage")
@@ -592,8 +578,6 @@ func Run(args []string) {
 		cmd.SetupQuorum()
 	case GenerateLocalRBTCmd:
 		cmd.GenerateLocalRBT()
-	case GenerateMainnetRBTCmd:
-		cmd.GenerateMainnetRBT()
 	case GetRBTBalanceCmd:
 		cmd.GetRBTBalance()
 	case RegsiterDIDCmd:
