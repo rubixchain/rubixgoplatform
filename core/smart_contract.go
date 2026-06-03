@@ -24,6 +24,10 @@ const (
 	ExecuteType int = 2
 )
 
+// ErrContractMetadataInvalid means the content at a token hash isn't valid
+// contract metadata JSON. Expected for child NFTs, which have no metadata.
+var ErrContractMetadataInvalid = errors.New("contract metadata is not valid IPFSContractInfo JSON")
+
 type NewState struct {
 	ConOwnerDID string `json:"contract_ownwer_did"`
 	ConHash     string `json:"contract_hash"`
@@ -506,7 +510,7 @@ func (c *Core) fetchContractInfo(tokenHash string) (*models.IPFSContractInfo, er
 	// Parse into unified struct
 	var contractInfo models.IPFSContractInfo
 	if err := json.Unmarshal(metadataBytes, &contractInfo); err != nil {
-		return nil, fmt.Errorf("fetchContractInfo: failed to parse contract metadata JSON: %w", err)
+		return nil, fmt.Errorf("fetchContractInfo: %w: %v", ErrContractMetadataInvalid, err)
 	}
 
 	return &contractInfo, nil
