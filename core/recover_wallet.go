@@ -183,7 +183,17 @@ func (c *Core) fetchRecoveryPageWithDiag(
 			lastErr = err
 			continue
 		}
-		httpReq.Close = true
+		// Intentionally NOT setting httpReq.Close = true.
+		//
+		// Each page used to open a fresh TCP conn + a fresh libp2p stream
+		// (via IPFS p2p-forward). After the handler returned, the server
+		// would emit Connection: close and tear down the stream immediately.
+		// On responses larger than the http server's 4 KB write buffer that
+		// teardown raced the remaining flushes through p2p-forward, so the
+		// client saw the first ~4 KB and then unexpected EOF — even though
+		// the response was fully marshalled with a correct Content-Length.
+		// Reusing the connection across pages keeps the libp2p stream alive
+		// for the whole recovery run, which removes the race entirely.
 
 		httpResp, err := peer.Do(httpReq, recoveryRequestTimeout)
 		if err != nil {
