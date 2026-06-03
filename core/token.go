@@ -1792,11 +1792,11 @@ func (c *Core) generateTestRBT(reqID string, numTokens int, did string, startInd
 
 		//If the latest token number to be generated is more than the max token value of previous token, increase the token level
 		// levelOffset := tokendetail.TokenLevel - constants.TestnetRBT_Level_Offset
-		maxTokens := token.TokenMap[mapLevel]
-		if tokendetail.CurrentTokenNumber == maxTokens+1 {
-			tokendetail.TokenLevel += 1
-			tokendetail.CurrentTokenNumber = 1
-		}
+		// maxTokens := token.TokenMap[mapLevel]
+		// if tokendetail.CurrentTokenNumber == maxTokens+1 {
+		// 	tokendetail.TokenLevel += 1
+		// 	tokendetail.CurrentTokenNumber = 1
+		// }
 
 		id, err := c.getTestTokensID(tokendetail.TokenLevel, tokendetail.CurrentTokenNumber)
 		if err != nil {
