@@ -20,11 +20,14 @@ import (
 // so TotalPages stays a meaningful index the client can use for gap detection
 // across an entire recovery run.
 const (
-	// recoverDefaultPageSize controls chain entries per page. Smaller values
-	// keep each response well below any libp2p stream buffer limits at the
-	// cost of more round-trips. Set low during initial transport testing —
-	// raise once end-to-end is confirmed working.
-	recoverDefaultPageSize     = 5
+	// recoverDefaultPageSize controls chain entries per page. Chain entries
+	// vary widely in `info` size (a tx referencing many tokens / quorums can
+	// be 50–100 KB on its own). Aggregating multiple per page risks blowing
+	// past libp2p stream buffer limits and the response gets truncated mid-
+	// flight (manifests as `unexpected EOF` on the client). We ship one
+	// entry per page during testing to stay safely under the threshold; bump
+	// up once a size-aware chunking strategy lands.
+	recoverDefaultPageSize     = 1
 	recoverMaxPageSize         = 1000
 	recoverMaxRequestBodyBytes = 1 * 1024 * 1024 // 1 MB to accommodate large known_tokens maps
 	recoverMaxOffsetRows       = 100_000_000
