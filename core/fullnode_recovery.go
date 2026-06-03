@@ -20,7 +20,11 @@ import (
 // so TotalPages stays a meaningful index the client can use for gap detection
 // across an entire recovery run.
 const (
-	recoverDefaultPageSize     = 100
+	// recoverDefaultPageSize controls chain entries per page. Smaller values
+	// keep each response well below any libp2p stream buffer limits at the
+	// cost of more round-trips. Set low during initial transport testing —
+	// raise once end-to-end is confirmed working.
+	recoverDefaultPageSize     = 5
 	recoverMaxPageSize         = 1000
 	recoverMaxRequestBodyBytes = 1 * 1024 * 1024 // 1 MB to accommodate large known_tokens maps
 	recoverMaxOffsetRows       = 100_000_000
@@ -230,6 +234,12 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 		TotalPages:      totalPages,
 		PageSize:        pageSize,
 		TotalItems:      totalItems,
+	}
+	// Log response size so we can correlate against libp2p tunnel behavior.
+	// Temporary diagnostic — remove once transport is confirmed stable.
+	if respBytes, mErr := json.Marshal(result); mErr == nil {
+		c.log.Info("recoverFromFullnodeHandler: response size",
+			"did", recReq.DID, "bytes", len(respBytes))
 	}
 	c.log.Info("recoverFromFullnodeHandler: returning",
 		"did", recReq.DID,
