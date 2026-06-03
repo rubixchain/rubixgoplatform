@@ -1,7 +1,6 @@
 package core
 
 import (
-	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,27 +12,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
-
-// renderGzipJSON writes a gzip-compressed JSON response over the libp2p
-// HTTP stream. Used by the recovery handler because individual chain
-// entries can carry very large transaction info blobs (>200 KB) that
-// exceed the underlying libp2p stream's effective throughput window
-// when shipped raw. Go's HTTP transport on the client transparently
-// decompresses any response carrying `Content-Encoding: gzip`, so no
-// matching client change is needed.
-func renderGzipJSON(req *ensweb.Request, body interface{}, status int) *ensweb.Result {
-	w := req.GetHTTPWritter()
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Encoding", "gzip")
-	w.WriteHeader(status)
-
-	gz := gzip.NewWriter(w)
-	enc := json.NewEncoder(gz)
-	_ = enc.Encode(body)
-	_ = gz.Close()
-
-	return &ensweb.Result{Status: status, Done: true}
-}
 
 // Page size / safety constants for the recover-from-fullnode endpoint.
 //
@@ -264,7 +242,7 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 	// Temporary diagnostic — remove once transport is confirmed stable.
 	if respBytes, mErr := json.Marshal(result); mErr == nil {
 		c.log.Info("recoverFromFullnodeHandler: response size",
-			"did", recReq.DID, "bytes_uncompressed", len(respBytes))
+			"did", recReq.DID, "bytes", len(respBytes))
 	}
 	c.log.Info("recoverFromFullnodeHandler: returning",
 		"did", recReq.DID,
@@ -272,9 +250,5 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 		"total_pages", totalPages,
 		"total_items", totalItems,
 		"tokens_in_response", len(out))
-	// Gzip the success-path response — single chain entries can exceed
-	// what the libp2p stream ships reliably (>~200 KB consistently EOFs
-	// the client). JSON compresses 5–10× here so even a 300 KB raw entry
-	// fits comfortably on the wire.
-	return renderGzipJSON(req, &model.BasicResponse{Status: true, Message: "ok", Result: result}, http.StatusOK)
+	return c.l.RenderJSON(req, &model.BasicResponse{Status: true, Message: "ok", Result: result}, http.StatusOK)
 }
