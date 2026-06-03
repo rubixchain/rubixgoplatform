@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/types"
@@ -116,7 +117,7 @@ func (c *Core) RecoverWalletFromFullnode(ctx context.Context, did string) (*Reco
 			Message string                          `json:"message"`
 			Result  types.RecoverFromFullnodeResult `json:"result"`
 		}
-		if err := peer.SendJSONRequest("POST", setup.APIRecoverFromFullnode, nil, req, &resp, false, recoveryRequestTimeout); err != nil {
+		if err := c.fetchRecoveryPageWithDiag(peer, req, &resp, pageNumber); err != nil {
 			return result, fmt.Errorf("RecoverWalletFromFullnode: send page %d: %w", pageNumber, err)
 		}
 		if !resp.Status {
@@ -153,6 +154,110 @@ func (c *Core) RecoverWalletFromFullnode(ctx context.Context, did string) (*Reco
 		}
 	}
 	return result, fmt.Errorf("RecoverWalletFromFullnode: page iteration cap (%d) reached without completion (total_pages=%d)", recoveryMaxPageIterations, totalPages)
+}
+
+// fetchRecoveryPageWithDiag is a temporary diagnostic replacement for
+// peer.SendJSONRequest used only by the recovery loop. It manually builds
+// the HTTP request, reads the response body in full, and logs:
+//   - HTTP status
+//   - Content-Encoding / Content-Length headers
+//   - Actual bytes received (compared against Content-Length)
+//   - Head + tail snippet of the body on decode failure
+//
+// Same 3-attempt retry shape as SendJSONRequest. Once the recovery transport
+// is stable, this can be reverted to SendJSONRequest.
+func (c *Core) fetchRecoveryPageWithDiag(
+	peer *ipfsport.Peer,
+	body *types.RecoverFromFullnodeRequest,
+	out interface{},
+	pageNumber int,
+) error {
+	const maxRetries = 3
+	var lastErr error
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		httpReq, err := peer.JSONRequest("POST", setup.APIRecoverFromFullnode, body)
+		if err != nil {
+			c.log.Error("recovery diag: build request failed",
+				"page", pageNumber, "attempt", attempt, "err", err)
+			lastErr = err
+			continue
+		}
+		httpReq.Close = true
+
+		httpResp, err := peer.Do(httpReq, recoveryRequestTimeout)
+		if err != nil {
+			c.log.Error("recovery diag: transport error",
+				"page", pageNumber, "attempt", attempt, "err", err)
+			lastErr = err
+			time.Sleep(time.Second * time.Duration(attempt))
+			continue
+		}
+
+		bodyBytes, readErr := io.ReadAll(httpResp.Body)
+		_ = httpResp.Body.Close()
+
+		c.log.Info("recovery diag: response received",
+			"page", pageNumber,
+			"attempt", attempt,
+			"http_status", httpResp.StatusCode,
+			"content_encoding", httpResp.Header.Get("Content-Encoding"),
+			"content_length_header", httpResp.Header.Get("Content-Length"),
+			"bytes_actually_read", len(bodyBytes),
+			"read_err", readErr)
+
+		if readErr != nil {
+			// Truncated read — log a snippet of what we got before the cut.
+			snippet := bodyBytes
+			if len(snippet) > 256 {
+				snippet = snippet[:256]
+			}
+			c.log.Error("recovery diag: body read truncated",
+				"page", pageNumber, "attempt", attempt,
+				"bytes_before_truncation", len(bodyBytes),
+				"head", string(snippet))
+			lastErr = readErr
+			time.Sleep(time.Second * time.Duration(attempt))
+			continue
+		}
+
+		if httpResp.StatusCode != 200 {
+			lastErr = fmt.Errorf("http status %d: %s", httpResp.StatusCode, string(bodyBytes))
+			c.log.Error("recovery diag: non-200", "page", pageNumber, "err", lastErr)
+			return lastErr
+		}
+
+		if err := json.Unmarshal(bodyBytes, out); err != nil {
+			headSize := 256
+			tailSize := 256
+			if len(bodyBytes) < headSize {
+				headSize = len(bodyBytes)
+			}
+			head := string(bodyBytes[:headSize])
+			var tail string
+			if len(bodyBytes) > tailSize {
+				tail = string(bodyBytes[len(bodyBytes)-tailSize:])
+			} else {
+				tail = "<same as head>"
+			}
+			c.log.Error("recovery diag: JSON decode failed",
+				"page", pageNumber, "attempt", attempt,
+				"body_size", len(bodyBytes),
+				"err", err,
+				"head_256", head,
+				"tail_256", tail)
+			lastErr = err
+			time.Sleep(time.Second * time.Duration(attempt))
+			continue
+		}
+
+		// Success.
+		c.log.Info("recovery diag: response decoded ok",
+			"page", pageNumber, "attempt", attempt, "body_size", len(bodyBytes))
+		return nil
+	}
+
+	return fmt.Errorf("recovery diag: all %d attempts failed: %w", maxRetries, lastErr)
 }
 
 // persistRecoveredTokenPage maps the wire-level RecoveredToken into the
