@@ -440,10 +440,37 @@ func (w *Wallet) PersistRecoveredTokenChainPage(
 		}
 	}
 
-	// 2. Upsert the tokens row. latest_position uses state.LatestPosition
-	// (the fullnode's global position) so future operations on this wallet
-	// continue the chain from the correct tip. Re-applying on every page
-	// for the same token is idempotent.
+	// 2. Resolve the local chain tip for this token AFTER the inserts above.
+	// We must point the tokens row at a transaction that actually exists in
+	// the local `transactions` table — otherwise the tokens.transaction_id
+	// FK fails. The fullnode's "global latest" tx might not have arrived yet
+	// (it'll come on a later page). So we use the highest-position chain row
+	// currently in the local tokenchain, which is guaranteed to have its tx
+	// already inserted (either by this page's loop above or a previous page).
+	var localLatestTxID string
+	var localLatestPosition int64
+	var localLatestRole int16
+	if err := dbtx.QueryRow(ctx, `
+		SELECT transaction_id, position, role
+		FROM tokenchain
+		WHERE token_id = $1
+		ORDER BY position DESC
+		LIMIT 1
+	`, state.TokenID).Scan(&localLatestTxID, &localLatestPosition, &localLatestRole); err != nil {
+		return fmt.Errorf("PersistRecoveredTokenChainPage: read local chain tip (token %q): %w", state.TokenID, err)
+	}
+
+	// 3. Upsert the tokens row.
+	//
+	// Chain-tip pointers (transaction_id, latest_position, latest_role) use
+	// the LOCAL chain tip just resolved — never the fullnode's global tip —
+	// so the tokens.transaction_id FK is always satisfied. As later pages
+	// arrive and add chain entries, those pointers advance toward the global
+	// tip; by the time the last page lands they match the fullnode's view.
+	//
+	// Status / value / DID / parent / state_hash come from the fullnode's
+	// authoritative current_state — those don't depend on chain depth.
+	// Re-applying on every page is idempotent.
 	if _, err := dbtx.Exec(ctx, `
 		INSERT INTO tokens (
 			token_id, parent_token_id, token_value, token_status, did,
@@ -465,11 +492,11 @@ func (w *Wallet) PersistRecoveredTokenChainPage(
 		state.TokenValue,
 		state.TokenStatus,
 		did,
-		state.TransactionID,
+		localLatestTxID,
 		state.TokenStateHash,
 		int16(tokenTypeID),
-		state.LatestPosition,
-		state.LatestRole,
+		localLatestPosition,
+		localLatestRole,
 	); err != nil {
 		return fmt.Errorf("PersistRecoveredTokenChainPage: upsert tokens (token %q): %w", state.TokenID, err)
 	}
