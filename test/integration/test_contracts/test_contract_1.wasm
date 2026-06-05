@@ -1,0 +1,3 @@
+// Dummy WASM binary for stress testing
+// The Rubix API only validates the .wasm extension
+dummy wasm binary content

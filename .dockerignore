@@ -1,0 +1,39 @@
+# Trim the Docker build context (repo root via `context: ..`).
+# The build stage runs `go build`, so it needs Go source + go.mod/go.sum +
+# submodules only. The runtime stage copies docker/rubix/* (kubo tarball,
+# entrypoint, config template) — those MUST NOT be ignored.
+
+# ---- Huge non-build artifacts (multi-GB) ----
+results/
+mac/
+linux/
+windows/
+logs/
+docker/data/
+
+# ---- Prebuilt binaries committed at repo root (rebuilt inside the image) ----
+/ipfs
+/rubixgoplatform
+/rubixgoplatform.exe
+
+# ---- Local-only Python test scratchpads (gitignored; not needed by the build) ----
+e2e/
+e2e_stress/
+test/integration/__pycache__/
+**/__pycache__/
+*.pyc
+
+# ---- Tooling / VCS / editor cruft ----
+.git/
+.github/
+.vscode/
+.planning/
+.claude/
+*.log
+.DS_Store
+
+# NOTE: docker/rubix/ is intentionally NOT ignored — the kubo tarball and
+# entrypoint/config template are copied by docker/rubix/Dockerfile.
+# NOTE: docs/ is intentionally NOT ignored — docs/docs.go is a Go package
+# imported by command/command.go (blank import for Swagger), so the build
+# needs it. Do not exclude docs/ or *.go-adjacent dirs.

@@ -1,0 +1,152 @@
+networks:
+  rubix-stress-net:
+    driver: bridge
+
+services:
+
+  # ─── nodeA ────────────────────────────────────────────────────────────────
+
+  nodeA-postgres:
+    image: postgres:16
+    container_name: rubix-stress-nodeA-postgres
+    environment:
+      POSTGRES_USER: rubix
+      POSTGRES_PASSWORD: rubixpass
+      POSTGRES_DB: rubix_a
+    volumes:
+      - ./data/stress/nodeA/db:/var/lib/postgresql/data
+    networks:
+      - rubix-stress-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rubix -d rubix_a"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    ports:
+      - "5436:5432"
+
+  nodeA:
+    build:
+      context: ../..
+      dockerfile: test/docker/rubix/Dockerfile
+    image: rubix-node:latest
+    container_name: rubix-stress-nodeA
+    depends_on:
+      nodeA-postgres:
+        condition: service_healthy
+    environment:
+      NETWORK_MODE: localnet
+      DB_HOST: nodeA-postgres
+      DB_PORT: 5432
+      DB_NAME: rubix_a
+    ports:
+      - "20010:20000"
+    volumes:
+      - ./data/stress/nodeA/app:/app/data
+      - ./swarm:/swarm
+    networks:
+      - rubix-stress-net
+    healthcheck:
+      test: ["CMD", "bash", "-c", "</dev/tcp/localhost/20000"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # ─── nodeB ────────────────────────────────────────────────────────────────
+
+  nodeB-postgres:
+    image: postgres:16
+    container_name: rubix-stress-nodeB-postgres
+    environment:
+      POSTGRES_USER: rubix
+      POSTGRES_PASSWORD: rubixpass
+      POSTGRES_DB: rubix_b
+    volumes:
+      - ./data/stress/nodeB/db:/var/lib/postgresql/data
+    networks:
+      - rubix-stress-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rubix -d rubix_b"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    ports:
+      - "5437:5432"
+
+  nodeB:
+    build:
+      context: ../..
+      dockerfile: test/docker/rubix/Dockerfile
+    image: rubix-node:latest
+    container_name: rubix-stress-nodeB
+    depends_on:
+      nodeB-postgres:
+        condition: service_healthy
+    environment:
+      NETWORK_MODE: localnet
+      DB_HOST: nodeB-postgres
+      DB_PORT: 5432
+      DB_NAME: rubix_b
+    ports:
+      - "20011:20000"
+    volumes:
+      - ./data/stress/nodeB/app:/app/data
+      - ./swarm:/swarm
+    networks:
+      - rubix-stress-net
+    healthcheck:
+      test: ["CMD", "bash", "-c", "</dev/tcp/localhost/20000"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # ─── quorum ───────────────────────────────────────────────────────────────
+
+  quorum-postgres:
+    image: postgres:16
+    container_name: rubix-stress-quorum-postgres
+    environment:
+      POSTGRES_USER: rubix
+      POSTGRES_PASSWORD: rubixpass
+      POSTGRES_DB: rubix_q
+    volumes:
+      - ./data/stress/quorum/db:/var/lib/postgresql/data
+    networks:
+      - rubix-stress-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rubix -d rubix_q"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    ports:
+      - "5438:5432"
+
+  quorum:
+    build:
+      context: ../..
+      dockerfile: test/docker/rubix/Dockerfile
+    image: rubix-node:latest
+    container_name: rubix-stress-quorum
+    depends_on:
+      quorum-postgres:
+        condition: service_healthy
+    environment:
+      NETWORK_MODE: localnet
+      DB_HOST: quorum-postgres
+      DB_PORT: 5432
+      DB_NAME: rubix_q
+    ports:
+      - "20012:20000"
+    volumes:
+      - ./data/stress/quorum/app:/app/data
+      - ./swarm:/swarm
+    networks:
+      - rubix-stress-net
+    healthcheck:
+      test: ["CMD", "bash", "-c", "</dev/tcp/localhost/20000"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s

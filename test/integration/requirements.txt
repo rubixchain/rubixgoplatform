@@ -1,0 +1,4 @@
+# Python dependencies for the integration test harness (test/integration/).
+# Install from repo root:  pip install -r test/integration/requirements.txt
+requests>=2.28
+psycopg2-binary>=2.9
