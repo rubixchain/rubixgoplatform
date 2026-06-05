@@ -138,62 +138,27 @@ type RecoveredChainRow struct {
 	Signature             json.RawMessage `db:"signature"`
 }
 
-// CountRecoverableChainEntries returns the total number of chain entries the
-// fullnode has queued to send for the recovering DID, after applying the
-// per-token `thresholds` filter (entries with `position > thresholds[token]`
-// qualify; tokens absent from the map default to -1 → full chain).
-//
-// Powers TotalPages on the recover-from-fullnode endpoint.
-func (w *Wallet) CountRecoverableChainEntries(ctx context.Context, did string, thresholds map[string]int64) (int, error) {
-	if ctx == nil {
-		ctx = w.Ctx
-	}
-	if did == "" {
-		return 0, fmt.Errorf("CountRecoverableChainEntries: did is required")
-	}
-
-	// Owned token set: union across the three state tables.
-	// We materialise the threshold pairs via unnest so the planner can filter
-	// fullnode_tokenchain by per-token position threshold in a single round trip.
-	thresholdTokens, thresholdValues := mapToParallelArrays(thresholds)
-
-	var count int
-	err := w.db.Pool().QueryRow(ctx, `
-		WITH owned AS (
-			SELECT token_id FROM fullnode_rbt WHERE did = $1
-			UNION ALL
-			SELECT token_id FROM fullnode_ft  WHERE did = $1
-			UNION ALL
-			SELECT token_id FROM fullnode_nft WHERE did = $1
-		),
-		thresholds AS (
-			SELECT * FROM unnest($2::text[], $3::bigint[]) AS t(token_id, threshold)
-		)
-		SELECT COUNT(*)
-		FROM fullnode_tokenchain tc
-		JOIN owned o ON o.token_id = tc.token_id
-		LEFT JOIN thresholds th ON th.token_id = tc.token_id
-		WHERE tc.position > COALESCE(th.threshold, -1)
-	`, did, thresholdTokens, thresholdValues).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("CountRecoverableChainEntries: %w", err)
-	}
-	return count, nil
-}
-
-// GetRecoverableChainPageByOffset returns up to `limit` chain entries (with
+// GetRecoverableChainPageByCursor returns up to `limit` chain entries (with
 // joined transaction info + signature) for the recovering DID, ordered by
-// (token_id, position), at the given OFFSET. Per-token thresholds filter as
-// in CountRecoverableChainEntries.
+// (token_id, position), strictly AFTER the (cursorTokenID, cursorPosition)
+// cursor. Per-token thresholds filter further: only rows with
+// `position > thresholds[token]` qualify; tokens absent from the map default
+// to -1 → full chain.
 //
-// The returned rows are already enriched with token_type via the joined
-// state table — the handler can group them by token_id and look up the
-// current state from a separate map prebuilt from ListOwnedTokensByDID.
-func (w *Wallet) GetRecoverableChainPageByOffset(
+// On the first request the caller passes an empty cursor
+// (cursorTokenID="" cursorPosition=-1) which matches every row.
+//
+// Tuple comparison ((token_id, position) > ($cursor_tok, $cursor_pos))
+// replaces LIMIT + OFFSET so the handler can stop emitting rows once a
+// per-page byte budget is reached, without losing track of where to resume.
+// The (token_id, position) index makes this a direct seek — no scan-and-skip.
+func (w *Wallet) GetRecoverableChainPageByCursor(
 	ctx context.Context,
 	did string,
 	thresholds map[string]int64,
-	offset, limit int,
+	cursorTokenID string,
+	cursorPosition int64,
+	limit int,
 ) ([]RecoveredChainRow, error) {
 	if ctx == nil {
 		ctx = w.Ctx
@@ -202,7 +167,7 @@ func (w *Wallet) GetRecoverableChainPageByOffset(
 		return nil, nil
 	}
 	if did == "" {
-		return nil, fmt.Errorf("GetRecoverableChainPageByOffset: did is required")
+		return nil, fmt.Errorf("GetRecoverableChainPageByCursor: did is required")
 	}
 	thresholdTokens, thresholdValues := mapToParallelArrays(thresholds)
 
@@ -224,11 +189,12 @@ func (w *Wallet) GetRecoverableChainPageByOffset(
 		JOIN owned o ON o.token_id = tc.token_id
 		LEFT JOIN thresholds th ON th.token_id = tc.token_id
 		WHERE tc.position > COALESCE(th.threshold, -1)
+		  AND (tc.token_id, tc.position) > ($4, $5)
 		ORDER BY tc.token_id ASC, tc.position ASC
-		LIMIT $4 OFFSET $5
-	`, did, thresholdTokens, thresholdValues, limit, offset)
+		LIMIT $6
+	`, did, thresholdTokens, thresholdValues, cursorTokenID, cursorPosition, limit)
 	if err != nil {
-		return nil, fmt.Errorf("GetRecoverableChainPageByOffset: query: %w", err)
+		return nil, fmt.Errorf("GetRecoverableChainPageByCursor: query: %w", err)
 	}
 	defer rows.Close()
 
@@ -239,7 +205,7 @@ func (w *Wallet) GetRecoverableChainPageByOffset(
 			&r.TokenID, &r.TransactionID, &r.Role, &r.Position,
 			&r.PreviousTransactionID, &r.Info, &r.Signature,
 		); err != nil {
-			return nil, fmt.Errorf("GetRecoverableChainPageByOffset: scan: %w", err)
+			return nil, fmt.Errorf("GetRecoverableChainPageByCursor: scan: %w", err)
 		}
 		out = append(out, r)
 	}

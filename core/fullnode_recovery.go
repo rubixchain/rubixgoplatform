@@ -1,6 +1,8 @@
 package core
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -14,24 +16,22 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
-// renderFixedLengthJSON writes a JSON response with an explicit
-// Content-Length header so the HTTP server uses identity transfer rather
-// than chunked transfer encoding.
+// renderGzipFixedLengthJSON writes a gzipped JSON response with an explicit
+// Content-Length header. The two properties together (Content-Length set +
+// Content-Encoding: gzip) keep Go's HTTP server on identity transfer instead
+// of chunked, and keep the wire body small enough to sit under the ~4 KB
+// Kubo p2p-forward buffer-flush ceiling that intermittently truncates larger
+// responses with "unexpected EOF".
 //
-// Why this matters: the default c.l.RenderJSON uses json.NewEncoder which
-// streams output incrementally; Go's HTTP server then has to use
-// Transfer-Encoding: chunked because the length isn't known at WriteHeader
-// time. When combined with `Connection: close` on the libp2p p2p-forward
-// stream, chunked responses larger than ~3955 bytes intermittently get
-// truncated mid-stream — the client receives the first frame and then sees
-// EOF. Small responses that fit in a single Write happen to dodge this
-// because Go can pre-compute Content-Length for them automatically.
+// Go's http.Transport on the client transparently decompresses when the
+// response carries Content-Encoding: gzip and the request did not set
+// Accept-Encoding explicitly — which is the case for ensweb's client. The
+// caller therefore sees a normal decompressed body without code changes.
 //
-// Marshalling to bytes first lets us set Content-Length explicitly, which
-// switches the response to identity encoding, which the stream reliably
-// delivers in one piece.
-func renderFixedLengthJSON(req *ensweb.Request, body interface{}, status int) *ensweb.Result {
-	data, err := json.Marshal(body)
+// On gzip failure the function falls back to uncompressed identity-encoded
+// output so the request still returns a valid error response.
+func renderGzipFixedLengthJSON(req *ensweb.Request, body interface{}, status int) *ensweb.Result {
+	raw, err := json.Marshal(body)
 	if err != nil {
 		w := req.GetHTTPWritter()
 		w.Header().Set("Content-Type", "application/json")
@@ -39,32 +39,62 @@ func renderFixedLengthJSON(req *ensweb.Request, body interface{}, status int) *e
 		_, _ = w.Write([]byte(`{"status":false,"message":"marshal failed"}`))
 		return &ensweb.Result{Status: http.StatusInternalServerError, Done: true}
 	}
+
+	var compressed bytes.Buffer
+	gz := gzip.NewWriter(&compressed)
+	if _, werr := gz.Write(raw); werr != nil {
+		return writeIdentityJSON(req, raw, status)
+	}
+	if cerr := gz.Close(); cerr != nil {
+		return writeIdentityJSON(req, raw, status)
+	}
+
 	w := req.GetHTTPWritter()
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	w.Header().Set("Content-Encoding", "gzip")
+	w.Header().Set("Content-Length", strconv.Itoa(compressed.Len()))
 	w.WriteHeader(status)
-	_, _ = w.Write(data)
+	_, _ = w.Write(compressed.Bytes())
 	return &ensweb.Result{Status: status, Done: true}
 }
 
-// Page size / safety constants for the recover-from-fullnode endpoint.
+// writeIdentityJSON is the gzip-failure fallback. Same fixed-length /
+// identity-encoded shape as the old renderFixedLengthJSON.
+func writeIdentityJSON(req *ensweb.Request, raw []byte, status int) *ensweb.Result {
+	w := req.GetHTTPWritter()
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Length", strconv.Itoa(len(raw)))
+	w.WriteHeader(status)
+	_, _ = w.Write(raw)
+	return &ensweb.Result{Status: status, Done: true}
+}
+
+// Safety constants for the recover-from-fullnode endpoint.
 //
-// Pagination is page-number based, mirroring sync-txn-info-chain. Page size
-// is a server constant (clamped from the request to [1, recoverMaxPageSize])
-// so TotalPages stays a meaningful index the client can use for gap detection
-// across an entire recovery run.
+// Pagination is cursor-based on (token_id, position). Each response is
+// gzipped with an explicit Content-Length, and the handler stops adding
+// chain rows once the accumulated raw JSON size approaches recoverMaxRawBytes.
+// At a typical 3–5× compression ratio for chain JSON, that yields a
+// compressed body of ~2–3 KB — well under the ~4 KB Kubo p2p-forward
+// buffer-flush limit that causes the "unexpected EOF" truncation on larger
+// responses.
+//
+// A single row whose raw JSON already exceeds the budget still ships alone
+// (one-row page) — the client-side retry handles the rare case where its
+// gzipped form also exceeds the wire ceiling.
 const (
-	// recoverDefaultPageSize controls chain entries per page. Chain entries
-	// vary widely in `info` size (a tx referencing many tokens / quorums can
-	// be 50–100 KB on its own). Aggregating multiple per page risks blowing
-	// past libp2p stream buffer limits and the response gets truncated mid-
-	// flight (manifests as `unexpected EOF` on the client). We ship one
-	// entry per page during testing to stay safely under the threshold; bump
-	// up once a size-aware chunking strategy lands.
-	recoverDefaultPageSize     = 1
-	recoverMaxPageSize         = 1000
-	recoverMaxRequestBodyBytes = 1 * 1024 * 1024 // 1 MB to accommodate large known_tokens maps
-	recoverMaxOffsetRows       = 100_000_000
+	// recoverMaxRawBytes is the soft budget on uncompressed JSON body bytes
+	// per page. Chosen so the gzipped wire body stays well under 4 KB at
+	// typical compression ratios for chain-row JSON.
+	recoverMaxRawBytes = 9 * 1024
+
+	// recoverBatchSize bounds the DB rows fetched per page-build so a single
+	// request can't pull tens of MB of chain entries into memory.
+	recoverBatchSize = 500
+
+	// recoverMaxRequestBodyBytes caps the incoming request body — large
+	// KnownTokens maps push this up.
+	recoverMaxRequestBodyBytes = 1 * 1024 * 1024
 )
 
 // registerRecoveryRoute is called from SubscribeTxnSetup when the node is a
@@ -81,8 +111,9 @@ func (c *Core) registerRecoveryRoute() {
 // The handler returns chain entries (transactions + tokenchain rows) for
 // every token currently held by DID across RBT / FT / NFT, regardless of
 // token_status (Free, Pledged, Burnt, Committed, etc.). Pagination is by
-// page_number with per-token (position, tx_id) cursors for incremental
-// re-sync. See types.RecoverFromFullnodeRequest for the full contract.
+// (token_id, position) cursor; the per-response byte budget keeps the
+// gzipped wire body under the p2p-forward truncation ceiling.
+// See types.RecoverFromFullnodeRequest for the full contract.
 func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 	c.log.Info("recoverFromFullnodeHandler: HIT")
 	if httpReq := req.GetHTTPRequest(); httpReq != nil && httpReq.Body != nil {
@@ -96,28 +127,10 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 	}
 	c.log.Info("recoverFromFullnodeHandler: parsed",
 		"did", recReq.DID,
-		"page_number", recReq.PageNumber,
-		"page_size", recReq.PageSize,
+		"cursor", fmt.Sprintf("(%s,%d)", recReq.LastTokenID, recReq.LastPosition),
 		"known_count", len(recReq.KnownTokens))
 	if recReq.DID == "" {
-		c.log.Info("recoverFromFullnodeHandler: empty DID, returning early")
 		return c.l.RenderJSON(req, &model.BasicResponse{Status: false, Message: "did is required"}, http.StatusOK)
-	}
-
-	// Clamp page size; default when zero. Must stay constant across a single
-	// recovery run for TotalPages to remain stable.
-	pageSize := recReq.PageSize
-	if pageSize <= 0 {
-		pageSize = recoverDefaultPageSize
-	}
-	if pageSize > recoverMaxPageSize {
-		pageSize = recoverMaxPageSize
-	}
-
-	// Default to page 1 when the request omits page_number.
-	pageNumber := recReq.PageNumber
-	if pageNumber <= 0 {
-		pageNumber = 1
 	}
 
 	// Divergence detection: tokens whose KnownTokens claim doesn't match the
@@ -134,9 +147,9 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 	for _, t := range divergent {
 		divergentSet[t] = struct{}{}
 	}
-	// Build the threshold map the count/page queries consume. Divergent
-	// tokens are LEFT OUT (defaults to -1 → full chain). Non-divergent
-	// tokens get their claimed position.
+	// Build the threshold map the cursor query consumes. Divergent tokens
+	// are LEFT OUT (defaults to -1 → full chain). Non-divergent tokens get
+	// their claimed position.
 	thresholds := make(map[string]int64, len(recReq.KnownTokens))
 	for tokenID, tip := range recReq.KnownTokens {
 		if _, isDivergent := divergentSet[tokenID]; isDivergent {
@@ -145,55 +158,35 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 		thresholds[tokenID] = tip.Position
 	}
 
-	c.log.Info("recoverFromFullnodeHandler: about to count chain entries", "did", recReq.DID)
-	totalItems, err := c.w.CountRecoverableChainEntries(c.w.Ctx, recReq.DID, thresholds)
-	if err != nil {
-		c.log.Warn("recoverFromFullnodeHandler: count failed",
-			"did", recReq.DID, "err", err)
-		return c.l.RenderJSON(req, &model.BasicResponse{Status: false, Message: "fullnode count failed"}, http.StatusOK)
-	}
-	c.log.Info("recoverFromFullnodeHandler: count returned",
-		"did", recReq.DID, "total_items", totalItems)
-	totalPages := 0
-	if totalItems > 0 {
-		totalPages = (totalItems + pageSize - 1) / pageSize
+	// Normalize cursor for the first request. An empty LastTokenID with
+	// LastPosition=0 is ambiguous (could mean "start fresh" or "after
+	// position 0 of a token whose id sorts to '' ") — interpret an empty
+	// cursor token as "start fresh" by forcing position to -1.
+	cursorTokenID := recReq.LastTokenID
+	cursorPosition := recReq.LastPosition
+	if cursorTokenID == "" {
+		cursorPosition = -1
 	}
 
-	if totalItems == 0 {
-		c.log.Info("recoverFromFullnodeHandler: returning empty (no owned tokens)",
-			"did", recReq.DID, "page_number", pageNumber)
-		result := types.RecoverFromFullnodeResult{
-			Tokens:          []types.RecoveredToken{},
-			DivergentTokens: divergent,
-			PageNumber:      pageNumber,
-			TotalPages:      0,
-			PageSize:        pageSize,
-			TotalItems:      0,
-		}
-		return c.l.RenderJSON(req, &model.BasicResponse{Status: true, Message: "ok", Result: result}, http.StatusOK)
-	}
-
-	if pageNumber > totalPages {
-		return c.l.RenderJSON(req, &model.BasicResponse{Status: false, Message: fmt.Sprintf("page_number %d exceeds total_pages %d", pageNumber, totalPages)}, http.StatusOK)
-	}
-
-	offset := (pageNumber - 1) * pageSize
-	if offset > recoverMaxOffsetRows {
-		return c.l.RenderJSON(req, &model.BasicResponse{Status: false, Message: fmt.Sprintf("page offset would exceed safety cap (%d rows)", recoverMaxOffsetRows)}, http.StatusOK)
-	}
-
-	chainRows, err := c.w.GetRecoverableChainPageByOffset(c.w.Ctx, recReq.DID, thresholds, offset, pageSize)
+	chainRows, err := c.w.GetRecoverableChainPageByCursor(c.w.Ctx, recReq.DID, thresholds, cursorTokenID, cursorPosition, recoverBatchSize)
 	if err != nil {
 		c.log.Warn("recoverFromFullnodeHandler: page fetch failed",
-			"did", recReq.DID, "page_number", pageNumber, "err", err)
+			"did", recReq.DID, "cursor", fmt.Sprintf("(%s,%d)", cursorTokenID, cursorPosition), "err", err)
 		return c.l.RenderJSON(req, &model.BasicResponse{Status: false, Message: "fullnode read failed"}, http.StatusOK)
 	}
 
-	// Look up the current state for the set of tokens appearing on this page.
-	// One round trip via the existing ListOwnedTokensByDID — we then filter
-	// to just the tokens we need for this page (which is a small subset of
-	// the DID's full holdings, but the alternative is a per-token state
-	// query). For now, pull the full owned-token list once and index it.
+	if len(chainRows) == 0 {
+		result := types.RecoverFromFullnodeResult{
+			Tokens:          []types.RecoveredToken{},
+			DivergentTokens: divergent,
+			HasMore:         false,
+		}
+		return renderGzipFixedLengthJSON(req, &model.BasicResponse{Status: true, Message: "ok", Result: result}, http.StatusOK)
+	}
+
+	// Look up the current state for the tokens appearing on this page.
+	// One round trip via the existing ListOwnedTokensByDID — then index by
+	// token id.
 	ownedAll, err := c.w.ListOwnedTokensByDID(c.w.Ctx, recReq.DID)
 	if err != nil {
 		c.log.Warn("recoverFromFullnodeHandler: load owned-token states failed",
@@ -205,27 +198,52 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 		stateByToken[ownedAll[i].TokenID] = &ownedAll[i]
 	}
 
-	// Group chain rows by token, preserving their position-ascending order
-	// (the query already sorts by token_id then position).
+	// Group chain rows by token, preserving their (token_id, position) order
+	// (the query already sorts that way). Stop emitting once the running raw
+	// byte budget would be exceeded — except for the very first row included,
+	// which always ships even if it alone blows the budget.
 	type tokenAccumulator struct {
 		token *wallet.RecoverableToken
 		txns  []types.RecoveredTransaction
 	}
 	accumulators := make(map[string]*tokenAccumulator)
 	orderedTokens := make([]string, 0)
+
+	rawBytesUsed := 0
+	rowsIncluded := 0
+	hasMore := false
+	var nextCursorTokenID string
+	var nextCursorPosition int64
+
 	for i := range chainRows {
 		row := &chainRows[i]
+
+		// Approximate the JSON byte cost of this row without re-marshalling.
+		// Info and Signature are already json.RawMessage and dominate the
+		// size; the surrounding fields add a small fixed overhead.
+		rowCost := len(row.Info) + len(row.Signature) + len(row.TokenID) + len(row.TransactionID) + 256
+
+		if rowsIncluded > 0 && rawBytesUsed+rowCost > recoverMaxRawBytes {
+			// Budget exhausted; remaining batch rows wait for the next page.
+			hasMore = true
+			break
+		}
+
+		st, found := stateByToken[row.TokenID]
+		if !found {
+			// Owned-state vanished between the chain query and the state
+			// query (extremely unlikely, but possible under heavy churn).
+			// Skip without consuming budget; cursor advances so we don't
+			// loop on the same row forever.
+			c.log.Warn("recoverFromFullnodeHandler: owned state missing for token on this page; skipping",
+				"did", recReq.DID, "tokenID", row.TokenID)
+			nextCursorTokenID = row.TokenID
+			nextCursorPosition = row.Position
+			continue
+		}
+
 		acc, ok := accumulators[row.TokenID]
 		if !ok {
-			st, found := stateByToken[row.TokenID]
-			if !found {
-				// Owned-state vanished between the chain query and the state
-				// query (extremely unlikely, but possible under heavy churn).
-				// Skip rather than fail the whole page.
-				c.log.Warn("recoverFromFullnodeHandler: owned state missing for token on this page; skipping",
-					"did", recReq.DID, "tokenID", row.TokenID)
-				continue
-			}
 			acc = &tokenAccumulator{token: st}
 			accumulators[row.TokenID] = acc
 			orderedTokens = append(orderedTokens, row.TokenID)
@@ -242,6 +260,17 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 				Position:              row.Position,
 			},
 		})
+		rowsIncluded++
+		rawBytesUsed += rowCost
+		nextCursorTokenID = row.TokenID
+		nextCursorPosition = row.Position
+	}
+
+	// If we consumed the entire DB batch without hitting the byte budget,
+	// there may still be more rows beyond the batch. Promise the client a
+	// follow-up so it keeps paginating.
+	if !hasMore && len(chainRows) == recoverBatchSize {
+		hasMore = true
 	}
 
 	out := make([]types.RecoveredToken, 0, len(orderedTokens))
@@ -267,25 +296,16 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 	result := types.RecoverFromFullnodeResult{
 		Tokens:          out,
 		DivergentTokens: divergent,
-		PageNumber:      pageNumber,
-		TotalPages:      totalPages,
-		PageSize:        pageSize,
-		TotalItems:      totalItems,
-	}
-	// Log response size so we can correlate against libp2p tunnel behavior.
-	// Temporary diagnostic — remove once transport is confirmed stable.
-	if respBytes, mErr := json.Marshal(result); mErr == nil {
-		c.log.Info("recoverFromFullnodeHandler: response size",
-			"did", recReq.DID, "bytes", len(respBytes))
+		HasMore:         hasMore,
+		NextTokenID:     nextCursorTokenID,
+		NextPosition:    nextCursorPosition,
 	}
 	c.log.Info("recoverFromFullnodeHandler: returning",
 		"did", recReq.DID,
-		"page_number", pageNumber,
-		"total_pages", totalPages,
-		"total_items", totalItems,
+		"rows_included", rowsIncluded,
+		"raw_bytes_used", rawBytesUsed,
+		"has_more", hasMore,
+		"next_cursor", fmt.Sprintf("(%s,%d)", nextCursorTokenID, nextCursorPosition),
 		"tokens_in_response", len(out))
-	// Use fixed-length encoding (Content-Length set, no Transfer-Encoding:
-	// chunked) — see renderFixedLengthJSON for why this matters for the
-	// libp2p p2p-forward path.
-	return renderFixedLengthJSON(req, &model.BasicResponse{Status: true, Message: "ok", Result: result}, http.StatusOK)
+	return renderGzipFixedLengthJSON(req, &model.BasicResponse{Status: true, Message: "ok", Result: result}, http.StatusOK)
 }

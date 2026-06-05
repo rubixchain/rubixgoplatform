@@ -28,10 +28,18 @@ const (
 	recoveryRequestTimeout    = 90 * time.Second
 
 	// Hard cap on the page loop so a misbehaving fullnode cannot keep the
-	// call spinning forever. With default page_size=100 chain entries this
-	// lets a recovering wallet pull up to ~500k chain entries per run, well
+	// call spinning forever. With byte-bounded pages averaging a few chain
+	// entries each, 100k iterations covers ~500k entries per run — well
 	// above realistic single-DID holdings.
-	recoveryMaxPageIterations = 5000
+	recoveryMaxPageIterations = 100000
+
+	// Pacing between page requests. The Kubo p2p-forward tunnel exhibits a
+	// race where rapid back-to-back requests on the reused connection can
+	// see the previous response's tail flush dropped (manifests as
+	// "unexpected EOF" on the client). A small delay between requests lets
+	// the previous response fully drain before the next request triggers
+	// any stream state change.
+	recoveryInterPageDelay = 50 * time.Millisecond
 )
 
 // fullnodeEntry mirrors one element of the JSON list at fullnodesListURL.
@@ -98,18 +106,19 @@ func (c *Core) RecoverWalletFromFullnode(ctx context.Context, did string) (*Reco
 
 	result := &RecoverWalletResult{DID: did, FullnodePeerID: peerID}
 
-	// Page-number-driven loop. The server tells us total_pages on every
-	// response; we loop while page_number <= total_pages. A crash partway
-	// through is harmless: ReadLocalKnownState above re-derives the cursor
-	// from the local DB on restart, so already-persisted chain entries
-	// naturally filter out on the server side.
-	pageNumber := 1
-	totalPages := 0
-	for ; pageNumber <= recoveryMaxPageIterations; pageNumber++ {
+	// Cursor-driven loop. The server returns HasMore + NextTokenID /
+	// NextPosition on every page; we echo those back on the next request.
+	// A crash partway through is harmless: ReadLocalKnownState above
+	// re-derives the per-token threshold from the local DB on restart, so
+	// already-persisted chain entries naturally filter out server-side.
+	var lastTokenID string
+	var lastPosition int64
+	for iter := 0; iter < recoveryMaxPageIterations; iter++ {
 		req := &types.RecoverFromFullnodeRequest{
-			DID:         did,
-			KnownTokens: knownTokens,
-			PageNumber:  pageNumber,
+			DID:          did,
+			KnownTokens:  knownTokens,
+			LastTokenID:  lastTokenID,
+			LastPosition: lastPosition,
 		}
 
 		var resp struct {
@@ -117,25 +126,23 @@ func (c *Core) RecoverWalletFromFullnode(ctx context.Context, did string) (*Reco
 			Message string                          `json:"message"`
 			Result  types.RecoverFromFullnodeResult `json:"result"`
 		}
-		if err := c.fetchRecoveryPageWithDiag(peer, req, &resp, pageNumber); err != nil {
-			return result, fmt.Errorf("RecoverWalletFromFullnode: send page %d: %w", pageNumber, err)
+		if err := c.fetchRecoveryPageWithDiag(peer, req, &resp, iter+1); err != nil {
+			return result, fmt.Errorf("RecoverWalletFromFullnode: fetch after cursor (%s,%d): %w", lastTokenID, lastPosition, err)
 		}
 		if !resp.Status {
-			return result, fmt.Errorf("RecoverWalletFromFullnode: fullnode error on page %d: %s", pageNumber, resp.Message)
+			return result, fmt.Errorf("RecoverWalletFromFullnode: fullnode error after cursor (%s,%d): %s", lastTokenID, lastPosition, resp.Message)
 		}
 		result.PagesFetched++
-		totalPages = resp.Result.TotalPages
 
 		// Collect divergent tokens from this page; deduped at the end.
 		if len(resp.Result.DivergentTokens) > 0 {
 			result.DivergentTokens = appendUnique(result.DivergentTokens, resp.Result.DivergentTokens)
 		}
 
+		pageEntries := 0
 		for i := range resp.Result.Tokens {
 			t := &resp.Result.Tokens[i]
 			if len(t.TxnInfos) == 0 {
-				// Empty txn_infos means nothing new for this token on this
-				// page. Should be rare with per-token cursors but harmless.
 				continue
 			}
 			if err := c.persistRecoveredTokenPage(ctx, did, t); err != nil {
@@ -147,13 +154,41 @@ func (c *Core) RecoverWalletFromFullnode(ctx context.Context, did string) (*Reco
 			}
 			result.TokensSeen++
 			result.ChainEntriesPersisted += len(t.TxnInfos)
+			pageEntries += len(t.TxnInfos)
 		}
 
-		if totalPages == 0 || pageNumber >= totalPages {
+		c.log.Info("RecoverWalletFromFullnode: page progress",
+			"did", did,
+			"page", iter+1,
+			"page_entries", pageEntries,
+			"tokens_on_page", len(resp.Result.Tokens),
+			"entries_persisted_total", result.ChainEntriesPersisted,
+			"tokens_seen_total", result.TokensSeen,
+			"has_more", resp.Result.HasMore,
+			"next_cursor", fmt.Sprintf("(%s,%d)", resp.Result.NextTokenID, resp.Result.NextPosition))
+
+		if !resp.Result.HasMore {
+			c.log.Info("RecoverWalletFromFullnode: recovery complete",
+				"did", did,
+				"pages_fetched", result.PagesFetched,
+				"entries_persisted_total", result.ChainEntriesPersisted,
+				"tokens_seen_total", result.TokensSeen,
+				"tokens_failed", result.TokensFailed,
+				"divergent_tokens", len(result.DivergentTokens))
 			return result, nil
 		}
+		lastTokenID = resp.Result.NextTokenID
+		lastPosition = resp.Result.NextPosition
+
+		// Pace between page requests to reduce p2p-forward stream
+		// contention on the reused libp2p connection.
+		select {
+		case <-ctx.Done():
+			return result, ctx.Err()
+		case <-time.After(recoveryInterPageDelay):
+		}
 	}
-	return result, fmt.Errorf("RecoverWalletFromFullnode: page iteration cap (%d) reached without completion (total_pages=%d)", recoveryMaxPageIterations, totalPages)
+	return result, fmt.Errorf("RecoverWalletFromFullnode: page iteration cap (%d) reached without completion (last cursor (%s,%d))", recoveryMaxPageIterations, lastTokenID, lastPosition)
 }
 
 // fetchRecoveryPageWithDiag is a temporary diagnostic replacement for

@@ -19,19 +19,20 @@ import (
 // position). A divergent token is reported back in Result.DivergentTokens
 // and its chain is shipped from position 0.
 //
-// Pagination is by absolute page number — same model as sync-txn-info-chain.
-// Pagination unit is one chain entry, NOT one token. A single token's full
-// chain may span multiple pages, and a single page may carry entries from
-// several tokens.
-//
-// `PageSize` is optional; the server clamps it to [1, MaxPageSize] and falls
-// back to DefaultPageSize when zero. PageSize MUST stay constant across a
-// single recovery run for TotalPages to remain stable.
+// Pagination is cursor-based on (token_id, position). The first request
+// leaves LastTokenID empty and LastPosition zero. Each subsequent request
+// echoes back the NextTokenID / NextPosition from the previous response.
+// Page sizes are determined server-side by a raw-byte budget rather than a
+// fixed entry count, so individual pages may carry one entry or many.
 type RecoverFromFullnodeRequest struct {
 	DID         string                   `json:"did"`
 	KnownTokens map[string]TokenChainTip `json:"known_tokens,omitempty"`
-	PageNumber  int                      `json:"page_number,omitempty"`
-	PageSize    int                      `json:"page_size,omitempty"`
+
+	// Cursor into the in-progress paginated session. Empty / zero on the
+	// first request; subsequent requests pass back the NextTokenID and
+	// NextPosition from the previous response.
+	LastTokenID  string `json:"last_token_id,omitempty"`
+	LastPosition int64  `json:"last_position,omitempty"`
 }
 
 // RecoverFromFullnodeResult is the BasicResponse.Result payload.
@@ -44,17 +45,18 @@ type RecoverFromFullnodeRequest struct {
 // "no known state" and ships their chain from position 0; client should
 // discard any local data for those tokens and replace with what arrives.
 //
-// `PageNumber`, `TotalPages`, `PageSize`, `TotalItems` together let the
-// client detect gaps after a recovery run and re-fetch any specific missing
-// page by its number. TotalItems is the total chain entries the server has
-// queued to send for this DID, given the KnownTokens filter.
+// `HasMore` is true when the server stopped emitting entries because the
+// per-page byte budget (or the internal batch limit) was reached. When true,
+// NextTokenID/NextPosition mark the last (token_id, position) included on
+// this page — the client passes them straight back as LastTokenID /
+// LastPosition on the next request.
 type RecoverFromFullnodeResult struct {
 	Tokens          []RecoveredToken `json:"tokens"`
 	DivergentTokens []string         `json:"divergent_tokens,omitempty"`
-	PageNumber      int              `json:"page_number"`
-	TotalPages      int              `json:"total_pages"`
-	PageSize        int              `json:"page_size"`
-	TotalItems      int              `json:"total_items"`
+
+	HasMore      bool   `json:"has_more"`
+	NextTokenID  string `json:"next_token_id,omitempty"`
+	NextPosition int64  `json:"next_position,omitempty"`
 }
 
 // RecoveredToken is one token entry on a recovery page.
