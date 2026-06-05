@@ -8,7 +8,6 @@ import (
 
 	"github.com/gorilla/sessions"
 	"github.com/rubixchain/rubixgoplatform/core"
-	"github.com/rubixchain/rubixgoplatform/grpcserver"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -18,11 +17,10 @@ import (
 // Server defines server handle
 type Server struct {
 	ensweb.Server
-	cfg  *Config
-	log  logger.Logger
-	c    *core.Core
-	sc   chan bool
-	grpc *grpcserver.ServerGRPC
+	cfg *Config
+	log logger.Logger
+	c   *core.Core
+	sc  chan bool
 }
 
 // NewServer create new server instances
@@ -90,14 +88,11 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute("/", "GET", s.Index)
 	s.AddRoute(setup.APIStart, "GET", s.AuthHandle(s.APIStart, false, s.AuthError, true))
 	s.AddRoute(setup.APIShutdown, "POST", s.AuthHandle(s.APIShutdown, false, s.AuthError, true))
-	s.AddRoute(setup.APINodeStatus, "GET", s.AuthHandle(s.APINodeStatus, false, s.AuthError, false))
 	s.AddRoute(setup.APIPing, "GET", s.AuthHandle(s.APIPing, false, s.AuthError, false))
 	s.AddRoute(setup.APIAddBootStrap, "POST", s.AuthHandle(s.APIAddBootStrap, false, s.AuthError, true))
 	s.AddRoute(setup.APIRemoveBootStrap, "POST", s.AuthHandle(s.APIRemoveBootStrap, false, s.AuthError, true))
 	s.AddRoute(setup.APIRemoveAllBootStrap, "POST", s.AuthHandle(s.APIRemoveAllBootStrap, false, s.AuthError, true))
 	s.AddRoute(setup.APIGetAllBootStrap, "GET", s.AuthHandle(s.APIGetAllBootStrap, false, s.AuthError, true))
-	s.AddRoute(setup.APIGetDIDChallenge, "GET", s.APIGetDIDChallenge)
-	s.AddRoute(setup.APIGetDIDAccess, "POST", s.APIGetDIDAccess)
 	s.AddRoute(setup.APICreateDID, "POST", s.APICreateDID)
 	s.AddRoute(setup.APIGetAllTokens, "GET", s.AuthHandle(s.APIGetAllTokens, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetAllDID, "GET", s.AuthHandle(s.APIGetAllDID, true, s.AuthError, true))
@@ -106,69 +101,28 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIRemoveAllQuorum, "GET", s.AuthHandle(s.APIRemoveAllQuorum, true, s.AuthError, true))
 	s.AddRoute(setup.APISetupQuorum, "POST", s.AuthHandle(s.APISetupQuorum, true, s.AuthError, true))
 	s.AddRoute(setup.APIGenerateLocalRBT, "POST", s.AuthHandle(s.APIGenerateLocalRBT, true, s.AuthError, false))
-	s.AddRoute(setup.APIGenerateMainnetRBT, "POST", s.AuthHandle(s.APIGenerateMainnetRBT, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetRbtByDid, "GET", s.AuthHandle(s.APIGetRbtByDid, true, s.AuthError, false))
 	s.AddRoute(setup.APISignatureResponse, "POST", s.AuthHandle(s.APISignatureResponse, true, s.AuthError, false))
-	s.AddRoute(setup.APIDumpTokenChainBlock, "POST", s.AuthHandle(s.APIDumpTokenChainBlock, true, s.AuthError, false))
 	s.AddRoute(setup.APIRegisterDID, "POST", s.AuthHandle(s.APIRegisterDID, true, s.AuthError, false))
 	s.AddRoute(setup.APISetupDID, "POST", s.AuthHandle(s.APISetupDID, true, s.AuthError, false))
-	s.AddRoute(setup.APISetupDB, "POST", s.AuthHandle(s.APISetupDB, true, s.AuthError, true))
-	s.AddRoute(setup.APIGetTxnByTxnID, "GET", s.AuthHandle(s.APIGetTxnByTxnID, true, s.AuthError, false))
-	s.AddRoute(setup.APIGetTxnByDID, "GET", s.AuthHandle(s.APIGetTxnByDID, true, s.AuthError, false))
-	s.AddRoute(setup.APIGetTxnByComment, "GET", s.AuthHandle(s.APIGetTxnByComment, true, s.AuthError, false))
-	// s.AddRoute(setup.APIAddNFTSale, "GET", s.AuthHandle(s.APIAddNFTSale, true, s.AuthError, false))
 	s.AddRoute(setup.APICreateNFT, "POST", s.AuthHandle(s.APICreateNFT, true, s.AuthError, false))
 	s.AddRoute(setup.APIGenerateSmartContract, "POST", s.AuthHandle(s.APIGenerateSmartContract, true, s.AuthError, false))
 	s.AddRoute(setup.APIFetchSmartContract, "GET", s.AuthHandle(s.APIFetchSmartContract, true, s.AuthError, false))
 	s.AddRoute(setup.APISubscribecontract, "GET", s.AuthHandle(s.APISubscribecontract, true, s.AuthError, false))
-	s.AddRoute(setup.APIDumpSmartContractTokenChainBlock, "POST", s.AuthHandle(s.APIDumpSmartContractTokenChainBlock, true, s.AuthError, false))
-	s.AddRoute(setup.APIGetSmartContractTokenData, "POST", s.AuthHandle(s.APIGetSmartContractTokenChainData, true, s.AuthError, false))
 	s.AddRoute(setup.APIRegisterCallBackURL, "POST", s.AuthHandle(s.APIRegisterCallbackURL, true, s.AuthError, false))
-	s.AddRoute(setup.APIGetTxnByNode, "GET", s.AuthHandle(s.APIGetTxnByNode, true, s.AuthError, false))
-	s.AddRoute(setup.APIRemoveTokenChainBlock, "POST", s.AuthHandle(s.APIRemoveTokenChainBlock, true, s.AuthError, false))
 	s.AddRoute(setup.APIPeerID, "GET", s.AuthHandle(s.APIPeerID, false, s.AuthError, false))
-	s.AddRoute(setup.APIReleaseAllLockedTokens, "GET", s.AuthHandle(s.APIReleaseAllLockedTokens, true, s.AuthError, false))
 	s.AddRoute(setup.APICheckQuorumStatus, "GET", s.AuthHandle(s.APICheckQuorumStatus, false, s.AuthError, false))
 	s.AddRoute(setup.APIAddPeerDetails, "POST", s.AuthHandle(s.APIAddPeerDetails, false, s.AuthError, true))
-	s.AddRoute(setup.APIGetPledgedTokenDetails, "GET", s.AuthHandle(s.APIGetPledgedTokenDetails, false, s.AuthError, true))
-	s.AddRoute(setup.APICheckPinnedState, "DELETE", s.AuthHandle(s.APICheckPinnedState, false, s.AuthError, true))
-	s.AddRoute(setup.APISelfTransfer, "POST", s.AuthHandle(s.SelfTransferHandle, false, s.AuthError, true))
-	s.AddRoute(setup.APIRunUnpledge, "POST", s.AuthHandle(s.RunUnpledgeHandle, false, s.AuthError, true))
-	s.AddRoute(setup.APIInitiatePinRBT, "POST", s.AuthHandle(s.APIInitiatePinRBT, true, s.AuthError, false))
-	s.AddRoute(setup.APIValidateTokenChain, "GET", s.AuthHandle(s.APIValidateTokenChain, false, s.AuthError, false))
 	s.AddRoute(setup.APIGenerateFaucetTestToken, "POST", s.AuthHandle(s.APIGenerateFaucetTestToken, true, s.AuthError, false))
-	s.AddRoute(setup.APIFaucetTokenCheck, "GET", s.AuthHandle(s.APIFaucetTokenCheck, false, s.AuthError, false))
-	s.AddRoute(setup.APIDumpFTTokenChainBlock, "POST", s.AuthHandle(s.APIDumpFTTokenChainBlock, true, s.AuthError, false))
-	s.AddRoute(setup.APIInitiateFTTransfer, "POST", s.AuthHandle(s.APIInitiateFTTransfer, true, s.AuthError, true))
 	s.AddRoute(setup.APIGetFtByDid, "GET", s.AuthHandle(s.APIGetFTInfo, true, s.AuthError, false))
-	s.AddRoute(setup.APIFixFTCreator, "POST", s.AuthHandle(s.APIFixFTCreator, true, s.AuthError, false))
-	s.AddRoute(setup.APIGetFTCreatorStats, "GET", s.AuthHandle(s.APIGetFTCreatorStats, true, s.AuthError, false))
-	s.AddRoute(setup.APIValidateToken, "GET", s.AuthHandle(s.APIValidateToken, false, s.AuthError, false))
-	s.AddRoute(setup.APIDumpNFTTokenChain, "GET", s.AuthHandle(s.APIDumpNFTTokenChain, true, s.AuthError, false))
 	s.AddRoute(setup.APISubscribeNFT, "GET", s.AuthHandle(s.APISubscribeNFT, true, s.AuthError, false))
-	s.AddRoute(setup.APIGetNFTTokenChainData, "GET", s.AuthHandle(s.APIGetNFTTokenChainData, true, s.AuthError, false))
 	s.AddRoute(setup.APIFetchNft, "GET", s.AuthHandle(s.APIFetchNft, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetNftByDid, "GET", s.AuthHandle(s.APIGetNFTsByDid, true, s.AuthError, false))
-	s.AddRoute(setup.APIGetFTTokenchain, "GET", s.AuthHandle(s.APIGetFTTokenchain, true, s.AuthError, false))
 
-	s.AddRoute(setup.APISendJWTFromWallet, "POST", s.APIAuthenticateWalletJWT)
-	s.AddRoute(setup.APIAddPeerDetailsFromExplorer, "POST", s.AuthHandle(s.APIAddPeerDetailsFromExplorer, false, s.AuthError, true))
-	s.AddRoute(setup.APIGetFTTxnByDID, "GET", s.AuthHandle(s.APIGetFTTxnByDID, true, s.AuthError, false))
-	s.AddRoute(setup.APIUpdateTokenStatus, "PUT", s.AuthHandle(s.APIUpdateTokenStatus, false, s.AuthError, false))
-	s.AddRoute(setup.APIGetTokenStatus, "GET", s.AuthHandle(s.APIGetTokenStatus, false, s.AuthError, false))
 	s.AddRoute(setup.APIArbitrarySign, "POST", s.AuthHandle(s.APIArbitrarySignature, true, s.AuthError, true))
 	s.AddRoute(setup.APISignVerification, "GET", s.AuthHandle(s.APISignVerification, false, s.AuthError, false))
-	s.AddRoute(setup.APIMigrateFTTransactions, "POST", s.AuthHandle(s.APIMigrateFTTransactions, false, s.AuthError, false))
-	s.AddRoute(setup.APIGetFTMigrationStatus, "GET", s.AuthHandle(s.APIGetFTMigrationStatus, false, s.AuthError, false))
-	s.AddRoute(setup.APIRetryFailedFTDownloads, "POST", s.AuthHandle(s.RetryFailedFTDownloads, false, s.AuthError, false))
-	s.AddRoute(setup.APIGetFailedFTDownloadStatus, "POST", s.AuthHandle(s.GetFailedFTDownloadStatus, false, s.AuthError, false))
-	// Token recovery doesn't need authentication - anyone should be able to recover their tokens
-	s.AddRoute(setup.APIRecoverLostTokens, "POST", s.APIRecoverLostTokens)
-	s.AddRoute(setup.APIRemoteRecoverTokens, "POST", s.APIRemoteRecoverTokens)
 
 	//Below are De-Explorer APIs
-	s.AddRoute(setup.APIRemoveStaleDID, "POST", s.AuthHandle(s.APIRemoveStaleDID, true, s.AuthError, false))
-
 	s.AddRoute(setup.APIListSmartContracts, "GET", s.AuthHandle(s.APIListSmartContracts, true, s.AuthError, false))
 	s.AddRoute(setup.APIListNFTs, "GET", s.AuthHandle(s.APIListNFTs, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetNFTChain, "GET", s.AuthHandle(s.APIGetNFTChain, true, s.AuthError, false))
@@ -203,11 +157,11 @@ func (s *Server) AuthHandle(hf ensweb.HandlerFunc, did bool, ef ensweb.HandlerFu
 	if s.cfg.EnableAuth {
 		switch s.cfg.AuthMethod {
 		case BasicAuthMethod:
-			if did {
-				return s.DIDAuthHandle(hf, nil, ef, root)
-			} else {
-				return s.APIKeyAuthHandle(hf, ef)
-			}
+			// if did {
+			// 	return s.DIDAuthHandle(hf, nil, ef, root)
+			// } else {
+			return s.APIKeyAuthHandle(hf, ef)
+			// }
 		// case SessionAuthMethod:
 		// 	return s.SessionAuthHandle(&setup.BearerToken{}, s.cfg.SessionName, s.cfg.SessionKey, hf, ef)
 		// case BasicAuthMethod:

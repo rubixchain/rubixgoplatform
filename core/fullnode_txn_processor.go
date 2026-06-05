@@ -4,7 +4,6 @@ import (
 	"context"
 	"runtime"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/types/models"
@@ -299,50 +298,6 @@ func (c *Core) updateProcessingMetrics(processingTime time.Duration) {
 				float64(processingTime)*alpha, // EXPONENTIAL MOVING AVERAGE
 		)
 	}
-}
-
-// Fast stats function using atomic counter
-func (c *Core) GetDynamicWorkerPoolStats() map[string]interface{} {
-	c.txnProcessor.workersMutex.RLock()
-	currentWorkers := c.txnProcessor.currentWorkers
-	c.txnProcessor.workersMutex.RUnlock()
-
-	// Get detailed resource stats from your ResourceMonitor
-	resourceStats := c.txnProcessor.resourceMonitor.GetResourceStats()
-
-	// Add CPU usage calculation
-	cpuUsage, _ := c.getCPUUsageLinux(nil)
-
-	// Use atomic counter instead of counting sync.Map
-	processedCount := atomic.LoadInt64(&c.txnProcessor.processedTxnCount)
-
-	// Combine all stats
-	stats := map[string]interface{}{
-		// Worker pool stats
-		"currentWorkers": currentWorkers,
-		"minWorkers":     c.txnProcessor.minWorkers,
-		"maxWorkers":     c.txnProcessor.maxWorkers,
-		"queueLength":    len(c.txnProcessor.txnQueue),
-		"processedTxns":  processedCount, // FAST ATOMIC READ
-
-		// Resource stats from your ResourceMonitor
-		"memoryTotalMB":      resourceStats["memory_total_mb"],
-		"memoryAvailableMB":  resourceStats["memory_available_mb"],
-		"memoryUsedMB":       resourceStats["memory_used_mb"],
-		"memoryUsagePercent": resourceStats["memory_usage_pct"],
-		"cpuCount":           resourceStats["cpu_count"],
-		"goroutines":         resourceStats["goroutines"],
-
-		// Calculated CPU usage
-		"cpuUsagePercent": cpuUsage,
-
-		// Thresholds
-		"cpuThreshold":    c.txnProcessor.cpuThreshold,
-		"memoryThreshold": c.txnProcessor.memoryThreshold,
-		"queueThreshold":  c.txnProcessor.queueThreshold,
-	}
-
-	return stats
 }
 
 // workerHealthCheck periodically verifies that at least minWorkers are

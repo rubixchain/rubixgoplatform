@@ -1,8 +1,8 @@
 package client
 
 import (
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
 type SmartContractRequest struct {
@@ -12,7 +12,7 @@ type SmartContractRequest struct {
 	SCPath     string
 }
 
-func (c *Client) GenerateSmartContractToken(smartContractRequest *SmartContractRequest) (*model.BasicResponse, error) {
+func (c *Client) GenerateSmartContractToken(smartContractRequest *SmartContractRequest) (*models.BasicResponse, error) {
 
 	fields := make(map[string]string)
 	files := make(map[string]string)
@@ -26,7 +26,7 @@ func (c *Client) GenerateSmartContractToken(smartContractRequest *SmartContractR
 	if smartContractRequest.DID != "" {
 		fields["did"] = smartContractRequest.DID
 	}
-	var basicResponse model.BasicResponse
+	var basicResponse models.BasicResponse
 	err := c.sendMutiFormRequest("POST", setup.APIGenerateSmartContract, nil, fields, files, &basicResponse)
 	if err != nil {
 		return nil, err
@@ -35,13 +35,13 @@ func (c *Client) GenerateSmartContractToken(smartContractRequest *SmartContractR
 
 }
 
-func (c *Client) FetchSmartContract(smartContractToken string) (*model.BasicResponse, error) {
+func (c *Client) FetchSmartContract(smartContractToken string) (*models.BasicResponse, error) {
 	fields := make(map[string]string)
 	if smartContractToken != "" {
 		fields["smartContractToken"] = smartContractToken
 	}
 
-	var basicResponse model.BasicResponse
+	var basicResponse models.BasicResponse
 	err := c.sendJSONRequest("GET", setup.APIFetchSmartContract, fields, nil, &basicResponse)
 	if err != nil {
 		return nil, err
@@ -49,8 +49,8 @@ func (c *Client) FetchSmartContract(smartContractToken string) (*model.BasicResp
 	return &basicResponse, nil
 }
 
-func (c *Client) SubscribeContract(smartContractToken string) (*model.BasicResponse, error) {
-	var response model.BasicResponse
+func (c *Client) SubscribeContract(smartContractToken string) (*models.BasicResponse, error) {
+	var response models.BasicResponse
 	// Use query parameter instead of JSON body
 	query := make(map[string]string)
 	query["smartContractToken"] = smartContractToken

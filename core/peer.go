@@ -4,13 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path"
 	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -30,11 +27,6 @@ func (c *Core) peerSetup() error {
 	return c.ps.SubscribeTopic(constants.Event_RubixDID, c.peerCallback)
 }
 
-// removePeerSetup will setup the ping route
-func (c *Core) removePeerSetup() error {
-	return c.ps.SubscribeTopic(constants.Event_RemoveRubixDID, c.removeStalePeerCallback)
-}
-
 func (c *Core) publishPeerMap(pm *PeerMap) error {
 	if c.ps != nil {
 		err := c.ps.Publish(constants.Event_RubixDID, pm)
@@ -49,7 +41,6 @@ func (c *Core) publishPeerMap(pm *PeerMap) error {
 func (c *Core) peerCallback(peerID string, topic string, data []byte) {
 	var m PeerMap
 	err := json.Unmarshal(data, &m)
-	c.log.Debug("Peer DID Update for ", m.PeerID, " DID ", m.DID)
 	if err != nil {
 		c.log.Error("failed to parse explorer data", "err", err)
 		return
@@ -118,7 +109,7 @@ func (c *Core) peerStatus(req *ensweb.Request) *ensweb.Result {
 	if err != nil {
 
 	}
-	ps := model.PeerStatusResponse{
+	ps := models.PeerStatusResponse{
 		Version:   c.version,
 		DIDExists: exist,
 	}
@@ -166,7 +157,7 @@ func (c *Core) getPeer(addr string) (*ipfsport.Peer, error) {
 	// 		q["selfDID_type"] = strconv.Itoa(selfDetails.Type)
 	// 	}
 	// }
-	var ps model.PeerStatusResponse
+	var ps models.PeerStatusResponse
 	err = p.SendJSONRequest("GET", APIPeerStatus, q, nil, &ps, false)
 	if err != nil {
 		return nil, err
@@ -182,26 +173,6 @@ func (c *Core) getPeer(addr string) (*ipfsport.Peer, error) {
 /*
 This methos returns the peer connection to the PeerId supplied as Input.
 */
-func (c *Core) connectPeer(peerID string) (*ipfsport.Peer, error) {
-	p, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
-	if err != nil {
-		return nil, err
-	}
-	/* q := make(map[string]string)
-	q["did"] = ""
-	var ps model.PeerStatusResponse
-	err = p.SendJSONRequest("GET", APIPeerStatus, q, nil, &ps, false)
-	if err != nil {
-		return nil, err
-	}
-	if !ps.DIDExists {
-		p.Close()
-		return nil, fmt.Errorf("did not exist with the peer")
-	} */
-	// TODO:: Valid the peer version before proceesing
-	return p, nil
-}
-
 func (c *Core) AddPeerDetails(peerDetail models.DID) error {
 	// Defensive: resolve AlgoID if caller did not set it (zero value).
 	// The did_algo table uses 1-based GENERATED ALWAYS AS IDENTITY,
@@ -221,90 +192,4 @@ func (c *Core) AddPeerDetails(peerDetail models.DID) error {
 	}
 	c.log.Info("PeerDetails added to DIDPeerTable", "did", peerDetail.DID)
 	return nil
-}
-
-func (c *Core) isDIDInArbitaryAddr(peerDID string) (bool, *models.DID, error) {
-	arbitaryAddr := []string{"12D3KooWHwsKu3GS9rh5X5eS9RTKGFy6NcdX1bV1UHcH8sQ8WqCM.bafybmicttgw2qx4grueyytrgln35vq2hbyhznv6ks4fabeakm47u72c26u",
-		"12D3KooWQ2as3FNtvL1MKTeo7XAuBZxSv8QqobxX4AmURxyNe5mX.bafybmicro2m4kove5vsetej63xq4csobtlzchb2c34lp6dnakzkwtq2mmy",
-		"12D3KooWJUJz2ipK78LAiwhc1QUVDvSMjZNBHt4vSAeVAq6FsneA.bafybmics43ef7ldgrogzurh7vukormpgscq4um44bss6mfuopsbjorbyaq",
-		"12D3KooWC5fHUg2yzAHydgenodN52MYPKhpK4DKRfS8TSm3idSUV.bafybmif5qnkfnkkrffxvoofah3fjzkmieohjbgyte35rrjrn3goufaiykq",
-		"12D3KooWDd7c7DAVb38a9vfCFpqxh5nHbDQ4CYjMJuFfBgzpiagK.bafybmie4iynumz2v3obbtkqirxrejjoljjs3l76frvl43wgalqqgprze6q"}
-
-	for _, addr := range arbitaryAddr {
-		// Split into two parts: [PeerID, DID]
-		arbPeerID, arbDID, ok := util.ParseAddress(addr)
-		if !ok {
-			c.log.Error("failed to parse asdvisory addr ", addr)
-			continue //check if the peerDID matches with any other addr in the list
-		}
-		// Compare the arbitrary DID (second part) with the peerDID
-		if arbDID == peerDID {
-			peer := models.DID{
-				DID:    arbDID,
-				PeerID: arbPeerID,
-			}
-			err := c.AddPeerDetails(peer)
-			if err != nil {
-				c.log.Error("failed to save peer details of Advisory node ", addr)
-				return true, &peer, fmt.Errorf("failed to save peer details of Advisory node")
-			}
-			return true, nil, nil
-		}
-	}
-	return false, nil, nil
-}
-
-func (c *Core) publishStalePeer(pm *PeerMap) error {
-	if c.ps != nil {
-		err := c.ps.Publish(constants.Event_RemoveRubixDID, pm)
-		if err != nil {
-			c.log.Error("Failed to publish peer map message", "err", err)
-			return err
-		}
-	}
-	return nil
-}
-
-func (c *Core) removeStalePeerCallback(peerID string, topic string, data []byte) {
-	var stalePeer PeerMap
-	err := json.Unmarshal(data, &stalePeer)
-	c.log.Debug("Peer DID Removal")
-	if err != nil {
-		c.log.Error("failed to parse stale did", "err", err)
-		return
-	}
-
-	if stalePeer.PeerID == c.peerID {
-		return
-	}
-
-	// verify the signature
-	h := util.CalculateHash([]byte(stalePeer.PeerID+stalePeer.DID+stalePeer.Time), "SHA3-256")
-	dc, err := c.InitialiseDID(stalePeer.DID)
-	if err != nil {
-		c.log.Error("failed to initialise stale peer")
-		return
-	}
-	signatureBytes, err := util.Base64ToBytes(stalePeer.Signature)
-	if err != nil {
-		c.log.Error("peerCallback: failed to parse signature, err", err)
-		return
-	}
-	st, err := dc.SignVerify(h, signatureBytes)
-	if err != nil || !st {
-		if err != nil && (strings.Contains(err.Error(), "NLSS DID detected") || strings.Contains(err.Error(), "incompatible key format")) {
-			c.log.Error("NLSS DID detected during stale peer removal. NLSS DIDs are DEPRECATED.", "did", stalePeer.DID, "error", err)
-		} else {
-			c.log.Error("failed to remove stale peer, signature verification failed, err ", err)
-		}
-		return
-	}
-
-	c.log.Debug("removing peer ", stalePeer.DID, stalePeer.PeerID)
-
-	// remove provided peer did and peer-id from PeerDIDTable
-	_ = c.w.RemoveDID(stalePeer.DID)
-
-	// remove peer-did folder
-	os.RemoveAll(path.Join(c.didDir, stalePeer.DID))
 }

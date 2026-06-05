@@ -27,21 +27,20 @@ func ReqPledgeToken(
 
 	log.Info("ReqPledgeToken : Request received to pledge tokens for transaction", "referenceId", referenceId, "transactionValue", transactionValue, "networkMode", networkMode)
 	// Lock and fetch free RBT tokens for split/transfer.
-	log.Debug("ReqPledgeToken: Attempting to lock tokens", "did", dc.GetDID(), "amount", transactionValue)
+	//log.Debug("ReqPledgeToken: Attempting to lock tokens", "did", dc.GetDID(), "amount", transactionValue)
 	lockedTokens, err := w.LockTokensForSplit(context.Background(), dc.GetDID(), transactionValue, referenceId)
 	if err != nil {
 		log.Error("ReqPledgeToken: Failed to lock tokens", "err", err)
 		return models.PledgeTokenResponse{}, fmt.Errorf("ReqPledgeToken: failed to lock tokens for split: %w", err)
 	}
-	log.Info("ReqPledgeToken: Tokens locked", "lockedTokensCount", len(lockedTokens), "transactionValue", transactionValue)
-	fmt.Println("The transactionValue in ReqPledgeToken is ", transactionValue)
+	//log.Info("ReqPledgeToken: Tokens locked", "lockedTokensCount", len(lockedTokens), "transactionValue", transactionValue)
+	log.Info("The transactionValue in ReqPledgeToken is ", transactionValue)
 
 	denomMap, err := w.GetTokenDenomArray(dc.GetDID())
 	if err != nil {
 		log.Error("ReqPledgeToken: Failed to get denom array", "err", err)
 		return models.PledgeTokenResponse{}, fmt.Errorf("ReqPledgeToken: failed to fetch token denom array: %w", err)
 	}
-	log.Debug("ReqPledgeToken: Denom map retrieved", "denomMapSize", len(denomMap))
 
 	pledgeTokenDetails, childTokensKept, burntParentToken, mintTokensBeingBurnt, err := parts.CollectRBTTokens(
 		dc,

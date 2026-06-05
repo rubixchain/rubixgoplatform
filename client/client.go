@@ -36,11 +36,6 @@ func NewClient(cfg *srvcfg.Config, log logger.Logger, timeout ...time.Duration) 
 	return c, nil
 }
 
-func (c *Client) SetAuthToken(token string) {
-	c.authToken = token
-	c.setAuth = true
-}
-
 func (c *Client) basicRequest(method string, path string, model interface{}) (*http.Request, error) {
 	r, err := c.JSONRequest(method, path, model)
 	if err != nil {
@@ -131,16 +126,4 @@ func (c *Client) sendMutiFormRequest(method string, path string, query map[strin
 		return err
 	}
 	return nil
-}
-
-// Add stubs for async FT response config
-func (c *Client) GetAsyncFTResponse() bool {
-	// TODO: Implement REST call to server if needed
-	fmt.Println("[WARN] GetAsyncFTResponse is not implemented for remote client. This only works in-process.")
-	return false
-}
-
-func (c *Client) SetAsyncFTResponse(val bool) {
-	// TODO: Implement REST call to server if needed
-	fmt.Printf("[WARN] SetAsyncFTResponse(%v) is not implemented for remote client. This only works in-process.\n", val)
 }

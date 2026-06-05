@@ -317,16 +317,3 @@ func (ops *IPFSOperations) BootstrapRmAll() ([]string, error) {
 	return result, operationErr
 }
 
-// SwarmConnect connects to a peer with health checks
-func (ops *IPFSOperations) SwarmConnect(ctx context.Context, addr string) error {
-	return ops.executeWithMetrics(ctx, "ipfs.swarm_connect", map[string]interface{}{
-		"address": addr,
-	}, func() error {
-		return ops.core.ipfs.SwarmConnect(ctx, addr)
-	})
-}
-
-// Request makes an IPFS API request with health checks
-func (ops *IPFSOperations) Request(command string, args ...string) *ipfsnode.RequestBuilder {
-	return ops.core.ipfs.Request(command, args...)
-}

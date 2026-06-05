@@ -9,7 +9,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -36,7 +35,7 @@ import (
 // Parameters:
 //   - mainTxID:   lookup key in unpledge_sequence_info (the main transfer txID)
 //   - quorumDID: DID that owns the pledged tokens
-//   - proofTx:  transaction info that represents as the proof for which unpledge is being performed. 
+//   - proofTx:  transaction info that represents as the proof for which unpledge is being performed.
 func (c *Core) UnpledgeV2(
 	ctx context.Context,
 	mainTxID string,
@@ -46,7 +45,7 @@ func (c *Core) UnpledgeV2(
 	var eventUnpledgeInfo *models.EventUnpledgeInfo = &models.EventUnpledgeInfo{
 		UnpledgeInfo:          make([]models.MsgUnpledgeTokenInfo, 0),
 		UnpledgeTransactionID: "",
-		PledgeTransactionID: "",
+		PledgeTransactionID:   "",
 	}
 
 	if mainTxID == "" {
@@ -221,7 +220,6 @@ func (c *Core) UnpledgeV2(
 		return fmt.Errorf("UnpledgeV2: update token status for mainTxID %q: %w", mainTxID, err)
 	}
 
-
 	if err := unpledgeTx.Commit(ctx); err != nil {
 		return fmt.Errorf("UnpledgeV2: commit unpledge tx for mainTxID %q, proofTxID %q: %w", mainTxID, proofTx.ID, err)
 	}
@@ -286,80 +284,6 @@ func (c *Core) UnpledgeV2(
 	}
 
 	c.log.Info("UnpledgeV2 complete", "mainTxID", mainTxID, "proofTxID", proofTx.ID, "tokens", len(pledgeTokens))
-
-	return nil
-}
-
-// Deprecated: unpledgeSingleTokenV2 is unused under the V2 single-transaction
-// architecture. UnpledgeV2 now performs an atomic UPDATE on all pledge rows
-// instead of per-token INSERT. Retained for reference only.
-func (c *Core) unpledgeSingleTokenV2(
-	ctx context.Context,
-	tokenID string,
-	mainTxID string,
-	triggerTxID string,
-	quorumDID string,
-	dc types.DIDCrypto,
-	epoch int,
-	network string,
-) error {
-	// Fetch the latest tokenchain row — this should be the pledge row, so
-	// latestRow.TransactionID = pledgeTxID.
-	latestRows, err := c.w.ReadLatestTokenChainRows(ctx, []string{tokenID})
-	if err != nil {
-		return fmt.Errorf("unpledgeSingleTokenV2: read latest tokenchain for %q: %w", tokenID, err)
-	}
-	latestRow := latestRows[tokenID]
-	if latestRow == nil {
-		return fmt.Errorf("unpledgeSingleTokenV2: no tokenchain entry for token %q", tokenID)
-	}
-
-	prevTx := latestRow.TransactionID
-
-	tokenValue, err := util.GetTokenValueFromTokenID(tokenID)
-	if err != nil {
-		return fmt.Errorf("unpledgeSingleTokenV2: get token value for %q: %w", tokenID, err)
-	}
-
-	// Build per-token unpledgeTxInfo.
-	unpledgeTxInfo := &models.TransactionInfo{
-		Initiator: quorumDID,
-		Owner:     quorumDID,
-		Epoch:     epoch,
-		Network:   network,
-		Tokens: &models.TransactionTokens{
-			RBT: []*models.TokenInfo{{
-				TokenID:               tokenID,
-				PreviousTransactionID: prevTx,
-				TokenValue:            tokenValue,
-			}},
-		},
-		Memo: fmt.Sprintf("UNPLEDGE pledged_for_tx=%s unpledged_by_tx=%s", mainTxID, triggerTxID),
-	}
-
-	// Deterministic identity.
-	unpledgeTxID, err := util.GetTransactionID(unpledgeTxInfo)
-	if err != nil {
-		return fmt.Errorf("unpledgeSingleTokenV2: compute unpledgeTxID for token %q: %w", tokenID, err)
-	}
-
-	// Sign.
-	unpledgeSig, err := util.SignTransaction(dc, unpledgeTxInfo)
-	if err != nil {
-		return fmt.Errorf("unpledgeSingleTokenV2: sign unpledge tx %q for token %q: %w", unpledgeTxID, tokenID, err)
-	}
-	signature := &models.Signature{InitiatorSignature: unpledgeSig}
-
-	// Build payload.
-	tokenChainRows, tokenStates, affectedTokens, err := c.w.BuildUnpledgePayload(ctx, unpledgeTxID, unpledgeTxInfo, quorumDID)
-	if err != nil {
-		return fmt.Errorf("unpledgeSingleTokenV2: build unpledge payload for token %q (tx %q): %w", tokenID, unpledgeTxID, err)
-	}
-
-	// Persist.
-	if err := c.w.PersistUnpledgeV2(ctx, unpledgeTxInfo, signature, unpledgeTxID, quorumDID, tokenChainRows, tokenStates, affectedTokens); err != nil {
-		return fmt.Errorf("unpledgeSingleTokenV2: persist unpledge tx %q for token %q: %w", unpledgeTxID, tokenID, err)
-	}
 
 	return nil
 }

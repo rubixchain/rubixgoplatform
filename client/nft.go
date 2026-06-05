@@ -1,8 +1,8 @@
 package client
 
 import (
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -17,7 +17,7 @@ type FetchNFTRequest struct {
 	NFTPath string
 }
 
-func (c *Client) CreateNFT(createNFTReq *CreateNFTReq) (*model.BasicResponse, error) {
+func (c *Client) CreateNFT(createNFTReq *CreateNFTReq) (*models.BasicResponse, error) {
 	fields := make(map[string]string)
 	files := make(map[string]string)
 	if createNFTReq.DID != "" {
@@ -35,7 +35,7 @@ func (c *Client) CreateNFT(createNFTReq *CreateNFTReq) (*model.BasicResponse, er
 	// 	fuid := path.Base(fn)
 	// 	files[fuid] = fn
 	// }
-	var br model.BasicResponse
+	var br models.BasicResponse
 	err := c.sendMutiFormRequest("POST", setup.APICreateNFT, nil, fields, files, &br)
 	if err != nil {
 		return nil, err
@@ -43,8 +43,8 @@ func (c *Client) CreateNFT(createNFTReq *CreateNFTReq) (*model.BasicResponse, er
 	return &br, nil
 }
 
-func (c *Client) SubscribeNFT(nft string) (*model.BasicResponse, error) {
-	var response model.BasicResponse
+func (c *Client) SubscribeNFT(nft string) (*models.BasicResponse, error) {
+	var response models.BasicResponse
 	// Use query parameter instead of JSON body
 	query := make(map[string]string)
 	query["nft"] = nft
@@ -55,14 +55,14 @@ func (c *Client) SubscribeNFT(nft string) (*model.BasicResponse, error) {
 	return &response, nil
 }
 
-func (c *Client) GetNFTsByDid(did string) (*model.BasicResponse, error) {
+func (c *Client) GetNFTsByDid(did string) (*models.BasicResponse, error) {
 	pathParams := make(map[string]string)
 	pathParams["did"] = did
 	endpoint, err := ensweb.SubstitutePathParams(setup.APIGetNftByDid, pathParams)
 	if err != nil {
 		return nil, err
 	}
-	var nftResp model.BasicResponse
+	var nftResp models.BasicResponse
 	err = c.sendJSONRequest("GET", endpoint, nil, nil, &nftResp)
 	if err != nil {
 		return nil, err
@@ -70,13 +70,13 @@ func (c *Client) GetNFTsByDid(did string) (*model.BasicResponse, error) {
 	return &nftResp, nil
 }
 
-func (c *Client) FetchNFT(fetchNft *FetchNFTRequest) (*model.BasicResponse, error) {
+func (c *Client) FetchNFT(fetchNft *FetchNFTRequest) (*models.BasicResponse, error) {
 	fields := make(map[string]string)
 	if fetchNft.NFT != "" {
 		fields["nft"] = fetchNft.NFT
 	}
 
-	var basicResponse model.BasicResponse
+	var basicResponse models.BasicResponse
 	err := c.sendJSONRequest("GET", setup.APIFetchNft, fields, nil, &basicResponse)
 	if err != nil {
 		return nil, err

@@ -13,12 +13,10 @@ import (
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/core/api"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
-	"github.com/rubixchain/rubixgoplatform/service"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -37,7 +35,6 @@ const (
 	APISendReceiverToken               string = "/api/send-receiver-token"
 	APIConfirmTokenTransfer            string = "/api/confirm-token-transfer"
 	APIRollbackTransaction             string = "/api/rollback-transaction"
-	APISyncTokenChain                  string = "/api/sync-token-chain"
 	APISyncTransactionChain            string = "/api/sync-transaction-chain"
 	APIDhtProviderCheck                string = "/api/dht-provider-check"
 	APIMapDIDArbitration               string = "/api/map-did-arbitration"
@@ -56,10 +53,7 @@ const (
 	APISendFTToken                     string = "/api/send-ft-token"
 	APIGetPrevQrmFromPrevSenderPath    string = "/api/get-prev-qrms-info-from-sender"
 	APICheckPinRole                    string = "/api/check-pin-role"
-	APISyncGenesisAndLatestBlock       string = "/api/sync-gennesis-n-lastest-block"
 	APISyncGenesisAndLatestTransaction string = "/api/sync-genesis-n-lastest-transaction"
-	APIUpdateStatus                    string = "/api/update-status"
-	APIGetTokenStatus                  string = "/api/get-token-status"
 	APIInitiateConsensus               string = "/api/initiate-consensus"
 	APISendTokens                      string = "/api/send-tokens"
 	APIRequestPledgeToken              string = "/api/request-pledge-token"
@@ -83,15 +77,12 @@ const (
 	MaxDecimalPlaces         int    = 3
 )
 
-var dbWriteSem = make(chan struct{}, 1)
-
 type Core struct {
 	cfg                  *types.RubixConfig
 	log                  logger.Logger
 	peerID               string
 	lock                 sync.RWMutex
 	ipfsLock             sync.RWMutex
-	qlock                sync.RWMutex
 	rlock                sync.Mutex
 	ipfs                 *ipfsnode.Shell
 	ipfsState            bool
@@ -117,25 +108,13 @@ type Core struct {
 	testnet              bool
 	networkMode          string
 	version              string
-	quorumRequest        map[string]*ConsensusStatus
-	pd                   map[string]*PledgeDetails
 	webReq               map[string]*did.DIDChan
 	w                    *wallet.Wallet
 	qc                   map[string]types.DIDCrypto
 	pqc                  map[string]types.DIDCrypto
 	secret               []byte
-	quorumCount          int
-	noBalanceQuorumCount int
-	defaultSetup         bool
-	tokenSyncManager     *TokenSyncManager
 	ipfsProviderStore    *IPFSProviderStore
-	asyncPinManager      *AsyncPinManager
 	perfTracker          *PerformanceTracker
-	tokenPool            *TokenInfoPool
-	batchSyncTokenPool   *BatchSyncTokenInfoPool
-	tokenSlicePool       *TokenSlicePool
-	pendingTokenMonitor  *PendingTokenMonitor
-	publishTokenChain    bool
 	fullNode             bool
 	txnProcessor         *DynamicTxnProcessor
 	RetryTokenSyncTicker *time.Ticker
@@ -143,9 +122,6 @@ type Core struct {
 	mainnet              bool
 	localnet             bool
 	Ctx                  context.Context
-	qm                   *QuorumManager
-	srv                  *service.Service
-
 	// Unpledge mismatch audit log — lazy-init on first mismatch event.
 	// See core/unpledge_v2.go:writeUnpledgeMismatch.
 	unpledgeAuditLog     *os.File
@@ -158,26 +134,20 @@ func newRubixContext() context.Context {
 }
 
 func NewCore(cfg *types.RubixConfig, log logger.Logger,
-	networkMode string, defaultSetup bool, publishTokenChainDetails bool,
+	networkMode string,
 	fullNode bool, faucetURL string,
 ) (*Core, error) {
 	var err error
 
 	c := &Core{
-		cfg:               cfg,
-		quorumRequest:     make(map[string]*ConsensusStatus),
-		pd:                make(map[string]*PledgeDetails),
-		webReq:            make(map[string]*did.DIDChan),
-		qc:                make(map[string]types.DIDCrypto),
-		pqc:               make(map[string]types.DIDCrypto),
-		secret:            func() []byte { b := make([]byte, 32); cryptorand.Read(b); return b }(),
-		defaultSetup:      defaultSetup,
-		publishTokenChain: publishTokenChainDetails,
-		fullNode:          fullNode,
-		faucetURL:         faucetURL,
-		Ctx:               newRubixContext(),
-		qm:                &QuorumManager{},
-		srv:               service.New(),
+		cfg:       cfg,
+		webReq:    make(map[string]*did.DIDChan),
+		qc:        make(map[string]types.DIDCrypto),
+		pqc:       make(map[string]types.DIDCrypto),
+		secret:    func() []byte { b := make([]byte, 32); cryptorand.Read(b); return b }(),
+		fullNode:  fullNode,
+		faucetURL: faucetURL,
+		Ctx:       newRubixContext(),
 	}
 
 	switch networkMode {
@@ -247,16 +217,6 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 		return c.peerID
 	})
 
-	if c.testnet && c.defaultSetup {
-		c.AddDefaulTestnetQuorums()
-	}
-
-	// Initialize token sync manager
-	c.tokenSyncManager = NewTokenSyncManager(c.log)
-
-	// Initialize async pin manager with 4 workers by default
-	c.asyncPinManager = NewAsyncPinManager(c, 4)
-
 	// Initialize performance tracker
 	perfConfig := &PerformanceConfig{
 		Enabled:        true, // TODO: Make this configurable
@@ -271,15 +231,6 @@ func NewCore(cfg *types.RubixConfig, log logger.Logger,
 		// Continue without performance tracking
 		c.perfTracker = &PerformanceTracker{enabled: false}
 	}
-
-	// Initialize token pools for memory optimization
-	c.tokenPool = NewTokenInfoPool()
-	c.batchSyncTokenPool = NewBatchSyncTokenInfoPool()
-	c.tokenSlicePool = NewTokenSlicePool()
-
-	// Initialize pending token monitor for self-healing
-	// Check every 5 minutes for tokens pending > 10 minutes
-	c.pendingTokenMonitor = NewPendingTokenMonitor(c, 5*time.Minute, 10*time.Minute)
 
 	// Wrap storage with tracking if performance tracker is enabled
 	// TODO: update the following
@@ -335,19 +286,8 @@ func (c *Core) SetupCore() error {
 	c.PingSetup()
 	c.CheckQuorumStatusSetup()
 	c.peerSetup()
-	c.removePeerSetup()
-	c.SetupToken()
 	c.QuorumSetup()
-	c.PinService()
-	api.SetupAPI(c.l, c.w, c.log)
 	c.TransactionSetup()
-
-	// c.RestartIncompleteTokenChainSyncs()
-	//c.UnlockFTs()
-	// c.selfTransferService()
-
-	// Start token sync cleanup routine
-	go c.tokenSyncCleanupRoutine()
 
 	return nil
 }
@@ -375,64 +315,7 @@ func (c *Core) Start() (bool, string) {
 		c.log.Error("failed to start ping port", "err", err)
 		return false, "Failed to start ping port"
 	}
-	//c.w.ReleaseAllLockedTokens()
-	// exp := model.ExploreModel{
-	// 	Cmd:    ExpPeerStatusCmd,
-	// 	PeerID: c.peerID,
-	// 	Status: "On",
-	// }
-	// err = c.PublishExplorer(&exp)
-	// if err != nil {
-	// 	c.log.Error("Failed to publish message to explorer", "err", err)
-	// 	return false, "Failed to publish message to explorer"
-	// }
-	// dt, err := c.w.GetAllDIDs()
-	// if err == nil && len(dt) > 0 {
-	// 	list := make([]string, 0)
-	// 	for _, d := range dt {
-	// 		list = append(list, d.DID)
-	// 	}
-	// 	// exp = model.ExploreModel{
-	// 	// 	Cmd:     ExpDIDPeerMapCmd,
-	// 	// 	PeerID:  c.peerID,
-	// 	// 	DIDList: list,
-	// 	// }
-	// 	// err = c.PublishExplorer(&exp)
-	// 	// if err != nil {
-	// 	// 	c.log.Error("Failed to publish message to explorer", "err", err)
-	// 	// 	return false, "Failed to publish message to explorer"
-	// 	// }
-	// }
 	return true, "Setup Complete"
-}
-
-// TODO:: need to add more test
-func (c *Core) NodeStatus() bool {
-	return true
-}
-
-// IPFSOperations returns the IPFS operations wrapper
-func (c *Core) IPFSOperations() *IPFSOperations {
-	return c.ipfsOps
-}
-
-// GetIPFSStats returns IPFS health and scalability statistics
-func (c *Core) GetIPFSStats() map[string]interface{} {
-	stats := make(map[string]interface{})
-
-	if c.ipfsHealth != nil {
-		stats["health"] = c.ipfsHealth.GetStats()
-	}
-
-	if c.ipfsScalability != nil {
-		stats["scalability"] = c.ipfsScalability.GetScalabilityStats()
-	}
-
-	if c.ipfsRecovery != nil {
-		stats["recovery"] = c.ipfsRecovery.GetRecoveryStats()
-	}
-
-	return stats
 }
 
 func (c *Core) StopCore() {
@@ -501,6 +384,12 @@ func (c *Core) RenameNFTFolder(tempFolderPath string, nft string) (string, error
 // GetConfig returns the core configuration
 func (c *Core) GetConfig() *types.RubixConfig {
 	return c.cfg
+}
+
+// GetWallet returns the wallet instance for direct access in dev/test scenarios.
+// In production, wallet operations go through Core methods.
+func (c *Core) GetWallet() *wallet.Wallet {
+	return c.w
 }
 
 func (c *Core) AddWebReq(req *ensweb.Request) {
@@ -602,11 +491,11 @@ func (c *Core) SetupForienDIDQuorum(didStr string, selfDID string) (types.DIDCry
 
 func (c *Core) FetchDID(did string) error {
 	didDir := path.Join(c.didDir, did)
-	
+
 	pubKeyPath := path.Join(didDir, constants.PubKeyFileName)
 	_, dirErr := os.Stat(didDir)
 	_, pubKeyErr := os.Stat(pubKeyPath)
-	
+
 	if os.IsNotExist(dirErr) || os.IsNotExist(pubKeyErr) {
 		err := os.MkdirAll(didDir, os.ModeDir|os.ModePerm)
 		if err != nil {
@@ -672,22 +561,6 @@ func (c *Core) InitialiseDID(didStr string) (types.DIDCrypto, error) {
 	return did.InitDIDLite(didStr, c.didDir, nil), nil
 }
 
-// StartPendingTokenMonitor starts the self-healing monitor for pending tokens
-func (c *Core) StartPendingTokenMonitor() {
-	if c.pendingTokenMonitor != nil {
-		c.pendingTokenMonitor.Start()
-		c.log.Info("Started pending token monitor for self-healing")
-	}
-}
-
-// StopPendingTokenMonitor stops the pending token monitor
-func (c *Core) StopPendingTokenMonitor() {
-	if c.pendingTokenMonitor != nil {
-		c.pendingTokenMonitor.Stop()
-		c.log.Info("Stopped pending token monitor")
-	}
-}
-
 // GetAsyncFTResponse returns the current value of the async FT response config flag
 func (c *Core) GetAsyncFTResponse() bool {
 	return c.cfg.AsyncFTResponse
@@ -696,21 +569,6 @@ func (c *Core) GetAsyncFTResponse() bool {
 // SetAsyncFTResponse sets the async FT response config flag at runtime
 func (c *Core) SetAsyncFTResponse(val bool) {
 	c.cfg.AsyncFTResponse = val
-}
-
-// tokenSyncCleanupRoutine periodically cleans up stale token sync entries
-func (c *Core) tokenSyncCleanupRoutine() {
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			if c.tokenSyncManager != nil {
-				c.tokenSyncManager.CleanupStaleSync(10 * time.Minute)
-			}
-		}
-	}
 }
 
 // GetSyncTransactionChainData returns transaction chains for the given token IDs,

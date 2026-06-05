@@ -8,7 +8,6 @@ import (
 )
 
 func (w *Wallet) CreateOrUpdateDID(didInfo *models.DID) error {
-	w.log.Debug("Adding to dids -", didInfo.DID, "peerid ", didInfo.PeerID, " isLocal:", didInfo.Local)
 	if _, err := w.db.Pool().Exec(w.Ctx, `
 		INSERT INTO dids(did, peer_id, local, algo_id)
 		VALUES ($1, $2, $3, $4)
@@ -103,7 +102,6 @@ func (w *Wallet) IsDIDExists(did string) (bool, error) {
 	return exists, nil
 }
 
-
 func (w *Wallet) IsLocalDID(did string) (bool, error) {
 	var local bool
 
@@ -118,4 +116,21 @@ func (w *Wallet) IsLocalDID(did string) (bool, error) {
 
 	return local, nil
 
+}
+
+func (w *Wallet) RemoveDID(did string) error {
+	result, err := w.db.Pool().Exec(w.Ctx,
+		`DELETE FROM dids WHERE did = $1`,
+		did,
+	)
+	if err != nil {
+		return fmt.Errorf("RemoveDID: %w", err)
+	}
+
+	rowsAffected := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("RemoveDID: no row found with did %v", did)
+	}
+
+	return nil
 }

@@ -354,3 +354,4 @@ func (hm *IPFSHealthManager) GetStats() map[string]interface{} {
 		"available_slots":   cap(hm.globalSem) - len(hm.globalSem),
 	}
 }
+

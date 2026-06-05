@@ -72,13 +72,13 @@ func (ps *PubSub) startStatsReporter() {
 func (ps *PubSub) SubscribeTopic(topic string, cb PubSubCallback) error {
 	f := ps.sub[topic]
 	if f != nil {
-		ps.log.Error("topic already subscribed")
+		ps.log.Error(topic, " - already subscribed")
 		return fmt.Errorf("topic already subscribed")
 	}
 	ps.sub[topic] = cb
 	p, err := ps.ipfs.PubSubSubscribe(topic)
 	if err != nil {
-		ps.log.Error("topic failed to subscribe", "err", err)
+		ps.log.Error(topic, " - failed to subscribe", "err", err)
 		return err
 	}
 	if topic == trackedTopic {
@@ -95,12 +95,12 @@ func (ps *PubSub) receivePub(topic string, p *ipfsnode.PubSubSubscription) {
 			continue
 		}
 		if topic == trackedTopic {
-			count := atomic.AddInt64(&ps.receiveCount, 1)
-			ps.log.Debug("PUBSUB RECV",
-				"topic", topic,
-				"from", m.From.String(),
-				"bytes", len(m.Data),
-				"receivedTotal", count)
+			//count := atomic.AddInt64(&ps.receiveCount, 1)
+			//ps.log.Debug("PUBSUB RECV",
+			//	"topic", topic,
+			//	"from", m.From.String(),
+			//	"bytes", len(m.Data),
+			//	"receivedTotal", count)
 		}
 		cb := ps.sub[topic]
 		if cb != nil {
@@ -116,14 +116,6 @@ func (ps *PubSub) Publish(topic string, model interface{}) error {
 	}
 	if err := ps.ipfs.PubSubPublish(topic, string(b)); err != nil {
 		return err
-	}
-	if topic == trackedTopic {
-		ps.startStatsReporter()
-		count := atomic.AddInt64(&ps.publishCount, 1)
-		ps.log.Debug("PUBSUB SEND",
-			"topic", topic,
-			"bytes", len(b),
-			"publishedTotal", count)
 	}
 	return nil
 }

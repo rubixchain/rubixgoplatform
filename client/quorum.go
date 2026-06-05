@@ -1,8 +1,8 @@
 package client
 
 import (
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/setup"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
 func (c *Client) AddQuorum(quorumDid string) (string, bool) {
@@ -14,7 +14,7 @@ func (c *Client) AddQuorum(quorumDid string) (string, bool) {
 	req := make(map[string]interface{})
 	req["did"] = quorumDid
 
-	var resp model.BasicResponse
+	var resp models.BasicResponse
 	err := c.sendJSONRequest("POST", setup.APIAddQuorum, nil, &req, &resp)
 	if err != nil {
 		c.log.Error("Failed to add quorum list", "err", err)
@@ -28,8 +28,8 @@ func (c *Client) AddQuorum(quorumDid string) (string, bool) {
 	return "Quorum list added successfully", true
 }
 
-func (c *Client) GettAllQuorum() (*model.QuorumListResponse, error) {
-	var rm model.QuorumListResponse
+func (c *Client) GettAllQuorum() (*models.QuorumListResponse, error) {
+	var rm models.QuorumListResponse
 	err := c.sendJSONRequest("GET", setup.APIGetAllQuorum, nil, nil, &rm)
 	if err != nil {
 		return nil, err
@@ -38,7 +38,7 @@ func (c *Client) GettAllQuorum() (*model.QuorumListResponse, error) {
 }
 
 func (c *Client) RemoveAllQuorum() (string, bool) {
-	var rm model.BasicResponse
+	var rm models.BasicResponse
 	err := c.sendJSONRequest("GET", setup.APIRemoveAllQuorum, nil, nil, &rm)
 	if err != nil {
 		return "Failed to remove quorum, " + err.Error(), false
@@ -47,12 +47,12 @@ func (c *Client) RemoveAllQuorum() (string, bool) {
 }
 
 func (c *Client) SetupQuorum(did string, pwd string, privPwd string) (string, bool) {
-	m := model.QuorumSetup{
+	m := models.QuorumSetup{
 		DID:             did,
 		Password:        pwd,
 		PrivKeyPassword: privPwd,
 	}
-	var rm model.BasicResponse
+	var rm models.BasicResponse
 	err := c.sendJSONRequest("POST", setup.APISetupQuorum, nil, &m, &rm)
 	if err != nil {
 		return "Failed to setup quorum, " + err.Error(), false

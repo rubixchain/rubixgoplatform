@@ -10,7 +10,6 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/consensus"
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/types/models"
@@ -28,7 +27,7 @@ func (c *Core) InitiateTransaction(reqID string, req *models.TransactionRequest)
 	dc.OutChan <- br
 }
 
-func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequest) *model.BasicResponse {
+func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequest) *models.BasicResponse {
 	c.log.Info("InitiateTransaction: Starting transaction",
 		"reqID", reqID,
 		"initiator", request.Initiator,
@@ -37,7 +36,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		"hasSC", request.HasSmartContract(),
 	)
 
-	resp := &model.BasicResponse{
+	resp := &models.BasicResponse{
 		Status: false,
 	}
 	ctx := c.Ctx
@@ -55,7 +54,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	networkMode := c.networkMode
 	c.log.Debug("InitiateTransaction: Network mode", "mode", networkMode)
 	// Build transaction info
-	//Here the c.publishTxn must be verified because the input type is *model.PubSubTxnInfo which need to be updated
+	//Here the c.publishTxn must be verified because the input type is *models.PubSubTxnInfo which need to be updated
 	// here the tokens which are being fetched as committed tokens in case of smartContract deployment: There we need to add the commitment block?
 
 	// Ensure locked RBT tokens are released if the transaction fails at any step.
@@ -549,7 +548,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	c.log.Info("InitiateTransaction: Transaction completed successfully", "transactionID", transactionId, "initiator", initiatorDID, "receiver", nextOwnerDID)
 	resp.Status = true
 	resp.Message = fmt.Sprintf("Transaction %v completed successfully", transactionId)
-	resp.Result = model.TransactionResult{
+	resp.Result = models.TransactionResult{
 		TransactionID:     transactionId,
 		MintedNFTChildren: mintedChildren,
 	}
@@ -562,11 +561,6 @@ func isTOCTOUConflict(err error) bool {
 	}
 	msg := err.Error()
 	return strings.Contains(msg, "TOCTOU conflict")
-}
-
-func retryBackoff(attempt int) time.Duration {
-	// 50ms → 100ms → 150ms
-	return time.Duration(attempt*50) * time.Millisecond
 }
 
 // sendTokensToReceiver sends transaction tokens to the receiver asynchronously.
@@ -599,7 +593,7 @@ func (c *Core) sendTokensToReceiver(
 	// For NFTs we need to check the particular boolean in the request for sending.
 	// For RBTs we need to send the entire token information.
 	var sendTokensRequest models.SendTokensRequest
-	var sendTokensResponse model.BasicResponse
+	var sendTokensResponse models.BasicResponse
 	sendTokensRequest.Tokens = txInfo.Tokens
 	sendTokensRequest.TransactionInfo = txInfo
 	sendTokensRequest.Signature = signature
@@ -662,7 +656,7 @@ func (c *Core) TransactionSetup() {
 }
 
 func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
-	crep := model.BasicResponse{Status: false}
+	crep := models.BasicResponse{Status: false}
 
 	var sendTokensRequest models.SendTokensRequest
 	err := c.l.ParseJSON(request, &sendTokensRequest)

@@ -4,12 +4,12 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/rubixchain/rubixgoplatform/core/model"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
 func (s *Server) APISetupQuorum(req *ensweb.Request) *ensweb.Result {
-	var qs model.QuorumSetup
+	var qs models.QuorumSetup
 	err := s.ParseJSON(req, &qs)
 	if err != nil {
 		return s.BasicResponse(req, false, "Failed to parse the input", nil)

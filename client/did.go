@@ -7,38 +7,12 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/core/model"
+	model "github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
-
-func (c *Client) GetDIDChallenge(did string) (string, error) {
-	q := make(map[string]string)
-	q["did"] = did
-	var resp model.DIDAccessResponse
-	err := c.sendJSONRequest("GET", setup.APIGetDIDChallenge, q, nil, &resp)
-	if err != nil {
-		return "", err
-	}
-	if !resp.Status {
-		return "", fmt.Errorf(resp.Message)
-	}
-	return resp.Token, nil
-}
-
-func (c *Client) GetDIDAccess(req *model.GetDIDAccess) (string, error) {
-	var resp model.DIDAccessResponse
-	err := c.sendJSONRequest("POST", setup.APIGetDIDAccess, nil, req, &resp)
-	if err != nil {
-		return "", err
-	}
-	if !resp.Status {
-		return "", fmt.Errorf(resp.Message)
-	}
-	return resp.Token, nil
-}
 
 func (c *Client) GetAllDIDs() (*model.BasicResponse, error) {
 	var ac model.BasicResponse
@@ -188,13 +162,3 @@ func (c *Client) SignVerification(signerDID, signedMsg, signature string) (strin
 	return result, nil
 }
 
-func (c *Client) RemoveStaleDID(didStr string) (*model.BasicResponse, error) {
-	m := make(map[string]interface{})
-	m["did"] = didStr
-	var rm model.BasicResponse
-	err := c.sendJSONRequest("POST", setup.APIRemoveStaleDID, nil, &m, &rm)
-	if err != nil {
-		return nil, err
-	}
-	return &rm, nil
-}

@@ -166,6 +166,132 @@ func (c *Core) configIPFS() error {
 	return nil
 }
 
+// ensureBootstrapNodes patches the IPFS config Bootstrap array with the bootstrap
+// peers from config.toml for the active network. Called before daemon start on
+// every run so config.toml changes are reflected without wiping the IPFS data dir.
+func (c *Core) ensureBootstrapNodes(ipfsDir string) error {
+	var bootstrapPeers []string
+	switch {
+	case c.testnet:
+		bootstrapPeers = c.cfg.TestnetBootstrap
+	case c.localnet:
+		bootstrapPeers = c.cfg.LocalnetBootStrap
+	default:
+		bootstrapPeers = c.cfg.MainnetBootstrap
+	}
+
+	configFile := path.Join(ipfsDir, IPFSConfigFilename)
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		return fmt.Errorf("failed to read ipfs config: %w", err)
+	}
+	var cfg map[string]interface{}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return fmt.Errorf("failed to parse ipfs config: %w", err)
+	}
+
+	if len(bootstrapPeers) == 0 {
+		cfg["Bootstrap"] = []string{}
+	} else {
+		cfg["Bootstrap"] = bootstrapPeers
+	}
+
+	updated, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal ipfs config: %w", err)
+	}
+	c.log.Info("Configured IPFS bootstrap nodes", "count", len(bootstrapPeers), "network", c.networkMode)
+	return os.WriteFile(configFile, updated, 0644)
+}
+
+// connectToBootstrapNodes actively swarm-connects to all configured bootstrap peers
+// after the IPFS daemon is running. Runs in a goroutine so a slow/unreachable peer
+// does not delay node startup. Success and failure are logged per peer.
+func (c *Core) connectToBootstrapNodes() {
+	var bootstrapPeers []string
+	switch {
+	case c.testnet:
+		bootstrapPeers = c.cfg.TestnetBootstrap
+	case c.localnet:
+		bootstrapPeers = c.cfg.LocalnetBootStrap
+	default:
+		bootstrapPeers = c.cfg.MainnetBootstrap
+	}
+
+	if len(bootstrapPeers) == 0 {
+		return
+	}
+
+	c.log.Info("Connecting to IPFS bootstrap peers", "count", len(bootstrapPeers), "network", c.networkMode)
+	for _, peer := range bootstrapPeers {
+		if err := c.ipfs.SwarmConnect(context.Background(), peer); err != nil {
+			c.log.Warn("Failed to swarm connect to bootstrap peer", "peer", peer, "err", err)
+		} else {
+			c.log.Info("Swarm connected to bootstrap peer", "peer", peer)
+		}
+	}
+}
+
+// ensureAnnounceAddresses patches the IPFS config to set Addresses.AppendAnnounce
+// when RUBIX_EXTERNAL_IP is set. This is required when running inside Docker so
+// the node announces the host machine's real IP and host-mapped port to the DHT
+// instead of its unreachable container IP. Must be called before the daemon starts.
+func (c *Core) ensureAnnounceAddresses(ipfsDir string) error {
+	externalIP := os.Getenv("RUBIX_EXTERNAL_IP")
+	if externalIP == "" {
+		c.log.Info("RUBIX_EXTERNAL_IP not set — skipping announce address config (node will announce container/local IP only)")
+		return nil
+	}
+	externalPort := os.Getenv("RUBIX_EXTERNAL_SWARM_PORT")
+	if externalPort == "" {
+		externalPort = fmt.Sprintf("%d", c.cfg.PortConfig.SwarmPort)
+		c.log.Info("RUBIX_EXTERNAL_SWARM_PORT not set — using node swarm port as fallback", "port", externalPort)
+	}
+
+	configFile := path.Join(ipfsDir, IPFSConfigFilename)
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		return fmt.Errorf("failed to read ipfs config: %w", err)
+	}
+	var cfg map[string]interface{}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return fmt.Errorf("failed to parse ipfs config: %w", err)
+	}
+
+	addresses, _ := cfg["Addresses"].(map[string]interface{})
+	if addresses == nil {
+		addresses = make(map[string]interface{})
+	}
+
+	announceAddr := fmt.Sprintf("/ip4/%s/tcp/%s", externalIP, externalPort)
+
+	// Log existing announce addresses so we can see what is being replaced
+	if prev, ok := addresses["AppendAnnounce"]; ok {
+		c.log.Info("Replacing existing IPFS AppendAnnounce", "previous", prev, "new", announceAddr)
+	} else {
+		c.log.Info("Setting IPFS AppendAnnounce (was empty)", "addr", announceAddr)
+	}
+
+	addresses["AppendAnnounce"] = []string{announceAddr}
+	cfg["Addresses"] = addresses
+
+	updated, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal ipfs config: %w", err)
+	}
+	if err := os.WriteFile(configFile, updated, 0644); err != nil {
+		return fmt.Errorf("failed to write ipfs config: %w", err)
+	}
+
+	c.log.Info("IPFS announce address configured",
+		"external_ip", externalIP,
+		"external_swarm_port", externalPort,
+		"announce_addr", announceAddr,
+		"config_file", configFile,
+	)
+	return nil
+}
+
 // ensureLibp2pStreamMounting patches the IPFS config file to enable
 // Experimental.Libp2pStreamMounting before the daemon starts. This must be
 // done via file edit (not API) so it works on both first-run and subsequent
@@ -257,7 +383,7 @@ func (c *Core) runIPFS() {
 			case <-done:
 				// Process exited gracefully
 				c.log.Info("IPFS daemon stopped gracefully")
-			case <-time.After(5 * time.Second):
+			case <-time.After(15 * time.Second):
 				// Force kill after timeout
 				c.log.Warn("IPFS daemon didn't stop gracefully, forcing kill")
 				if err := cmd.Process.Kill(); err != nil {
@@ -316,6 +442,14 @@ func (c *Core) RunIPFS() error {
 		return err
 	}
 
+	if err := c.ensureBootstrapNodes(ipfsDir); err != nil {
+		c.log.Warn("failed to update IPFS bootstrap nodes", "err", err)
+	}
+
+	if err := c.ensureAnnounceAddresses(ipfsDir); err != nil {
+		c.log.Warn("failed to set IPFS announce addresses — external peers may not be able to reach this node", "err", err)
+	}
+
 	c.runIPFS()
 
 	// Wait for IPFS daemon to be ready
@@ -353,6 +487,9 @@ func (c *Core) RunIPFS() error {
 	}
 	c.peerID = idoutput.ID
 	c.log.Info("Node PeerID : " + idoutput.ID)
+
+	go c.connectToBootstrapNodes()
+
 	return nil
 }
 
@@ -510,39 +647,4 @@ func (c *Core) GetAllBootStrap() []string {
 	}
 
 	return c.cfg.MainnetBootstrap
-}
-
-func (c *Core) GetDHTddrs(cid string) ([]string, error) {
-	cmd := exec.Command(c.ipfsApp, "dht", "findprovs", cid)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		c.log.Error("failed to open command stdout", "err", err)
-		return nil, err
-	}
-	err = cmd.Start()
-	if err != nil {
-		c.log.Error("failed to start command", "err", err)
-		return nil, err
-	}
-	ids := make([]string, 0)
-	scanner := bufio.NewScanner(stdout)
-	for scanner.Scan() {
-		m := scanner.Text()
-		if strings.Contains(m, "Error") {
-			return nil, fmt.Errorf(m)
-		}
-		if !strings.HasPrefix(m, "Qm") {
-			ids = append(ids, m)
-		}
-	}
-	return ids, nil
-}
-
-func (c *Core) ipfsRepoGc() {
-	cmd := exec.Command(c.ipfsApp, "ipfs", "repo", "gc")
-	err := cmd.Start()
-	if err != nil {
-		c.log.Error("failed to start command", "err", err)
-		//return nil, err
-	}
 }

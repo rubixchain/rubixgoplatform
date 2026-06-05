@@ -37,15 +37,7 @@ func BuildTransactionInfoFromRequest(
 	pubsub *types.PubSub, // punishFn which was of type func(*model.PubSubTxnInfo)  is change to types.PubSub to be passed to CollectRBTTokens
 	referenceID string, // referenceID is added to be passed to LockTokensForSplit and CollectRBTTokens for better traceability of locked tokens
 ) (*models.TransactionInfo, float64, error) {
-	log.Info("BuildTransactionInfoFromRequest: Starting",
-		"hasRBT", req.HasRBT(),
-		"hasFT", req.HasFT(),
-		"hasNFT", req.HasNFT(),
-		"hasSC", req.HasSmartContract(),
-		"rbtAmount", req.GetRBTAmount(),
-		"initiator", req.Initiator,
-		"owner", req.Owner,
-	)
+	log.Debug("Initating BuildTransactionInfoFromRequest")
 
 	// Reject NFT and SmartContract entries with badly-shaped IDs up front.
 	// Callers must subscribe to obtain a real CID; this catches empty strings
@@ -80,7 +72,7 @@ func BuildTransactionInfoFromRequest(
 	if req.HasRBT() {
 		var genTX *models.Transactions = nil
 
-		log.Info("BuildTransactionInfoFromRequest: Processing RBT tokens", "amount", req.GetRBTAmount())
+		log.Debug("BuildTransactionInfoFromRequest: Processing RBT tokens", "amount", req.GetRBTAmount())
 		ownerDID := dc.GetDID()
 		log.Debug("BuildTransactionInfoFromRequest: Locking RBT tokens for split", "did", ownerDID, "amount", req.GetRBTAmount())
 		ownedRBTTokens, err := w.LockTokensForSplit(ctx, ownerDID, req.GetRBTAmount(), referenceID)
@@ -88,7 +80,7 @@ func BuildTransactionInfoFromRequest(
 			log.Error("BuildTransactionInfoFromRequest: Failed to lock RBT tokens", "err", err, "did", ownerDID, "amount", req.GetRBTAmount())
 			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: lock RBT tokens for split: %w", err)
 		}
-		log.Info("BuildTransactionInfoFromRequest: RBT tokens locked", "count", len(ownedRBTTokens), "did", ownerDID)
+		log.Debug("BuildTransactionInfoFromRequest: RBT tokens locked", "count", len(ownedRBTTokens), "did", ownerDID)
 
 		log.Debug("BuildTransactionInfoFromRequest: Getting token denom array", "did", ownerDID)
 		denomMap, err := w.GetTokenDenomArray(ownerDID)

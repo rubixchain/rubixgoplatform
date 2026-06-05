@@ -280,3 +280,98 @@ type IPFSContractInfo struct {
 	ArtifactHash string `json:"artifactHash"`
 	PeerID       string `json:"peerID"`
 }
+
+type BasicResponse struct {
+	Status  bool        `json:"status"`
+	Message string      `json:"message"`
+	Result  interface{} `json:"result"`
+}
+
+// MintedChild reports one server-generated child NFT ID back to the caller
+// when a transaction includes child-mint entries.
+type MintedChild struct {
+	ParentNFTId string `json:"parentNFTId"`
+	ChildNFTId  string `json:"childNFTId"`
+}
+
+// TransactionResult is the typed payload returned via BasicResponse.Result
+// from InitiateTransaction on success. MintedNFTChildren is omitted from the
+// JSON when no children were minted in the transaction.
+type TransactionResult struct {
+	TransactionID     string        `json:"transactionID"`
+	MintedNFTChildren []MintedChild `json:"mintedNFTChildren"`
+}
+
+type BootStrapPeers struct {
+	Peers []string `json:"peers"`
+}
+
+// BootStrapResponse used as model for the API responses
+type BootStrapResponse struct {
+	Status  bool           `json:"status"`
+	Message string         `json:"message"`
+	Result  BootStrapPeers `json:"result"`
+}
+
+type ArbitrarySignRequest struct {
+	SignerDID string `json:"signer_did"`
+	MsgToSign string `json:"msg_to_sign"`
+}
+
+type SignVerificationRequest struct {
+	SignerDID string `json:"signer_did"`
+	SignedMsg string `json:"signed_msg"`
+	Signature string `json:"signature"`
+}
+
+type ArbitrarySignature struct {
+	Signature string `json:"signature"`
+}
+
+type RegisterCallBackUrlReq struct {
+	SmartContractToken string
+	CallBackURL        string
+}
+
+type PeerStatusResponse struct {
+	Version   string `json:"version"`
+	DIDExists bool   `json:"did_exists"`
+}
+
+type DIDResult struct {
+	DID    string `json:"did"`
+	PeerID string `json:"peer_id"`
+}
+
+type TokenDetail struct {
+	Token  string `json:"token"`
+	Status int    `json:"status"`
+}
+
+type TokenResponse struct {
+	BasicResponse
+	TokenDetails []TokenDetail `json:"token_details"`
+}
+
+type QuorumSetup struct {
+	DID             string `json:"did"`
+	Password        string `json:"password"`
+	PrivKeyPassword string `json:"priv_password"`
+}
+
+type GenerateLocalRBTRequest struct {
+	NumberOfTokens int    `json:"number_of_tokens"`
+	DID            string `json:"did"`
+	StartIndex     int    `json:"start_index"`
+}
+
+type FaucetRBTGenerateRequest struct {
+	TokenCount int    `json:"token_count"`
+	DID        string `json:"did"`
+}
+
+type QuorumListResponse struct {
+	Status  bool     `json:"status"`
+	Message string   `json:"message"`
+	Result  []string `json:"result"`
+}

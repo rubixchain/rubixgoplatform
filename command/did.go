@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/core/model"
 	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -126,7 +126,7 @@ func (cmd *Command) SetupDIDCmd() {
 	cmd.log.Info("DID registered successfully")
 }
 
-func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.Duration) (string, bool) {
+func (cmd *Command) SignatureResponse(br *models.BasicResponse, timeout ...time.Duration) (string, bool) {
 	pwdSet := false
 	password := cmd.privPWD
 
@@ -146,7 +146,7 @@ func (cmd *Command) SignatureResponse(br *model.BasicResponse, timeout ...time.D
 				return errMsg, false
 			}
 
-			signMap := model.Signature{}
+			signMap := models.ArbitrarySignature{}
 			err = json.Unmarshal(jsonbytes, &signMap)
 			if err != nil {
 				errMsg := "Invalid response, " + err.Error()
@@ -315,39 +315,4 @@ func (cmd *Command) SignVerification() {
 		return
 	}
 	cmd.log.Info("signature verification result", result)
-}
-
-func (cmd *Command) RemoveStaleDID() {
-	if cmd.did == "" {
-		cmd.log.Info("DID cannot be empty")
-		fmt.Print("Enter DID : ")
-		_, err := fmt.Scan(&cmd.did)
-		if err != nil {
-			cmd.log.Error("Failed to get DID")
-			return
-		}
-	}
-	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
-	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !isAlphanumeric {
-		cmd.log.Error("Invalid DID")
-		return
-	}
-	br, err := cmd.c.RemoveStaleDID(cmd.did)
-	if err != nil {
-		cmd.log.Error("Failed to remove DID from network", "err", err)
-		return
-	}
-
-	if !br.Status {
-		cmd.log.Error("Failed to remove DID from network", "msg", br.Message)
-		return
-	}
-
-	msg, status := cmd.SignatureResponse(br)
-
-	if !status {
-		cmd.log.Error("Failed to remove DID from network, " + msg)
-		return
-	}
-	cmd.log.Info("DID removed from network successfully")
 }
