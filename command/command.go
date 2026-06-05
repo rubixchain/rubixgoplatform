@@ -25,11 +25,8 @@ import (
 	"golang.org/x/term"
 )
 
-const (
-	version string = "0.2"
-)
-
 var (
+	version        string = "1.0.0"
 	currentCommit  string = "unknown"
 	previousCommit string = "unknown"
 )
