@@ -57,6 +57,19 @@ jobs:
         # silently (a half-executed run could otherwise pass green).
         run: python3 -m test.integration.runner --small-test --run-all-tests
 
+      - name: Dump container diagnostics on failure
+        if: failure()
+        # The Python wrapper only reports that `up --wait` failed, not WHY. Capture
+        # container status + full logs so a crashed/unhealthy node is diagnosable
+        # from the uploaded artifacts (node app logs may not exist if a container
+        # died before writing them).
+        run: |
+          mkdir -p test/docker/data/stress/logs
+          echo "=== docker compose ps ===" | tee test/docker/data/stress/logs/_ci_diagnostics.txt
+          docker compose -f test/docker/docker-compose.stress.yml -p rubix-stress ps -a 2>&1 | tee -a test/docker/data/stress/logs/_ci_diagnostics.txt || true
+          echo "=== docker compose logs ===" | tee -a test/docker/data/stress/logs/_ci_diagnostics.txt
+          docker compose -f test/docker/docker-compose.stress.yml -p rubix-stress logs --no-color --tail=400 2>&1 | tee -a test/docker/data/stress/logs/_ci_diagnostics.txt || true
+
       - name: Upload run artifacts
         if: always()
         uses: actions/upload-artifact@v4
