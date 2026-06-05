@@ -46,6 +46,11 @@ services:
       - ./swarm:/swarm
     networks:
       - rubix-stress-net
+    # Resolve host.docker.internal on Linux (CI), where it isn't provided by
+    # default — the node POSTs SC callbacks to the host-side CallbackReceiver at
+    # host.docker.internal. host-gateway maps that name to the Docker host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "bash", "-c", "</dev/tcp/localhost/20000"]
       interval: 10s
@@ -95,6 +100,11 @@ services:
       - ./swarm:/swarm
     networks:
       - rubix-stress-net
+    # Resolve host.docker.internal on Linux (CI), where it isn't provided by
+    # default — the node POSTs SC callbacks to the host-side CallbackReceiver at
+    # host.docker.internal. host-gateway maps that name to the Docker host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "bash", "-c", "</dev/tcp/localhost/20000"]
       interval: 10s
@@ -144,6 +154,11 @@ services:
       - ./swarm:/swarm
     networks:
       - rubix-stress-net
+    # Resolve host.docker.internal on Linux (CI), where it isn't provided by
+    # default — the node POSTs SC callbacks to the host-side CallbackReceiver at
+    # host.docker.internal. host-gateway maps that name to the Docker host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "bash", "-c", "</dev/tcp/localhost/20000"]
       interval: 10s
