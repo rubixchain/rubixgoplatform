@@ -57,3 +57,22 @@ CLAUDE.md
 docker/
 e2e*/
 core/storage/.migration
+
+# --- Integration test harness (test/integration + test/docker) ---
+# The global rules above (*.json, *.txt, *.md, *.sh, docker/) silently exclude
+# required harness source files. Un-ignore the harness trees below, but keep
+# their runtime state (IPFS blocks, Postgres data, logs) ignored.
+!test/integration/
+!test/integration/**
+!test/docker/
+!test/docker/**
+# Re-ignore runtime/generated state under the harness (must come AFTER the
+# negations above so it wins).
+test/docker/data/
+*.log
+
+# Release notes consumed by GoReleaser (make release passes --release-notes when
+# present). Must be track-able despite the global *.md ignore so it can be
+# committed at the tagged commit; otherwise the release silently falls back to
+# auto-generated notes.
+!RELEASE_NOTES.md
