@@ -75,13 +75,60 @@ class StressDockerManager:
                 check=True,
             )
 
-        subprocess.run(
-            ["docker", "compose", "-f", self.compose_file,
-             "-p", self.project_name,
-             "up", "-d", "--wait", "--remove-orphans"],
-            check=True,
-        )
+        try:
+            subprocess.run(
+                ["docker", "compose", "-f", self.compose_file,
+                 "-p", self.project_name,
+                 "up", "-d", "--wait", "--remove-orphans"],
+                check=True,
+            )
+        except subprocess.CalledProcessError:
+            # `up --wait` failed (a container is unhealthy or exited). Capture
+            # container status + logs NOW, before anything tears the stack down —
+            # the runner's finally:teardown() removes the containers, so a later
+            # workflow step would find nothing. This is the only reliable place
+            # to surface WHY a node didn't come up.
+            self._dump_diagnostics()
+            raise
+
         log.info("All integration nodes healthy.")
+
+    def _dump_diagnostics(self) -> None:
+        """Dump `compose ps -a` + `compose logs` to stdout and a log file.
+
+        Called on bring-up failure, before teardown, so a crashed/exited node is
+        diagnosable from CI artifacts (and the console).
+        """
+        log.error("Bring-up failed — capturing container diagnostics:")
+        out_lines = []
+        for label, args in (
+            ("docker compose ps -a", ["ps", "-a"]),
+            ("docker compose logs (tail 400)", ["logs", "--no-color", "--tail", "400"]),
+        ):
+            header = f"===== {label} ====="
+            out_lines.append(header)
+            log.error(header)
+            try:
+                res = subprocess.run(
+                    ["docker", "compose", "-f", self.compose_file,
+                     "-p", self.project_name, *args],
+                    capture_output=True, text=True, timeout=120,
+                )
+                body = (res.stdout or "") + (res.stderr or "")
+            except Exception as exc:  # noqa: BLE001
+                body = f"(failed to capture: {exc})"
+            out_lines.append(body)
+            for line in body.splitlines():
+                log.error("  %s", line)
+        # Persist alongside the run logs so it lands in the uploaded artifact.
+        try:
+            logs_dir = os.path.join(_STATE_DIR, "logs")
+            os.makedirs(logs_dir, exist_ok=True)
+            with open(os.path.join(logs_dir, "_bringup_diagnostics.txt"),
+                      "w", encoding="utf-8") as fh:
+                fh.write("\n".join(out_lines))
+        except Exception as exc:  # noqa: BLE001
+            log.error("Could not write _bringup_diagnostics.txt: %s", exc)
 
     def down(self, volumes: bool = True) -> None:
         ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
