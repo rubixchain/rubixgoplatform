@@ -182,33 +182,28 @@ func (d *DID) CreateDID(didCreate *types.DIDCreate) (string, error) {
 	//passing the diroctory of public key file to add it to ipfs and exctract the hash
 	did, err := d.getDirHash(path.Join(dirName, "public"))
 	if err != nil {
-		errStr := fmt.Sprintf("DID: failed to create did, err: %w", err)
-		d.log.Error(errStr)
-		return "", fmt.Errorf("%s", errStr)
+		d.log.Error("DID: failed to create did", "err", err)
+		return "", fmt.Errorf("DID: failed to create did, err: %w", err)
 	}
 
 	destDidDirectory := path.Join(d.dir, did)
 
 	err = os.MkdirAll(destDidDirectory, os.ModeDir|os.ModePerm)
 	if err != nil {
-		errStr := fmt.Sprintf("DID: failed to create final directory, err: %w", err)
-		d.log.Error(errStr)
-		return "", fmt.Errorf("%s", errStr)
+		d.log.Error("DID: failed to create final directory", "err", err)
+		return "", fmt.Errorf("DID: failed to create final directory, err: %w", err)
 	}
 
 	err = util.DirCopy(path.Join(dirName, "public"), destDidDirectory)
 	if err != nil {
-		errStr := fmt.Sprintf("DID: failed to copy public key to final directory, err: %w", err)
-		d.log.Error(errStr)
-		return "", fmt.Errorf("%s", errStr)
+		d.log.Error("DID: failed to copy public key to final directory", "err", err)
+		return "", fmt.Errorf("DID: failed to copy public key to final directory, err: %w", err)
 	}
 
 	err = util.DirCopy(path.Join(dirName, "private"), destDidDirectory)
 	if err != nil {
-		d.log.Error("failed to copy directory", "err", err)
-		errStr := fmt.Sprintf("DID: failed to copy private key to final directory, err: %w", err)
-		d.log.Error(errStr)
-		return "", fmt.Errorf("%s", errStr)
+		d.log.Error("DID: failed to copy private key to final directory", "err", err)
+		return "", fmt.Errorf("DID: failed to copy private key to final directory, err: %w", err)
 	}
 	os.RemoveAll(dirName)
 	t2 := time.Now()

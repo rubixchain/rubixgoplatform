@@ -45,27 +45,27 @@ func (ps *PubSub) GetTrackedTopicStats() (published int64, received int64) {
 // level for the tracked topic. Started lazily on first subscribe/publish.
 func (ps *PubSub) startStatsReporter() {
 	ps.statsOnce.Do(func() {
-		//	go func() {
-		ticker := time.NewTicker(120 * time.Second)
-		defer ticker.Stop()
-		var lastPub, lastRcv int64
-		for range ticker.C {
-			pub := atomic.LoadInt64(&ps.publishCount)
-			rcv := atomic.LoadInt64(&ps.receiveCount)
-			deltaPub := pub - lastPub
-			deltaRcv := rcv - lastRcv
-			if pub != 0 || rcv != 0 {
-				ps.log.Info("PUBSUB STATS",
-					"topic", trackedTopic,
-					"publishedTotal", pub,
-					"receivedTotal", rcv,
-					"publishedDelta30s", deltaPub,
-					"receivedDelta30s", deltaRcv)
+		go func() {
+			ticker := time.NewTicker(120 * time.Second)
+			defer ticker.Stop()
+			var lastPub, lastRcv int64
+			for range ticker.C {
+				pub := atomic.LoadInt64(&ps.publishCount)
+				rcv := atomic.LoadInt64(&ps.receiveCount)
+				deltaPub := pub - lastPub
+				deltaRcv := rcv - lastRcv
+				if pub != 0 || rcv != 0 {
+					ps.log.Info("PUBSUB STATS",
+						"topic", trackedTopic,
+						"publishedTotal", pub,
+						"receivedTotal", rcv,
+						"publishedDelta30s", deltaPub,
+						"receivedDelta30s", deltaRcv)
+				}
+				lastPub = pub
+				lastRcv = rcv
 			}
-			lastPub = pub
-			lastRcv = rcv
-		}
-		//}()
+		}()
 	})
 }
 
