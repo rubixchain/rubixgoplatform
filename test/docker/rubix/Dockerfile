@@ -22,32 +22,28 @@ COPY . .
 RUN GOARCH=${TARGETARCH} go build -o rubixgoplatform
 
 # -------------------------
-# STAGE 2 — KUBO (ipfs binary)
-# Rubix shells out to ./ipfs for init and daemon lifecycle.
-# Downloaded at build time (not committed) — TARGETARCH is set automatically by
-# Docker BuildKit: amd64, arm64, or 386.
-# -------------------------
-FROM alpine:latest AS kubo-extractor
-
-ARG TARGETARCH
-ARG KUBO_VERSION=v0.19.1
-
-RUN apk add --no-cache curl tar \
- && curl -fsSL "https://dist.ipfs.tech/kubo/${KUBO_VERSION}/kubo_${KUBO_VERSION}_linux-${TARGETARCH}.tar.gz" -o /tmp/kubo.tar.gz \
- && tar -xzf /tmp/kubo.tar.gz -C /tmp \
- && chmod +x /tmp/kubo/ipfs
-
-# -------------------------
-# STAGE 3 — RUNTIME
+# STAGE 2 — RUNTIME
 # -------------------------
 FROM alpine:latest
 
 WORKDIR /app
 
-RUN apk add --no-cache bash postgresql-client gettext
+# gcompat: the kubo (ipfs) release binaries for linux are glibc-linked
+# (interpreter /lib64/ld-linux-*.so), but Alpine is musl. Without the glibc
+# shim, `exec ./ipfs` fails with the misleading "no such file or directory"
+# (missing ELF interpreter), so the node can't init IPFS and exits on startup.
+RUN apk add --no-cache bash postgresql-client gettext gcompat
 
 COPY --from=builder /app/rubixgoplatform /app/rubixgoplatform
-COPY --from=kubo-extractor /tmp/kubo/ipfs /app/ipfs
+
+# Vendored kubo (ipfs) release — kubo v0.19.1, linux-amd64. The release tarball
+# is committed alongside this Dockerfile instead of downloaded at build time, so
+# the image builds with no network dependency on dist.ipfs.tech. To bump the
+# version, replace the tarball and update the filename below.
+COPY test/docker/rubix/kubo_v0.19.1_linux-amd64.tar.gz /tmp/kubo.tar.gz
+RUN tar -xzf /tmp/kubo.tar.gz -C /tmp \
+ && cp /tmp/kubo/ipfs /app/ipfs \
+ && rm -rf /tmp/kubo /tmp/kubo.tar.gz
 
 # entrypoint + config template live alongside this Dockerfile (relative to the
 # repo-root build context: test/docker/rubix/).
