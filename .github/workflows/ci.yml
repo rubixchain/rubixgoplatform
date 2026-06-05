@@ -1,0 +1,82 @@
+name: CI
+
+# Fast feedback gate: compile, unit-test, vet, and format-check on every push
+# and PR, plus a compile-only matrix across the three target OSes. This is the
+# quick signal — the heavier Docker integration suite lives in
+# docker-integration.yml.
+
+on:
+  push:
+  pull_request:
+
+# Cancel superseded runs on the same ref to save runner minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Linux: full Go checks (build + unit tests + vet + gofmt).
+  # ---------------------------------------------------------------------------
+  go-checks:
+    name: Go checks (ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'      # matches go.mod and docker/rubix/Dockerfile
+
+      - name: Build
+        run: go build ./...
+
+      - name: Unit tests
+        run: go test -race ./...
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: gofmt (report-only)
+        # Reports unformatted files without failing the build. Flip to a hard
+        # failure (uncomment the exit) after a one-time `gofmt -w` cleanup.
+        run: |
+          unformatted=$(gofmt -l $(git ls-files '*.go'))
+          if [ -n "$unformatted" ]; then
+            echo "::warning::The following files are not gofmt-clean:"
+            echo "$unformatted"
+            # exit 1
+          else
+            echo "All Go files are gofmt-clean."
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Compile-only across the three target OSes. Behavioral testing is Docker/
+  # Linux-only (see docker-integration.yml); this just proves the binary still
+  # compiles for windows/darwin — including the OS-branching paths
+  # (ipfs.exe vs ipfs, taskkill vs pkill).
+  # ---------------------------------------------------------------------------
+  compile-matrix:
+    name: Compile (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build
+        run: go build ./...

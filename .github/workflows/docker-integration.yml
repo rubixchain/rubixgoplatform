@@ -1,0 +1,71 @@
+name: Docker Integration Tests
+
+# Behavioral end-to-end suite: spins up the 3-node Postgres-backed cluster via
+# Docker Compose and drives it through the HTTP API across every subsystem
+# (RBT, FT, NFT, smart contracts, bundled, all-in-one, intra-node) plus the
+# negative / failure-path checks. Localnet only.
+#
+# Docker-on-Linux only by design: GitHub's Windows/macOS runners can't run the
+# Linux node containers, and PostgreSQL is mandatory for the node — so this
+# behavioral suite runs on ubuntu. OS-compile coverage is in ci.yml.
+
+on:
+  pull_request:
+    branches:
+      - release-v1
+  workflow_dispatch:        # allow manual runs from the Actions tab
+
+concurrency:
+  group: docker-integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    name: Run integration suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 60     # run-all + image build; cap generously (typ. ~5 min)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install test dependencies
+        run: pip install -r test/integration/requirements.txt
+
+      - name: Build node image
+        # Fail-fast: surface an image build break before the Python setup runs.
+        # The runner also builds on bring-up (up --build), but Docker's layer
+        # cache makes that a near-instant no-op. Uses the same project name the
+        # runner and teardown use, for consistency.
+        run: docker compose -f test/docker/docker-compose.stress.yml -p rubix-stress build nodeA
+
+      - name: Run integration suite (all subsystems + negatives)
+        # Runner spins the compose stack up, drives every subsystem + negative
+        # tests, tears the stack down, and exits non-zero if any verification
+        # check fails. A fresh CI checkout means clean state by construction.
+        #
+        # --small-test sizes the token budget (mint counts + shuttle buffer) so
+        # EVERY transaction in the full run-all matrix completes — see the
+        # small_test_overrides block in test/integration/config.json. Without
+        # the right budget the wallet drains mid-run and later phases fail
+        # silently (a half-executed run could otherwise pass green).
+        run: python3 -m test.integration.runner --small-test --run-all-tests
+
+      - name: Upload run artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-logs
+          path: |
+            test/docker/data/stress/logs/**
+          if-no-files-found: warn
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose -f test/docker/docker-compose.stress.yml -p rubix-stress down -v
