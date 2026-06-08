@@ -182,35 +182,62 @@ class NativePostgresManager:
         if not _IS_WINDOWS:
             opts += f" -k {os.path.abspath(inst.data_dir)}"
         log.info("[%s] starting Postgres on 127.0.0.1:%d", inst.name, inst.port)
+        # IMPORTANT: do NOT use capture_output here. pg_ctl launches the postgres
+        # server as a detached child that inherits the stdout/stderr pipes; on
+        # Windows that server keeps the pipe open after pg_ctl exits, so a
+        # capture_output read would block forever (the whole job hangs at
+        # "starting Postgres" with no error). Send pg_ctl's own output to a file
+        # and add a Python-side timeout as a hard backstop so a misbehaving
+        # pg_ctl can never hang CI — it raises instead.
+        pgctl_log = os.path.join(inst.data_dir, "pg_ctl.out")
         try:
-            subprocess.run(
-                [self._pg_ctl, "-D", inst.data_dir, "-l", logfile,
-                 "-o", opts, "-w", "-t", str(self._startup_timeout), "start"],
-                check=True, capture_output=True, text=True,
-            )
-        except subprocess.CalledProcessError as exc:
-            # pg_ctl's own stderr rarely says why; the reason is in server.log.
-            # Surface both so a CI failure is diagnosable without the artifact.
-            server_log = ""
-            try:
-                with open(logfile, encoding="utf-8") as fh:
-                    server_log = fh.read()[-2000:]
-            except OSError:
-                pass
+            with open(pgctl_log, "w", encoding="utf-8") as out:
+                subprocess.run(
+                    [self._pg_ctl, "-D", inst.data_dir, "-l", logfile,
+                     "-o", opts, "-w", "-t", str(self._startup_timeout), "start"],
+                    check=True, stdout=out, stderr=subprocess.STDOUT,
+                    timeout=self._startup_timeout + 30,
+                )
+        except subprocess.TimeoutExpired:
+            server_log = self._read_tail(logfile)
+            pgctl_out = self._read_tail(pgctl_log)
             log.error(
-                "[%s] pg_ctl start failed (rc=%s).\nstdout:%s\nstderr:%s\nserver.log:\n%s",
-                inst.name, exc.returncode, exc.stdout, exc.stderr, server_log,
+                "[%s] pg_ctl start TIMED OUT after %ss.\npg_ctl.out:\n%s\nserver.log:\n%s",
+                inst.name, self._startup_timeout + 30, pgctl_out, server_log,
             )
             raise
+        except subprocess.CalledProcessError as exc:
+            # pg_ctl's own output is in pg_ctl.out; the real reason is in
+            # server.log. Surface both so a CI failure is diagnosable.
+            log.error(
+                "[%s] pg_ctl start failed (rc=%s).\npg_ctl.out:\n%s\nserver.log:\n%s",
+                inst.name, exc.returncode,
+                self._read_tail(pgctl_log), self._read_tail(logfile),
+            )
+            raise
+
+    @staticmethod
+    def _read_tail(path: str, n: int = 2000) -> str:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                return fh.read()[-n:]
+        except OSError:
+            return "(unavailable)"
 
     def _stop_instance(self, inst: PgInstance) -> None:
         if not os.path.isdir(inst.data_dir):
             return
         log.info("[%s] stopping Postgres (port %d)", inst.name, inst.port)
-        subprocess.run(
-            [self._pg_ctl, "-D", inst.data_dir, "-m", "fast", "-w", "stop"],
-            check=False, capture_output=True, text=True,
-        )
+        # No capture_output (same Windows pipe-inheritance hang risk as start);
+        # bounded timeout so teardown can't hang the job either.
+        try:
+            subprocess.run(
+                [self._pg_ctl, "-D", inst.data_dir, "-m", "fast", "-w", "stop"],
+                check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=60,
+            )
+        except subprocess.TimeoutExpired:
+            log.warning("[%s] pg_ctl stop timed out; leaving server to OS cleanup.", inst.name)
 
     # ----- readiness + provisioning --------------------------------------- #
 
