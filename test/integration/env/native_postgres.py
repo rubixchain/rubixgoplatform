@@ -143,22 +143,60 @@ class NativePostgresManager:
         # Trust local connections so we can create the rubix role without a
         # bootstrap password dance; this is a throwaway test instance on loopback.
         log.info("[%s] initdb -> %s", inst.name, inst.data_dir)
-        subprocess.run(
+        proc = subprocess.run(
             [self._initdb, "-D", inst.data_dir, "-U", "postgres",
              "--auth=trust", "--encoding=UTF8"],
-            check=True, capture_output=True, text=True,
+            capture_output=True, text=True,
         )
+        if proc.returncode != 0:
+            # initdb's reason is in its stdout/stderr; capture_output hides it
+            # unless we surface it. Persist alongside the data dir too so it
+            # lands in the CI artifact.
+            try:
+                with open(os.path.join(os.path.dirname(inst.data_dir), "initdb.log"),
+                          "w", encoding="utf-8") as fh:
+                    fh.write((proc.stdout or "") + "\n--- stderr ---\n" + (proc.stderr or ""))
+            except OSError:
+                pass
+            log.error(
+                "[%s] initdb failed (rc=%s).\nstdout:\n%s\nstderr:\n%s",
+                inst.name, proc.returncode, proc.stdout, proc.stderr,
+            )
+            raise subprocess.CalledProcessError(
+                proc.returncode, proc.args, proc.stdout, proc.stderr
+            )
 
     def _start_instance(self, inst: PgInstance) -> None:
         logfile = os.path.join(inst.data_dir, "server.log")
         # Bind loopback only; set the port via -o so each instance is isolated.
         opts = f"-p {inst.port} -h 127.0.0.1"
+        # On Unix, override the unix-socket dir to the (writable) data dir. The
+        # default (/var/run/postgresql) is NOT writable by the non-root CI runner
+        # user, so `pg_ctl start` fails there. Use an absolute path — pg requires
+        # it for -k. Windows has no unix sockets, so skip.
+        if not _IS_WINDOWS:
+            opts += f" -k {os.path.abspath(inst.data_dir)}"
         log.info("[%s] starting Postgres on 127.0.0.1:%d", inst.name, inst.port)
-        subprocess.run(
-            [self._pg_ctl, "-D", inst.data_dir, "-l", logfile,
-             "-o", opts, "-w", "-t", str(self._startup_timeout), "start"],
-            check=True, capture_output=True, text=True,
-        )
+        try:
+            subprocess.run(
+                [self._pg_ctl, "-D", inst.data_dir, "-l", logfile,
+                 "-o", opts, "-w", "-t", str(self._startup_timeout), "start"],
+                check=True, capture_output=True, text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            # pg_ctl's own stderr rarely says why; the reason is in server.log.
+            # Surface both so a CI failure is diagnosable without the artifact.
+            server_log = ""
+            try:
+                with open(logfile, encoding="utf-8") as fh:
+                    server_log = fh.read()[-2000:]
+            except OSError:
+                pass
+            log.error(
+                "[%s] pg_ctl start failed (rc=%s).\nstdout:%s\nstderr:%s\nserver.log:\n%s",
+                inst.name, exc.returncode, exc.stdout, exc.stderr, server_log,
+            )
+            raise
 
     def _stop_instance(self, inst: PgInstance) -> None:
         if not os.path.isdir(inst.data_dir):

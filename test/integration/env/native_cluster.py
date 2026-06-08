@@ -32,6 +32,7 @@ Port derivation (core/config/config.go + constants/ipfs.go), per node_index i:
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import platform
@@ -73,6 +74,17 @@ class NativeNode:
     def api_port(self) -> int:
         return 20000 + self.node_index
 
+    @property
+    def swarm_port(self) -> int:
+        # constants.SwarmPort (4002) + node_index — the IPFS swarm listen port.
+        return 4002 + self.node_index
+
+    @property
+    def ipfs_api_port(self) -> int:
+        # constants.IPFSPort (5002) + node_index — the kubo HTTP API port
+        # (`ipfs --api` talks to this; see core/ipfs.go:66).
+        return 5002 + self.node_index
+
 
 class NativeClusterManager:
     """Build (config + assets), launch, health-check, and stop native nodes."""
@@ -110,6 +122,16 @@ class NativeClusterManager:
         for node in self._nodes:
             self._wait_healthy(node)
         log.info("All %d native node(s) healthy.", len(self._nodes))
+
+        # Explicitly mesh the nodes' IPFS swarms. On localnet the node dials
+        # peers by bare peerID (core/ipfsport/peer.go:114), which needs the
+        # address already in the peerstore. The only discovery mechanism is
+        # kubo's mDNS — which works between local processes on a dev machine but
+        # is blocked in sandboxed CI runners (no multicast), and the DHT is off
+        # (private swarm) with no bootstrap nodes. So we hand each node the
+        # others' explicit loopback multiaddrs; once connected, the peerstore
+        # caches them and per-transaction SwarmConnect(peerID) succeeds.
+        self._mesh_connect()
 
     def down(self) -> None:
         for name, proc in list(self._procs.items()):
@@ -230,6 +252,67 @@ class NativeClusterManager:
                 return True
         except OSError:
             return False
+
+    # ----- IPFS swarm meshing --------------------------------------------- #
+
+    def _mesh_connect(self) -> None:
+        """Explicitly connect every node's IPFS swarm to every other node via
+        loopback multiaddrs, so peering doesn't depend on mDNS/DHT discovery.
+
+        Resolves each node's peerID via `ipfs id`, then for every ordered pair
+        runs `ipfs swarm connect /ip4/127.0.0.1/tcp/<swarm>/p2p/<peerID>`.
+        """
+        # Resolve peerIDs (may need a brief retry — the kubo daemon starts a
+        # moment after the node's HTTP API is reachable).
+        peer_ids: dict[str, str] = {}
+        for node in self._nodes:
+            peer_ids[node.name] = self._wait_ipfs_id(node)
+
+        connected = 0
+        for src in self._nodes:
+            for dst in self._nodes:
+                if src.name == dst.name:
+                    continue
+                maddr = (f"/ip4/127.0.0.1/tcp/{dst.swarm_port}"
+                         f"/p2p/{peer_ids[dst.name]}")
+                rc, out, err = self._ipfs(src, "swarm", "connect", maddr)
+                if rc == 0:
+                    connected += 1
+                else:
+                    # Non-fatal per-pair: log and continue. A genuinely broken
+                    # mesh surfaces as transaction failures the suite catches.
+                    log.warning("[%s -> %s] swarm connect failed: %s",
+                                src.name, dst.name, (err or out))
+        log.info("IPFS swarm mesh: %d/%d peer connections established.",
+                 connected, len(self._nodes) * (len(self._nodes) - 1))
+
+    def _wait_ipfs_id(self, node: NativeNode, timeout: int = 30) -> str:
+        """Return node's IPFS peerID, retrying until the kubo API answers."""
+        deadline = time.time() + timeout
+        last = ""
+        while time.time() < deadline:
+            rc, out, err = self._ipfs(node, "id")
+            if rc == 0 and out:
+                try:
+                    return json.loads(out)["ID"]
+                except (ValueError, KeyError):
+                    last = out
+            else:
+                last = err or out
+            time.sleep(1.0)
+        raise RuntimeError(
+            f"[{node.name}] could not read IPFS peerID within {timeout}s "
+            f"(last: {last})"
+        )
+
+    def _ipfs(self, node: NativeNode, *args: str):
+        """Run the node's kubo binary against its HTTP API. Returns
+        (returncode, stdout, stderr)."""
+        ipfs = os.path.join(os.path.abspath(node.work_dir),
+                            "ipfs.exe" if _IS_WINDOWS else "ipfs")
+        cmd = [ipfs, "--api", f"/ip4/127.0.0.1/tcp/{node.ipfs_api_port}", *args]
+        p = subprocess.run(cmd, cwd=node.work_dir, capture_output=True, text=True)
+        return p.returncode, p.stdout.strip(), p.stderr.strip()
 
     # ----- kubo (ipfs) binary resolution ---------------------------------- #
 
