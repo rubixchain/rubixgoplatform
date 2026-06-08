@@ -352,12 +352,20 @@ class IntraNodeEngine:
         fund_count: int = 2,
         rounds: int = 2,
         per_round: int = 1,
+        pre_fund_settle: int = 15,
     ) -> None:
         """Fund did_a2 with ``fund_count`` FTs and bounce ``per_round`` tokens
         back-and-forth for ``rounds`` rounds.
 
         ``ft_batch`` is a dict from :class:`FTEngine._minted_fts` — needs
         ``ft_name`` and ``creator_did``.
+
+        ``pre_fund_settle`` waits before the first A->A2 fund so the quorum's
+        synced copy of the FT token chain catches up to the initiator's head.
+        Without it, on slow runners the fund transfer fails with
+        ``TokenChainIntegrityCheck: ... chain mismatch after sync`` because the
+        FT was minted/transferred in the preceding FT phase and the quorum's
+        chain head lags. Fast dev machines don't hit this; CI does.
         """
         assert self.secondary_did, "call setup_secondary_did() first"
         if not ft_batch:
@@ -377,6 +385,16 @@ class IntraNodeEngine:
             "=== INTRA-NODE FT: batch=%s  fund=%d  rounds=%d  per_round=%d ===",
             ft_name, fund_count, rounds, per_round,
         )
+
+        # Let the quorum's synced FT token chain catch up to the initiator's
+        # head before funding, so the fund transfer's TokenChainIntegrityCheck
+        # doesn't fail on a stale chain head (see docstring).
+        if pre_fund_settle > 0:
+            log.info(
+                "Settling %ds for FT '%s' token chain to sync on quorum before fund…",
+                pre_fund_settle, ft_name,
+            )
+            time.sleep(pre_fund_settle)
 
         # Initial fund — A -> A2
         self._fire_ft(

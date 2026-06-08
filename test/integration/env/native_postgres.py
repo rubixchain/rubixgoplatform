@@ -138,7 +138,12 @@ class NativePostgresManager:
         # Fresh data dir every run — no stale rubix_* state across runs.
         if os.path.isdir(inst.data_dir):
             shutil.rmtree(inst.data_dir, ignore_errors=True)
-        os.makedirs(inst.data_dir, exist_ok=True)
+        # Create only the PARENT; let initdb create the leaf data dir itself.
+        # initdb locks the data dir to 0700, and on Windows it can't change
+        # permissions on a pre-existing directory ("could not change permissions
+        # of directory: Permission denied"). When initdb creates the dir, it sets
+        # the right perms at creation. Harmless on Unix too.
+        os.makedirs(os.path.dirname(inst.data_dir), exist_ok=True)
 
         # Trust local connections so we can create the rubix role without a
         # bootstrap password dance; this is a throwaway test instance on loopback.
