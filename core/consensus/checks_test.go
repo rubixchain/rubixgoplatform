@@ -100,8 +100,8 @@ func TestValidateTransactionInfoFields(t *testing.T) {
 		}, wantErr: true, wantMatch: "length"},
 
 		// ---- Owner DID ----
-		{name: "owner empty", mutate: func(tx *models.TransactionInfo) { tx.Owner = "" },
-			wantErr: true, wantMatch: "owner"},
+		{name: "owner empty is allowed (deployment txns)", mutate: func(tx *models.TransactionInfo) { tx.Owner = "" },
+			wantErr: false},
 		{name: "owner has space", mutate: func(tx *models.TransactionInfo) { tx.Owner = "bafybmi abc" },
 			wantErr: true, wantMatch: "alphanumeric"},
 
