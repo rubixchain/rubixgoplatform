@@ -62,6 +62,13 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         help="Skip docker up/down (nodes already running — e.g. external environment)",
     )
     p.add_argument(
+        "--native",
+        action="store_true",
+        help="Run the cluster as native host processes (no Docker): local Postgres "
+             "+ rubixgoplatform binaries. For macOS/Windows. Use with "
+             "--config test/integration/config.native.json. Mutually exclusive with --no-docker.",
+    )
+    p.add_argument(
         "--max-transactions",
         type=int,
         default=None,
@@ -461,10 +468,20 @@ def main() -> None:
 
     runner = StressRunner(cfg)
 
-    # Environment owns cluster lifecycle. --no-docker => caller provides nodes
-    # (external environment, e.g. a future non-Docker workflow). Otherwise spin
-    # up a fresh compose stack and tear it down on the way out.
-    env = None if args.no_docker else DockerEnvironment()
+    # Environment owns cluster lifecycle:
+    #   --native    => stand up native Postgres + rubixgoplatform processes (no Docker)
+    #   --no-docker => caller provides already-running nodes (external environment)
+    #   default     => spin up a fresh compose stack and tear it down on the way out
+    if args.native and args.no_docker:
+        log.error("--native and --no-docker are mutually exclusive.")
+        sys.exit(2)
+    if args.native:
+        from test.integration.env.native_env import NativeEnvironment
+        env = NativeEnvironment()
+    elif args.no_docker:
+        env = None
+    else:
+        env = DockerEnvironment()
 
     try:
         if env is not None:

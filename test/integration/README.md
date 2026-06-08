@@ -52,6 +52,38 @@ python3 -m test.integration.runner --no-docker --run-all-tests
 Requires Docker (with compose) for the default path. The runner builds the node
 image from `test/docker/rubix/Dockerfile` and uses `test/docker/docker-compose.stress.yml`.
 
+## Native mode (no Docker — macOS / Windows)
+
+`--native` runs the same suites against a cluster of **native host processes**
+instead of containers: three local PostgreSQL instances plus three
+`rubixgoplatform` processes. This is for platforms where GitHub-hosted runners
+can't run the Linux node containers (macOS has no Docker; Windows can't run Linux
+containers). Test logic is unchanged — only the cluster lifecycle (`env/`) differs.
+
+```bash
+# Build the node binary for your OS first (repo root):
+make compile-mac        # macOS  (or compile-linux / compile-windows)
+
+# Run natively (no Docker):
+python3 -m test.integration.runner --native \
+    --config test/integration/config.native.json --small-test --run-all-tests
+```
+
+Prerequisites:
+- **PostgreSQL** installed and on PATH (e.g. `brew install postgresql@16` on
+  macOS). The harness finds `initdb`/`pg_ctl` on PATH or in common install
+  locations and manages three throwaway instances itself.
+- The **`rubixgoplatform` binary** built via `make compile-<os>` (auto-detected:
+  `mac/`, `linux/`, or `windows/`).
+- Network access on first run to fetch the pinned **kubo** (IPFS) build for your
+  OS/arch; it's cached under `test/native/.kubo/` thereafter.
+
+Native mode uses the binary's own `node_index`-derived ports (no Docker
+remapping): API **20000/20001/20002**, Postgres **5433/5434/5435** — which is why
+it needs `--config test/integration/config.native.json` (the default
+`config.json` targets the Docker-mapped ports). All runtime state lives under
+`test/native/` (gitignored). `--native` is mutually exclusive with `--no-docker`.
+
 ## Exit code
 
 The runner exits non-zero when **any** verification check fails or the run
