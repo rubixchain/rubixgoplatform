@@ -8,6 +8,15 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
+// APISetupQuorum godoc
+// @Summary      Setup quorum
+// @Description  Sets up the quorum for the given DID using the supplied passwords.
+// @Tags         Quorum
+// @Accept       json
+// @Produce      json
+// @Param        input  body      models.QuorumSetup  true  "Quorum setup request"
+// @Success      200    {object}  models.BasicResponse
+// @Router       /api/setup-quorum [post]
 func (s *Server) APISetupQuorum(req *ensweb.Request) *ensweb.Result {
 	var qs models.QuorumSetup
 	err := s.ParseJSON(req, &qs)

@@ -278,7 +278,17 @@ func (cmd *Command) getURL(url string) string {
 		s := strings.Split(url, "://:")
 		url = s[0] + "://" + outIp + ":" + s[1]
 	}
-	cmd.log.Info("Swagger URL : " + url + "/swagger/index.html")
+	// A bind-all host (0.0.0.0 or ::) is not browseable; rewrite only the
+	// displayed Swagger link to localhost so it is clickable from the terminal.
+	// The returned url and the server binding are left unchanged.
+	swaggerURL := url
+	for _, bindAll := range []string{"://0.0.0.0:", "://[::]:"} {
+		if strings.Contains(swaggerURL, bindAll) {
+			swaggerURL = strings.Replace(swaggerURL, bindAll, "://localhost:", 1)
+			break
+		}
+	}
+	cmd.log.Info("Swagger URL : " + swaggerURL + "/swagger/index.html")
 	return url
 }
 

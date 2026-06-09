@@ -93,18 +93,24 @@ func (s *Server) APIGetAllBootStrap(req *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(req, true, "Got all the bootstrap peers successfully", m)
 }
 
-// APIAddQuorum will add quorum list to node
+// APIAddQuorum godoc
+// @Summary      Add quorum
+// @Description  Adds a quorum to the node's quorum list, identified by its DID.
+// @Tags         Quorum
+// @Accept       json
+// @Produce      json
+// @Param        input  body      model.AddQuorumRequest  true  "Quorum to add"
+// @Success      200    {object}  model.BasicResponse
+// @Router       /api/addquorum [post]
 func (s *Server) APIAddQuorum(req *ensweb.Request) *ensweb.Result {
-	var reqMap map[string]interface{}
-	err := s.ParseJSON(req, &reqMap)
+	var reqBody model.AddQuorumRequest
+	err := s.ParseJSON(req, &reqBody)
 	if err != nil {
-		return s.BasicResponse(req, false, "invlid input request", nil)
+		return s.BasicResponse(req, false, "invalid input request", nil)
 	}
-	// CLI client sends "did" (see client/quorum.go); keep "quorumDID" for older callers.
-	ql, _ := reqMap["did"].(string)
-	ql = strings.TrimSpace(ql)
+	ql := strings.TrimSpace(reqBody.DID)
 	if ql == "" {
-		return s.BasicResponse(req, false, "did (or quorumDID) is required", nil)
+		return s.BasicResponse(req, false, "did is required", nil)
 	}
 	err = s.c.AddQuorum(ql)
 	if err != nil {
@@ -113,7 +119,13 @@ func (s *Server) APIAddQuorum(req *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(req, true, "Quorums added successfully", nil)
 }
 
-// APIGetAllQuorum will get quorum list from node
+// APIGetAllQuorum godoc
+// @Summary      Get all quorums
+// @Description  Returns the list of quorums configured on the node.
+// @Tags         Quorum
+// @Produce      json
+// @Success      200  {object}  model.BasicResponse
+// @Router       /api/getallquorum [get]
 func (s *Server) APIGetAllQuorum(req *ensweb.Request) *ensweb.Result {
 	ql, err := s.c.GetAllQuorum()
 	if err != nil {
@@ -122,7 +134,13 @@ func (s *Server) APIGetAllQuorum(req *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(req, true, "Got all quorums successfully", ql)
 }
 
-// APIRemoveAllQuorum will remove quorum list from node
+// APIRemoveAllQuorum godoc
+// @Summary      Remove all quorums
+// @Description  Removes all quorums from the node's quorum list.
+// @Tags         Quorum
+// @Produce      json
+// @Success      200  {object}  model.BasicResponse
+// @Router       /api/removeallquorum [get]
 func (s *Server) APIRemoveAllQuorum(req *ensweb.Request) *ensweb.Result {
 	err := s.c.RemoveAllQuorum()
 	if err != nil {

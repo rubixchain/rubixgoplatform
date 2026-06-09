@@ -12,13 +12,13 @@ type syncTransactionChainRequest struct {
 }
 
 // @Summary Initiates a transaction
-// @Description Initiate a transaction
+// @Description Submits a transfer request (RBT, FT, NFT or smart contract) and runs it through quorum consensus. Returns a request ID that must be passed to the signature API (POST /rubix/v1/signature) to sign and complete the transaction.
 // @ID txInit
 // @Tags Transactions
 // @Accept json
 // @Produce json
 // @Param   input body models.TransactionRequest true "transaction"
-// @Success 200 {object} model.BasicResponse
+// @Success 200 {object} models.BasicResponse
 // @Router /rubix/v1/tx [post]
 func (s *Server) APIInitiateTransaction(req *ensweb.Request) *ensweb.Result {
 	var transactionreq models.TransactionRequest
@@ -33,13 +33,13 @@ func (s *Server) APIInitiateTransaction(req *ensweb.Request) *ensweb.Result {
 
 // NFT godoc
 // @Summary      Get Transactions by ID
-// @Description  Get Transactions by ID
+// @Description  Returns the transaction details for the given transaction ID.
 // @Tags         Transactions
 // @ID           txQuery
 // @Accept       json
 // @Produce      json
 // @Param 		 tx_id path string true "Transaction ID"
-// @Success      200  {object}  model.BasicResponse
+// @Success      200  {object}  models.BasicResponse
 // @Router       /rubix/v1/tx/{tx_id} [get]
 func (s *Server) APIGetTransactionByID(req *ensweb.Request) *ensweb.Result {
 	txID := s.GetRouteVar(req, "tx_id")
@@ -57,12 +57,12 @@ func (s *Server) APIGetTransactionByID(req *ensweb.Request) *ensweb.Result {
 
 // NFT godoc
 // @Summary      List transactions
-// @Description  List transactions
+// @Description  Returns all transactions stored on this node.
 // @Tags         Transactions
 // @ID           getAllTx
 // @Accept       json
 // @Produce      json
-// @Success      200  {object}  model.BasicResponse
+// @Success      200  {object}  models.BasicResponse
 // @Router       /rubix/v1/tx [get]
 func (s *Server) APIGetTransactions(req *ensweb.Request) *ensweb.Result {
 	transactions, err := s.c.GetAllTransactions()
@@ -76,12 +76,12 @@ func (s *Server) APIGetTransactions(req *ensweb.Request) *ensweb.Result {
 // APISyncTransactionChain godoc
 // @Summary      Sync transaction chains for tokens
 // @Description  Returns ordered transaction chains for the requested token IDs, optionally excluding specific transaction IDs
-// @Tags         tx
+// @Tags         Transactions
 // @ID           syncTxChain
 // @Accept       json
 // @Produce      json
 // @Param        input body syncTransactionChainRequest true "sync request"
-// @Success      200  {object}  model.BasicResponse
+// @Success      200  {object}  models.BasicResponse
 // @Router       /rubix/v1/sync-transaction-chain [post]
 func (s *Server) APISyncTransactionChain(req *ensweb.Request) *ensweb.Result {
 	var syncReq syncTransactionChainRequest
@@ -101,14 +101,14 @@ func (s *Server) APISyncTransactionChain(req *ensweb.Request) *ensweb.Result {
 
 // APIGetTransactionsByDID godoc
 // @Summary      Get Transactions by DID
-// @Description  Get Transactions by DID
+// @Description  Returns transactions for the given DID, filtered by token type (rbt, nft, ft, smartContract).
 // @Tags         Transactions
 // @ID           getTxnsByDID
 // @Accept       json
 // @Produce      json
 // @Param        did        path   string  true   "DID"
 // @Param        token_type path  string  true  "Token Type (rbt, nft, ft, smartContract)"
-// @Success      200  {object}  model.BasicResponse
+// @Success      200  {object}  models.BasicResponse
 // @Router       /rubix/v1/tx/{did}/{token_type} [get]
 func (s *Server) APIGetTransactionsByDID(req *ensweb.Request) *ensweb.Result {
 	did := s.GetRouteVar(req, "did")

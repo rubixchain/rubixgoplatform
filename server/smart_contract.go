@@ -14,14 +14,14 @@ import (
 
 // SmartContract godoc
 // @Summary      Generate Smart Contract
-// @Description  This API will Generate smart contract Token
+// @Description  Generates a smart contract token for a DID from the uploaded binary and raw code files.
 // @Tags         Smart Contract
 // @Accept       mpfd
 // @Produce      mpfd
 // @Param        did        	   formData      string  true   "DID"
 // @Param 		 binaryCodePath	   formData      file    true  "location of binary code hash"
 // @Param 		 rawCodePath	   formData      file    true  "location of raw code hash"
-// @Success      200  {object}  model.BasicResponse
+// @Success      200  {object}  models.BasicResponse
 // @Router       /rubix/v1/smart_contracts/generate [post]
 func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	var deploySC core.GenerateSmartContractRequest
@@ -208,7 +208,7 @@ func (s *Server) APIFetchSmartContract(req *ensweb.Request) *ensweb.Result {
 // @Accept       json
 // @Produce      json
 // @Param        smartContractToken query string true "Smart contract token to subscribe to"
-// @Success      200  {object}  model.BasicResponse
+// @Success      200  {object}  models.BasicResponse
 // @Router       /rubix/v1/smart_contracts/subscribe [get]
 func (s *Server) APISubscribecontract(request *ensweb.Request) *ensweb.Result {
 	// Get smart contract token from query parameter
@@ -232,22 +232,13 @@ func (s *Server) APISubscribecontract(request *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(request, true, "Smart contract subscribed successfully", nil)
 }
 
-type ExecuteSmartContractSwaggoInput struct {
-	SmartContractToken string `json:"smartContractToken"`
-	ExecutorAddress    string `json:"executorAddr"`
-	QuorumType         int    `json:"quorumType"`
-	Comment            string `json:"comment"`
-	SmartContractData  string `json:"smartContractData"`
-}
-
 // SmartContract godoc
 // @Summary      Get all smartcontracts
 // @Description  This API will return all smart contracts
 // @Tags         Smart Contract
 // @Produce      json
-// @Success      200  {object}  model.BasicResponse
+// @Success      200  {object}  models.BasicResponse
 // @Router       /rubix/v1/smart_contracts [get]
-
 func (s *Server) APIListSmartContracts(req *ensweb.Request) *ensweb.Result {
 	response, err := s.c.GetAllSmartcontracts()
 	if err != nil {
@@ -262,9 +253,8 @@ func (s *Server) APIListSmartContracts(req *ensweb.Request) *ensweb.Result {
 // @Tags         Smart Contract
 // @Produce      json
 // @Param        contract_id   path      string  true  "Smart Contract Token ID"
-// @Success      200  {object}  model.BasicResponse
+// @Success      200  {object}  models.BasicResponse
 // @Router       /rubix/v1/smart_contracts/{contract_id}/chain [get]
-
 func (s *Server) APIGetSmartContractChain(req *ensweb.Request) *ensweb.Result {
 	smartContractID := s.GetRouteVar(req, "contract_id")
 	TokenChainResponse, err := s.c.GetSmartContractChain(smartContractID)
