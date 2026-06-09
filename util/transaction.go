@@ -60,6 +60,11 @@ func VerifySignature(dc types.DIDCrypto, txInfo *models.TransactionInfo, signatu
 }
 
 func PublishTransaction(pubsub *types.PubSub, tx *models.TransactionInfo, signature *models.Signature, isTxSuccess bool, message string) (*models.Transactions, error) {
+	// Skip publishing transactions on localnet
+	if tx.Network == constants.NetworkMode_Localnet {
+		return nil, nil
+	}
+
 	txID, err := GetTransactionID(tx)
 	if err != nil {
 		return nil, fmt.Errorf("PublishTransaction: failed to get transaction ID: %v", err)
