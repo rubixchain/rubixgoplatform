@@ -1,0 +1,118 @@
+name: Native Integration Tests
+
+# Behavioral end-to-end suite running WITHOUT Docker: native Postgres + native
+# rubixgoplatform processes (see test/integration/env/native_env.py). This is the
+# cross-OS counterpart to docker-integration.yml (Linux/Docker only) — it proves
+# the same suite passes on macOS and Windows, where GitHub-hosted runners can't
+# run the Linux node containers.
+#
+# Each OS: install Postgres, build the node binary natively (CGO), then run the
+# --native runner against config.native.json (node_index-derived ports).
+
+on:
+  pull_request:
+    branches:
+      - release-v1
+  workflow_dispatch:
+
+concurrency:
+  group: native-integration-${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: Native suite (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false   # let macOS finish even if Windows breaks, and vice-versa
+      matrix:
+        include:
+          - os: ubuntu-latest
+            bin_path: linux/rubixgoplatform
+          - os: macos-latest
+            bin_path: mac/rubixgoplatform
+          - os: windows-latest
+            bin_path: windows/rubixgoplatform.exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.22'
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install test dependencies
+        run: pip install -r test/integration/requirements.txt
+
+      # ---- Postgres provisioning (per-OS) -------------------------------- #
+      # The harness manages its own 3 instances; we only need initdb/pg_ctl on
+      # PATH. Ubuntu and the Windows runner ship Postgres; macOS gets it via brew.
+      - name: Install/locate Postgres (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          # postgresql client+server are preinstalled on ubuntu-latest under
+          # /usr/lib/postgresql/<ver>/bin — add it to PATH for initdb/pg_ctl.
+          PGBIN=$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1)
+          echo "$PGBIN" >> "$GITHUB_PATH"
+
+      - name: Install Postgres (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install postgresql@16 || true
+          echo "$(brew --prefix postgresql@16)/bin" >> "$GITHUB_PATH"
+
+      - name: Locate Postgres (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # windows-latest ships PostgreSQL under $env:PGBIN; fall back to the
+          # standard install dir. Append to PATH so initdb/pg_ctl resolve.
+          $pgbin = $env:PGBIN
+          if (-not $pgbin) {
+            $pgbin = (Get-ChildItem 'C:\Program Files\PostgreSQL\*\bin' | Sort-Object Name -Descending | Select-Object -First 1).FullName
+          }
+          Write-Host "Postgres bin: $pgbin"
+          Add-Content -Path $env:GITHUB_PATH -Value $pgbin
+
+      # ---- Build the node binary natively (CGO, no cross-compile) --------- #
+      - name: Build rubixgoplatform (Unix)
+        if: runner.os != 'Windows'
+        env:
+          CGO_ENABLED: '1'
+        run: go build -o ${{ matrix.bin_path }}
+
+      - name: Build rubixgoplatform (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          CGO_ENABLED: '1'
+        run: go build -o ${{ matrix.bin_path }}
+
+      # ---- Run the native suite ------------------------------------------ #
+      - name: Run native integration suite (all subsystems + negatives)
+        run: >
+          python -m test.integration.runner
+          --native
+          --config test/integration/config.native.json
+          --small-test --run-all-tests
+
+      - name: Upload run artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-logs-${{ matrix.os }}
+          path: |
+            test/docker/data/stress/logs/**
+            test/native/data/**/*.log
+            test/native/data/**/pgdata/server.log
+          if-no-files-found: warn

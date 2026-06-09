@@ -1,0 +1,64 @@
+{
+  "_comment": "Native (no-Docker) E2E config. Ports point at the node_index-derived values the rubixgoplatform binary uses when run natively (no Docker port remapping). node_index 0/1/2 => API 20000/20001/20002 (constants.RubixServerPort+idx) and Postgres 5433/5434/5435 (constants.PostgresBasePort+idx). See core/config/config.go:141-152. Used via: python3 -m test.integration.runner --native --config test/integration/config.native.json",
+
+  "node_a_port": 20000,
+  "node_b_port": 20001,
+  "quorum_port": 20002,
+  "db_a_port": 5433,
+  "db_b_port": 5434,
+  "db_q_port": 5435,
+  "password": "mypassword",
+  "output_dir": "test/docker/data/stress/logs",
+
+  "_comment_callback": "Native nodes are host processes, so the SC callback receiver is reachable at 127.0.0.1 (not host.docker.internal).",
+  "callback_url_mode": "host",
+
+  "node_a_mint": {
+    "start_index": 140000,
+    "end_index": 142000,
+    "batch_size": 2000
+  },
+  "quorum_mint": {
+    "start_index": 180000,
+    "end_index": 182000,
+    "batch_size": 2000
+  },
+
+  "_comment_buffer": "min_balance_buffer reserves RBT that the shuttle phase will NOT spend, so the later asset phases (NFT/SC/FT/bundled/all-in-one/intra-node) have funds. Must exceed the asset phases' total RBT need (~50) or those phases starve even when plenty was minted.",
+  "min_balance_buffer": 200,
+  "quorum_free_threshold": 50,
+  "max_transactions": 40,
+
+  "phases": [
+    {"name": "sequential_warmup", "concurrency": 1,  "tx_count": 20},
+    {"name": "parallel_5",        "concurrency": 5,  "tx_count": 500},
+    {"name": "parallel_10",       "concurrency": 10, "tx_count": 1000},
+    {"name": "parallel_20",       "concurrency": 20, "tx_count": 1400}
+  ],
+
+  "_comment_small": "small_test: sized so the FULL --run-all-tests matrix completes every transaction (used by CI). It's localnet, so minting is free/instant — we mint generously rather than risk starvation. Index ranges kept far apart so token-number ranges can never overlap across nodes.",
+  "small_test_overrides": {
+    "node_a_mint": {"start_index": 300000, "end_index": 300500, "batch_size": 100},
+    "quorum_mint": {"start_index": 400000, "end_index": 401000, "batch_size": 100},
+    "min_balance_buffer": 200,
+    "quorum_free_threshold": 5,
+    "max_transactions": 40,
+    "phases": [
+      {"name": "sequential_warmup", "concurrency": 1, "tx_count": 10},
+      {"name": "parallel_5",        "concurrency": 5, "tx_count": 20},
+      {"name": "parallel_10",       "concurrency": 10, "tx_count": 10}
+    ]
+  },
+
+  "_comment_micro": "micro_test: minimal budget for fast RBT-chain tracing / debugging. NOT sized for the full --run-all-tests matrix (it will starve in later phases by design). Use --small-test for a complete run-all.",
+  "micro_test_overrides": {
+    "node_a_mint": {"start_index": 600100, "end_index": 600150, "batch_size": 25},
+    "quorum_mint": {"start_index": 700100, "end_index": 700300, "batch_size": 25},
+    "min_balance_buffer": 5,
+    "quorum_free_threshold": 1,
+    "max_transactions": 5,
+    "phases": [
+      {"name": "sequential_warmup", "concurrency": 1, "tx_count": 5}
+    ]
+  }
+}
