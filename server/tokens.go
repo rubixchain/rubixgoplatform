@@ -10,15 +10,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
-// APIGetAllTokens godoc
-// @Summary      Get all tokens
-// @Description  Lists all tokens held by the given DID, optionally filtered by token type.
-// @Tags         Token
-// @Produce      json
-// @Param        did   query     string  true   "DID (59-char alphanumeric, prefixed with bafybmi)"
-// @Param        type  query     string  false  "Token type filter"
-// @Success      200   {object}  models.TokenResponse
-// @Router       /api/getalltokens [get]
+// APIGetAllTokens lists all tokens held by the given DID, optionally filtered by
+// token type. Intentionally excluded from the Swagger spec (no godoc annotations).
 func (s *Server) APIGetAllTokens(req *ensweb.Request) *ensweb.Result {
 	tokenType := s.GetQuery(req, "type")
 	did := s.GetQuery(req, "did")
@@ -42,7 +35,7 @@ func (s *Server) APIGetAllTokens(req *ensweb.Request) *ensweb.Result {
 // @Produce      json
 // @Param        input  body      models.GenerateLocalRBTRequest  true  "Local RBT generation request"
 // @Success      200    {object}  models.BasicResponse
-// @Router       /api/generate-local-rbt [post]
+// @Router       /rubix/v1/tokens/generate_local_rbt [post]
 func (s *Server) APIGenerateLocalRBT(req *ensweb.Request) *ensweb.Result {
 	var tr models.GenerateLocalRBTRequest
 	err := s.ParseJSON(req, &tr)

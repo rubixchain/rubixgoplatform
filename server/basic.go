@@ -44,7 +44,7 @@ func (s *Server) shutDown() {
 // @Produce      json
 // @Param        peerID  query     string  true  "Peer ID of the node to ping (52-char alphanumeric, prefixed with 12D3KooW)"
 // @Success      200     {object}  model.BasicResponse
-// @Router       /api/ping [get]
+// @Router       /rubix/v1/node/ping [get]
 func (s *Server) APIPing(req *ensweb.Request) *ensweb.Result {
 	peerID := s.GetQuery(req, "peerID")
 	if peerID == "" {
@@ -71,7 +71,7 @@ func (s *Server) APIPing(req *ensweb.Request) *ensweb.Result {
 // @Produce      json
 // @Param        quorumAddress  query     string  true  "DID of the quorum (59-char alphanumeric, prefixed with bafybmi)"
 // @Success      200            {object}  model.BasicResponse
-// @Router       /api/check-quorum-status [get]
+// @Router       /rubix/v1/quorums/status [get]
 func (s *Server) APICheckQuorumStatus(req *ensweb.Request) *ensweb.Result {
 	qAddress := s.GetQuery(req, "quorumAddress")
 	DID := qAddress

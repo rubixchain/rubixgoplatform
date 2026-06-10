@@ -146,7 +146,7 @@ class NodeClient:
 
     def get_peer_id(self) -> str:
         """Return the node's IPFS peer ID string."""
-        resp = self._get("/api/get-peer-id")
+        resp = self._get("/rubix/v1/node/peer_id")
         peer_id: str = resp["message"]
         log.info("[%s] Peer ID: %s", self.name, peer_id)
         return peer_id
@@ -157,7 +157,7 @@ class NodeClient:
         NOTE: Field names are Capitalised — the Go struct has no json tags.
         """
         log.info("[%s] Adding peer: did=%s peer_id=%s", self.name, did, peer_id)
-        return self._post("/api/add-peer-details", {"DID": did, "PeerID": peer_id})
+        return self._post("/rubix/v1/node/add_peers", {"DID": did, "PeerID": peer_id})
 
     # ------------------------------------------------------------------
     # Quorum configuration
@@ -169,13 +169,13 @@ class NodeClient:
         NOTE: Payload is a single "did" string, NOT an array.
         """
         log.info("[%s] Adding quorum DID: %s", self.name, quorum_did)
-        return self._post("/api/addquorum", {"did": quorum_did})
+        return self._post("/rubix/v1/quorums/add", {"did": quorum_did})
 
     def setup_quorum(self, did: str, password: str = "mypassword") -> Dict[str, Any]:
         """Set up this node AS a quorum member using *did*."""
         log.info("[%s] Setting up quorum for DID: %s", self.name, did)
         return self._post(
-            "/api/setup-quorum",
+            "/rubix/v1/quorums/setup",
             {"did": did, "password": password, "priv_password": password},
         )
 
@@ -223,7 +223,7 @@ class NodeClient:
             self.name, number_of_tokens, did, start_index, target,
         )
         self._post(
-            "/api/generate-local-rbt",
+            "/rubix/v1/tokens/generate_local_rbt",
             {"number_of_tokens": number_of_tokens, "did": did, "start_index": start_index},
         )
 

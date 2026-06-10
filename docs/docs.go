@@ -15,330 +15,6 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/api/add-peer-details": {
-            "post": {
-                "description": "Manually registers a DID-to-PeerID mapping so this node can reach the peer.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Peer"
-                ],
-                "summary": "Add Peer",
-                "parameters": [
-                    {
-                        "description": "Peer Details",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.DIDPeerMapTemp"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/addquorum": {
-            "post": {
-                "description": "Adds a quorum to the node's quorum list, identified by its DID.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Quorum"
-                ],
-                "summary": "Add quorum",
-                "parameters": [
-                    {
-                        "description": "Quorum to add",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.AddQuorumRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/check-quorum-status": {
-            "get": {
-                "description": "Checks whether the quorum identified by the given DID is set up and available.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Quorum"
-                ],
-                "summary": "Check quorum status",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "DID of the quorum (59-char alphanumeric, prefixed with bafybmi)",
-                        "name": "quorumAddress",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/generate-local-rbt": {
-            "post": {
-                "description": "Generates local (test) RBT tokens for the given DID on a local network.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Token"
-                ],
-                "summary": "Generate local RBT",
-                "parameters": [
-                    {
-                        "description": "Local RBT generation request",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.GenerateLocalRBTRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/get-peer-id": {
-            "get": {
-                "description": "Returns the libp2p peer ID of this node.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Peer"
-                ],
-                "summary": "Get peer ID",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/getallquorum": {
-            "get": {
-                "description": "Returns the list of quorums configured on the node.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Quorum"
-                ],
-                "summary": "Get all quorums",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/getalltokens": {
-            "get": {
-                "description": "Lists all tokens held by the given DID, optionally filtered by token type.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Token"
-                ],
-                "summary": "Get all tokens",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "DID (59-char alphanumeric, prefixed with bafybmi)",
-                        "name": "did",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Token type filter",
-                        "name": "type",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.TokenResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/ping": {
-            "get": {
-                "description": "Pings the given peer by peerID to check reachability.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Peer"
-                ],
-                "summary": "Ping a peer",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Peer ID of the node to ping (52-char alphanumeric, prefixed with 12D3KooW)",
-                        "name": "peerID",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/register-callback-url": {
-            "post": {
-                "description": "This API will register call back url for when updated come for smart contract token",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Smart Contract"
-                ],
-                "summary": "Get Smart Contract Token Chain Data",
-                "operationId": "register-callback-url",
-                "parameters": [
-                    {
-                        "description": "Register call back URL",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.RegisterCallBackUrlReq"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/removeallquorum": {
-            "get": {
-                "description": "Removes all quorums from the node's quorum list.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Quorum"
-                ],
-                "summary": "Remove all quorums",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/setup-quorum": {
-            "post": {
-                "description": "Sets up the quorum for the given DID using the supplied passwords.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Quorum"
-                ],
-                "summary": "Setup quorum",
-                "parameters": [
-                    {
-                        "description": "Quorum setup request",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.QuorumSetup"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/rubix/v1/dids": {
             "get": {
                 "description": "Retrieves a list of all DIDs.",
@@ -838,6 +514,226 @@ const docTemplate = `{
                 }
             }
         },
+        "/rubix/v1/node/add_peers": {
+            "post": {
+                "description": "Manually registers a DID-to-PeerID mapping so this node can reach the peer.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Peer"
+                ],
+                "summary": "Add Peer",
+                "parameters": [
+                    {
+                        "description": "Peer Details",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.DIDPeerMapTemp"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/node/peer_id": {
+            "get": {
+                "description": "Returns the libp2p peer ID of this node.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Peer"
+                ],
+                "summary": "Get peer ID",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/node/ping": {
+            "get": {
+                "description": "Pings the given peer by peerID to check reachability.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Peer"
+                ],
+                "summary": "Ping a peer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Peer ID of the node to ping (52-char alphanumeric, prefixed with 12D3KooW)",
+                        "name": "peerID",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/quorums": {
+            "get": {
+                "description": "Returns the list of quorums configured on the node.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Quorum"
+                ],
+                "summary": "Get all quorums",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/quorums/add": {
+            "post": {
+                "description": "Adds a quorum to the node's quorum list, identified by its DID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Quorum"
+                ],
+                "summary": "Add quorum",
+                "parameters": [
+                    {
+                        "description": "Quorum to add",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.AddQuorumRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/quorums/remove_all": {
+            "get": {
+                "description": "Removes all quorums from the node's quorum list.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Quorum"
+                ],
+                "summary": "Remove all quorums",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/quorums/setup": {
+            "post": {
+                "description": "Sets up the quorum for the given DID using the supplied passwords.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Quorum"
+                ],
+                "summary": "Setup quorum",
+                "parameters": [
+                    {
+                        "description": "Quorum setup request",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.QuorumSetup"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/quorums/status": {
+            "get": {
+                "description": "Checks whether the quorum identified by the given DID is set up and available.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Quorum"
+                ],
+                "summary": "Check quorum status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "DID of the quorum (59-char alphanumeric, prefixed with bafybmi)",
+                        "name": "quorumAddress",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/rubix/v1/signature": {
             "post": {
                 "description": "This API is used to supply the password for the node along with the ID generated when Initiate RBT transfer is called.",
@@ -1039,6 +935,41 @@ const docTemplate = `{
                 }
             }
         },
+        "/rubix/v1/smart_contracts/register_callback": {
+            "post": {
+                "description": "This API will register call back url for when updated come for smart contract token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Smart Contract"
+                ],
+                "summary": "Get Smart Contract Token Chain Data",
+                "operationId": "register-callback-url",
+                "parameters": [
+                    {
+                        "description": "Register call back URL",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.RegisterCallBackUrlReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/rubix/v1/smart_contracts/subscribe": {
             "get": {
                 "description": "This API endpoint allows subscribing to a smart contract.",
@@ -1122,6 +1053,40 @@ const docTemplate = `{
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/server.syncTransactionChainRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/tokens/generate_local_rbt": {
+            "post": {
+                "description": "Generates local (test) RBT tokens for the given DID on a local network.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Token"
+                ],
+                "summary": "Generate local RBT",
+                "parameters": [
+                    {
+                        "description": "Local RBT generation request",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.GenerateLocalRBTRequest"
                         }
                     }
                 ],
@@ -1380,35 +1345,6 @@ const docTemplate = `{
                 },
                 "value": {
                     "type": "number"
-                }
-            }
-        },
-        "models.TokenDetail": {
-            "type": "object",
-            "properties": {
-                "status": {
-                    "type": "integer"
-                },
-                "token": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.TokenResponse": {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string"
-                },
-                "result": {},
-                "status": {
-                    "type": "boolean"
-                },
-                "token_details": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.TokenDetail"
-                    }
                 }
             }
         },

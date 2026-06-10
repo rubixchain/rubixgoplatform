@@ -101,7 +101,7 @@ func (s *Server) APIGetAllBootStrap(req *ensweb.Request) *ensweb.Result {
 // @Produce      json
 // @Param        input  body      model.AddQuorumRequest  true  "Quorum to add"
 // @Success      200    {object}  model.BasicResponse
-// @Router       /api/addquorum [post]
+// @Router       /rubix/v1/quorums/add [post]
 func (s *Server) APIAddQuorum(req *ensweb.Request) *ensweb.Result {
 	var reqBody model.AddQuorumRequest
 	err := s.ParseJSON(req, &reqBody)
@@ -125,7 +125,7 @@ func (s *Server) APIAddQuorum(req *ensweb.Request) *ensweb.Result {
 // @Tags         Quorum
 // @Produce      json
 // @Success      200  {object}  model.BasicResponse
-// @Router       /api/getallquorum [get]
+// @Router       /rubix/v1/quorums [get]
 func (s *Server) APIGetAllQuorum(req *ensweb.Request) *ensweb.Result {
 	ql, err := s.c.GetAllQuorum()
 	if err != nil {
@@ -140,7 +140,7 @@ func (s *Server) APIGetAllQuorum(req *ensweb.Request) *ensweb.Result {
 // @Tags         Quorum
 // @Produce      json
 // @Success      200  {object}  model.BasicResponse
-// @Router       /api/removeallquorum [get]
+// @Router       /rubix/v1/quorums/remove_all [get]
 func (s *Server) APIRemoveAllQuorum(req *ensweb.Request) *ensweb.Result {
 	err := s.c.RemoveAllQuorum()
 	if err != nil {

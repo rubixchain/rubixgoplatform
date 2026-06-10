@@ -16,7 +16,7 @@ import (
 // @Produce      json
 // @Param        input  body      models.QuorumSetup  true  "Quorum setup request"
 // @Success      200    {object}  models.BasicResponse
-// @Router       /api/setup-quorum [post]
+// @Router       /rubix/v1/quorums/setup [post]
 func (s *Server) APISetupQuorum(req *ensweb.Request) *ensweb.Result {
 	var qs models.QuorumSetup
 	err := s.ParseJSON(req, &qs)

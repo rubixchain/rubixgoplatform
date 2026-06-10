@@ -22,7 +22,7 @@ type DIDPeerMapTemp struct {
 // @Produce     json
 // @Param       input body DIDPeerMapTemp true "Peer Details"
 // @Success     200 {object} models.BasicResponse
-// @Router      /api/add-peer-details [post]
+// @Router      /rubix/v1/node/add_peers [post]
 func (s *Server) APIAddPeerDetails(req *ensweb.Request) *ensweb.Result {
 	var pd DIDPeerMapTemp
 	var peerDetails models.DID

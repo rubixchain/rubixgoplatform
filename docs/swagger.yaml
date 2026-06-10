@@ -78,25 +78,6 @@ definitions:
       value:
         type: number
     type: object
-  models.TokenDetail:
-    properties:
-      status:
-        type: integer
-      token:
-        type: string
-    type: object
-  models.TokenResponse:
-    properties:
-      message:
-        type: string
-      result: {}
-      status:
-        type: boolean
-      token_details:
-        items:
-          $ref: '#/definitions/models.TokenDetail'
-        type: array
-    type: object
   models.TransactionRequest:
     properties:
       initiator:
@@ -189,223 +170,6 @@ info:
   title: Rubix Core
   version: "1.0"
 paths:
-  /api/add-peer-details:
-    post:
-      consumes:
-      - application/json
-      description: Manually registers a DID-to-PeerID mapping so this node can reach
-        the peer.
-      parameters:
-      - description: Peer Details
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.DIDPeerMapTemp'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.BasicResponse'
-      summary: Add Peer
-      tags:
-      - Peer
-  /api/addquorum:
-    post:
-      consumes:
-      - application/json
-      description: Adds a quorum to the node's quorum list, identified by its DID.
-      parameters:
-      - description: Quorum to add
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/models.AddQuorumRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.BasicResponse'
-      summary: Add quorum
-      tags:
-      - Quorum
-  /api/check-quorum-status:
-    get:
-      description: Checks whether the quorum identified by the given DID is set up
-        and available.
-      parameters:
-      - description: DID of the quorum (59-char alphanumeric, prefixed with bafybmi)
-        in: query
-        name: quorumAddress
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.BasicResponse'
-      summary: Check quorum status
-      tags:
-      - Quorum
-  /api/generate-local-rbt:
-    post:
-      consumes:
-      - application/json
-      description: Generates local (test) RBT tokens for the given DID on a local
-        network.
-      parameters:
-      - description: Local RBT generation request
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/models.GenerateLocalRBTRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.BasicResponse'
-      summary: Generate local RBT
-      tags:
-      - Token
-  /api/get-peer-id:
-    get:
-      description: Returns the libp2p peer ID of this node.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.BasicResponse'
-      summary: Get peer ID
-      tags:
-      - Peer
-  /api/getallquorum:
-    get:
-      description: Returns the list of quorums configured on the node.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.BasicResponse'
-      summary: Get all quorums
-      tags:
-      - Quorum
-  /api/getalltokens:
-    get:
-      description: Lists all tokens held by the given DID, optionally filtered by
-        token type.
-      parameters:
-      - description: DID (59-char alphanumeric, prefixed with bafybmi)
-        in: query
-        name: did
-        required: true
-        type: string
-      - description: Token type filter
-        in: query
-        name: type
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.TokenResponse'
-      summary: Get all tokens
-      tags:
-      - Token
-  /api/ping:
-    get:
-      description: Pings the given peer by peerID to check reachability.
-      parameters:
-      - description: Peer ID of the node to ping (52-char alphanumeric, prefixed with
-          12D3KooW)
-        in: query
-        name: peerID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.BasicResponse'
-      summary: Ping a peer
-      tags:
-      - Peer
-  /api/register-callback-url:
-    post:
-      consumes:
-      - application/json
-      description: This API will register call back url for when updated come for
-        smart contract token
-      operationId: register-callback-url
-      parameters:
-      - description: Register call back URL
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/models.RegisterCallBackUrlReq'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.BasicResponse'
-      summary: Get Smart Contract Token Chain Data
-      tags:
-      - Smart Contract
-  /api/removeallquorum:
-    get:
-      description: Removes all quorums from the node's quorum list.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.BasicResponse'
-      summary: Remove all quorums
-      tags:
-      - Quorum
-  /api/setup-quorum:
-    post:
-      consumes:
-      - application/json
-      description: Sets up the quorum for the given DID using the supplied passwords.
-      parameters:
-      - description: Quorum setup request
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/models.QuorumSetup'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.BasicResponse'
-      summary: Setup quorum
-      tags:
-      - Quorum
   /rubix/v1/dids:
     get:
       consumes:
@@ -737,6 +501,152 @@ paths:
       summary: Subscribe to NFT
       tags:
       - NFT
+  /rubix/v1/node/add_peers:
+    post:
+      consumes:
+      - application/json
+      description: Manually registers a DID-to-PeerID mapping so this node can reach
+        the peer.
+      parameters:
+      - description: Peer Details
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.DIDPeerMapTemp'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Add Peer
+      tags:
+      - Peer
+  /rubix/v1/node/peer_id:
+    get:
+      description: Returns the libp2p peer ID of this node.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Get peer ID
+      tags:
+      - Peer
+  /rubix/v1/node/ping:
+    get:
+      description: Pings the given peer by peerID to check reachability.
+      parameters:
+      - description: Peer ID of the node to ping (52-char alphanumeric, prefixed with
+          12D3KooW)
+        in: query
+        name: peerID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Ping a peer
+      tags:
+      - Peer
+  /rubix/v1/quorums:
+    get:
+      description: Returns the list of quorums configured on the node.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Get all quorums
+      tags:
+      - Quorum
+  /rubix/v1/quorums/add:
+    post:
+      consumes:
+      - application/json
+      description: Adds a quorum to the node's quorum list, identified by its DID.
+      parameters:
+      - description: Quorum to add
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/models.AddQuorumRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Add quorum
+      tags:
+      - Quorum
+  /rubix/v1/quorums/remove_all:
+    get:
+      description: Removes all quorums from the node's quorum list.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Remove all quorums
+      tags:
+      - Quorum
+  /rubix/v1/quorums/setup:
+    post:
+      consumes:
+      - application/json
+      description: Sets up the quorum for the given DID using the supplied passwords.
+      parameters:
+      - description: Quorum setup request
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/models.QuorumSetup'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Setup quorum
+      tags:
+      - Quorum
+  /rubix/v1/quorums/status:
+    get:
+      description: Checks whether the quorum identified by the given DID is set up
+        and available.
+      parameters:
+      - description: DID of the quorum (59-char alphanumeric, prefixed with bafybmi)
+        in: query
+        name: quorumAddress
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Check quorum status
+      tags:
+      - Quorum
   /rubix/v1/signature:
     post:
       consumes:
@@ -893,6 +803,30 @@ paths:
       summary: Generate Smart Contract
       tags:
       - Smart Contract
+  /rubix/v1/smart_contracts/register_callback:
+    post:
+      consumes:
+      - application/json
+      description: This API will register call back url for when updated come for
+        smart contract token
+      operationId: register-callback-url
+      parameters:
+      - description: Register call back URL
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/models.RegisterCallBackUrlReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Get Smart Contract Token Chain Data
+      tags:
+      - Smart Contract
   /rubix/v1/smart_contracts/subscribe:
     get:
       consumes:
@@ -938,6 +872,29 @@ paths:
       summary: Sync transaction chains for tokens
       tags:
       - Transactions
+  /rubix/v1/tokens/generate_local_rbt:
+    post:
+      consumes:
+      - application/json
+      description: Generates local (test) RBT tokens for the given DID on a local
+        network.
+      parameters:
+      - description: Local RBT generation request
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/models.GenerateLocalRBTRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Generate local RBT
+      tags:
+      - Token
   /rubix/v1/tx:
     get:
       consumes:
