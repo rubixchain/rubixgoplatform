@@ -1017,18 +1017,6 @@ class NodeClient:
         log.info("[%s] FT balance: %d entries", self.name, len(result) if result else 0)
         return result or []
 
-    def get_ft_chain(self, token_id: str) -> Dict[str, Any]:
-        """Return the chain for a specific FT token.
-
-        Endpoint: GET /api/get-ft-token-chain?tokenID={token_id}
-
-        Returns:
-            Parsed JSON response (structure depends on server impl).
-        """
-        log.info("[%s] Getting FT token chain for %s", self.name, token_id)
-        resp = self._get(f"/api/get-ft-token-chain?tokenID={token_id}")
-        return resp
-
     def transfer_ft(
         self,
         sender_did: str,

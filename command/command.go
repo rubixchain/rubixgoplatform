@@ -61,7 +61,6 @@ const (
 	CreateFTCmd                string = "createft"
 	SubscribeNFTCmd            string = "subscribe-nft"
 	FetchNftCmd                string = "fetch-nft"
-	AddPeerDetailsFromExplorer string = "exppeerdetails"
 	ArbitrarySignCmd           string = "sign"
 	VerifySignatureCmd         string = "verify-signature"
 	InitCmd                    string = "init"
@@ -105,7 +104,6 @@ var commands = []string{
 	GetFTBalanceCmd,
 	SubscribeNFTCmd,
 	FetchNftCmd,
-	AddPeerDetailsFromExplorer,
 	ArbitrarySignCmd,
 	VerifySignatureCmd,
 	GetDIDBalanceCmd,
@@ -617,8 +615,6 @@ func Run(args []string) {
 		cmd.SubscribeNFT()
 	case FetchNftCmd:
 		cmd.fetchNFT()
-	case AddPeerDetailsFromExplorer:
-		cmd.addPeerDetailsFromExplorer()
 	case ArbitrarySignCmd:
 		cmd.ArbitrarySign()
 	case VerifySignatureCmd:
