@@ -195,6 +195,15 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 	}
 	c.log.Info("Consensus request parsed successfully", "request", consensusRequest)
 
+	consensusSucceeded := false
+	defer func() {
+		if !consensusSucceeded {
+			if releaseErr := c.w.ReleaseAllLockedRBTTokensForDID(c.w.Ctx, quorumDid, consensusRequest.ReferenceId); releaseErr != nil {
+				c.log.Error("initiateConsensusHandler: failed to release quorum's locked tokens after failure", "err", releaseErr)
+			}
+		}
+	}()
+
 	// Validation pipeline: run stateless checks BEFORE calling InitiateConsensus
 
 	// Check 0: Nil-check TransactionInfo
@@ -405,6 +414,7 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 		// Alerting is needed to investigate and resolve the underlying issue.
 		return c.l.RenderJSON(request, response, http.StatusInternalServerError)
 	}
+	consensusSucceeded = true 
 
 	return c.l.RenderJSON(request, &consensusResponse, http.StatusOK)
 }
