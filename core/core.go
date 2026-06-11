@@ -252,6 +252,11 @@ func (c *Core) SetupCore() error {
 
 	if c.fullNode {
 		c.SubscribeTxnSetup()
+		// Fullnodes hold an authoritative dids table and serve DID->peerID
+		// lookups for nodes that missed the ephemeral rubix_did announcement.
+		if err := c.peerInfoResponderSetup(); err != nil {
+			c.log.Error("Failed to subscribe to peer_info responder topic", "err", err)
+		}
 	}
 
 	c.w.SetupWallet(c.ipfs)

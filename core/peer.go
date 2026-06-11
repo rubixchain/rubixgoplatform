@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
+	"github.com/rubixchain/rubixgoplatform/wrapper/uuid"
 )
 
 type PeerMap struct {
@@ -19,6 +21,32 @@ type PeerMap struct {
 	DIDAlgo   int64  `json:"did_algo"`
 	Signature string `json:"signature"`
 	Time      string `json:"time"`
+}
+
+// peerInfoMsgType distinguishes the two halves of the peer_info exchange that
+// share a single pubsub topic.
+const (
+	peerInfoRequest  = "request"
+	peerInfoResponse = "response"
+)
+
+// peerInfoResolveTimeout bounds how long a requester waits for a fullnode to
+// answer a peer_info lookup before failing (and falling back to today's
+// "peer ID not found" behaviour).
+const peerInfoResolveTimeout = 10 * time.Second
+
+// PeerInfoMsg is the request/response payload exchanged on Event_PeerInfo.
+// It is an unauthenticated lookup (no signature): a requester asks "which
+// peerID owns this DID?" and any fullnode that knows answers. This sidesteps
+// the signing constraint that blocks re-announcing PeerMaps on nodes without
+// local private keys.
+type PeerInfoMsg struct {
+	Type      string `json:"type"`       // peerInfoRequest | peerInfoResponse
+	RequestID string `json:"request_id"` // correlation id, set by the requester
+	DID       string `json:"did"`        // DID being resolved
+	PeerID    string `json:"peer_id"`    // filled only in responses
+	DIDAlgo   int64  `json:"did_algo"`   // filled only in responses
+	Requester string `json:"requester"`  // requester's peerID
 }
 
 // PingSetup will setup the ping route
@@ -192,4 +220,127 @@ func (c *Core) AddPeerDetails(peerDetail models.DID) error {
 	}
 	c.log.Info("PeerDetails added to DIDPeerTable", "did", peerDetail.DID)
 	return nil
+}
+
+// peerInfoResponderSetup subscribes a fullnode permanently to the peer_info
+// topic so it can answer DID->peerID lookups from its authoritative dids
+// table. Only fullnodes respond; this is called from SetupCore when
+// c.fullNode is true.
+func (c *Core) peerInfoResponderSetup() error {
+	return c.ps.SubscribeTopic(constants.Event_PeerInfo, c.peerInfoResponderCallback)
+}
+
+// peerInfoResponderCallback handles incoming peer_info requests. It runs only
+// on fullnodes (the permanent responder subscription). If this node knows the
+// requested DID, it publishes a response; otherwise it stays silent so the
+// requester simply times out.
+func (c *Core) peerInfoResponderCallback(fromPeerID string, topic string, data []byte) {
+	var m PeerInfoMsg
+	if err := json.Unmarshal(data, &m); err != nil {
+		c.log.Error("peerInfoResponderCallback: failed to parse message", "err", err)
+		return
+	}
+	// Only act on requests, and never answer our own echoed request.
+	if m.Type != peerInfoRequest {
+		return
+	}
+	if m.Requester == c.peerID {
+		return
+	}
+
+	didInfo, err := c.w.GetDID(m.DID)
+	if err != nil || didInfo.PeerID == "" {
+		// We don't know this DID -- stay silent.
+		return
+	}
+
+	resp := &PeerInfoMsg{
+		Type:      peerInfoResponse,
+		RequestID: m.RequestID,
+		DID:       m.DID,
+		PeerID:    didInfo.PeerID,
+		DIDAlgo:   didInfo.AlgoID,
+	}
+	if err := c.ps.Publish(constants.Event_PeerInfo, resp); err != nil {
+		c.log.Error("peerInfoResponderCallback: failed to publish response", "did", m.DID, "err", err)
+	}
+}
+
+// resolvePeerInfoViaPubsub asks the network (fullnodes) for the peerID of a DID
+// that is missing from the local dids table. It subscribes to the peer_info
+// topic, publishes a request, waits up to peerInfoResolveTimeout for the first
+// valid response, persists it, and unsubscribes. Returns ("", false) on timeout
+// or any error.
+//
+// Only non-fullnodes use this path: a fullnode has an authoritative dids table
+// and never misses, so it never reaches here. The c.fullNode guard enforces
+// that invariant -- a fullnode is already permanently subscribed to peer_info
+// (as a responder), so a transient SubscribeTopic here would collide.
+func (c *Core) resolvePeerInfoViaPubsub(did string) (string, bool) {
+	if c.fullNode {
+		return "", false
+	}
+	if c.ps == nil {
+		return "", false
+	}
+
+	reqID := uuid.New().String()
+	// Buffered so a late/duplicate responder never blocks on send after we've
+	// already taken the first answer and moved on.
+	resultCh := make(chan PeerInfoMsg, 4)
+
+	cb := func(fromPeerID string, topic string, data []byte) {
+		var m PeerInfoMsg
+		if err := json.Unmarshal(data, &m); err != nil {
+			return
+		}
+		if m.Type != peerInfoResponse {
+			return
+		}
+		if m.RequestID != reqID || m.DID != did {
+			return
+		}
+		if m.PeerID == "" {
+			return
+		}
+		select {
+		case resultCh <- m:
+		default:
+		}
+	}
+
+	if err := c.ps.SubscribeTopic(constants.Event_PeerInfo, cb); err != nil {
+		c.log.Error("resolvePeerInfoViaPubsub: failed to subscribe", "did", did, "err", err)
+		return "", false
+	}
+	defer c.ps.Unsubscribe(constants.Event_PeerInfo)
+
+	req := &PeerInfoMsg{
+		Type:      peerInfoRequest,
+		RequestID: reqID,
+		DID:       did,
+		Requester: c.peerID,
+	}
+	if err := c.ps.Publish(constants.Event_PeerInfo, req); err != nil {
+		c.log.Error("resolvePeerInfoViaPubsub: failed to publish request", "did", did, "err", err)
+		return "", false
+	}
+
+	select {
+	case m := <-resultCh:
+		if err := c.AddPeerDetails(models.DID{
+			DID:    m.DID,
+			PeerID: m.PeerID,
+			AlgoID: m.DIDAlgo,
+			Local:  false,
+		}); err != nil {
+			c.log.Error("resolvePeerInfoViaPubsub: failed to persist resolved peer", "did", did, "err", err)
+			return "", false
+		}
+		c.log.Info("resolvePeerInfoViaPubsub: resolved DID via pubsub", "did", did, "peerID", m.PeerID)
+		return m.PeerID, true
+	case <-time.After(peerInfoResolveTimeout):
+		c.log.Debug("resolvePeerInfoViaPubsub: timed out resolving DID", "did", did)
+		return "", false
+	}
 }
