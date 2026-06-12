@@ -113,6 +113,7 @@ func (c *Core) peerCallback(peerID string, topic string, data []byte) {
 			c.log.Error("peerCallback: failed to update DID information, err: %v", err)
 			return
 		}
+		c.log.Info("PeerDetails added to DIDPeerTable via rubix_did announcement", "did", didInfo.DID, "peerID", didInfo.PeerID)
 	}
 }
 
@@ -218,7 +219,7 @@ func (c *Core) AddPeerDetails(peerDetail models.DID) error {
 		c.log.Error("Failed to add PeerDetails to DIDPeerTable", "err", err)
 		return err
 	}
-	c.log.Info("PeerDetails added to DIDPeerTable", "did", peerDetail.DID)
+	c.log.Info("PeerDetails added to DIDPeerTable", "did", peerDetail.DID, "peerID", peerDetail.PeerID)
 	return nil
 }
 
