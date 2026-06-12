@@ -200,6 +200,8 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 		if !consensusSucceeded {
 			if releaseErr := c.w.ReleaseAllLockedRBTTokensForDID(c.w.Ctx, quorumDid, consensusRequest.ReferenceId); releaseErr != nil {
 				c.log.Error("initiateConsensusHandler: failed to release quorum's locked tokens after failure", "err", releaseErr)
+			} else {
+				c.log.Info("initiateConsensusHandler: released quorum's locked RBT tokens after failed transaction", "did", quorumDid)
 			}
 		}
 	}()
@@ -447,6 +449,7 @@ func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {
 
 	// Subscribe to "rubix_txns" event
 	c.SubscribeTxnSetup()
+	c.startStaleLockedTokenUnlocker()
 
 	return nil
 }

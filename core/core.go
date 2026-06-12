@@ -100,9 +100,10 @@ type Core struct {
 	Ctx                  context.Context
 	// Unpledge mismatch audit log — lazy-init on first mismatch event.
 	// See core/unpledge_v2.go:writeUnpledgeMismatch.
-	unpledgeAuditLog     *os.File
-	unpledgeAuditLogOnce sync.Once
-	unpledgeAuditLogMu   sync.Mutex
+	unpledgeAuditLog      *os.File
+	unpledgeAuditLogOnce  sync.Once
+	unpledgeAuditLogMu    sync.Mutex
+	staleUnlockerOnce     sync.Once
 }
 
 func newRubixContext() context.Context {

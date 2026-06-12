@@ -404,6 +404,25 @@ func (w *Wallet) GetAllPinnedTokens(did string) ([]models.Token, error) {
 	return tokens, rows.Err()
 }
 
+// ReleaseStaleLockedRBTTokens resets Locked RBT tokens back to Free when their
+// updated_at is older than staleAfter. Used by the quorum node's stale-token
+// unlocker to recover liquidity left locked after failed pledge or consensus handlers.
+func (w *Wallet) ReleaseStaleLockedRBTTokens(ctx context.Context, staleAfter time.Duration) (int64, error) {
+	cutoff := time.Now().Add(-staleAfter)
+	result, err := w.db.Pool().Exec(ctx,
+		`UPDATE tokens SET token_status=$1, updated_at=$2, lock_reference_id=NULL
+		 WHERE token_status=$3
+		   AND lock_reference_id IS NOT NULL
+		   AND updated_at < $4
+		   AND token_type=(SELECT id FROM token_type WHERE name=$5)`,
+		constants.TokenStatus_Free, time.Now(), constants.TokenStatus_Locked, cutoff, constants.TokenType_RBT,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 // ReleaseAllLockedRBTTokensForDID resets all Locked RBT tokens for a DID back to Free.
 // Called on transaction failure after LockTokensForSplit to prevent tokens from staying
 // permanently locked when the transaction does not complete.
