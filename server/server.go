@@ -137,6 +137,11 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APISyncTransactionChain, "POST", s.AuthHandle(s.APISyncTransactionChain, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetTransactionsByDID, "GET", s.APIGetTransactionsByDID)
 
+	// Wallet recovery from a published fullnode. Auth is enforced at the
+	// fullnode end via DID signature, so the HTTP route does not need
+	// AuthHandle here.
+	s.AddRoute(setup.APIRecoverWalletFromFullnode, "POST", s.APIRecoverWalletFromFullnode)
+
 	// FTs
 	s.AddRoute(setup.APICreateFT, "POST", s.AuthHandle(s.APICreateFT, true, s.AuthError, false))
 	s.AddRoute(setup.APIListFT, "GET", s.APIListFTs)
