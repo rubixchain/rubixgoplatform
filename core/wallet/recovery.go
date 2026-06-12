@@ -125,6 +125,96 @@ func (w *Wallet) ListOwnedTokensByDID(ctx context.Context, did string) ([]Recove
 	return result, rows.Err()
 }
 
+// ListOwnedTokensByIDs is the scoped variant of ListOwnedTokensByDID. It
+// returns current state only for the named token IDs (filtered to the rows
+// owned by `did`), instead of returning every token the DID owns.
+//
+// Used by the recover-from-fullnode handler: each page only touches a small
+// subset of the DID's tokens, so fetching the full owned-set on every page
+// is wasteful. This query is bounded by the number of tokens actually on
+// the page (typically 1–5), not the DID's total holdings.
+//
+// Order matches ListOwnedTokensByDID (by token_id ASC) so callers can index
+// the slice with the same downstream code.
+func (w *Wallet) ListOwnedTokensByIDs(ctx context.Context, did string, tokenIDs []string) ([]RecoverableToken, error) {
+	if ctx == nil {
+		ctx = w.Ctx
+	}
+	if did == "" {
+		return nil, fmt.Errorf("ListOwnedTokensByIDs: did is required")
+	}
+	if len(tokenIDs) == 0 {
+		return nil, nil
+	}
+
+	q := `
+		SELECT token_id, token_type, did, token_status, token_value,
+		       token_state_hash, transaction_id, latest_position, latest_role,
+		       parent_token_id
+		FROM (
+			SELECT token_id, $2::text AS token_type, did, token_status, token_value,
+			       token_state_hash, transaction_id, latest_position, latest_role,
+			       parent_token_id::text AS parent_token_id
+			FROM fullnode_rbt
+			WHERE did = $1 AND token_id = ANY($5::text[])
+			UNION ALL
+			SELECT token_id, $3::text AS token_type, did, token_status, token_value,
+			       token_state_hash, transaction_id, latest_position, latest_role,
+			       NULL::text AS parent_token_id
+			FROM fullnode_ft
+			WHERE did = $1 AND token_id = ANY($5::text[])
+			UNION ALL
+			SELECT token_id, $4::text AS token_type, did, token_status, token_value,
+			       token_state_hash, transaction_id, latest_position, latest_role,
+			       NULL::text AS parent_token_id
+			FROM fullnode_nft
+			WHERE did = $1 AND token_id = ANY($5::text[])
+		) AS owned
+		ORDER BY token_id ASC
+	`
+
+	rows, err := w.db.Pool().Query(ctx, q,
+		did,
+		constants.TokenType_RBT,
+		constants.TokenType_FT,
+		constants.TokenType_NFT,
+		tokenIDs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("ListOwnedTokensByIDs: query: %w", err)
+	}
+	defer rows.Close()
+
+	var result []RecoverableToken
+	for rows.Next() {
+		var r ownedTokenRow
+		if err := rows.Scan(
+			&r.TokenID, &r.TokenType, &r.DID, &r.TokenStatus, &r.TokenValue,
+			&r.TokenStateHash, &r.TransactionID, &r.LatestPosition, &r.LatestRole,
+			&r.ParentTokenID,
+		); err != nil {
+			return nil, fmt.Errorf("ListOwnedTokensByIDs: scan: %w", err)
+		}
+		parent := ""
+		if r.ParentTokenID != nil {
+			parent = *r.ParentTokenID
+		}
+		result = append(result, RecoverableToken{
+			TokenID:        r.TokenID,
+			TokenType:      r.TokenType,
+			DID:            r.DID,
+			TokenStatus:    r.TokenStatus,
+			TokenValue:     r.TokenValue,
+			TokenStateHash: r.TokenStateHash,
+			TransactionID:  r.TransactionID,
+			LatestPosition: r.LatestPosition,
+			LatestRole:     r.LatestRole,
+			ParentTokenID:  parent,
+		})
+	}
+	return result, rows.Err()
+}
+
 // RecoveredChainRow is one (transaction + tokenchain) row pair returned by
 // the per-page recovery query. The handler maps these directly to
 // RecoveredTransaction wire entries.

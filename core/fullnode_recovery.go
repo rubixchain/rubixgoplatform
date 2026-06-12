@@ -82,10 +82,16 @@ func writeIdentityJSON(req *ensweb.Request, raw []byte, status int) *ensweb.Resu
 // (one-row page) — the client-side retry handles the rare case where its
 // gzipped form also exceeds the wire ceiling.
 const (
-	// recoverMaxRawBytes is the soft budget on uncompressed JSON body bytes
-	// per page. Chosen so the gzipped wire body stays well under 4 KB at
-	// typical compression ratios for chain-row JSON.
-	recoverMaxRawBytes = 9 * 1024
+	// recoverMaxCompressedBytes is the page budget enforced on the GZIPPED
+	// wire body, NOT on the raw JSON. After each row is tentatively added the
+	// handler marshals + gzips the candidate response and stops if the
+	// compressed size would exceed this. Set safely under the ~4 KB Kubo
+	// p2p-forward buffer-flush ceiling.
+	//
+	// Using a compressed-byte budget (instead of a raw-byte budget) lets us
+	// pack many small entries per page when the data compresses well, and
+	// still ship oversize single entries one-at-a-time when they don't.
+	recoverMaxCompressedBytes = 3 * 1024
 
 	// recoverBatchSize bounds the DB rows fetched per page-build so a single
 	// request can't pull tens of MB of chain entries into memory.
@@ -95,6 +101,21 @@ const (
 	// KnownTokens maps push this up.
 	recoverMaxRequestBodyBytes = 1 * 1024 * 1024
 )
+
+// compressedSize reports the gzipped length of `raw`. Used by the handler's
+// speculative-fit loop to decide whether one more row would push the page
+// past the wire budget.
+func compressedSize(raw []byte) (int, error) {
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	if _, err := gz.Write(raw); err != nil {
+		return 0, err
+	}
+	if err := gz.Close(); err != nil {
+		return 0, err
+	}
+	return buf.Len(), nil
+}
 
 // registerRecoveryRoute is called from SubscribeTxnSetup when the node is a
 // fullnode; the endpoint is meaningless on a non-fullnode (no fullnode_* tables
@@ -183,24 +204,38 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 		return renderGzipFixedLengthJSON(req, &models.BasicResponse{Status: true, Message: "ok", Result: result}, http.StatusOK)
 	}
 
-	// Look up the current state for the tokens appearing on this page.
-	// One round trip via the existing ListOwnedTokensByDID — then index by
-	// token id.
-	ownedAll, err := c.w.ListOwnedTokensByDID(c.w.Ctx, recReq.DID)
+	// Look up current state ONLY for the tokens that appear in this page's
+	// chain rows. Avoids fetching the DID's full owned-set on every page —
+	// most pages touch 1–3 tokens, not the whole holding. Scales with page
+	// size, not with the DID's total token count.
+	uniqueTokenIDs := make([]string, 0, 8)
+	seenTokenID := make(map[string]struct{}, 8)
+	for i := range chainRows {
+		tid := chainRows[i].TokenID
+		if _, ok := seenTokenID[tid]; ok {
+			continue
+		}
+		seenTokenID[tid] = struct{}{}
+		uniqueTokenIDs = append(uniqueTokenIDs, tid)
+	}
+	ownedSubset, err := c.w.ListOwnedTokensByIDs(c.w.Ctx, recReq.DID, uniqueTokenIDs)
 	if err != nil {
 		c.log.Warn("recoverFromFullnodeHandler: load owned-token states failed",
 			"did", recReq.DID, "err", err)
 		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: "fullnode read failed"}, http.StatusOK)
 	}
-	stateByToken := make(map[string]*wallet.RecoverableToken, len(ownedAll))
-	for i := range ownedAll {
-		stateByToken[ownedAll[i].TokenID] = &ownedAll[i]
+	stateByToken := make(map[string]*wallet.RecoverableToken, len(ownedSubset))
+	for i := range ownedSubset {
+		stateByToken[ownedSubset[i].TokenID] = &ownedSubset[i]
 	}
 
-	// Group chain rows by token, preserving their (token_id, position) order
-	// (the query already sorts that way). Stop emitting once the running raw
-	// byte budget would be exceeded — except for the very first row included,
-	// which always ships even if it alone blows the budget.
+	// Build the page row-by-row. After each row, marshal + gzip the candidate
+	// response and stop if its compressed size would exceed
+	// recoverMaxCompressedBytes. This caps the wire body directly, instead of
+	// guessing via a raw-byte budget, so small entries pack many-per-page when
+	// the data compresses well. A single row whose gzipped form ALREADY
+	// exceeds the budget still ships alone (one-row page) — the client retry
+	// covers the rare case where the wire body crosses the cliff.
 	type tokenAccumulator struct {
 		token *wallet.RecoverableToken
 		txns  []types.RecoveredTransaction
@@ -208,8 +243,34 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 	accumulators := make(map[string]*tokenAccumulator)
 	orderedTokens := make([]string, 0)
 
-	rawBytesUsed := 0
+	buildResult := func() types.RecoverFromFullnodeResult {
+		out := make([]types.RecoveredToken, 0, len(orderedTokens))
+		for _, tokenID := range orderedTokens {
+			acc := accumulators[tokenID]
+			out = append(out, types.RecoveredToken{
+				TokenID:   acc.token.TokenID,
+				TokenType: acc.token.TokenType,
+				CurrentState: types.RecoveredTokenState{
+					DID:            acc.token.DID,
+					TokenStatus:    acc.token.TokenStatus,
+					TokenValue:     acc.token.TokenValue,
+					TokenStateHash: acc.token.TokenStateHash,
+					TransactionID:  acc.token.TransactionID,
+					LatestPosition: acc.token.LatestPosition,
+					LatestRole:     acc.token.LatestRole,
+					ParentTokenID:  acc.token.ParentTokenID,
+				},
+				TxnInfos: acc.txns,
+			})
+		}
+		return types.RecoverFromFullnodeResult{
+			Tokens:          out,
+			DivergentTokens: divergent,
+		}
+	}
+
 	rowsIncluded := 0
+	lastCompressed := 0
 	hasMore := false
 	var nextCursorTokenID string
 	var nextCursorPosition int64
@@ -217,23 +278,11 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 	for i := range chainRows {
 		row := &chainRows[i]
 
-		// Approximate the JSON byte cost of this row without re-marshalling.
-		// Info and Signature are already json.RawMessage and dominate the
-		// size; the surrounding fields add a small fixed overhead.
-		rowCost := len(row.Info) + len(row.Signature) + len(row.TokenID) + len(row.TransactionID) + 256
-
-		if rowsIncluded > 0 && rawBytesUsed+rowCost > recoverMaxRawBytes {
-			// Budget exhausted; remaining batch rows wait for the next page.
-			hasMore = true
-			break
-		}
-
 		st, found := stateByToken[row.TokenID]
 		if !found {
 			// Owned-state vanished between the chain query and the state
-			// query (extremely unlikely, but possible under heavy churn).
-			// Skip without consuming budget; cursor advances so we don't
-			// loop on the same row forever.
+			// query (extremely unlikely under churn). Skip; cursor advances
+			// so we don't loop on the same row forever.
 			c.log.Warn("recoverFromFullnodeHandler: owned state missing for token on this page; skipping",
 				"did", recReq.DID, "tokenID", row.TokenID)
 			nextCursorTokenID = row.TokenID
@@ -241,8 +290,10 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 			continue
 		}
 
-		acc, ok := accumulators[row.TokenID]
-		if !ok {
+		// Tentatively add this row.
+		acc, existed := accumulators[row.TokenID]
+		wasNewToken := !existed
+		if !existed {
 			acc = &tokenAccumulator{token: st}
 			accumulators[row.TokenID] = acc
 			orderedTokens = append(orderedTokens, row.TokenID)
@@ -259,52 +310,69 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 				Position:              row.Position,
 			},
 		})
+
+		// Measure: marshal the candidate result + gzip + check size.
+		candidate := buildResult()
+		raw, mErr := json.Marshal(&models.BasicResponse{Status: true, Message: "ok", Result: candidate})
+		if mErr != nil {
+			// Should never happen — types are JSON-clean. Treat like budget
+			// exceeded: roll back so we still ship a valid page.
+			acc.txns = acc.txns[:len(acc.txns)-1]
+			if wasNewToken {
+				delete(accumulators, row.TokenID)
+				orderedTokens = orderedTokens[:len(orderedTokens)-1]
+			}
+			hasMore = true
+			break
+		}
+		cz, czErr := compressedSize(raw)
+		if czErr != nil {
+			// Gzip failure on a measurement — same treatment.
+			acc.txns = acc.txns[:len(acc.txns)-1]
+			if wasNewToken {
+				delete(accumulators, row.TokenID)
+				orderedTokens = orderedTokens[:len(orderedTokens)-1]
+			}
+			hasMore = true
+			break
+		}
+
+		// First row always ships, even oversized (retry handles the rare
+		// wire-cliff case). For every subsequent row, enforce the budget.
+		if rowsIncluded > 0 && cz > recoverMaxCompressedBytes {
+			// Roll back the tentative addition.
+			acc.txns = acc.txns[:len(acc.txns)-1]
+			if wasNewToken {
+				delete(accumulators, row.TokenID)
+				orderedTokens = orderedTokens[:len(orderedTokens)-1]
+			}
+			hasMore = true
+			break
+		}
+
 		rowsIncluded++
-		rawBytesUsed += rowCost
+		lastCompressed = cz
 		nextCursorTokenID = row.TokenID
 		nextCursorPosition = row.Position
 	}
 
 	// If we consumed the entire DB batch without hitting the byte budget,
-	// there may still be more rows beyond the batch. Promise the client a
-	// follow-up so it keeps paginating.
+	// there may still be more rows beyond it. Promise the client a follow-up.
 	if !hasMore && len(chainRows) == recoverBatchSize {
 		hasMore = true
 	}
 
-	out := make([]types.RecoveredToken, 0, len(orderedTokens))
-	for _, tokenID := range orderedTokens {
-		acc := accumulators[tokenID]
-		out = append(out, types.RecoveredToken{
-			TokenID:   acc.token.TokenID,
-			TokenType: acc.token.TokenType,
-			CurrentState: types.RecoveredTokenState{
-				DID:            acc.token.DID,
-				TokenStatus:    acc.token.TokenStatus,
-				TokenValue:     acc.token.TokenValue,
-				TokenStateHash: acc.token.TokenStateHash,
-				TransactionID:  acc.token.TransactionID,
-				LatestPosition: acc.token.LatestPosition,
-				LatestRole:     acc.token.LatestRole,
-				ParentTokenID:  acc.token.ParentTokenID,
-			},
-			TxnInfos: acc.txns,
-		})
-	}
+	result := buildResult()
+	result.HasMore = hasMore
+	result.NextTokenID = nextCursorTokenID
+	result.NextPosition = nextCursorPosition
 
-	result := types.RecoverFromFullnodeResult{
-		Tokens:          out,
-		DivergentTokens: divergent,
-		HasMore:         hasMore,
-		NextTokenID:     nextCursorTokenID,
-		NextPosition:    nextCursorPosition,
-	}
 	c.log.Info("recoverFromFullnodeHandler: returning",
 		"did", recReq.DID,
 		"rows_included", rowsIncluded,
-		"raw_bytes_used", rawBytesUsed,
+		"compressed_bytes", lastCompressed,
 		"has_more", hasMore,
 		"next_cursor", fmt.Sprintf("(%s,%d)", nextCursorTokenID, nextCursorPosition),
-		"tokens_in_response", len(out))
+		"tokens_in_response", len(result.Tokens))
 	return renderGzipFixedLengthJSON(req, &models.BasicResponse{Status: true, Message: "ok", Result: result}, http.StatusOK)
 }
