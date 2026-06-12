@@ -37,7 +37,14 @@ func (s *Server) shutDown() {
 	s.sc <- true
 }
 
-// APIPing will ping to given peer
+// APIPing godoc
+// @Summary      Ping a peer
+// @Description  Pings the given peer by peerID to check reachability.
+// @Tags         Peer
+// @Produce      json
+// @Param        peerID  query     string  true  "Peer ID of the node to ping (52-char alphanumeric, prefixed with 12D3KooW)"
+// @Success      200     {object}  model.BasicResponse
+// @Router       /rubix/v1/node/ping [get]
 func (s *Server) APIPing(req *ensweb.Request) *ensweb.Result {
 	peerID := s.GetQuery(req, "peerID")
 	if peerID == "" {
@@ -57,7 +64,14 @@ func (s *Server) APIPing(req *ensweb.Request) *ensweb.Result {
 	return s.BasicResponse(req, true, str, nil)
 }
 
-// APIPing will ping to given peer
+// APICheckQuorumStatus godoc
+// @Summary      Check quorum status
+// @Description  Checks whether the quorum identified by the given DID is set up and available.
+// @Tags         Quorum
+// @Produce      json
+// @Param        quorumAddress  query     string  true  "DID of the quorum (59-char alphanumeric, prefixed with bafybmi)"
+// @Success      200            {object}  model.BasicResponse
+// @Router       /rubix/v1/quorums/status [get]
 func (s *Server) APICheckQuorumStatus(req *ensweb.Request) *ensweb.Result {
 	qAddress := s.GetQuery(req, "quorumAddress")
 	DID := qAddress

@@ -15,8 +15,8 @@ import (
 // @Accept       json
 // @Produce      json
 // @Param		 input body models.RegisterCallBackUrlReq true "Register call back URL"
-// @Success      200  {object}  model.BasicResponse
-// @Router       /api/register-callback-url [post]
+// @Success      200  {object}  models.BasicResponse
+// @Router       /rubix/v1/smart_contracts/register_callback [post]
 func (s *Server) APIRegisterCallbackURL(req *ensweb.Request) *ensweb.Result {
 	var registerReq models.RegisterCallBackUrlReq
 	err := s.ParseJSON(req, &registerReq)

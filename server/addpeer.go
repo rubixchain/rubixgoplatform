@@ -16,13 +16,13 @@ type DIDPeerMapTemp struct {
 
 // APIAddPeerDetails godoc
 // @Summary     Add Peer
-// @Description This API allows the user to add peer details manually
-// @Tags        Account
+// @Description Manually registers a DID-to-PeerID mapping so this node can reach the peer.
+// @Tags        Peer
 // @Accept      json
 // @Produce     json
 // @Param       input body DIDPeerMapTemp true "Peer Details"
-// @Success     200 {object} model.BasicResponse
-// @Router      /api/add-peer-details [post]
+// @Success     200 {object} models.BasicResponse
+// @Router      /rubix/v1/node/add_peers [post]
 func (s *Server) APIAddPeerDetails(req *ensweb.Request) *ensweb.Result {
 	var pd DIDPeerMapTemp
 	var peerDetails models.DID

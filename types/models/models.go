@@ -359,6 +359,11 @@ type QuorumSetup struct {
 	PrivKeyPassword string `json:"priv_password"`
 }
 
+// AddQuorumRequest is the request body for adding a quorum.
+type AddQuorumRequest struct {
+	DID string `json:"did"`
+}
+
 type GenerateLocalRBTRequest struct {
 	NumberOfTokens int    `json:"number_of_tokens"`
 	DID            string `json:"did"`

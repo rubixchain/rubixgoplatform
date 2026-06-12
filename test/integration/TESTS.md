@@ -36,7 +36,7 @@ MINTING → SHUTTLE → NFT → SMART_CONTRACT → BUNDLED_TX → FT → ALL_IN_
 
 | Phase | What it does |
 |-------|--------------|
-| Minting | Pre-mints localnet RBT on nodeA and quorum (`/api/generate-local-rbt`). |
+| Minting | Pre-mints localnet RBT on nodeA and quorum (`/rubix/v1/tokens/generate_local_rbt`). |
 | Shuttle | Alternating A→B / B→A RBT transfers across sequential + parallel phases. |
 
 **Verification checks**

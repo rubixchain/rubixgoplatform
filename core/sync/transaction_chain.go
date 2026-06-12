@@ -15,7 +15,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
-const APISyncTransactionChain = "/api/sync-transaction-chain"
+const APISyncTransactionChain = "/rubix/v1/internal/sync_transaction_chain"
 
 // GetTransactionsForChainSync returns serialized transactions and the next transaction ID
 // for the given token starting from fromTransactionID. It wraps wallet.Wallet.GetTransactions

@@ -61,7 +61,6 @@ const (
 	CreateFTCmd                string = "createft"
 	SubscribeNFTCmd            string = "subscribe-nft"
 	FetchNftCmd                string = "fetch-nft"
-	AddPeerDetailsFromExplorer string = "exppeerdetails"
 	ArbitrarySignCmd           string = "sign"
 	VerifySignatureCmd         string = "verify-signature"
 	InitCmd                    string = "init"
@@ -105,7 +104,6 @@ var commands = []string{
 	GetFTBalanceCmd,
 	SubscribeNFTCmd,
 	FetchNftCmd,
-	AddPeerDetailsFromExplorer,
 	ArbitrarySignCmd,
 	VerifySignatureCmd,
 	GetDIDBalanceCmd,
@@ -278,7 +276,17 @@ func (cmd *Command) getURL(url string) string {
 		s := strings.Split(url, "://:")
 		url = s[0] + "://" + outIp + ":" + s[1]
 	}
-	cmd.log.Info("Swagger URL : " + url + "/swagger/index.html")
+	// A bind-all host (0.0.0.0 or ::) is not browseable; rewrite only the
+	// displayed Swagger link to localhost so it is clickable from the terminal.
+	// The returned url and the server binding are left unchanged.
+	swaggerURL := url
+	for _, bindAll := range []string{"://0.0.0.0:", "://[::]:"} {
+		if strings.Contains(swaggerURL, bindAll) {
+			swaggerURL = strings.Replace(swaggerURL, bindAll, "://localhost:", 1)
+			break
+		}
+	}
+	cmd.log.Info("Swagger URL : " + swaggerURL + "/swagger/index.html")
 	return url
 }
 
@@ -607,8 +615,6 @@ func Run(args []string) {
 		cmd.SubscribeNFT()
 	case FetchNftCmd:
 		cmd.fetchNFT()
-	case AddPeerDetailsFromExplorer:
-		cmd.addPeerDetailsFromExplorer()
 	case ArbitrarySignCmd:
 		cmd.ArbitrarySign()
 	case VerifySignatureCmd:
