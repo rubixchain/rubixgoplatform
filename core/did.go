@@ -160,13 +160,18 @@ func (c *Core) GetPeerDIDInfo(didStr string) (*models.DID, error) {
 	c.log.Debug("GetPeerDIDInfo: Resolving peer info", "did", didStr)
 
 	peerID, err := c.w.GetPeerID(didStr)
-	if err != nil {
-		c.log.Error("GetPeerDIDInfo: Failed to get peer ID", "did", didStr, "error", err)
-		return nil, err
-	}
-
-	if peerID == "" {
-		return nil, fmt.Errorf("peer ID not found for DID: %s", didStr)
+	if err != nil || peerID == "" {
+		// Local dids table miss. The rubix_did announcement is ephemeral, so a
+		// node that was offline when this DID registered never learned its
+		// peerID. Ask the network (fullnodes) on demand before giving up.
+		if resolved, ok := c.resolvePeerInfoViaPubsub(didStr); ok {
+			peerID = resolved
+		} else {
+			if err != nil {
+				c.log.Error("GetPeerDIDInfo: Failed to get peer ID", "did", didStr, "error", err)
+			}
+			return nil, fmt.Errorf("peer ID not found for DID: %s", didStr)
+		}
 	}
 
 	return &models.DID{

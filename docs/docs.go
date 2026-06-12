@@ -15,356 +15,6 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/api/add-peer-details": {
-            "post": {
-                "description": "This API allows the user to add peer details manually",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Account"
-                ],
-                "summary": "Add Peer",
-                "parameters": [
-                    {
-                        "description": "Peer Details",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.DIDPeerMapTemp"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/get-failed-ft-download-status": {
-            "post": {
-                "description": "This API returns the status of failed FT downloads",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "FT"
-                ],
-                "summary": "Get Failed FT Download Status",
-                "operationId": "get-failed-ft-download-status",
-                "parameters": [
-                    {
-                        "description": "DID",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.FailedFTDownloadStatusRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/get-ft-token-chain": {
-            "get": {
-                "description": "This API returns FT token chain data for a given FT token ID.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "FT"
-                ],
-                "summary": "Get FT Token Chain Data",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "FT Token ID",
-                        "name": "tokenID",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Successful response with token chain data",
-                        "schema": {
-                            "$ref": "#/definitions/model.GetTokenChainResponce"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/get-nft-token-chain-data": {
-            "get": {
-                "description": "This API will return nft token chain data",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "NFT"
-                ],
-                "summary": "Get NFT Token Chain Data",
-                "operationId": "get-nft-token-chain-data",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "NFT token id",
-                        "name": "nft",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Set to true if you only need the latest token block",
-                        "name": "latest",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/get-smart-contract-token-chain-data": {
-            "post": {
-                "description": "This API will return smart contract token chain data",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Smart Contract"
-                ],
-                "summary": "Get Smart Contract Token Chain Data",
-                "operationId": "get-smart-contract-token-chain-data",
-                "parameters": [
-                    {
-                        "description": "Returns Smart contract token chain Execution Data",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.GetSmartContractTokenChainDataSwaggoInput"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/recover-lost-tokens": {
-            "post": {
-                "description": "Allows senders to recover tokens that were sent but not received by the receiver",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "FT"
-                ],
-                "summary": "Recover lost tokens",
-                "operationId": "recover-lost-tokens",
-                "parameters": [
-                    {
-                        "description": "DID of the sender",
-                        "name": "sender_did",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "description": "Transaction ID to recover tokens from",
-                        "name": "transaction_id",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/register-callback-url": {
-            "post": {
-                "description": "This API will register call back url for when updated come for smart contract token",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Smart Contract"
-                ],
-                "summary": "Get Smart Contract Token Chain Data",
-                "operationId": "register-callback-url",
-                "parameters": [
-                    {
-                        "description": "Register call back URL",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.RegisterCallBackURLSwaggoInput"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/remote-recover-tokens": {
-            "post": {
-                "description": "Allows Node A to trigger token recovery on Node B",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "FT"
-                ],
-                "summary": "Initiate remote token recovery",
-                "operationId": "remote-recover-tokens",
-                "parameters": [
-                    {
-                        "description": "DID of the target node where recovery should happen",
-                        "name": "target_did",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "description": "Transaction ID to recover",
-                        "name": "transaction_id",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "description": "DID of the requesting node",
-                        "name": "requester_did",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "description": "Reason for remote recovery",
-                        "name": "reason",
-                        "in": "body",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/retry-failed-ft-downloads": {
-            "post": {
-                "description": "This API retries downloading failed FT tokens",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "FT"
-                ],
-                "summary": "Retry Failed FT Downloads",
-                "operationId": "retry-failed-ft-downloads",
-                "parameters": [
-                    {
-                        "description": "DID",
-                        "name": "input",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/server.RetryFailedFTDownloadsRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/rubix/v1/dids": {
             "get": {
                 "description": "Retrieves a list of all DIDs.",
@@ -382,13 +32,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -422,13 +72,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -460,13 +110,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -498,13 +148,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -536,13 +186,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -574,13 +224,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -612,13 +262,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -626,7 +276,7 @@ const docTemplate = `{
         },
         "/rubix/v1/fts": {
             "get": {
-                "description": "This API endpoint will list FTs.",
+                "description": "Returns all fungible tokens (FTs) held on this node.",
                 "consumes": [
                     "application/json"
                 ],
@@ -641,7 +291,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -649,7 +299,7 @@ const docTemplate = `{
         },
         "/rubix/v1/fts/mint": {
             "post": {
-                "description": "This API endpoint will create FTs.",
+                "description": "Mints a named fungible token (FT) for a DID, backed by the requested number of RBT tokens.",
                 "consumes": [
                     "application/json"
                 ],
@@ -667,7 +317,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/server.CreateFTReqSwaggoInput"
+                            "$ref": "#/definitions/types.CreateFTReq"
                         }
                     }
                 ],
@@ -675,7 +325,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -721,7 +371,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -753,7 +403,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -782,7 +432,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -814,13 +464,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -852,13 +502,233 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/node/add_peers": {
+            "post": {
+                "description": "Manually registers a DID-to-PeerID mapping so this node can reach the peer.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Peer"
+                ],
+                "summary": "Add Peer",
+                "parameters": [
+                    {
+                        "description": "Peer Details",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/server.DIDPeerMapTemp"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/node/peer_id": {
+            "get": {
+                "description": "Returns the libp2p peer ID of this node.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Peer"
+                ],
+                "summary": "Get peer ID",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/node/ping": {
+            "get": {
+                "description": "Pings the given peer by peerID to check reachability.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Peer"
+                ],
+                "summary": "Ping a peer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Peer ID of the node to ping (52-char alphanumeric, prefixed with 12D3KooW)",
+                        "name": "peerID",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/quorums": {
+            "get": {
+                "description": "Returns the list of quorums configured on the node.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Quorum"
+                ],
+                "summary": "Get all quorums",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/quorums/add": {
+            "post": {
+                "description": "Adds a quorum to the node's quorum list, identified by its DID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Quorum"
+                ],
+                "summary": "Add quorum",
+                "parameters": [
+                    {
+                        "description": "Quorum to add",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.AddQuorumRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/quorums/remove_all": {
+            "get": {
+                "description": "Removes all quorums from the node's quorum list.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Quorum"
+                ],
+                "summary": "Remove all quorums",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/quorums/setup": {
+            "post": {
+                "description": "Sets up the quorum for the given DID using the supplied passwords.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Quorum"
+                ],
+                "summary": "Setup quorum",
+                "parameters": [
+                    {
+                        "description": "Quorum setup request",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.QuorumSetup"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/quorums/status": {
+            "get": {
+                "description": "Checks whether the quorum identified by the given DID is set up and available.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Quorum"
+                ],
+                "summary": "Check quorum status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "DID of the quorum (59-char alphanumeric, prefixed with bafybmi)",
+                        "name": "quorumAddress",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -893,13 +763,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -926,7 +796,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.ArbitrarySignRequest"
+                            "$ref": "#/definitions/models.ArbitrarySignRequest"
                         }
                     }
                 ],
@@ -934,13 +804,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -987,13 +857,33 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/smart_contracts": {
+            "get": {
+                "description": "This API will return all smart contracts",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Smart Contract"
+                ],
+                "summary": "Get all smartcontracts",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -1001,7 +891,7 @@ const docTemplate = `{
         },
         "/rubix/v1/smart_contracts/generate": {
             "post": {
-                "description": "This API will Generate smart contract Token",
+                "description": "Generates a smart contract token for a DID from the uploaded binary and raw code files.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -1039,7 +929,42 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/smart_contracts/register_callback": {
+            "post": {
+                "description": "This API will register call back url for when updated come for smart contract token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Smart Contract"
+                ],
+                "summary": "Get Smart Contract Token Chain Data",
+                "operationId": "register-callback-url",
+                "parameters": [
+                    {
+                        "description": "Register call back URL",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.RegisterCallBackUrlReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -1071,7 +996,36 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/smart_contracts/{contract_id}/chain": {
+            "get": {
+                "description": "This API will return the smart contract chain for a given smart contract token ID",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Smart Contract"
+                ],
+                "summary": "Get smart contract chain by token ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Smart Contract Token ID",
+                        "name": "contract_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -1087,7 +1041,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "tx"
+                    "Transactions"
                 ],
                 "summary": "Sync transaction chains for tokens",
                 "operationId": "syncTxChain",
@@ -1106,7 +1060,41 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/tokens/generate_local_rbt": {
+            "post": {
+                "description": "Generates local (test) RBT tokens for the given DID on a local network.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Token"
+                ],
+                "summary": "Generate local RBT",
+                "parameters": [
+                    {
+                        "description": "Local RBT generation request",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.GenerateLocalRBTRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -1114,7 +1102,7 @@ const docTemplate = `{
         },
         "/rubix/v1/tx": {
             "get": {
-                "description": "List transactions",
+                "description": "Returns all transactions stored on this node.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1130,13 +1118,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
             },
             "post": {
-                "description": "Initiate a transaction",
+                "description": "Submits a transfer request (RBT, FT, NFT or smart contract) and runs it through quorum consensus. Returns a request ID that must be passed to the signature API (POST /rubix/v1/signature) to sign and complete the transaction.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1163,7 +1151,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -1171,7 +1159,7 @@ const docTemplate = `{
         },
         "/rubix/v1/tx/{did}/{token_type}": {
             "get": {
-                "description": "Get Transactions by DID",
+                "description": "Returns transactions for the given DID, filtered by token type (rbt, nft, ft, smartContract).",
                 "consumes": [
                     "application/json"
                 ],
@@ -1203,7 +1191,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -1211,7 +1199,7 @@ const docTemplate = `{
         },
         "/rubix/v1/tx/{tx_id}": {
             "get": {
-                "description": "Get Transactions by ID",
+                "description": "Returns the transaction details for the given transaction ID.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1236,7 +1224,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.BasicResponse"
+                            "$ref": "#/definitions/models.BasicResponse"
                         }
                     }
                 }
@@ -1244,7 +1232,15 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "model.ArbitrarySignRequest": {
+        "models.AddQuorumRequest": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ArbitrarySignRequest": {
             "type": "object",
             "properties": {
                 "msg_to_sign": {
@@ -1255,7 +1251,7 @@ const docTemplate = `{
                 }
             }
         },
-        "model.BasicResponse": {
+        "models.BasicResponse": {
             "type": "object",
             "properties": {
                 "message": {
@@ -1264,22 +1260,6 @@ const docTemplate = `{
                 "result": {},
                 "status": {
                     "type": "boolean"
-                }
-            }
-        },
-        "model.GetTokenChainResponce": {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string"
-                },
-                "result": {},
-                "status": {
-                    "type": "boolean"
-                },
-                "tokenChainData": {
-                    "type": "array",
-                    "items": {}
                 }
             }
         },
@@ -1294,6 +1274,20 @@ const docTemplate = `{
                 },
                 "numberOfFts": {
                     "type": "number"
+                }
+            }
+        },
+        "models.GenerateLocalRBTRequest": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "number_of_tokens": {
+                    "type": "integer"
+                },
+                "start_index": {
+                    "type": "integer"
                 }
             }
         },
@@ -1312,6 +1306,31 @@ const docTemplate = `{
                 },
                 "value": {
                     "type": "number"
+                }
+            }
+        },
+        "models.QuorumSetup": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "priv_password": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.RegisterCallBackUrlReq": {
+            "type": "object",
+            "properties": {
+                "callBackURL": {
+                    "type": "string"
+                },
+                "smartContractToken": {
+                    "type": "string"
                 }
             }
         },
@@ -1375,26 +1394,6 @@ const docTemplate = `{
                 }
             }
         },
-        "server.CreateFTReqSwaggoInput": {
-            "type": "object",
-            "properties": {
-                "did": {
-                    "type": "string"
-                },
-                "ft_count": {
-                    "type": "integer"
-                },
-                "ft_name": {
-                    "type": "string"
-                },
-                "ft_num_start_index": {
-                    "type": "integer"
-                },
-                "token_count": {
-                    "type": "integer"
-                }
-            }
-        },
         "server.DIDPeerMapTemp": {
             "type": "object",
             "properties": {
@@ -1402,44 +1401,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "peerID": {
-                    "type": "string"
-                }
-            }
-        },
-        "server.FailedFTDownloadStatusRequest": {
-            "type": "object",
-            "properties": {
-                "did": {
-                    "type": "string"
-                }
-            }
-        },
-        "server.GetSmartContractTokenChainDataSwaggoInput": {
-            "type": "object",
-            "properties": {
-                "latest": {
-                    "type": "boolean"
-                },
-                "token": {
-                    "type": "string"
-                }
-            }
-        },
-        "server.RegisterCallBackURLSwaggoInput": {
-            "type": "object",
-            "properties": {
-                "CallBackURL": {
-                    "type": "string"
-                },
-                "SmartContractToken": {
-                    "type": "string"
-                }
-            }
-        },
-        "server.RetryFailedFTDownloadsRequest": {
-            "type": "object",
-            "properties": {
-                "did": {
                     "type": "string"
                 }
             }
@@ -1461,6 +1422,26 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "types.CreateFTReq": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "ft_count": {
+                    "type": "integer"
+                },
+                "ft_name": {
+                    "type": "string"
+                },
+                "ft_num_start_index": {
+                    "type": "integer"
+                },
+                "token_count": {
+                    "type": "integer"
                 }
             }
         },

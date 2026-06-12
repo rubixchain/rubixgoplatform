@@ -10,6 +10,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
+// APIGetAllTokens lists all tokens held by the given DID, optionally filtered by
+// token type. Intentionally excluded from the Swagger spec (no godoc annotations).
 func (s *Server) APIGetAllTokens(req *ensweb.Request) *ensweb.Result {
 	tokenType := s.GetQuery(req, "type")
 	did := s.GetQuery(req, "did")
@@ -25,6 +27,15 @@ func (s *Server) APIGetAllTokens(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSON(req, tr, http.StatusOK)
 }
 
+// APIGenerateLocalRBT godoc
+// @Summary      Generate local RBT
+// @Description  Generates local (test) RBT tokens for the given DID on a local network.
+// @Tags         Token
+// @Accept       json
+// @Produce      json
+// @Param        input  body      models.GenerateLocalRBTRequest  true  "Local RBT generation request"
+// @Success      200    {object}  models.BasicResponse
+// @Router       /rubix/v1/tokens/generate_local_rbt [post]
 func (s *Server) APIGenerateLocalRBT(req *ensweb.Request) *ensweb.Result {
 	var tr models.GenerateLocalRBTRequest
 	err := s.ParseJSON(req, &tr)
@@ -49,14 +60,6 @@ func (s *Server) APIGenerateLocalRBT(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
-type RBTTransferRequestSwaggoInput struct {
-	Receiver   string  `json:"receiver"`
-	Sender     string  `json:"sender"`
-	TokenCount float64 `json:"tokenCOunt"`
-	Comment    string  `json:"comment"`
-	Type       int     `json:"type"`
-}
-
 // GetRBTBalance godoc
 // @Summary      Get RBT Balance
 // @Description  Retrieves the RBT token balance for a given DID.
@@ -64,8 +67,8 @@ type RBTTransferRequestSwaggoInput struct {
 // @Accept       json
 // @Produce      json
 // @Param        did  path      string  true  "DID (e.g. did:bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)"
-// @Success      200  {object}  model.BasicResponse
-// @Failure      400  {object}  model.BasicResponse
+// @Success      200  {object}  models.BasicResponse
+// @Failure      400  {object}  models.BasicResponse
 // @Router       /rubix/v1/dids/{did}/balances/rbt [get]
 func (s *Server) APIGetRbtByDid(req *ensweb.Request) *ensweb.Result {
 	did := s.GetRouteVar(req, "did")
@@ -90,12 +93,6 @@ func (s *Server) APIGetRbtByDid(req *ensweb.Request) *ensweb.Result {
 	return s.RenderJSON(req, ac, http.StatusOK)
 }
 
-type SignatureResponseSwaggoInput struct {
-	ID       string `json:"id"`
-	Mode     int    `json:"mode"`
-	Password string `json:"password"`
-}
-
 // ShowAccount godoc
 // @Summary     Signature Response
 // @Description This API is used to supply the password for the node along with the ID generated when Initiate RBT transfer is called.
@@ -104,8 +101,8 @@ type SignatureResponseSwaggoInput struct {
 // @Accept      json
 // @Produce     json
 // @Param 		input body types.SignRespData true "Send input for requested signature"
-// @Success      200      {object}  model.BasicResponse
-// @Failure      400      {object}  model.BasicResponse
+// @Success      200      {object}  models.BasicResponse
+// @Failure      400      {object}  models.BasicResponse
 // @Router /rubix/v1/signature [post]
 func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
 	var resp types.SignRespData

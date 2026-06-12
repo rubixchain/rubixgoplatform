@@ -532,7 +532,6 @@ class FTEngine:
         Exercises:
           - GET /rubix/v1/fts               (both nodes)
           - GET /rubix/v1/dids/{did}/balances/ft (both DIDs)
-          - GET /api/get-ft-token-chain     (best-effort if token IDs available)
           - GET /rubix/v1/tx                (both nodes — tx list sanity)
         """
         log.info("=== FT VERIFICATION START ===")

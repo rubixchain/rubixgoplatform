@@ -108,3 +108,11 @@ Three tables now own the entire transaction layer:
 | `transactions` | Transaction ID, base64-encoded `TransactionInfo`, combined initiator + quorum signatures |
 | `tokenchain` | Per-token ordered list of `(transactionID, role)` |
 | `requests` | In-flight transaction lifecycle: request ID, transaction ID, status, role |
+
+---
+
+## Recovering a Tokenchain From a Full Node
+
+A node can now recover its tokenchains directly from a full node by presenting its DID.
+
+The request carries the DID, and the full node sends back all the tokenchain information it holds for that node. Full nodes already receive and retain every published transaction and tokenchain detail, so they act as the source of truth for recovery — ask with a DID, get the tokenchains back.

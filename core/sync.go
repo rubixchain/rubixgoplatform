@@ -30,7 +30,7 @@ type syncTxChainResponse struct {
 	Data    map[string][]types.TransactionWithRole `json:"data"`
 }
 
-// SyncTransactionChain handles POST /api/sync-transaction-chain.
+// SyncTransactionChain handles POST /rubix/v1/internal/sync_transaction_chain.
 // It returns the ordered transaction chains for the requested token IDs from local DB.
 func (c *Core) SyncTransactionChain(request *ensweb.Request) *ensweb.Result {
 	var req syncTxChainRequest

@@ -1,29 +1,23 @@
 definitions:
-  model.ArbitrarySignRequest:
+  models.AddQuorumRequest:
+    properties:
+      did:
+        type: string
+    type: object
+  models.ArbitrarySignRequest:
     properties:
       msg_to_sign:
         type: string
       signer_did:
         type: string
     type: object
-  model.BasicResponse:
+  models.BasicResponse:
     properties:
       message:
         type: string
       result: {}
       status:
         type: boolean
-    type: object
-  model.GetTokenChainResponce:
-    properties:
-      message:
-        type: string
-      result: {}
-      status:
-        type: boolean
-      tokenChainData:
-        items: {}
-        type: array
     type: object
   models.FTInfo:
     properties:
@@ -33,6 +27,15 @@ definitions:
         type: string
       numberOfFts:
         type: number
+    type: object
+  models.GenerateLocalRBTRequest:
+    properties:
+      did:
+        type: string
+      number_of_tokens:
+        type: integer
+      start_index:
+        type: integer
     type: object
   models.NFTInfo:
     properties:
@@ -49,6 +52,22 @@ definitions:
         type: string
       value:
         type: number
+    type: object
+  models.QuorumSetup:
+    properties:
+      did:
+        type: string
+      password:
+        type: string
+      priv_password:
+        type: string
+    type: object
+  models.RegisterCallBackUrlReq:
+    properties:
+      callBackURL:
+        type: string
+      smartContractToken:
+        type: string
     type: object
   models.SmartContractInfo:
     properties:
@@ -89,48 +108,11 @@ definitions:
       transferNftOwnership:
         type: boolean
     type: object
-  server.CreateFTReqSwaggoInput:
-    properties:
-      did:
-        type: string
-      ft_count:
-        type: integer
-      ft_name:
-        type: string
-      ft_num_start_index:
-        type: integer
-      token_count:
-        type: integer
-    type: object
   server.DIDPeerMapTemp:
     properties:
       did:
         type: string
       peerID:
-        type: string
-    type: object
-  server.FailedFTDownloadStatusRequest:
-    properties:
-      did:
-        type: string
-    type: object
-  server.GetSmartContractTokenChainDataSwaggoInput:
-    properties:
-      latest:
-        type: boolean
-      token:
-        type: string
-    type: object
-  server.RegisterCallBackURLSwaggoInput:
-    properties:
-      CallBackURL:
-        type: string
-      SmartContractToken:
-        type: string
-    type: object
-  server.RetryFailedFTDownloadsRequest:
-    properties:
-      did:
         type: string
     type: object
   server.syncTransactionChainRequest:
@@ -145,6 +127,19 @@ definitions:
         items:
           type: string
         type: array
+    type: object
+  types.CreateFTReq:
+    properties:
+      did:
+        type: string
+      ft_count:
+        type: integer
+      ft_name:
+        type: string
+      ft_num_start_index:
+        type: integer
+      token_count:
+        type: integer
     type: object
   types.DIDCreate:
     properties:
@@ -175,238 +170,6 @@ info:
   title: Rubix Core
   version: "1.0"
 paths:
-  /api/add-peer-details:
-    post:
-      consumes:
-      - application/json
-      description: This API allows the user to add peer details manually
-      parameters:
-      - description: Peer Details
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.DIDPeerMapTemp'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Add Peer
-      tags:
-      - Account
-  /api/get-failed-ft-download-status:
-    post:
-      consumes:
-      - application/json
-      description: This API returns the status of failed FT downloads
-      operationId: get-failed-ft-download-status
-      parameters:
-      - description: DID
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.FailedFTDownloadStatusRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Get Failed FT Download Status
-      tags:
-      - FT
-  /api/get-ft-token-chain:
-    get:
-      consumes:
-      - application/json
-      description: This API returns FT token chain data for a given FT token ID.
-      parameters:
-      - description: FT Token ID
-        in: query
-        name: tokenID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Successful response with token chain data
-          schema:
-            $ref: '#/definitions/model.GetTokenChainResponce'
-      summary: Get FT Token Chain Data
-      tags:
-      - FT
-  /api/get-nft-token-chain-data:
-    get:
-      consumes:
-      - application/json
-      description: This API will return nft token chain data
-      operationId: get-nft-token-chain-data
-      parameters:
-      - description: NFT token id
-        in: query
-        name: nft
-        required: true
-        type: string
-      - description: Set to true if you only need the latest token block
-        in: query
-        name: latest
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Get NFT Token Chain Data
-      tags:
-      - NFT
-  /api/get-smart-contract-token-chain-data:
-    post:
-      consumes:
-      - application/json
-      description: This API will return smart contract token chain data
-      operationId: get-smart-contract-token-chain-data
-      parameters:
-      - description: Returns Smart contract token chain Execution Data
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.GetSmartContractTokenChainDataSwaggoInput'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Get Smart Contract Token Chain Data
-      tags:
-      - Smart Contract
-  /api/recover-lost-tokens:
-    post:
-      consumes:
-      - application/json
-      description: Allows senders to recover tokens that were sent but not received
-        by the receiver
-      operationId: recover-lost-tokens
-      parameters:
-      - description: DID of the sender
-        in: body
-        name: sender_did
-        required: true
-        schema:
-          type: string
-      - description: Transaction ID to recover tokens from
-        in: body
-        name: transaction_id
-        required: true
-        schema:
-          type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Recover lost tokens
-      tags:
-      - FT
-  /api/register-callback-url:
-    post:
-      consumes:
-      - application/json
-      description: This API will register call back url for when updated come for
-        smart contract token
-      operationId: register-callback-url
-      parameters:
-      - description: Register call back URL
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.RegisterCallBackURLSwaggoInput'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Get Smart Contract Token Chain Data
-      tags:
-      - Smart Contract
-  /api/remote-recover-tokens:
-    post:
-      consumes:
-      - application/json
-      description: Allows Node A to trigger token recovery on Node B
-      operationId: remote-recover-tokens
-      parameters:
-      - description: DID of the target node where recovery should happen
-        in: body
-        name: target_did
-        required: true
-        schema:
-          type: string
-      - description: Transaction ID to recover
-        in: body
-        name: transaction_id
-        required: true
-        schema:
-          type: string
-      - description: DID of the requesting node
-        in: body
-        name: requester_did
-        required: true
-        schema:
-          type: string
-      - description: Reason for remote recovery
-        in: body
-        name: reason
-        schema:
-          type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Initiate remote token recovery
-      tags:
-      - FT
-  /api/retry-failed-ft-downloads:
-    post:
-      consumes:
-      - application/json
-      description: This API retries downloading failed FT tokens
-      operationId: retry-failed-ft-downloads
-      parameters:
-      - description: DID
-        in: body
-        name: input
-        required: true
-        schema:
-          $ref: '#/definitions/server.RetryFailedFTDownloadsRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/model.BasicResponse'
-      summary: Retry Failed FT Downloads
-      tags:
-      - FT
   /rubix/v1/dids:
     get:
       consumes:
@@ -418,11 +181,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Get All DIDs
       tags:
       - DID
@@ -443,11 +206,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Get DID Balance
       tags:
       - DID
@@ -468,11 +231,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Get FT Balance
       tags:
       - DID
@@ -493,11 +256,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Get NFTs owned by the particular did
       tags:
       - NFT
@@ -518,11 +281,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Get RBT Balance
       tags:
       - DID
@@ -543,11 +306,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Register DID
       tags:
       - DID
@@ -569,11 +332,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Create DID
       tags:
       - DID
@@ -581,14 +344,14 @@ paths:
     get:
       consumes:
       - application/json
-      description: This API endpoint will list FTs.
+      description: Returns all fungible tokens (FTs) held on this node.
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: List FTs
       tags:
       - FT
@@ -596,21 +359,22 @@ paths:
     post:
       consumes:
       - application/json
-      description: This API endpoint will create FTs.
+      description: Mints a named fungible token (FT) for a DID, backed by the requested
+        number of RBT tokens.
       parameters:
       - description: Create FT
         in: body
         name: input
         required: true
         schema:
-          $ref: '#/definitions/server.CreateFTReqSwaggoInput'
+          $ref: '#/definitions/types.CreateFTReq'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Create FT
       tags:
       - FT
@@ -629,7 +393,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Get nft chain by token ID
       tags:
       - NFT
@@ -651,11 +415,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Get child NFTs of a given parent NFT
       tags:
       - NFT
@@ -677,11 +441,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Get the parent NFT of a given child NFT
       tags:
       - NFT
@@ -712,7 +476,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Create NFT
       tags:
       - NFT
@@ -733,10 +497,156 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Subscribe to NFT
       tags:
       - NFT
+  /rubix/v1/node/add_peers:
+    post:
+      consumes:
+      - application/json
+      description: Manually registers a DID-to-PeerID mapping so this node can reach
+        the peer.
+      parameters:
+      - description: Peer Details
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.DIDPeerMapTemp'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Add Peer
+      tags:
+      - Peer
+  /rubix/v1/node/peer_id:
+    get:
+      description: Returns the libp2p peer ID of this node.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Get peer ID
+      tags:
+      - Peer
+  /rubix/v1/node/ping:
+    get:
+      description: Pings the given peer by peerID to check reachability.
+      parameters:
+      - description: Peer ID of the node to ping (52-char alphanumeric, prefixed with
+          12D3KooW)
+        in: query
+        name: peerID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Ping a peer
+      tags:
+      - Peer
+  /rubix/v1/quorums:
+    get:
+      description: Returns the list of quorums configured on the node.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Get all quorums
+      tags:
+      - Quorum
+  /rubix/v1/quorums/add:
+    post:
+      consumes:
+      - application/json
+      description: Adds a quorum to the node's quorum list, identified by its DID.
+      parameters:
+      - description: Quorum to add
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/models.AddQuorumRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Add quorum
+      tags:
+      - Quorum
+  /rubix/v1/quorums/remove_all:
+    get:
+      description: Removes all quorums from the node's quorum list.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Remove all quorums
+      tags:
+      - Quorum
+  /rubix/v1/quorums/setup:
+    post:
+      consumes:
+      - application/json
+      description: Sets up the quorum for the given DID using the supplied passwords.
+      parameters:
+      - description: Quorum setup request
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/models.QuorumSetup'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Setup quorum
+      tags:
+      - Quorum
+  /rubix/v1/quorums/status:
+    get:
+      description: Checks whether the quorum identified by the given DID is set up
+        and available.
+      parameters:
+      - description: DID of the quorum (59-char alphanumeric, prefixed with bafybmi)
+        in: query
+        name: quorumAddress
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Check quorum status
+      tags:
+      - Quorum
   /rubix/v1/signature:
     post:
       consumes:
@@ -757,11 +667,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Signature Response
       tags:
       - Signature
@@ -777,18 +687,18 @@ paths:
         name: input
         required: true
         schema:
-          $ref: '#/definitions/model.ArbitrarySignRequest'
+          $ref: '#/definitions/models.ArbitrarySignRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Request Arbitrary Signature
       tags:
       - Signature
@@ -820,19 +730,53 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Verify Arbitrary Signature
       tags:
       - Signature
+  /rubix/v1/smart_contracts:
+    get:
+      description: This API will return all smart contracts
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Get all smartcontracts
+      tags:
+      - Smart Contract
+  /rubix/v1/smart_contracts/{contract_id}/chain:
+    get:
+      description: This API will return the smart contract chain for a given smart
+        contract token ID
+      parameters:
+      - description: Smart Contract Token ID
+        in: path
+        name: contract_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Get smart contract chain by token ID
+      tags:
+      - Smart Contract
   /rubix/v1/smart_contracts/generate:
     post:
       consumes:
       - multipart/form-data
-      description: This API will Generate smart contract Token
+      description: Generates a smart contract token for a DID from the uploaded binary
+        and raw code files.
       parameters:
       - description: DID
         in: formData
@@ -855,8 +799,32 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Generate Smart Contract
+      tags:
+      - Smart Contract
+  /rubix/v1/smart_contracts/register_callback:
+    post:
+      consumes:
+      - application/json
+      description: This API will register call back url for when updated come for
+        smart contract token
+      operationId: register-callback-url
+      parameters:
+      - description: Register call back URL
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/models.RegisterCallBackUrlReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Get Smart Contract Token Chain Data
       tags:
       - Smart Contract
   /rubix/v1/smart_contracts/subscribe:
@@ -876,7 +844,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Subscribe to Smart Contract
       tags:
       - Smart Contract
@@ -900,15 +868,38 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Sync transaction chains for tokens
       tags:
-      - tx
+      - Transactions
+  /rubix/v1/tokens/generate_local_rbt:
+    post:
+      consumes:
+      - application/json
+      description: Generates local (test) RBT tokens for the given DID on a local
+        network.
+      parameters:
+      - description: Local RBT generation request
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/models.GenerateLocalRBTRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Generate local RBT
+      tags:
+      - Token
   /rubix/v1/tx:
     get:
       consumes:
       - application/json
-      description: List transactions
+      description: Returns all transactions stored on this node.
       operationId: getAllTx
       produces:
       - application/json
@@ -916,14 +907,16 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: List transactions
       tags:
       - Transactions
     post:
       consumes:
       - application/json
-      description: Initiate a transaction
+      description: Submits a transfer request (RBT, FT, NFT or smart contract) and
+        runs it through quorum consensus. Returns a request ID that must be passed
+        to the signature API (POST /rubix/v1/signature) to sign and complete the transaction.
       operationId: txInit
       parameters:
       - description: transaction
@@ -938,7 +931,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Initiates a transaction
       tags:
       - Transactions
@@ -946,7 +939,8 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get Transactions by DID
+      description: Returns transactions for the given DID, filtered by token type
+        (rbt, nft, ft, smartContract).
       operationId: getTxnsByDID
       parameters:
       - description: DID
@@ -965,7 +959,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Get Transactions by DID
       tags:
       - Transactions
@@ -973,7 +967,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get Transactions by ID
+      description: Returns the transaction details for the given transaction ID.
       operationId: txQuery
       parameters:
       - description: Transaction ID
@@ -987,7 +981,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/model.BasicResponse'
+            $ref: '#/definitions/models.BasicResponse'
       summary: Get Transactions by ID
       tags:
       - Transactions

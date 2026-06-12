@@ -11,21 +11,13 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
-type CreateFTReqSwaggoInput struct {
-	DID             string `json:"did"`
-	FTName          string `json:"ft_name"`
-	FTCount         int    `json:"ft_count"`
-	TokenCount      int    `json:"token_count"`
-	FTNumStartIndex int    `json:"ft_num_start_index"`
-}
-
 // ShowAccount godoc
 // @Summary      Create FT
-// @Description  This API endpoint will create FTs.
+// @Description  Mints a named fungible token (FT) for a DID, backed by the requested number of RBT tokens.
 // @Tags         FT
 // @Accept       json
 // @Produce      json
-// @Param        input body CreateFTReqSwaggoInput true "Create FT"
+// @Param        input body types.CreateFTReq true "Create FT"
 // @Success      200  {object}  model.BasicResponse
 // @Router       /rubix/v1/fts/mint [post]
 func (s *Server) APICreateFT(req *ensweb.Request) *ensweb.Result {
@@ -79,7 +71,7 @@ func (s *Server) APIGetFTInfo(req *ensweb.Request) *ensweb.Result {
 
 // ShowAccount godoc
 // @Summary      List FTs
-// @Description  This API endpoint will list FTs.
+// @Description  Returns all fungible tokens (FTs) held on this node.
 // @Tags         FT
 // @Accept       json
 // @Produce      json

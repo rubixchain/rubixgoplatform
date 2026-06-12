@@ -22,9 +22,12 @@ func (s *Server) AddPrefixRoute(prefix string, dirpath string, hf HandlerFunc) {
 }
 
 func (s *Server) EnableSWagger(url string) {
-
+	// Use a relative spec URL so the Swagger UI fetches doc.json from the same
+	// origin the page was loaded on (localhost, 127.0.0.1, a LAN IP, etc.).
+	// An absolute URL would hardcode the bind host (e.g. 0.0.0.0) and trip the
+	// browser's cross-origin check when the page is opened on a different host.
 	s.mux.PathPrefix("/swagger/").Handler(httpSwagger.Handler(
-		httpSwagger.URL(url+"/swagger/doc.json"),
+		httpSwagger.URL("./doc.json"),
 		httpSwagger.DeepLinking(true),
 		httpSwagger.DocExpansion("none"),
 		httpSwagger.DomID("swagger-ui"))).Methods(http.MethodGet)

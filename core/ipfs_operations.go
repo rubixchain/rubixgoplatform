@@ -158,8 +158,6 @@ func (ops *IPFSOperations) Cat(hash string) (io.ReadCloser, error) {
 func (ops *IPFSOperations) Get(hash, path string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-
-	ops.core.log.Debug("Get: fetching file from IPFS", "hash", hash, "path", path)
 	inputHash := hash
 	if !(strings.HasPrefix(hash, "Qm") || strings.HasPrefix(hash, "bafy")) {
 		var err error
@@ -316,4 +314,3 @@ func (ops *IPFSOperations) BootstrapRmAll() ([]string, error) {
 
 	return result, operationErr
 }
-
