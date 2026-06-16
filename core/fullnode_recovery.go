@@ -3,17 +3,159 @@ package core
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
+	"sync"
 
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
+
+// Recovery ownership-proof is carried in HTTP headers (not the request body) so
+// it can be checked before the body is parsed and kept separate from request
+// semantics. Same convention as the existing X-API-Key / Authorization headers.
+const (
+	headerRecoveryNonce     = "X-Rubix-Recovery-Nonce"
+	headerRecoverySignature = "X-Rubix-Recovery-Signature"
+)
+
+// recoverySession is one in-flight, ownership-proven recovery. Bound to a DID;
+// `validated` flips true after the first signature check so later pages only
+// pay a cheap liveness lookup.
+type recoverySession struct {
+	did       string
+	validated bool
+}
+
+// recoverySessionStore holds the single-use nonces issued to recovering nodes.
+// A nonce stays live for the WHOLE recovery (no time window); it is removed
+// when the recovery completes (last page) so a captured nonce cannot be
+// replayed afterwards.
+type recoverySessionStore struct {
+	mu sync.Mutex
+	m  map[string]*recoverySession
+}
+
+func newRecoverySessionStore() *recoverySessionStore {
+	return &recoverySessionStore{m: make(map[string]*recoverySession)}
+}
+
+func (s *recoverySessionStore) create(nonce, did string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.m[nonce] = &recoverySession{did: did}
+}
+
+// lookup returns the session's DID and validated flag for a live nonce.
+func (s *recoverySessionStore) lookup(nonce string) (did string, validated, ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sess, exists := s.m[nonce]
+	if !exists {
+		return "", false, false
+	}
+	return sess.did, sess.validated, true
+}
+
+func (s *recoverySessionStore) markValidated(nonce string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if sess, ok := s.m[nonce]; ok {
+		sess.validated = true
+	}
+}
+
+func (s *recoverySessionStore) remove(nonce string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.m, nonce)
+}
+
+// newRecoveryNonce mints a 256-bit cryptographically random, single-use nonce.
+func newRecoveryNonce() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return util.BytesToBase64(b), nil
+}
+
+// verifyRecoveryOwnership confirms the requester holds the private key for
+// recReq.DID before any chain data is served. The nonce must belong to a live
+// recovery session for this DID; on the first page the signature is verified
+// against the DID's public key (resolved from IPFS via InitialiseDID — the same
+// path the fullnode uses for transaction signatures) over the nonce digest, and
+// the session is marked validated so later pages only pay the liveness lookup.
+// There is NO time window — a nonce is valid for the entire recovery and is
+// evicted when the recovery completes.
+// reqDID is the DID from the request body; nonce and signature come from the
+// X-Rubix-Recovery-* headers.
+func (c *Core) verifyRecoveryOwnership(reqDID, nonce, signature string) error {
+	if c.recoverySessions == nil {
+		return fmt.Errorf("recovery sessions not initialised")
+	}
+	if nonce == "" || signature == "" {
+		return fmt.Errorf("missing recovery nonce/signature header")
+	}
+	did, validated, ok := c.recoverySessions.lookup(nonce)
+	if !ok {
+		return fmt.Errorf("unknown or completed recovery nonce")
+	}
+	if did != reqDID {
+		return fmt.Errorf("nonce does not belong to this DID")
+	}
+	if validated {
+		return nil
+	}
+	sigBytes, err := util.Base64ToBytes(signature)
+	if err != nil {
+		return fmt.Errorf("decode ownership signature: %w", err)
+	}
+	dc, err := c.InitialiseDID(reqDID)
+	if err != nil {
+		return fmt.Errorf("resolve requester DID public key: %w", err)
+	}
+	verified, err := dc.SignVerify(recoveryNonceHash(nonce), sigBytes)
+	if err != nil {
+		return fmt.Errorf("verify ownership signature: %w", err)
+	}
+	if !verified {
+		return fmt.Errorf("ownership signature does not match DID public key")
+	}
+	c.recoverySessions.markValidated(nonce)
+	return nil
+}
+
+// recoverChallengeHandler mints a one-time nonce bound to the requested DID and
+// returns it. The caller signs the nonce (proving private-key ownership) and
+// presents nonce + signature on each recovery page.
+func (c *Core) recoverChallengeHandler(req *ensweb.Request) *ensweb.Result {
+	var chReq types.RecoverChallengeRequest
+	if err := c.l.ParseJSON(req, &chReq); err != nil {
+		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: "Invalid input"}, http.StatusOK)
+	}
+	if chReq.DID == "" {
+		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: "did is required"}, http.StatusOK)
+	}
+	if c.recoverySessions == nil {
+		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: "recovery sessions not initialised"}, http.StatusOK)
+	}
+	nonce, err := newRecoveryNonce()
+	if err != nil {
+		c.log.Warn("recoverChallengeHandler: nonce generation failed", "err", err)
+		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: "failed to mint nonce"}, http.StatusOK)
+	}
+	c.recoverySessions.create(nonce, chReq.DID)
+	c.log.Info("recoverChallengeHandler: issued nonce", "did", chReq.DID)
+	return c.l.RenderJSON(req, &models.BasicResponse{Status: true, Message: "ok", Result: types.RecoverChallengeResult{Nonce: nonce}}, http.StatusOK)
+}
 
 // renderGzipFixedLengthJSON writes a gzipped JSON response with an explicit
 // Content-Length header. The two properties together (Content-Length set +
@@ -121,6 +263,10 @@ func compressedSize(raw []byte) (int, error) {
 // fullnode; the endpoint is meaningless on a non-fullnode (no fullnode_* tables
 // to read from).
 func (c *Core) registerRecoveryRoute() {
+	if c.recoverySessions == nil {
+		c.recoverySessions = newRecoverySessionStore()
+	}
+	c.l.AddRoute(setup.APIRecoverChallenge, "POST", c.recoverChallengeHandler)
 	c.l.AddRoute(setup.APIRecoverFromFullnode, "POST", c.recoverFromFullnodeHandler)
 }
 
@@ -151,6 +297,22 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 		"known_count", len(recReq.KnownTokens))
 	if recReq.DID == "" {
 		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: "did is required"}, http.StatusOK)
+	}
+
+	// Ownership gate: only the holder of the DID's private key may pull its
+	// chain. Verify the signed challenge BEFORE serving any chain data — this
+	// prevents anyone who merely knows the (public) DID from exfiltrating its
+	// token chains (including sensitive smart-contract payloads) or DoSing the
+	// fullnode with unauthenticated paginated pulls.
+	var ownerNonce, ownerSig string
+	if httpReq := req.GetHTTPRequest(); httpReq != nil {
+		ownerNonce = httpReq.Header.Get(headerRecoveryNonce)
+		ownerSig = httpReq.Header.Get(headerRecoverySignature)
+	}
+	if err := c.verifyRecoveryOwnership(recReq.DID, ownerNonce, ownerSig); err != nil {
+		c.log.Warn("recoverFromFullnodeHandler: ownership verification failed",
+			"did", recReq.DID, "err", err)
+		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: "recovery authorization failed"}, http.StatusOK)
 	}
 
 	// Divergence detection: tokens whose KnownTokens claim doesn't match the
@@ -201,6 +363,8 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 			DivergentTokens: divergent,
 			HasMore:         false,
 		}
+		// Recovery complete — retire the single-use nonce so it can't be replayed.
+		c.recoverySessions.remove(ownerNonce)
 		return renderGzipFixedLengthJSON(req, &models.BasicResponse{Status: true, Message: "ok", Result: result}, http.StatusOK)
 	}
 
@@ -366,6 +530,12 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 	result.HasMore = hasMore
 	result.NextTokenID = nextCursorTokenID
 	result.NextPosition = nextCursorPosition
+
+	// Recovery complete on this page — retire the single-use nonce so it can't
+	// be replayed. While more pages remain the nonce stays live (no time limit).
+	if !hasMore {
+		c.recoverySessions.remove(ownerNonce)
+	}
 
 	c.log.Info("recoverFromFullnodeHandler: returning",
 		"did", recReq.DID,

@@ -12,11 +12,13 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 )
 
 const (
@@ -42,6 +44,14 @@ const (
 	recoveryInterPageDelay = 50 * time.Millisecond
 )
 
+// recoveryNonceHash builds the digest the recovering node signs to prove DID
+// ownership: SHA3-256 over the fullnode-issued single-use nonce. Both client
+// and fullnode MUST build it identically. SHA3-256 matches the hash the rest
+// of the DID-signing flow uses.
+func recoveryNonceHash(nonce string) []byte {
+	return util.CalculateHash([]byte("recover-from-fullnode:"+nonce), constants.HashAlgorithm_SHA3_256)
+}
+
 // fullnodeEntry mirrors one element of the JSON list at fullnodesListURL.
 type fullnodeEntry struct {
 	PeerID string `json:"peer_id"`
@@ -66,6 +76,32 @@ type RecoverWalletResult struct {
 	DivergentTokens       []string `json:"divergent_tokens,omitempty"`
 }
 
+// RecoverWalletFromFullnodeAsync runs RecoverWalletFromFullnode in the
+// background and delivers the result (or error) over the request's signature
+// channel. Recovery now signs an ownership challenge, so the API handler runs
+// it asynchronously through the same OutChan/InChan signature mechanism as
+// register/transfer: the node emits "Signature needed" (or "Password needed"),
+// the caller answers via /rubix/v1/signature, then the final recovery summary
+// is returned on the same channel.
+func (c *Core) RecoverWalletFromFullnodeAsync(reqID string, did string) {
+	result, err := c.RecoverWalletFromFullnode(reqID, c.w.Ctx, did)
+	br := &models.BasicResponse{
+		Status:  true,
+		Message: "wallet recovery completed",
+		Result:  result,
+	}
+	if err != nil {
+		br.Status = false
+		br.Message = "recovery failed: " + err.Error()
+	}
+	dc := c.GetWebReq(reqID)
+	if dc == nil {
+		c.log.Error("RecoverWalletFromFullnodeAsync: failed to get did channel", "did", did)
+		return
+	}
+	dc.OutChan <- br
+}
+
 // RecoverWalletFromFullnode rebuilds the local wallet state for `did` by
 // pulling chain entries for every token DID owns from an Active fullnode in
 // the canonical fullnodes.json. Idempotent: re-running it after a successful
@@ -79,12 +115,21 @@ type RecoverWalletResult struct {
 //     and persist via PersistRecoveredTokenChainPage (per-token, multi-tx).
 //  4. After the run, surface DivergentTokens so the caller can react to any
 //     chain divergence the fullnode reported.
-func (c *Core) RecoverWalletFromFullnode(ctx context.Context, did string) (*RecoverWalletResult, error) {
+func (c *Core) RecoverWalletFromFullnode(reqID string, ctx context.Context, did string) (*RecoverWalletResult, error) {
 	if did == "" {
 		return nil, fmt.Errorf("RecoverWalletFromFullnode: did is required")
 	}
 	if ctx == nil {
 		ctx = c.w.Ctx
+	}
+
+	// Ownership proof uses a server-issued single-use nonce. Get a signer handle
+	// now; the nonce is fetched after the peer connection opens and signed ONCE,
+	// then reused across every page (the possibly-external signer is invoked
+	// exactly once per recovery — not per page).
+	signer, err := c.SetupDID(reqID, did)
+	if err != nil {
+		return nil, fmt.Errorf("RecoverWalletFromFullnode: setup signer for %s: %w", did, err)
 	}
 
 	peerID, err := c.selectActiveFullnodePeer(ctx)
@@ -98,6 +143,20 @@ func (c *Core) RecoverWalletFromFullnode(ctx context.Context, did string) (*Reco
 		return nil, fmt.Errorf("RecoverWalletFromFullnode: connect to fullnode %s: %w", peerID, err)
 	}
 	defer peer.Close()
+
+	// Obtain a single-use ownership nonce from the fullnode, then sign it ONCE.
+	// The signature (over the nonce) is reused on every page; the fullnode
+	// verifies it on the first page and keeps the nonce live for the rest of the
+	// recovery (no time limit), evicting it on completion.
+	nonce, err := c.fetchRecoveryChallenge(peer, did)
+	if err != nil {
+		return nil, fmt.Errorf("RecoverWalletFromFullnode: obtain recovery nonce: %w", err)
+	}
+	authSigBytes, err := signer.Sign(recoveryNonceHash(nonce))
+	if err != nil {
+		return nil, fmt.Errorf("RecoverWalletFromFullnode: sign recovery nonce: %w", err)
+	}
+	authSignature := util.BytesToBase64(authSigBytes)
 
 	knownTokens, err := c.w.ReadLocalKnownState(ctx, did)
 	if err != nil {
@@ -126,7 +185,7 @@ func (c *Core) RecoverWalletFromFullnode(ctx context.Context, did string) (*Reco
 			Message string                          `json:"message"`
 			Result  types.RecoverFromFullnodeResult `json:"result"`
 		}
-		if err := c.fetchRecoveryPageWithDiag(peer, req, &resp, iter+1); err != nil {
+		if err := c.fetchRecoveryPageWithDiag(peer, req, &resp, iter+1, nonce, authSignature); err != nil {
 			return result, fmt.Errorf("RecoverWalletFromFullnode: fetch after cursor (%s,%d): %w", lastTokenID, lastPosition, err)
 		}
 		if !resp.Status {
@@ -191,6 +250,41 @@ func (c *Core) RecoverWalletFromFullnode(ctx context.Context, did string) (*Reco
 	return result, fmt.Errorf("RecoverWalletFromFullnode: page iteration cap (%d) reached without completion (last cursor (%s,%d))", recoveryMaxPageIterations, lastTokenID, lastPosition)
 }
 
+// fetchRecoveryChallenge requests a one-time, single-use ownership nonce from
+// the fullnode over the libp2p connection. The caller signs this nonce to prove
+// it holds the DID's private key; the same signature is then reused on every
+// recovery page.
+func (c *Core) fetchRecoveryChallenge(peer *ipfsport.Peer, did string) (string, error) {
+	httpReq, err := peer.JSONRequest("POST", setup.APIRecoverChallenge, &types.RecoverChallengeRequest{DID: did})
+	if err != nil {
+		return "", fmt.Errorf("build challenge request: %w", err)
+	}
+	httpResp, err := peer.Do(httpReq, recoveryRequestTimeout)
+	if err != nil {
+		return "", fmt.Errorf("challenge transport: %w", err)
+	}
+	bodyBytes, readErr := io.ReadAll(httpResp.Body)
+	_ = httpResp.Body.Close()
+	if readErr != nil {
+		return "", fmt.Errorf("read challenge response: %w", readErr)
+	}
+	var resp struct {
+		Status  bool                         `json:"status"`
+		Message string                       `json:"message"`
+		Result  types.RecoverChallengeResult `json:"result"`
+	}
+	if err := json.Unmarshal(bodyBytes, &resp); err != nil {
+		return "", fmt.Errorf("decode challenge response: %w", err)
+	}
+	if !resp.Status {
+		return "", fmt.Errorf("fullnode refused challenge: %s", resp.Message)
+	}
+	if resp.Result.Nonce == "" {
+		return "", fmt.Errorf("fullnode returned empty nonce")
+	}
+	return resp.Result.Nonce, nil
+}
+
 // fetchRecoveryPageWithDiag is a temporary diagnostic replacement for
 // peer.SendJSONRequest used only by the recovery loop. It manually builds
 // the HTTP request, reads the response body in full, and logs:
@@ -206,6 +300,8 @@ func (c *Core) fetchRecoveryPageWithDiag(
 	body *types.RecoverFromFullnodeRequest,
 	out interface{},
 	pageNumber int,
+	nonce string,
+	signature string,
 ) error {
 	const maxRetries = 3
 	var lastErr error
@@ -218,6 +314,10 @@ func (c *Core) fetchRecoveryPageWithDiag(
 			lastErr = err
 			continue
 		}
+		// Ownership proof travels in headers (not the body) — see
+		// headerRecoveryNonce / headerRecoverySignature.
+		httpReq.Header.Set(headerRecoveryNonce, nonce)
+		httpReq.Header.Set(headerRecoverySignature, signature)
 		// Intentionally NOT setting httpReq.Close = true.
 		//
 		// Each page used to open a fresh TCP conn + a fresh libp2p stream

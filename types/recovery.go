@@ -9,9 +9,10 @@ import (
 // RecoverFromFullnodeRequest is the body of a recover-from-fullnode call.
 //
 // The caller is a normal node whose local DB was lost (cold restore) or
-// partially out of sync (warm restore). It identifies itself with `DID`.
-// Authentication is provided by the libp2p connection identity layer — no
-// extra signature scheme on this body.
+// partially out of sync (warm restore). It identifies itself with `DID` and
+// proves ownership of it with a signed challenge (AuthTimestamp +
+// AuthSignature) that the fullnode verifies against the DID's public key
+// before serving any chain data.
 //
 // `KnownTokens` is a per-token "I already have up to here" filter. Each entry
 // carries position + tx_id so the server can detect chain divergence (the
@@ -33,6 +34,30 @@ type RecoverFromFullnodeRequest struct {
 	// NextPosition from the previous response.
 	LastTokenID  string `json:"last_token_id,omitempty"`
 	LastPosition int64  `json:"last_position,omitempty"`
+
+	// Ownership proof is carried in HTTP headers, NOT this body — see
+	// headerRecoveryNonce / headerRecoverySignature in core. Before recovery the
+	// client obtains a one-time, single-use nonce from the fullnode
+	// (APIRecoverChallenge), signs it ONCE, and sends the same nonce + signature
+	// in headers on every page. The fullnode verifies the signature against the
+	// DID's public key (resolved from IPFS) and that the nonce belongs to a live
+	// recovery session for this DID before serving ANY chain data — gating the
+	// per-DID chain (incl. sensitive smart-contract payloads) to the holder of
+	// the DID's private key. The nonce stays valid for the whole recovery (no
+	// time window) and is evicted on completion.
+}
+
+// RecoverChallengeRequest asks the fullnode to mint a one-time nonce the caller
+// will sign to prove ownership of DID before recovery.
+type RecoverChallengeRequest struct {
+	DID string `json:"did"`
+}
+
+// RecoverChallengeResult carries the minted nonce back to the caller. The nonce
+// is single-use and bound server-side to the requested DID for one recovery
+// session.
+type RecoverChallengeResult struct {
+	Nonce string `json:"nonce"`
 }
 
 // RecoverFromFullnodeResult is the BasicResponse.Result payload.

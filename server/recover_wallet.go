@@ -10,9 +10,11 @@ import (
 // @Description Rebuilds the local wallet's token state for a DID by pulling
 // owned tokens (status Free or Pledged) from an Active fullnode advertised at
 // https://raw.githubusercontent.com/rubixchain/assets/refs/heads/main/fullnodes.json.
-// Intended for nodes that lost their local DB and only retain their DID. The
-// request is DID-signed end-to-end inside the core; the HTTP layer only needs
-// the DID string.
+// Intended for nodes that lost their local DB and only retain their DID.
+// Recovery proves DID ownership via a signed challenge, so this runs
+// asynchronously through the signature request/response channel: the node
+// returns "Signature needed", the caller signs the hash and POSTs it to
+// /rubix/v1/signature, then the final recovery summary is returned.
 // @Tags Recovery
 // @Accept json
 // @Produce json
@@ -36,20 +38,11 @@ func (s *Server) APIRecoverWalletFromFullnode(req *ensweb.Request) *ensweb.Resul
 		return s.BasicResponse(req, false, "did is required", nil)
 	}
 
-	result, err := s.c.RecoverWalletFromFullnode(s.c.Ctx, body.DID)
-	if err != nil {
-		s.log.Error("APIRecoverWalletFromFullnode: recovery failed",
-			"did", body.DID, "err", err)
-		return s.BasicResponse(req, false, "recovery failed: "+err.Error(), result)
-	}
-
-	s.log.Info("APIRecoverWalletFromFullnode: recovery completed",
-		"did", body.DID,
-		"fullnode_peer", result.FullnodePeerID,
-		"tokens_seen", result.TokensSeen,
-		"chain_entries_persisted", result.ChainEntriesPersisted,
-		"tokens_failed", result.TokensFailed,
-		"pages_fetched", result.PagesFetched,
-		"divergent_tokens", len(result.DivergentTokens))
-	return s.BasicResponse(req, true, "wallet recovery completed", result)
+	// Recovery signs an ownership challenge, so it runs asynchronously through
+	// the OutChan/InChan signature mechanism (like register/transfer). The node
+	// emits "Signature needed", the caller answers via /rubix/v1/signature, and
+	// the final recovery summary is delivered on the same channel.
+	s.c.AddWebReq(req)
+	go s.c.RecoverWalletFromFullnodeAsync(req.ID, body.DID)
+	return s.didResponse(req, req.ID)
 }
