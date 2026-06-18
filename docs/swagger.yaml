@@ -939,8 +939,12 @@ paths:
     get:
       consumes:
       - application/json
-      description: Returns transactions for the given DID, filtered by token type
-        (rbt, nft, ft, smartContract).
+      description: |-
+        Returns transactions for the given DID, filtered by token type (rbt, nft, ft, smartContract).
+        Optional query parameters narrow results further:
+        - latest: return only the N most recent transactions sorted by epoch descending (e.g. latest=5)
+        - start_date / end_date: filter by created_at date range, inclusive, format YYYY-MM-DD
+        - start_epoch / end_epoch: filter by epoch range, inclusive integer values
       operationId: getTxnsByDID
       parameters:
       - description: DID
@@ -953,6 +957,26 @@ paths:
         name: token_type
         required: true
         type: string
+      - description: Return only the N most recent transactions sorted by epoch descending
+        in: query
+        name: latest
+        type: integer
+      - description: Start date for created_at filter (YYYY-MM-DD, inclusive)
+        in: query
+        name: start_date
+        type: string
+      - description: End date for created_at filter (YYYY-MM-DD, inclusive)
+        in: query
+        name: end_date
+        type: string
+      - description: Start epoch for epoch range filter (inclusive)
+        in: query
+        name: start_epoch
+        type: integer
+      - description: End epoch for epoch range filter (inclusive)
+        in: query
+        name: end_epoch
+        type: integer
       produces:
       - application/json
       responses:

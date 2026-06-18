@@ -811,6 +811,6 @@ func retryWithRandomBackoff(attempt int) time.Duration {
 	return time.Duration(attempt*50+rand.Intn(1000)) * time.Millisecond
 }
 
-func (c *Core) GetTransactionsByDIDAndTokenType(did, tokenType string) ([]models.Transactions, error) {
-	return c.w.GetTransactionsByDIDAndTokenType(did, tokenType)
+func (c *Core) GetTransactionsByDIDAndTokenType(did, tokenType string, filter models.TxQueryFilter) ([]models.Transactions, error) {
+	return c.w.GetTransactionsByDIDAndTokenType(did, tokenType, filter)
 }

@@ -1,6 +1,9 @@
 package server
 
 import (
+	"strconv"
+	"time"
+
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
@@ -102,12 +105,21 @@ func (s *Server) APISyncTransactionChain(req *ensweb.Request) *ensweb.Result {
 // APIGetTransactionsByDID godoc
 // @Summary      Get Transactions by DID
 // @Description  Returns transactions for the given DID, filtered by token type (rbt, nft, ft, smartContract).
+// @Description  Optional query parameters narrow results further:
+// @Description    - latest: return only the N most recent transactions sorted by epoch descending (e.g. latest=5)
+// @Description    - start_date / end_date: filter by created_at date range, inclusive, format YYYY-MM-DD
+// @Description    - start_epoch / end_epoch: filter by epoch range, inclusive integer values
 // @Tags         Transactions
 // @ID           getTxnsByDID
 // @Accept       json
 // @Produce      json
-// @Param        did        path   string  true   "DID"
-// @Param        token_type path  string  true  "Token Type (rbt, nft, ft, smartContract)"
+// @Param        did         path   string  true   "DID"
+// @Param        token_type  path   string  true   "Token Type (rbt, nft, ft, smartContract)"
+// @Param        latest      query  int     false  "Return only the N most recent transactions sorted by epoch descending"
+// @Param        start_date  query  string  false  "Start date for created_at filter (YYYY-MM-DD, inclusive)"
+// @Param        end_date    query  string  false  "End date for created_at filter (YYYY-MM-DD, inclusive)"
+// @Param        start_epoch query  int     false  "Start epoch for epoch range filter (inclusive)"
+// @Param        end_epoch   query  int     false  "End epoch for epoch range filter (inclusive)"
 // @Success      200  {object}  models.BasicResponse
 // @Router       /rubix/v1/tx/{did}/{token_type} [get]
 func (s *Server) APIGetTransactionsByDID(req *ensweb.Request) *ensweb.Result {
@@ -121,10 +133,63 @@ func (s *Server) APIGetTransactionsByDID(req *ensweb.Request) *ensweb.Result {
 		return s.BasicResponse(req, false, "empty token type", nil)
 	}
 
-	txInfo, err := s.c.GetTransactionsByDIDAndTokenType(did, tokenType)
+	filter, errMsg := parseTxQueryFilter(req, s)
+	if errMsg != "" {
+		return s.BasicResponse(req, false, errMsg, nil)
+	}
+
+	txInfo, err := s.c.GetTransactionsByDIDAndTokenType(did, tokenType, filter)
 	if err != nil {
 		return s.BasicResponse(req, false, err.Error(), nil)
 	}
 
 	return s.BasicResponse(req, true, "", txInfo)
+}
+
+// parseTxQueryFilter reads optional query parameters from the request and returns a TxQueryFilter.
+// Returns a non-empty error message string if any parameter value is malformed.
+func parseTxQueryFilter(req *ensweb.Request, s *Server) (models.TxQueryFilter, string) {
+	var filter models.TxQueryFilter
+
+	if v := s.GetQuery(req, "latest"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			return filter, "latest must be a positive integer"
+		}
+		filter.Latest = n
+	}
+
+	const dateLayout = "2006-01-02"
+	if v := s.GetQuery(req, "start_date"); v != "" {
+		t, err := time.Parse(dateLayout, v)
+		if err != nil {
+			return filter, "start_date must be in YYYY-MM-DD format"
+		}
+		filter.StartDate = t.UTC()
+	}
+	if v := s.GetQuery(req, "end_date"); v != "" {
+		t, err := time.Parse(dateLayout, v)
+		if err != nil {
+			return filter, "end_date must be in YYYY-MM-DD format"
+		}
+		// include the full end day up to 23:59:59.999999999 UTC
+		filter.EndDate = time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 999999999, time.UTC)
+	}
+
+	if v := s.GetQuery(req, "start_epoch"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return filter, "start_epoch must be an integer"
+		}
+		filter.StartEpoch = &n
+	}
+	if v := s.GetQuery(req, "end_epoch"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return filter, "end_epoch must be an integer"
+		}
+		filter.EndEpoch = &n
+	}
+
+	return filter, ""
 }
