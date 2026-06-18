@@ -1151,7 +1151,7 @@
         },
         "/rubix/v1/tx/{did}/{token_type}": {
             "get": {
-                "description": "Returns transactions for the given DID, filtered by token type (rbt, nft, ft, smartContract).",
+                "description": "Returns transactions for the given DID, filtered by token type (rbt, nft, ft, smartContract).\nOptional query parameters narrow results further:\n- latest: return only the N most recent transactions sorted by epoch descending (e.g. latest=5)\n- start_date / end_date: filter by created_at date range, inclusive, format YYYY-MM-DD\n- start_epoch / end_epoch: filter by epoch range, inclusive integer values",
                 "consumes": [
                     "application/json"
                 ],
@@ -1177,6 +1177,36 @@
                         "name": "token_type",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Return only the N most recent transactions sorted by epoch descending",
+                        "name": "latest",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date for created_at filter (YYYY-MM-DD, inclusive)",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date for created_at filter (YYYY-MM-DD, inclusive)",
+                        "name": "end_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Start epoch for epoch range filter (inclusive)",
+                        "name": "start_epoch",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "End epoch for epoch range filter (inclusive)",
+                        "name": "end_epoch",
+                        "in": "query"
                     }
                 ],
                 "responses": {
