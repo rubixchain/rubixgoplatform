@@ -2,7 +2,19 @@ package models
 
 import (
 	"encoding/json"
+	"time"
 )
+
+// TxQueryFilter holds optional filter parameters for GetTransactionsByDIDAndTokenType.
+// Zero values mean "no filter": Latest=0 means no limit, zero Time means no date bound,
+// nil epoch pointers mean no epoch bound.
+type TxQueryFilter struct {
+	Latest     int        // if > 0, return only the N most recent transactions sorted by epoch desc
+	StartDate  time.Time  // if non-zero, include only transactions with created_at >= StartDate
+	EndDate    time.Time  // if non-zero, include only transactions with created_at <= EndDate
+	StartEpoch *int       // if non-nil, include only transactions with epoch >= *StartEpoch
+	EndEpoch   *int       // if non-nil, include only transactions with epoch <= *EndEpoch
+}
 
 type TransactionInfo struct {
 	Initiator       string             `json:"initiator"`
