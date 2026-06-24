@@ -91,29 +91,6 @@ func ValidateTransactionInfoFields(txnInfo *models.TransactionInfo, configuredNe
 	return nil
 }
 
-func configuredNetworkModeFromFlags(testnet, mainnet, localnet bool) (string, error) {
-	modeCount := 0
-	if testnet {
-		modeCount++
-	}
-	if mainnet {
-		modeCount++
-	}
-	if localnet {
-		modeCount++
-	}
-	if modeCount != 1 {
-		return "", fmt.Errorf("invalid node network configuration: expected exactly one of mainnet/testnet/localnet to be true")
-	}
-	if mainnet {
-		return constants.NetworkMode_Mainnet, nil
-	}
-	if testnet {
-		return constants.NetworkMode_Testnet, nil
-	}
-	return constants.NetworkMode_Localnet, nil
-}
-
 func TransactionIDIntegrityCheck(transactionID string, transactionInfo *models.TransactionInfo) error {
 	computedTransactionID, err := util.GetTransactionID(transactionInfo)
 	if err != nil {
@@ -926,7 +903,7 @@ func ValidateTransaction(
 		return false, fmt.Errorf("ValidateTransaction: failed to unmarshal transaction info: %w", err)
 	}
 
-	configuredNetworkMode, err := configuredNetworkModeFromFlags(testnet, mainnet, localnet)
+	configuredNetworkMode, err := util.GetNetworkMode(testnet, mainnet, localnet)
 	if err != nil {
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
