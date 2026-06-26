@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/types"
@@ -625,19 +626,79 @@ func (w *Wallet) PersistRecoveredTokenChainPage(
 	// same denom. Only meaningful for RBT; NFT/FT/SC have their own
 	// accounting tables (fts / ft_tokens). Tokens with token_value=0 are
 	// excluded both because the existing normal-flow accounting skips them
-	// and to keep token_denom keyed on real denominations only.
+	// and to keep token_denom keyed on real denominations only. Only Free
+	// (status 0) tokens are counted so token_denom reflects spendable balance
+	// (mirrors getrbtbalance); transferred/burnt/committed tokens must not
+	// inflate the cache.
 	rbtTypeID := models.GetTokenTypeID(constants.TokenType_RBT)
 	if tokenTypeID == rbtTypeID && state.TokenValue > 0 {
 		if _, err := dbtx.Exec(ctx, `
 			INSERT INTO token_denom (did, denom, count, created_at, updated_at)
 			SELECT $1, $2, COUNT(*), NOW(), NOW()
 			FROM tokens
-			WHERE did = $1 AND token_value = $2 AND token_type = $3
+			WHERE did = $1 AND token_value = $2 AND token_type = $3 AND token_status = $4
 			ON CONFLICT (did, denom) DO UPDATE SET
 				count = EXCLUDED.count,
 				updated_at = NOW()
-		`, did, state.TokenValue, int16(rbtTypeID)); err != nil {
+		`, did, state.TokenValue, int16(rbtTypeID), int16(constants.TokenStatus_Free)); err != nil {
 			return fmt.Errorf("PersistRecoveredTokenChainPage: upsert token_denom (did=%q denom=%v): %w", did, state.TokenValue, err)
+		}
+	}
+
+	// Re-derive fts / ft_tokens for recovered FT pieces so a recovered node
+	// can see and spend FTs exactly like a normal node. FT identity lives in
+	// fts (ft_name, creator_did, ft_count) + ft_tokens (token_id -> ft_id),
+	// NOT in the tokens row — balance/transfer all resolve through that
+	// tokens-ft_tokens-fts join, so without these rows a recovered FT is
+	// invisible/unspendable. FT token IDs encode identity as
+	// <ftName>_<creatorDID>_<n> (same parse the normal receive path uses in
+	// upsertFTInfo). Absolute-recompute (not delta) keeps it idempotent across
+	// the multiple page calls for the same token — mirrors the token_denom and
+	// tokenchain_index self-derive pattern above. ft_count counts only Free
+	// (spendable) pieces, matching the net-owned semantics the normal flow
+	// converges to.
+	ftTypeID := models.GetTokenTypeID(constants.TokenType_FT)
+	if tokenTypeID == ftTypeID {
+		parts := strings.SplitN(state.TokenID, "_", 3)
+		if len(parts) != 3 {
+			return fmt.Errorf("PersistRecoveredTokenChainPage: malformed FT token id %q (want <ftName>_<creatorDID>_<n>)", state.TokenID)
+		}
+		ftName, creatorDID := parts[0], parts[1]
+
+		// Upsert the FT identity row and get its id (ft_count filled in below).
+		var ftID int32
+		if err := dbtx.QueryRow(ctx, `
+			INSERT INTO fts (ft_name, creator_did, ft_count, created_at, updated_at)
+			VALUES ($1, $2, 0, NOW(), NOW())
+			ON CONFLICT (ft_name, creator_did) DO UPDATE SET updated_at = NOW()
+			RETURNING id
+		`, ftName, creatorDID).Scan(&ftID); err != nil {
+			return fmt.Errorf("PersistRecoveredTokenChainPage: upsert fts (%s/%s): %w", ftName, creatorDID, err)
+		}
+
+		// Map this owned FT piece to its identity.
+		if _, err := dbtx.Exec(ctx, `
+			INSERT INTO ft_tokens (token_id, ft_id, created_at, updated_at)
+			VALUES ($1, $2, NOW(), NOW())
+			ON CONFLICT (token_id) DO UPDATE SET ft_id = EXCLUDED.ft_id, updated_at = NOW()
+		`, state.TokenID, ftID); err != nil {
+			return fmt.Errorf("PersistRecoveredTokenChainPage: insert ft_tokens (%q): %w", state.TokenID, err)
+		}
+
+		// Recompute ft_count = number of this FT's currently-spendable (Free)
+		// pieces held on this node, from the authoritative tokens-ft_tokens join.
+		if _, err := dbtx.Exec(ctx, `
+			UPDATE fts SET
+				ft_count = (
+					SELECT COUNT(*)
+					FROM ft_tokens jt
+					JOIN tokens t ON t.token_id = jt.token_id
+					WHERE jt.ft_id = $1 AND t.token_status = $2
+				),
+				updated_at = NOW()
+			WHERE id = $1
+		`, ftID, int16(constants.TokenStatus_Free)); err != nil {
+			return fmt.Errorf("PersistRecoveredTokenChainPage: recompute fts.ft_count (id=%d): %w", ftID, err)
 		}
 	}
 
