@@ -452,6 +452,40 @@ func determineRecoveryDIDRole(infoJSON []byte, did string) (string, error) {
 	return "", nil
 }
 
+// extractPledgeMainTxFields parses a pledged token's main-transaction info JSON
+// to recover the two unpledge_sequence_info fields that don't live on the token
+// row: the transferred ("transaction") tokens and the epoch.
+//
+// The transaction-token set mirrors EXACTLY what the live pledge path stores:
+// quorum_initiator.go builds transactionTokens from Tokens.RBT/FT/NFT/
+// SmartContract (NOT CommittedTokens) before calling PledgeV2. Matching that set
+// is what makes the reconstructed row line up with the comparison
+// CallBackQuorumUnpledge/CheckTxnsPresentInUnpledgeSequenceInfo performs later.
+func extractPledgeMainTxFields(infoJSON []byte) ([]string, int, error) {
+	if len(infoJSON) == 0 {
+		return nil, 0, fmt.Errorf("empty transaction info")
+	}
+	var info models.TransactionInfo
+	if err := json.Unmarshal(infoJSON, &info); err != nil {
+		return nil, 0, err
+	}
+	var transactionTokens []string
+	if info.Tokens != nil {
+		appendTok := func(toks []*models.TokenInfo) {
+			for _, t := range toks {
+				if t != nil && t.TokenID != "" {
+					transactionTokens = append(transactionTokens, t.TokenID)
+				}
+			}
+		}
+		appendTok(info.Tokens.RBT)
+		appendTok(info.Tokens.FT)
+		appendTok(info.Tokens.NFT)
+		appendTok(info.Tokens.SmartContract)
+	}
+	return transactionTokens, info.Epoch, nil
+}
+
 // PersistRecoveredTokenChainPage atomically writes a page worth of chain
 // entries plus the current token state for a single token recovered from a
 // fullnode. This replaces the old PersistRecoveredPledgedToken helper and
@@ -699,6 +733,75 @@ func (w *Wallet) PersistRecoveredTokenChainPage(
 			WHERE id = $1
 		`, ftID, int16(constants.TokenStatus_Free)); err != nil {
 			return fmt.Errorf("PersistRecoveredTokenChainPage: recompute fts.ft_count (id=%d): %w", ftID, err)
+		}
+	}
+
+	// Re-derive unpledge_sequence_info for a recovered PLEDGED token so the
+	// recovered quorum can release the pledge later, exactly like a normal
+	// quorum. The fullnode has no dedicated pledge-bookkeeping table, but the
+	// pledge IS reconstructable from the chain it does serve: PledgeV2 records
+	// the pledge as a tokenchain entry whose transaction_id is the main
+	// (transfer) txID and whose role is Pledge, and sets the tokens row to
+	// (status=Pledged, transaction_id=mainTxID, latest_role=Pledge). So the
+	// pledge->mainTx link is already on the tokens row upserted above. The two
+	// remaining columns (transaction_tokens, epoch) come from the main
+	// transaction's info JSON, which is guaranteed local here — the tokens FK
+	// (transaction_id=mainTxID) above could not have committed otherwise.
+	//
+	// Only currently-Pledged tokens are reconstructed: a pledge that was already
+	// released shows its token back at Free on the fullnode (with a role-9
+	// unpledge entry), so it is naturally skipped here — no risk of recreating a
+	// settled pledge. pledge_tokens is absolute-recomputed (every token this
+	// quorum has pledged for the same mainTxID), keeping it idempotent and
+	// correct when several pledge tokens for one mainTxID arrive across pages.
+	//
+	// NOTE: this restores the data that drives FUTURE unpledge triggers
+	// (CallBackQuorumUnpledge fires when the transferred tokens next move). It
+	// does NOT retroactively fire unpledges the quorum missed while offline; a
+	// recovery-time sweep for already-moved transaction_tokens is a follow-up
+	// (the deciding data — the transferred tokens' current chain state — is on
+	// the fullnode).
+	pledgeRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Pledge))
+	if state.TokenStatus == int16(constants.TokenStatus_Pledged) && localLatestRole == pledgeRoleID {
+		mainTxID := localLatestTxID
+
+		var infoJSON []byte
+		if err := dbtx.QueryRow(ctx,
+			`SELECT info FROM transactions WHERE id = $1`, mainTxID,
+		).Scan(&infoJSON); err != nil {
+			return fmt.Errorf("PersistRecoveredTokenChainPage: read main tx info for pledge (token %q tx %q): %w", state.TokenID, mainTxID, err)
+		}
+
+		transactionTokens, epoch, parseErr := extractPledgeMainTxFields(infoJSON)
+		if parseErr != nil {
+			// A malformed/legacy info blob must not abort the token's recovery —
+			// the pledge row is simply not reconstructed (same end-state as before
+			// this change). Mirrors the transaction_units decode-failure policy.
+			w.log.Warn("PersistRecoveredTokenChainPage: parse main tx info for pledge failed; skipping unpledge_sequence_info",
+				"token", state.TokenID, "tx", mainTxID, "err", parseErr)
+		} else {
+			// All of this quorum's tokens currently pledged for this mainTxID.
+			var pledgeTokens []string
+			if err := dbtx.QueryRow(ctx, `
+				SELECT COALESCE(array_agg(token_id ORDER BY token_id), '{}')
+				FROM tokens
+				WHERE did = $1 AND token_status = $2 AND transaction_id = $3 AND latest_role = $4
+			`, did, int16(constants.TokenStatus_Pledged), mainTxID, pledgeRoleID).Scan(&pledgeTokens); err != nil {
+				return fmt.Errorf("PersistRecoveredTokenChainPage: recompute pledge_tokens (tx %q): %w", mainTxID, err)
+			}
+
+			if _, err := dbtx.Exec(ctx, `
+				INSERT INTO unpledge_sequence_info (tx_id, pledge_tokens, epoch, quorum_did, transaction_tokens, created_at, updated_at)
+				VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+				ON CONFLICT (tx_id) DO UPDATE SET
+					pledge_tokens      = EXCLUDED.pledge_tokens,
+					epoch              = EXCLUDED.epoch,
+					quorum_did         = EXCLUDED.quorum_did,
+					transaction_tokens = EXCLUDED.transaction_tokens,
+					updated_at         = NOW()
+			`, mainTxID, pledgeTokens, epoch, did, transactionTokens); err != nil {
+				return fmt.Errorf("PersistRecoveredTokenChainPage: upsert unpledge_sequence_info (tx %q): %w", mainTxID, err)
+			}
 		}
 	}
 
