@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -227,32 +228,65 @@ func (w *Wallet) GetTransactionIdByIndex(index int16, isFullNode bool) (string, 
 }
 
 // GetTransactionsByDIDAndTokenType returns transaction history of a given DID and token_type,
-// and in case of RBT it does not return split/burnt transactions where initiator=owner
-func (w *Wallet) GetTransactionsByDIDAndTokenType(did, tokenType string) ([]models.Transactions, error) {
-	rows, err := w.db.Pool().Query(w.Ctx,
-		`SELECT id, info, signature, created_at, updated_at
-	FROM transactions
-	WHERE (info->>'initiator' = $1 OR info->>'owner' = $1)
-	AND (
-		CASE $2
-			WHEN 'rbt' THEN
-				json_typeof(info->'tokens'->'rbt') = 'array'
-				AND info->>'initiator' != info->>'owner'
+// and in case of RBT it does not return split/burnt transactions where initiator=owner.
+// Optional filter fields narrow the result set: date range (created_at), epoch range, or a
+// Latest-N limit sorted by epoch descending.
+func (w *Wallet) GetTransactionsByDIDAndTokenType(did, tokenType string, filter models.TxQueryFilter) ([]models.Transactions, error) {
+	args := []any{did, tokenType}
+	paramIdx := 3
 
-			WHEN 'nft' THEN
-				json_typeof(info->'tokens'->'nft') = 'array'
+	var sb strings.Builder
+	sb.WriteString(`SELECT id, info, signature, created_at, updated_at
+FROM transactions
+WHERE (info->>'initiator' = $1 OR info->>'owner' = $1)
+AND (
+	CASE $2
+		WHEN 'rbt' THEN
+			json_typeof(info->'tokens'->'rbt') = 'array'
+			AND info->>'initiator' != info->>'owner'
 
-			WHEN 'ft' THEN
-				json_typeof(info->'tokens'->'ft') = 'array'
+		WHEN 'nft' THEN
+			json_typeof(info->'tokens'->'nft') = 'array'
 
-			WHEN 'smartContract' THEN
-				json_typeof(info->'tokens'->'smartContract') = 'array'
+		WHEN 'ft' THEN
+			json_typeof(info->'tokens'->'ft') = 'array'
 
-			ELSE FALSE
-		END
-	)`,
-		did, tokenType,
-	)
+		WHEN 'smartContract' THEN
+			json_typeof(info->'tokens'->'smartContract') = 'array'
+
+		ELSE FALSE
+	END
+)`)
+
+	if !filter.StartDate.IsZero() {
+		fmt.Fprintf(&sb, " AND created_at >= $%d", paramIdx)
+		args = append(args, filter.StartDate)
+		paramIdx++
+	}
+	if !filter.EndDate.IsZero() {
+		fmt.Fprintf(&sb, " AND created_at <= $%d", paramIdx)
+		args = append(args, filter.EndDate)
+		paramIdx++
+	}
+	if filter.StartEpoch != nil {
+		fmt.Fprintf(&sb, " AND (info->>'epoch')::int >= $%d", paramIdx)
+		args = append(args, *filter.StartEpoch)
+		paramIdx++
+	}
+	if filter.EndEpoch != nil {
+		fmt.Fprintf(&sb, " AND (info->>'epoch')::int <= $%d", paramIdx)
+		args = append(args, *filter.EndEpoch)
+		paramIdx++
+	}
+
+	sb.WriteString(" ORDER BY (info->>'epoch')::int DESC")
+
+	if filter.Latest > 0 {
+		fmt.Fprintf(&sb, " LIMIT $%d", paramIdx)
+		args = append(args, filter.Latest)
+	}
+
+	rows, err := w.db.Pool().Query(w.Ctx, sb.String(), args...)
 	if err != nil {
 		return nil, fmt.Errorf("GetTransactionsByAddressAndTokenType: %w", err)
 	}
