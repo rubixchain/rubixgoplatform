@@ -103,6 +103,22 @@ func (c *Client) RegisterDID(didStr string) (*model.BasicResponse, error) {
 	return &rm, nil
 }
 
+// RecoverWalletFromFullnode triggers fullnode-backed wallet recovery for the
+// given DID. The node proves DID ownership via the async signature challenge,
+// so the caller must drive cmd.SignatureResponse on the returned response (same
+// flow as RegisterDID).
+func (c *Client) RecoverWalletFromFullnode(didStr string) (*model.BasicResponse, error) {
+	req := struct {
+		DID string `json:"did"`
+	}{DID: didStr}
+	var rm model.BasicResponse
+	err := c.sendJSONRequest("POST", setup.APIRecoverWalletFromFullnode, nil, &req, &rm)
+	if err != nil {
+		return nil, err
+	}
+	return &rm, nil
+}
+
 func (c *Client) GetRBTBalance(didStr string) (*model.BasicResponse, error) {
 	pathParams := make(map[string]string)
 	pathParams["did"] = didStr

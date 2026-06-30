@@ -49,6 +49,7 @@ const (
 	GenerateLocalRBTCmd        string = "generatelocalrbt"
 	RegsiterDIDCmd             string = "registerdid"
 	SetupDIDCmd                string = "setupdid"
+	RecoverWalletFromFullnodeCmd string = "recover-from-fullnode"
 	ShutDownCmd                string = "shutdown"
 	CreateNFTCmd               string = "create-nft"
 	GenerateSmartContractToken string = "generatesct"
@@ -91,6 +92,7 @@ var commands = []string{
 	GetRBTBalanceCmd,
 	RegsiterDIDCmd,
 	SetupDIDCmd,
+	RecoverWalletFromFullnodeCmd,
 	ShutDownCmd,
 	SubscribeContractCmd,
 	CreateNFTCmd,
@@ -589,6 +591,8 @@ func Run(args []string) {
 		cmd.RegsiterDIDCmd()
 	case SetupDIDCmd:
 		cmd.SetupDIDCmd()
+	case RecoverWalletFromFullnodeCmd:
+		cmd.RecoverWalletFromFullnodeCmd()
 	case ShutDownCmd:
 		cmd.ShutDownCmd()
 	case SubscribeContractCmd:

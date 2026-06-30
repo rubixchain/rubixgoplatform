@@ -73,7 +73,17 @@ type RecoverWalletResult struct {
 	ChainEntriesPersisted int      `json:"chain_entries_persisted"`
 	TokensFailed          int      `json:"tokens_failed"`
 	PagesFetched          int      `json:"pages_fetched"`
+	TokensPinned          int      `json:"tokens_pinned"`
+	TokensPinFailed       int      `json:"tokens_pin_failed"`
 	DivergentTokens       []string `json:"divergent_tokens,omitempty"`
+}
+
+// recoveredPinTarget carries the per-token data needed to (re)pin its IPFS
+// state-hash content after the DB rebuild.
+type recoveredPinTarget struct {
+	stateHash string
+	txID      string
+	value     float64
 }
 
 // RecoverWalletFromFullnodeAsync runs RecoverWalletFromFullnode in the
@@ -165,6 +175,11 @@ func (c *Core) RecoverWalletFromFullnode(reqID string, ctx context.Context, did 
 
 	result := &RecoverWalletResult{DID: did, FullnodePeerID: peerID}
 
+	// Tokens whose IPFS state-hash content must be (re)pinned after the DB
+	// rebuild so quorums can fetch/verify them on a future spend. Deduped by
+	// token id across pages; later pages overwrite with the latest state.
+	tokensToPin := make(map[string]recoveredPinTarget)
+
 	// Cursor-driven loop. The server returns HasMore + NextTokenID /
 	// NextPosition on every page; we echo those back on the next request.
 	// A crash partway through is harmless: ReadLocalKnownState above
@@ -214,6 +229,16 @@ func (c *Core) RecoverWalletFromFullnode(reqID string, ctx context.Context, did 
 			result.TokensSeen++
 			result.ChainEntriesPersisted += len(t.TxnInfos)
 			pageEntries += len(t.TxnInfos)
+
+			// Queue this token's current state-hash content for re-pinning
+			// after the DB rebuild completes.
+			if t.CurrentState.TokenStateHash != "" {
+				tokensToPin[t.TokenID] = recoveredPinTarget{
+					stateHash: t.CurrentState.TokenStateHash,
+					txID:      t.CurrentState.TransactionID,
+					value:     t.CurrentState.TokenValue,
+				}
+			}
 		}
 
 		c.log.Info("RecoverWalletFromFullnode: page progress",
@@ -227,12 +252,20 @@ func (c *Core) RecoverWalletFromFullnode(reqID string, ctx context.Context, did 
 			"next_cursor", fmt.Sprintf("(%s,%d)", resp.Result.NextTokenID, resp.Result.NextPosition))
 
 		if !resp.Result.HasMore {
+			// DB rebuild done — now restore the IPFS layer so recovered tokens
+			// are actually spendable: pin each token's state-hash content
+			// (fetched from the network) and record this node as an Owner
+			// provider. Without this, quorums can't fetch/verify the token chain
+			// during a transfer and the spend is rejected.
+			result.TokensPinned, result.TokensPinFailed = c.pinRecoveredTokenContent(ctx, did, tokensToPin)
 			c.log.Info("RecoverWalletFromFullnode: recovery complete",
 				"did", did,
 				"pages_fetched", result.PagesFetched,
 				"entries_persisted_total", result.ChainEntriesPersisted,
 				"tokens_seen_total", result.TokensSeen,
 				"tokens_failed", result.TokensFailed,
+				"tokens_pinned", result.TokensPinned,
+				"tokens_pin_failed", result.TokensPinFailed,
 				"divergent_tokens", len(result.DivergentTokens))
 			return result, nil
 		}
@@ -248,6 +281,48 @@ func (c *Core) RecoverWalletFromFullnode(reqID string, ctx context.Context, did 
 		}
 	}
 	return result, fmt.Errorf("RecoverWalletFromFullnode: page iteration cap (%d) reached without completion (last cursor (%s,%d))", recoveryMaxPageIterations, lastTokenID, lastPosition)
+}
+
+// pinRecoveredTokenContent restores the IPFS layer for recovered tokens. The
+// DB rebuild alone leaves token-state content un-pinned and this node absent
+// from the provider records, so quorums can't fetch/verify a token's chain
+// during a transfer and the spend is rejected ("token ... still not found
+// locally after sync"). For each recovered token this pins the state-hash
+// content (IPFS fetches it from the network) and records this node as an Owner
+// provider — the step that makes a recovered token actually spendable.
+//
+// Best-effort by design: a single unavailable/timed-out CID must not abort the
+// whole recovery, so failures are logged and counted (TokensPinFailed) rather
+// than returned. Pin is idempotent, so re-running recovery safely re-pins.
+func (c *Core) pinRecoveredTokenContent(ctx context.Context, did string, targets map[string]recoveredPinTarget) (pinned int, failed int) {
+	for tokenID, t := range targets {
+		if t.stateHash == "" {
+			continue
+		}
+		select {
+		case <-ctx.Done():
+			c.log.Warn("pinRecoveredTokenContent: context cancelled; remaining tokens not pinned",
+				"did", did, "pinned", pinned, "failed", failed, "remaining", len(targets)-pinned-failed)
+			return pinned, failed
+		default:
+		}
+		// Owner role + did so this node is advertised as a provider of the
+		// token's state content (mirrors the normal receive/split pin path).
+		if _, err := c.w.Pin(t.stateHash, constants.TokenProviderRole_Owner, did, t.txID, did, did, t.value); err != nil {
+			c.log.Warn("pinRecoveredTokenContent: failed to pin token state content; token is in the DB but may be unspendable until re-pinned",
+				"did", did, "tokenID", tokenID, "stateHash", t.stateHash, "err", err)
+			failed++
+			continue
+		}
+		pinned++
+	}
+	if failed > 0 {
+		c.log.Warn("pinRecoveredTokenContent: some recovered tokens could not be pinned (re-run recovery to retry)",
+			"did", did, "pinned", pinned, "failed", failed)
+	} else {
+		c.log.Info("pinRecoveredTokenContent: pinned all recovered token content", "did", did, "pinned", pinned)
+	}
+	return pinned, failed
 }
 
 // fetchRecoveryChallenge requests a one-time, single-use ownership nonce from
