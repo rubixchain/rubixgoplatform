@@ -82,7 +82,7 @@ const (
 	// fullnode-backed recovery (orchestrates fetching fullnodes.json, dialing
 	// a fullnode over libp2p, calling APIRecoverFromFullnode in a paginated
 	// loop, and persisting results locally).
-	APIRecoverWalletFromFullnode string = "/rubix/v1/recover"
+	APIRecoverWalletFromFullnode string = "/rubix/v1/sync"
 )
 
 // jwt.RegisteredClaims
