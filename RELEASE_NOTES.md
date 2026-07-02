@@ -111,8 +111,6 @@ Three tables now own the entire transaction layer:
 
 ---
 
-## Recovering a Tokenchain From a Full Node
+## Recovering and Syncing a Wallet From a Full Node
 
-A node can now recover its tokenchains directly from a full node by presenting its DID.
-
-The request carries the DID, and the full node sends back all the tokenchain information it holds for that node. Full nodes already receive and retain every published transaction and tokenchain detail, so they act as the source of truth for recovery — ask with a DID, get the tokenchains back.
+A node that has lost its database or drifted out of sync can now rebuild its wallet from a full node — via the `sync` command or the `POST /rubix/v1/sync` API (with a `did`). The node signs a one-time challenge with its DID's private key to prove ownership, then sends the tokens and chain positions it already has. The full node returns only the missing chain data, flags any tokens whose local state has diverged, and returns their full chain. Recovery is idempotent and resumable, and after rebuilding the database it re-pins each recovered token's state content on IPFS so the tokens are immediately spendable.

@@ -95,10 +95,15 @@ type recoveredPinTarget struct {
 // is returned on the same channel.
 func (c *Core) RecoverWalletFromFullnodeAsync(reqID string, did string) {
 	result, err := c.RecoverWalletFromFullnode(reqID, c.w.Ctx, did)
+	// Result stays nil: the CLI signature loop treats a non-nil Result as another
+	// signature request, which made a successful recovery report a failure.
 	br := &models.BasicResponse{
 		Status:  true,
 		Message: "wallet recovery completed",
-		Result:  result,
+	}
+	if result != nil {
+		br.Message = fmt.Sprintf("wallet recovery completed: %d tokens, %d chain entries persisted, %d pinned, %d divergent",
+			result.TokensSeen, result.ChainEntriesPersisted, result.TokensPinned, len(result.DivergentTokens))
 	}
 	if err != nil {
 		br.Status = false
