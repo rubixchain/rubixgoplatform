@@ -111,6 +111,14 @@ Three tables now own the entire transaction layer:
 
 ---
 
-## Recovering and Syncing a Wallet From a Full Node
+## Wallet Synchronization Improvements
 
-A node that has lost its database or drifted out of sync can now rebuild its wallet from a full node — via the `sync` command or the `POST /rubix/v1/sync` API (with a `did`). The node signs a one-time challenge with its DID's private key to prove ownership, then sends the tokens and chain positions it already has. The full node returns only the missing chain data, flags any tokens whose local state has diverged, and returns their full chain. Recovery is idempotent and resumable, and after rebuilding the database it re-pins each recovered token's state content on IPFS so the tokens are immediately spendable.
+Improved wallet synchronization, available through the `sync` command and the `POST /rubix/v1/sync` API.
+
+**Enhancements**
+
+- Added support for synchronizing local wallet state using a DID.
+- DID ownership is verified before synchronization begins.
+- Synchronizes only the token chain data that is not already available locally, improving efficiency.
+- Automatically updates any token chain whose local state is not up to date.
+- Synchronization is resumable, allowing it to continue seamlessly if interrupted.

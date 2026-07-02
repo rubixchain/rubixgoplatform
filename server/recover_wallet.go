@@ -19,8 +19,8 @@ import (
 // @Accept json
 // @Produce json
 // @Param did body string true "DID of the wallet to recover"
-// @Success 200 {object} model.BasicResponse
-// @Router /api/recover-wallet-from-fullnode [post]
+// @Success 200 {object} models.BasicResponse
+// @Router /rubix/v1/sync [post]
 func (s *Server) APIRecoverWalletFromFullnode(req *ensweb.Request) *ensweb.Result {
 	body := struct {
 		DID string `json:"did"`

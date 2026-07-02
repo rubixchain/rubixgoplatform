@@ -848,6 +848,28 @@ paths:
       summary: Subscribe to Smart Contract
       tags:
       - Smart Contract
+  /rubix/v1/sync:
+    post:
+      consumes:
+      - application/json
+      description: Rebuilds the local wallet's token state for a DID by pulling
+      parameters:
+      - description: DID of the wallet to recover
+        in: body
+        name: did
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Recover wallet state from a published fullnode
+      tags:
+      - Recovery
   /rubix/v1/sync-transaction-chain:
     post:
       consumes:
