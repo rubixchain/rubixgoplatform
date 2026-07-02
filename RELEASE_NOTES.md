@@ -111,8 +111,14 @@ Three tables now own the entire transaction layer:
 
 ---
 
-## Recovering a Tokenchain From a Full Node
+## Wallet Synchronization Improvements
 
-A node can now recover its tokenchains directly from a full node by presenting its DID.
+Improved wallet synchronization, available through the `sync` command and the `POST /rubix/v1/sync` API.
 
-The request carries the DID, and the full node sends back all the tokenchain information it holds for that node. Full nodes already receive and retain every published transaction and tokenchain detail, so they act as the source of truth for recovery — ask with a DID, get the tokenchains back.
+**Enhancements**
+
+- Added support for synchronizing local wallet state using a DID.
+- DID ownership is verified before synchronization begins.
+- Synchronizes only the token chain data that is not already available locally, improving efficiency.
+- Automatically updates any token chain whose local state is not up to date.
+- Synchronization is resumable, allowing it to continue seamlessly if interrupted.
