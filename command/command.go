@@ -32,38 +32,39 @@ var (
 )
 
 const (
-	VersionCmd                 string = "-v"
-	HelpCmd                    string = "-h"
-	RunCmd                     string = "run"
-	PingCmd                    string = "ping"
-	AddBootStrapCmd            string = "addbootstrap"
-	RemoveBootStrapCmd         string = "removebootstrap"
-	RemoveAllBootStrapCmd      string = "removeallbootstrap"
-	GetAllBootStrapCmd         string = "getallbootstrap"
-	CreateDIDCmd               string = "createdid"
-	GetAllDIDCmd               string = "getalldid"
-	AddQuorumCmd               string = "addquorum"
-	GetAllQuorumCmd            string = "getallquorum"
-	RemoveAllQuorumCmd         string = "removeallquorum"
-	SetupQuorumCmd             string = "setupquorum"
-	GenerateLocalRBTCmd        string = "generatelocalrbt"
-	RegsiterDIDCmd             string = "registerdid"
-	SetupDIDCmd                string = "setupdid"
-	ShutDownCmd                string = "shutdown"
-	CreateNFTCmd               string = "create-nft"
-	GenerateSmartContractToken string = "generatesct"
-	FetchSmartContract         string = "fetchsct"
-	SubscribeContractCmd       string = "subscribesct"
-	GetPeerID                  string = "get-peer-id"
-	CheckQuorumStatusCmd       string = "checkQuorumStatus"
-	AddPeerDetailsCmd          string = "addpeerdetails"
-	GenerateFaucetTestRBTCmd   string = "generatefaucetrbt"
-	CreateFTCmd                string = "createft"
-	SubscribeNFTCmd            string = "subscribe-nft"
-	FetchNftCmd                string = "fetch-nft"
-	ArbitrarySignCmd           string = "sign"
-	VerifySignatureCmd         string = "verify-signature"
-	InitCmd                    string = "init"
+	VersionCmd                   string = "-v"
+	HelpCmd                      string = "-h"
+	RunCmd                       string = "run"
+	PingCmd                      string = "ping"
+	AddBootStrapCmd              string = "addbootstrap"
+	RemoveBootStrapCmd           string = "removebootstrap"
+	RemoveAllBootStrapCmd        string = "removeallbootstrap"
+	GetAllBootStrapCmd           string = "getallbootstrap"
+	CreateDIDCmd                 string = "createdid"
+	GetAllDIDCmd                 string = "getalldid"
+	AddQuorumCmd                 string = "addquorum"
+	GetAllQuorumCmd              string = "getallquorum"
+	RemoveAllQuorumCmd           string = "removeallquorum"
+	SetupQuorumCmd               string = "setupquorum"
+	GenerateLocalRBTCmd          string = "generatelocalrbt"
+	RegsiterDIDCmd               string = "registerdid"
+	SetupDIDCmd                  string = "setupdid"
+	RecoverWalletFromFullnodeCmd string = "sync"
+	ShutDownCmd                  string = "shutdown"
+	CreateNFTCmd                 string = "create-nft"
+	GenerateSmartContractToken   string = "generatesct"
+	FetchSmartContract           string = "fetchsct"
+	SubscribeContractCmd         string = "subscribesct"
+	GetPeerID                    string = "get-peer-id"
+	CheckQuorumStatusCmd         string = "checkQuorumStatus"
+	AddPeerDetailsCmd            string = "addpeerdetails"
+	GenerateFaucetTestRBTCmd     string = "generatefaucetrbt"
+	CreateFTCmd                  string = "createft"
+	SubscribeNFTCmd              string = "subscribe-nft"
+	FetchNftCmd                  string = "fetch-nft"
+	ArbitrarySignCmd             string = "sign"
+	VerifySignatureCmd           string = "verify-signature"
+	InitCmd                      string = "init"
 
 	// balance commands
 	GetDIDBalanceCmd string = "getdidbalance"
@@ -91,6 +92,7 @@ var commands = []string{
 	GetRBTBalanceCmd,
 	RegsiterDIDCmd,
 	SetupDIDCmd,
+	RecoverWalletFromFullnodeCmd,
 	ShutDownCmd,
 	SubscribeContractCmd,
 	CreateNFTCmd,
@@ -589,6 +591,8 @@ func Run(args []string) {
 		cmd.RegsiterDIDCmd()
 	case SetupDIDCmd:
 		cmd.SetupDIDCmd()
+	case RecoverWalletFromFullnodeCmd:
+		cmd.RecoverWalletFromFullnodeCmd()
 	case ShutDownCmd:
 		cmd.ShutDownCmd()
 	case SubscribeContractCmd:

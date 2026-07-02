@@ -99,6 +99,31 @@ func (cmd *Command) RegsiterDIDCmd() {
 	cmd.log.Info("DID registered successfully")
 }
 
+func (cmd *Command) RecoverWalletFromFullnodeCmd() {
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !isAlphanumeric {
+		cmd.log.Error("Invalid DID")
+		return
+	}
+	br, err := cmd.c.RecoverWalletFromFullnode(cmd.did)
+	if err != nil {
+		cmd.log.Error("Failed to recover wallet from fullnode", "err", err)
+		return
+	}
+	if !br.Status {
+		cmd.log.Error("Failed to recover wallet from fullnode", "msg", br.Message)
+		return
+	}
+	// Recovery signs an ownership challenge through the async signature flow,
+	// exactly like RegisterDID — drive it to completion.
+	msg, status := cmd.SignatureResponse(br)
+	if !status {
+		cmd.log.Error("Failed to recover wallet from fullnode, " + msg)
+		return
+	}
+	cmd.log.Info("Wallet recovery from fullnode completed: " + msg)
+}
+
 func (cmd *Command) SetupDIDCmd() {
 	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
 	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !isAlphanumeric {
