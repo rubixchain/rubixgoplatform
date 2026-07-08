@@ -24,6 +24,32 @@ func (w *Wallet) CreateOrUpdateDID(didInfo *models.DID) error {
 	return nil
 }
 
+// UpsertDIDPeer inserts the DID, or updates ONLY its peer_id when the announced
+// peerID differs from the stored one (e.g. the peer restarted with a new
+// identity). On the conflict path it deliberately leaves did, algo_id and local
+// unchanged — only peer_id is ever rewritten. It reports whether a row was
+// actually inserted or updated: true when something changed, false when the DID
+// already existed with the same peerID (the WHERE clause makes that a no-op, so
+// RETURNING yields no row / pgx.ErrNoRows). Single round-trip.
+func (w *Wallet) UpsertDIDPeer(didInfo *models.DID) (bool, error) {
+	var changed bool
+	err := w.db.Pool().QueryRow(w.Ctx, `
+		INSERT INTO dids(did, peer_id, local, algo_id)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT(did) DO UPDATE SET
+			peer_id = EXCLUDED.peer_id
+		WHERE dids.peer_id IS DISTINCT FROM EXCLUDED.peer_id
+		RETURNING true;
+	`, didInfo.DID, didInfo.PeerID, didInfo.Local, didInfo.AlgoID).Scan(&changed)
+	if err == pgx.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("UpsertDIDPeer: failed to upsert DID %v information, err: %v", didInfo.DID, err)
+	}
+	return changed, nil
+}
+
 func (w *Wallet) GetDID(did string) (models.DID, error) {
 	row := w.db.Pool().QueryRow(w.Ctx,
 		`SELECT did, peer_id, local, algo_id FROM dids WHERE did=$1`, did,
