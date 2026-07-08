@@ -36,10 +36,10 @@ func (c *Core) CreateDID(didCreate *types.DIDCreate) (did string, err error) {
 		}
 	}
 
-	if c.IsDIDExist(did) {
-		return did, nil
-	}
-
+	// Always record local ownership, even if the DID row already exists. A prior
+	// remote rubix_did announcement may have inserted it as local=false; creating
+	// it here means this node holds the mnemonic, so upsert it as local=true.
+	// CreateOrUpdateDID's ON CONFLICT DO UPDATE promotes the existing row.
 	dt := &models.DID{
 		DID:    did,
 		PeerID: c.peerID,
