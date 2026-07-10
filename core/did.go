@@ -121,6 +121,17 @@ func (c *Core) RegisterDID(reqID string, did string) {
 }
 
 func (c *Core) registerDID(reqID string, did string) error {
+	didInfo, err := c.w.GetDID(did)
+	if err != nil {
+		c.log.Error("failed to fetch DID from dids table, err", err)
+		return fmt.Errorf("failed to fetch DID from dids table, err: %v", err)
+	}
+	// check if the did is local to the node,
+	// do not allow registerdid if not local
+	if !didInfo.Local || didInfo.PeerID != c.peerID{
+		c.log.Error("DID is not local, cannot register")
+		return fmt.Errorf("DID is not local, cannot register")
+	}
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
 		return fmt.Errorf("DID is not exist")
