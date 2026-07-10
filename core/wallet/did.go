@@ -24,6 +24,35 @@ func (w *Wallet) CreateOrUpdateDID(didInfo *models.DID) error {
 	return nil
 }
 
+// UpsertDIDPeer inserts the DID, or updates its peer_id and local flag when the
+// announced peerID differs from the stored one. This is called from the remote
+// rubix_did path (peerCallback), which passes Local=false: a signature-verified
+// announcement from a peerID other than our own means another node now owns the
+// DID, so we adopt that peerID and mark the DID non-local. did and algo_id are
+// left unchanged on the conflict path. It reports whether a row was actually
+// inserted or updated: true when something changed, false when the DID already
+// existed with the same peerID (the WHERE clause makes that a no-op, so
+// RETURNING yields no row / pgx.ErrNoRows). Single round-trip.
+func (w *Wallet) UpsertDIDPeer(didInfo *models.DID) (bool, error) {
+	var changed bool
+	err := w.db.Pool().QueryRow(w.Ctx, `
+		INSERT INTO dids(did, peer_id, local, algo_id)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT(did) DO UPDATE SET
+			peer_id = EXCLUDED.peer_id,
+			local   = EXCLUDED.local
+		WHERE dids.peer_id IS DISTINCT FROM EXCLUDED.peer_id
+		RETURNING true;
+	`, didInfo.DID, didInfo.PeerID, didInfo.Local, didInfo.AlgoID).Scan(&changed)
+	if err == pgx.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("UpsertDIDPeer: failed to upsert DID %v information, err: %v", didInfo.DID, err)
+	}
+	return changed, nil
+}
+
 func (w *Wallet) GetDID(did string) (models.DID, error) {
 	row := w.db.Pool().QueryRow(w.Ctx,
 		`SELECT did, peer_id, local, algo_id FROM dids WHERE did=$1`, did,

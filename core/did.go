@@ -36,10 +36,10 @@ func (c *Core) CreateDID(didCreate *types.DIDCreate) (did string, err error) {
 		}
 	}
 
-	if c.IsDIDExist(did) {
-		return did, nil
-	}
-
+	// Always record local ownership, even if the DID row already exists. A prior
+	// remote rubix_did announcement may have inserted it as local=false; creating
+	// it here means this node holds the mnemonic, so upsert it as local=true.
+	// CreateOrUpdateDID's ON CONFLICT DO UPDATE promotes the existing row.
 	dt := &models.DID{
 		DID:    did,
 		PeerID: c.peerID,
@@ -121,6 +121,17 @@ func (c *Core) RegisterDID(reqID string, did string) {
 }
 
 func (c *Core) registerDID(reqID string, did string) error {
+	didInfo, err := c.w.GetDID(did)
+	if err != nil {
+		c.log.Error("failed to fetch DID from dids table, err", err)
+		return fmt.Errorf("failed to fetch DID from dids table, err: %v", err)
+	}
+	// check if the did is local to the node,
+	// do not allow registerdid if not local
+	if !didInfo.Local || didInfo.PeerID != c.peerID{
+		c.log.Error("DID is not local, cannot register")
+		return fmt.Errorf("DID is not local, cannot register")
+	}
 	dc, err := c.SetupDID(reqID, did)
 	if err != nil {
 		return fmt.Errorf("DID is not exist")

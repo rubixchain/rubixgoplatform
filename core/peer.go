@@ -108,12 +108,18 @@ func (c *Core) peerCallback(peerID string, topic string, data []byte) {
 		Local:  false,
 	}
 
-	if exists, _ := c.w.IsDIDExists(didInfo.DID); !exists {
-		if err := c.w.CreateOrUpdateDID(didInfo); err != nil {
-			c.log.Error("peerCallback: failed to update DID information, err: %v", err)
-			return
-		}
-		c.log.Info("PeerDetails added to DIDPeerTable via rubix_did announcement", "did", didInfo.DID, "peerID", didInfo.PeerID)
+	// Insert the DID if it is new, or update ONLY its peer_id when the announced
+	// peerID differs from the stored one (e.g. the peer restarted with a new
+	// identity). A single-round-trip upsert; `changed` is false when the DID
+	// already existed with the same peerID, so the log fires only on a real
+	// add/update.
+	changed, err := c.w.UpsertDIDPeer(didInfo)
+	if err != nil {
+		c.log.Error("peerCallback: failed to update DID information", "err", err)
+		return
+	}
+	if changed {
+		c.log.Info("PeerDetails added/updated in DIDPeerTable via rubix_did announcement", "did", didInfo.DID, "peerID", didInfo.PeerID)
 	}
 }
 
