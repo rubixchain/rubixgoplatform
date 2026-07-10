@@ -220,5 +220,16 @@ func (w *Wallet) PersistGenesisTransaction(req *PersistGenesisTransactionReq) er
 		return fmt.Errorf("PersistPreConsensus: failed to commit transaction, err: %v", err)
 	}
 
+	childTokenIDs := make([]string, 0, len(req.GenesisTokens))
+	for _, c := range req.GenesisTokens {
+		childTokenIDs = append(childTokenIDs, c.Token.TokenID)
+	}
+	w.log.Debug("PersistGenesisTransaction: DB write committed (local split/genesis)",
+		"genesisTxID", req.GenesisTransaction.ID,
+		"did", req.DID,
+		"burntParentTokens", req.BurnTokens,
+		"childTokenIDs", childTokenIDs,
+	)
+
 	return nil
 }

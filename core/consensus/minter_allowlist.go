@@ -28,19 +28,21 @@ type genesisInitiatorLookup interface {
 // NFT, FT, and SmartContract entries are skipped.
 func ValidateMinterAllowlist(
 	txnInfo *models.TransactionInfo,
+	currentTxID string,
 	isFullnode bool,
 	w *wallet.Wallet,
 	log logger.Logger,
 	syncTxChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error,
 	testnet, mainnet bool,
 ) error {
-	return validateMinterAllowlist(txnInfo, isFullnode, w, log, syncTxChains, testnet, mainnet)
+	return validateMinterAllowlist(txnInfo, currentTxID, isFullnode, w, log, syncTxChains, testnet, mainnet)
 }
 
 // validateMinterAllowlist is the test-friendly entry that takes an interface
 // for the wallet lookup.
 func validateMinterAllowlist(
 	txnInfo *models.TransactionInfo,
+	currentTxID string,
 	isFullnode bool,
 	w genesisInitiatorLookup,
 	log logger.Logger,
@@ -102,8 +104,8 @@ func validateMinterAllowlist(
 		if lookupErr != nil && elems.PartIndex != 0 && syncTxChains != nil {
 			// Part-token transfer: the whole-token chain may not be local yet.
 			// Pull it from the initiator and try the lookup again.
-			log.Debug("ValidateMinterAllowlist: whole-token chain missing locally for part transfer, syncing from initiator",
-				"partTokenID", t.TokenID, "wholeID", wholeID, "peerDID", txnInfo.Initiator)
+			log.Debug("ValidateMinterAllowlist: whole-token chain missing locally for part transfer, syncing from initiator WITHOUT excluding any txID — may pull in a transaction still being validated elsewhere",
+				"currentTxID", currentTxID, "partTokenID", t.TokenID, "wholeID", wholeID, "peerDID", txnInfo.Initiator)
 			if syncErr := syncTxChains(
 				txnInfo.Initiator,
 				[]string{wholeID},
@@ -114,6 +116,8 @@ func validateMinterAllowlist(
 					t.TokenID, wholeID, syncErr)
 			}
 			minter, lookupErr = w.GetGenesisInitiatorDID(wholeID, isFullnode)
+			log.Debug("ValidateMinterAllowlist: post-sync minter lookup",
+				"currentTxID", currentTxID, "wholeID", wholeID, "minter", minter, "lookupErr", lookupErr)
 		}
 		// Fallback: if local genesis lookup still fails and the current
 		// transaction declares itself as the mint for this whole token

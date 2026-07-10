@@ -9,6 +9,7 @@ import (
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
@@ -170,6 +171,14 @@ func (ps *PubSub) Publish(topic string, model interface{}) error {
 	b, err := json.Marshal(model)
 	if err != nil {
 		return err
+	}
+	if evtTx, ok := model.(models.EventTransaction); ok {
+		ps.log.Debug("PubSub.Publish: publishing transaction event",
+			"topic", topic,
+			"transactionID", evtTx.TransactionID,
+			"status", evtTx.Status,
+			"message", evtTx.Message,
+		)
 	}
 	if err := ps.ipfs.PubSubPublish(topic, string(b)); err != nil {
 		return err

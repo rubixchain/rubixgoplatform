@@ -546,6 +546,7 @@ func (w *Wallet) GetFullNodeTransactionAndRoleAtHeight(tokenID string, height in
 	var tokenRoleInTx int16
 	if err := row.Scan(&txID, &tokenRoleInTx); err != nil {
 		if err == pgx.ErrNoRows {
+			w.log.Debug("GetFullNodeTransactionAndRoleAtHeight: DB read", "tokenID", tokenID, "height", height, "found", false)
 			return nil, -1, fmt.Errorf("fullnode transaction not found at height %d for token %s", height, tokenID)
 		}
 		return nil, -1, fmt.Errorf("GetFullNodeTransactionAndRoleAtHeight scan: %w", err)
@@ -556,6 +557,7 @@ func (w *Wallet) GetFullNodeTransactionAndRoleAtHeight(tokenID string, height in
 		return nil, -1, fmt.Errorf("GetFullNodeTransactionAndRoleAtHeight transaction details not found for transaction_id: %v, err %w", txID, err)
 	}
 
+	w.log.Debug("GetFullNodeTransactionAndRoleAtHeight: DB read", "tokenID", tokenID, "height", height, "found", true, "txID", txID, "role", tokenRoleInTx)
 	return tx, tokenRoleInTx, nil
 }
 

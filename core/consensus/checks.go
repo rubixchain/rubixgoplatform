@@ -550,7 +550,9 @@ func IsParentTokenBurnt(
 	isFullNode bool,
 	tokenID string,
 	currentTokenOwner string,
+	currentTxID string,
 	w *wallet.Wallet,
+	log logger.Logger,
 	syncTxChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error,
 ) (error, bool) {
 	var parentTokenID string
@@ -565,6 +567,14 @@ func IsParentTokenBurnt(
 		return fmt.Errorf("IsParentTokenBurnt: failed to compute parent id of token %s: %w", partTokenID, err), false
 	}
 
+	log.Debug("IsParentTokenBurnt: entry",
+		"currentTxID", currentTxID,
+		"tokenID", tokenID,
+		"parentTokenID", parentTokenID,
+		"currentTokenOwner", currentTokenOwner,
+		"isFullNode", isFullNode,
+	)
+
 	var genesisTx *models.Transactions
 	if isFullNode {
 		genesisTx, _, err = w.GetFullNodeTransactionAndRoleAtHeight(tokenID, 0)
@@ -572,9 +582,16 @@ func IsParentTokenBurnt(
 		genesisTx, _, err = w.GetTransactionAndRoleAtHeight(tokenID, 0)
 	}
 	if err != nil {
+		log.Debug("IsParentTokenBurnt: genesis not found locally, syncing WITHOUT excluding any txID — may pull in a transaction still being validated elsewhere",
+			"currentTxID", currentTxID,
+			"tokenID", tokenID,
+			"syncFromPeerDID", currentTokenOwner,
+			"localLookupErr", err,
+		)
 		// sync token chain from initiator
 		err = syncTxChains(currentTokenOwner, []string{tokenID}, map[string]string{tokenID: ""}, []string{})
 		if err != nil {
+			log.Debug("IsParentTokenBurnt: sync failed", "currentTxID", currentTxID, "tokenID", tokenID, "err", err)
 			return fmt.Errorf("failed to get genesis transaction for token %s: %w", tokenID, err), false
 		} else {
 			if isFullNode {
@@ -582,6 +599,17 @@ func IsParentTokenBurnt(
 			} else {
 				genesisTx, _, err = w.GetTransactionAndRoleAtHeight(tokenID, 0)
 			}
+			log.Debug("IsParentTokenBurnt: post-sync local genesis lookup",
+				"currentTxID", currentTxID,
+				"tokenID", tokenID,
+				"found", genesisTx != nil,
+				"genesisTxID", func() string {
+					if genesisTx != nil {
+						return genesisTx.ID
+					}
+					return ""
+				}(),
+			)
 		}
 	}
 	if genesisTx == nil {
@@ -595,10 +623,12 @@ func IsParentTokenBurnt(
 
 	for _, committedToken := range txInfo.CommittedTokens {
 		if committedToken.TokenID == parentTokenID {
+			log.Debug("IsParentTokenBurnt: result", "currentTxID", currentTxID, "tokenID", tokenID, "parentTokenID", parentTokenID, "isBurnt", true)
 			return nil, true
 		}
 	}
 
+	log.Debug("IsParentTokenBurnt: result", "currentTxID", currentTxID, "tokenID", tokenID, "parentTokenID", parentTokenID, "isBurnt", false)
 	return nil, false
 }
 
@@ -633,6 +663,7 @@ func ValidateGenuineTokenCreator(tokenID string, isFullNode bool, w *wallet.Wall
 func ValidateTokenIDRelatedChecks(
 	tokenID string,
 	currentTokenOwner string,
+	currentTxID string,
 	isFullNode bool,
 	w *wallet.Wallet,
 	testnet bool,
@@ -649,7 +680,7 @@ func ValidateTokenIDRelatedChecks(
 	//First check whether the token is a part token or not. If it is a part token, then check whether the parent token is burnt.
 	devidedParts := strings.Split(tokenID, "_")
 	if len(devidedParts) == 3 {
-		err, isParentTokenBurnt := IsParentTokenBurnt(isFullNode, tokenID, currentTokenOwner, w, syncTxChains)
+		err, isParentTokenBurnt := IsParentTokenBurnt(isFullNode, tokenID, currentTokenOwner, currentTxID, w, log, syncTxChains)
 		if err != nil {
 			return fmt.Errorf("failed to validate parent token burnt: %w", err)
 		}
@@ -756,6 +787,8 @@ func TokenChainIntegrityCheck(
 		return nil
 	}
 
+	log.Debug("TokenChainIntigrityCheck: entry", "currentTxID", currentTxID, "isFullnode", isFullnode, "tokenCount", len(allTokens))
+
 	// Phase 1: identify tokens whose local chain tip doesn't match.
 	tokensToSyncByPeer := make(map[string][]string)
 	tokenIDSyncPeerMap := make(map[string]string)
@@ -791,9 +824,17 @@ func TokenChainIntegrityCheck(
 			for _, tokenID := range tokensToSync {
 				peerPrevTxIDs[tokenID] = tokenIDPrevTxIDMap[tokenID]
 			}
+			log.Debug("TokenChainIntigrityCheck: Phase2 sync starting",
+				"currentTxID", currentTxID,
+				"peerDID", peerDID,
+				"tokenIDs", tokensToSync,
+				"prevTxIDs", peerPrevTxIDs,
+				"excludeTxIDs", []string{currentTxID},
+			)
 			if err := syncTxChains(peerDID, tokensToSync, peerPrevTxIDs, []string{currentTxID}); err != nil {
 				return fmt.Errorf("TokenChainIntigrityCheck: sync failed from %s: %w", peerDID, err)
 			}
+			log.Debug("TokenChainIntigrityCheck: Phase2 sync finished", "currentTxID", currentTxID, "peerDID", peerDID, "tokenIDs", tokensToSync)
 		}
 	}
 
@@ -808,12 +849,21 @@ func TokenChainIntegrityCheck(
 			return fmt.Errorf("TokenChainIntigrityCheck: token %s (%s) still not found locally after sync from %s",
 				tc.tokenID, tc.label, tokenIDSyncPeerMap[tc.tokenID])
 		}
-		if localTxID != tc.previousTransactionID {
+		log.Debug("TokenChainIntigrityCheck: Phase3 recheck",
+			"currentTxID", currentTxID,
+			"tokenID", tc.tokenID,
+			"label", tc.label,
+			"localTxID", localTxID,
+			"expectedPrevTxID", tc.previousTransactionID,
+			"match", localTxID == tc.previousTransactionID,
+		)
+		if localTxID != tc.previousTransactionID { // if local latets is the cuirrent txn id then skip to next token
 			return fmt.Errorf("TokenChainIntigrityCheck: token %s (%s) chain mismatch after sync from %s: local latest %s != expected %s",
 				tc.tokenID, tc.label, tokenIDSyncPeerMap[tc.tokenID], localTxID, tc.previousTransactionID)
 		}
 	}
 
+	log.Debug("TokenChainIntigrityCheck: exit ok", "currentTxID", currentTxID)
 	return nil
 }
 
@@ -919,14 +969,14 @@ func ValidateTransaction(
 	}
 
 	//If transaction is a genesis transaction fullnode should do the below check addordingly
-	if err := ValidateMinterAllowlist(&txnInfo, isFullnode, w, log, syncTxChains, testnet, mainnet); err != nil {
+	if err := ValidateMinterAllowlist(&txnInfo, tx.ID, isFullnode, w, log, syncTxChains, testnet, mainnet); err != nil {
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
 
 	// 7. ValidateTokenIDRelatedChecks for each RBT token in Tokens and CommittedTokens and pledged tokens
 	if txnInfo.Tokens.RBT != nil {
 		for _, token := range txnInfo.Tokens.RBT {
-			if err := ValidateTokenIDRelatedChecks(token.TokenID, txnInfo.Initiator, isFullnode, w, testnet, mainnet, localnet, log, syncTxChains); err != nil {
+			if err := ValidateTokenIDRelatedChecks(token.TokenID, txnInfo.Initiator, tx.ID, isFullnode, w, testnet, mainnet, localnet, log, syncTxChains); err != nil {
 				return false, fmt.Errorf("ValidateTransaction: token %s: %w", token.TokenID, err)
 
 			}
@@ -934,7 +984,7 @@ func ValidateTransaction(
 	}
 
 	for _, t := range txnInfo.CommittedTokens {
-		if err := ValidateTokenIDRelatedChecks(t.TokenID, txnInfo.Initiator, isFullnode, w, testnet, mainnet, localnet, log, syncTxChains); err != nil {
+		if err := ValidateTokenIDRelatedChecks(t.TokenID, txnInfo.Initiator, tx.ID, isFullnode, w, testnet, mainnet, localnet, log, syncTxChains); err != nil {
 			return false, fmt.Errorf("ValidateTransaction: committed token %s: %w", t.TokenID, err)
 		}
 	}
@@ -943,7 +993,7 @@ func ValidateTransaction(
 
 	for _, quorum := range txnInfo.Quorums {
 		for _, t := range quorum.Tokens {
-			if err := ValidateTokenIDRelatedChecks(t.TokenID, quorum.Did, isFullnode, w, testnet, mainnet, localnet, log, syncTxChains); err != nil {
+			if err := ValidateTokenIDRelatedChecks(t.TokenID, quorum.Did, tx.ID, isFullnode, w, testnet, mainnet, localnet, log, syncTxChains); err != nil {
 				return false, fmt.Errorf("ValidateTransaction: quorum %s token %s: %w", quorum.Did, t.TokenID, err)
 
 			}

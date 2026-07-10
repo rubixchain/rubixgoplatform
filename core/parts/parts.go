@@ -239,7 +239,19 @@ func CollectRBTTokens(
 		childRecords[i].TokenChain.TransactionID = txID
 		childRecords[i].Token.TransactionID = txID
 	}
+	transferTokenIDs := make([]string, 0, len(tokensForTransfer))
+	for _, t := range tokensForTransfer {
+		transferTokenIDs = append(transferTokenIDs, t.TokenID)
+	}
+	childTokenIDs := make([]string, 0, len(childRecords))
+	for _, c := range childRecords {
+		childTokenIDs = append(childTokenIDs, c.Token.TokenID)
+	}
 	log.Info("CollectRBTTokens: Completed successfully",
+		"genesisTxID", txID,
+		"transferTokenIDs", transferTokenIDs,
+		"childTokenIDs", childTokenIDs,
+		"parentsToBurn", parentsToBurn,
 		"tokensForTransferCount", len(tokensForTransfer),
 		"childRecordsCount", len(childRecords),
 		"parentsToBurnCount", len(parentsToBurn))
