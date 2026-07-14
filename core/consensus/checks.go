@@ -602,6 +602,58 @@ func IsParentTokenBurnt(
 	return nil, false
 }
 
+// ValidateParentNotAlreadyBurnt guards against a double-spend of a split token.
+//
+// IsParentTokenBurnt only confirms that the parent appears in the CommittedTokens
+// of the child token's OWN genesis transaction, which is self-referential and
+// therefore true for any well-formed split. It cannot detect a re-split of a
+// parent that was already burnt by a PRIOR transaction (e.g. a token recovered
+// from a fullnode and split again through the same quorum).
+//
+// This function closes that gap by inspecting the parent token's own chain: if
+// the parent's latest chain entry is already a burn, the parent has already been
+// consumed and this split is a double-spend, so it is rejected. The parent chain
+// is synced from the current owner first when the quorum does not have it, and
+// the check fails closed (returns an error) if the parent chain still cannot be
+// obtained — so a quorum that never saw the original spend cannot be bypassed.
+func ValidateParentNotAlreadyBurnt(
+	isFullNode bool,
+	tokenID string,
+	currentTokenOwner string,
+	w *wallet.Wallet,
+	syncTxChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error,
+) error {
+	partTokenID := util.TokenID(tokenID)
+	parentTokenID, err := partTokenID.GetParentToken()
+	if err != nil {
+		return fmt.Errorf("ValidateParentNotAlreadyBurnt: failed to get parent id of token %s: %w", tokenID, err)
+	}
+	if parentTokenID == "" {
+		// Not a part token (no parent to verify); nothing to check.
+		return nil
+	}
+
+	parentChain, err := w.GetTokenChainByTokenID(parentTokenID, isFullNode)
+	if err != nil || len(parentChain) == 0 {
+		// Parent chain not available locally: sync it from the current owner and re-read.
+		if syncErr := syncTxChains(currentTokenOwner, []string{parentTokenID}, map[string]string{parentTokenID: ""}, []string{}); syncErr != nil {
+			return fmt.Errorf("ValidateParentNotAlreadyBurnt: failed to sync parent %s chain for token %s: %w", parentTokenID, tokenID, syncErr)
+		}
+		parentChain, err = w.GetTokenChainByTokenID(parentTokenID, isFullNode)
+		if err != nil || len(parentChain) == 0 {
+			// Fail closed: without the parent chain we cannot rule out a prior burn.
+			return fmt.Errorf("ValidateParentNotAlreadyBurnt: parent %s chain not found for token %s after sync", parentTokenID, tokenID)
+		}
+	}
+
+	latestParentEntry := parentChain[len(parentChain)-1]
+	if latestParentEntry.Role == int16(models.GetTokenRoleID(constants.TokenRole_Burn)) {
+		return fmt.Errorf("ValidateParentNotAlreadyBurnt: parent token %s is already burnt (tx %s); token %s is a double spend", parentTokenID, latestParentEntry.TransactionID, tokenID)
+	}
+
+	return nil
+}
+
 func ValidateGenuineTokenCreator(tokenID string, isFullNode bool, w *wallet.Wallet) error {
 	devidedParts := strings.Split(tokenID, "_")
 
@@ -655,6 +707,13 @@ func ValidateTokenIDRelatedChecks(
 		}
 		if !isParentTokenBurnt {
 			return fmt.Errorf("parent token is not burnt")
+		}
+		// Double-spend guard: IsParentTokenBurnt is self-referential (it only checks
+		// this token's own genesis tx), so additionally verify the parent's own chain
+		// tip is not ALREADY a burn from a prior transaction, i.e. a re-split of a
+		// token that was already spent.
+		if err := ValidateParentNotAlreadyBurnt(isFullNode, tokenID, currentTokenOwner, w, syncTxChains); err != nil {
+			return fmt.Errorf("failed to validate parent not already burnt: %w", err)
 		}
 	}
 	// err = ValidateGenuineTokenCreator(tokenID, isFullNode, w)
