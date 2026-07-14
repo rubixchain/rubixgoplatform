@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/rubixchain/rubixgoplatform/core/minterallowlist"
@@ -32,10 +33,10 @@ func ValidateMinterAllowlist(
 	isFullnode bool,
 	w *wallet.Wallet,
 	log logger.Logger,
-	syncTxChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error,
+	fetchGenesisTx func(peerDID, tokenID string) (*models.Transactions, error),
 	testnet, mainnet bool,
 ) error {
-	return validateMinterAllowlist(txnInfo, currentTxID, isFullnode, w, log, syncTxChains, testnet, mainnet)
+	return validateMinterAllowlist(txnInfo, currentTxID, isFullnode, w, log, fetchGenesisTx, testnet, mainnet)
 }
 
 // validateMinterAllowlist is the test-friendly entry that takes an interface
@@ -46,7 +47,7 @@ func validateMinterAllowlist(
 	isFullnode bool,
 	w genesisInitiatorLookup,
 	log logger.Logger,
-	syncTxChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error,
+	fetchGenesisTx func(peerDID, tokenID string) (*models.Transactions, error),
 	testnet, mainnet bool,
 ) error {
 	if txnInfo == nil {
@@ -101,22 +102,30 @@ func validateMinterAllowlist(
 		wholeID := fmt.Sprintf("%d_%d", level, number)
 
 		minter, lookupErr := w.GetGenesisInitiatorDID(wholeID, isFullnode)
-		if lookupErr != nil && elems.PartIndex != 0 && syncTxChains != nil {
-			// Part-token transfer: the whole-token chain may not be local yet.
-			// Pull it from the initiator and try the lookup again.
-			log.Debug("ValidateMinterAllowlist: whole-token chain missing locally for part transfer, syncing from initiator WITHOUT excluding any txID — may pull in a transaction still being validated elsewhere",
+		if lookupErr != nil && elems.PartIndex != 0 && fetchGenesisTx != nil {
+			// Part-token transfer: the whole-token genesis may not be local yet.
+			// Fetch ONLY the genesis transaction from the peer — this never
+			// persists anything locally, so there's no risk of ingesting a
+			// sibling transaction that's still being validated elsewhere.
+			log.Debug("ValidateMinterAllowlist: whole-token genesis missing locally for part transfer, fetching genesis-only from peer",
 				"currentTxID", currentTxID, "partTokenID", t.TokenID, "wholeID", wholeID, "peerDID", txnInfo.Initiator)
-			if syncErr := syncTxChains(
-				txnInfo.Initiator,
-				[]string{wholeID},
-				map[string]string{wholeID: ""},
-				nil,
-			); syncErr != nil {
-				return fmt.Errorf("ValidateMinterAllowlist: whole-token sync failed for %s (whole %s): %w",
-					t.TokenID, wholeID, syncErr)
+			genesisTx, fetchErr := fetchGenesisTx(txnInfo.Initiator, wholeID)
+			if fetchErr != nil {
+				return fmt.Errorf("ValidateMinterAllowlist: whole-token genesis fetch failed for %s (whole %s): %w",
+					t.TokenID, wholeID, fetchErr)
 			}
-			minter, lookupErr = w.GetGenesisInitiatorDID(wholeID, isFullnode)
-			log.Debug("ValidateMinterAllowlist: post-sync minter lookup",
+			var genesisInfo models.TransactionInfo
+			if unmarshalErr := json.Unmarshal(genesisTx.Info, &genesisInfo); unmarshalErr != nil {
+				return fmt.Errorf("ValidateMinterAllowlist: failed to unmarshal fetched genesis for %s (whole %s): %w",
+					t.TokenID, wholeID, unmarshalErr)
+			}
+			if genesisInfo.Initiator == "" {
+				lookupErr = fmt.Errorf("empty initiator in fetched genesis for whole %s", wholeID)
+			} else {
+				minter = genesisInfo.Initiator
+				lookupErr = nil
+			}
+			log.Debug("ValidateMinterAllowlist: post-fetch minter resolution",
 				"currentTxID", currentTxID, "wholeID", wholeID, "minter", minter, "lookupErr", lookupErr)
 		}
 		// Fallback: if local genesis lookup still fails and the current

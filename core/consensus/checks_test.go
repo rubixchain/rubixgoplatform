@@ -400,6 +400,7 @@ func TestValidateTransaction_FailsOnInvalidInfoFields(t *testing.T) {
 		false, false, false,
 		func(string, string) error { return nil },
 		func(string, []string, map[string]string, []string) error { return nil },
+		func(string, string) (*models.Transactions, error) { return nil, nil },
 		false, // transferNFTOwnership
 	)
 	if err == nil {
@@ -428,6 +429,7 @@ func TestValidateTransaction_FailsOnTxIDMismatch(t *testing.T) {
 		false, false, false,
 		func(string, string) error { return nil },
 		func(string, []string, map[string]string, []string) error { return nil },
+		func(string, string) (*models.Transactions, error) { return nil, nil },
 		false, // transferNFTOwnership
 	)
 	if err == nil || !strings.Contains(err.Error(), "transaction ID mismatch") {

@@ -555,7 +555,7 @@ func IsParentTokenBurnt(
 	currentTxnInfo *models.TransactionInfo,
 	w *wallet.Wallet,
 	log logger.Logger,
-	syncTxChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error,
+	fetchGenesisTx func(peerDID, tokenID string) (*models.Transactions, error),
 ) (error, bool) {
 	var parentTokenID string
 	var err error
@@ -609,35 +609,28 @@ func IsParentTokenBurnt(
 		genesisTx, _, err = w.GetTransactionAndRoleAtHeight(tokenID, 0)
 	}
 	if err != nil {
-		log.Debug("IsParentTokenBurnt: genesis not found locally, syncing WITHOUT excluding any txID — may pull in a transaction still being validated elsewhere",
+		log.Debug("IsParentTokenBurnt: genesis not found locally, fetching genesis-only from peer (no chain data is persisted by this call)",
 			"currentTxID", currentTxID,
 			"tokenID", tokenID,
-			"syncFromPeerDID", currentTokenOwner,
+			"fetchFromPeerDID", currentTokenOwner,
 			"localLookupErr", err,
 		)
-		// sync token chain from initiator
-		err = syncTxChains(currentTokenOwner, []string{tokenID}, map[string]string{tokenID: ""}, []string{})
+		genesisTx, err = fetchGenesisTx(currentTokenOwner, tokenID)
 		if err != nil {
-			log.Debug("IsParentTokenBurnt: sync failed", "currentTxID", currentTxID, "tokenID", tokenID, "err", err)
+			log.Debug("IsParentTokenBurnt: genesis fetch failed", "currentTxID", currentTxID, "tokenID", tokenID, "err", err)
 			return fmt.Errorf("failed to get genesis transaction for token %s: %w", tokenID, err), false
-		} else {
-			if isFullNode {
-				genesisTx, _, err = w.GetFullNodeTransactionAndRoleAtHeight(tokenID, 0)
-			} else {
-				genesisTx, _, err = w.GetTransactionAndRoleAtHeight(tokenID, 0)
-			}
-			log.Debug("IsParentTokenBurnt: post-sync local genesis lookup",
-				"currentTxID", currentTxID,
-				"tokenID", tokenID,
-				"found", genesisTx != nil,
-				"genesisTxID", func() string {
-					if genesisTx != nil {
-						return genesisTx.ID
-					}
-					return ""
-				}(),
-			)
 		}
+		log.Debug("IsParentTokenBurnt: genesis fetched from peer",
+			"currentTxID", currentTxID,
+			"tokenID", tokenID,
+			"found", genesisTx != nil,
+			"genesisTxID", func() string {
+				if genesisTx != nil {
+					return genesisTx.ID
+				}
+				return ""
+			}(),
+		)
 	}
 	if genesisTx == nil {
 		return fmt.Errorf("genesis transaction not found for token %s", tokenID), false
@@ -699,7 +692,7 @@ func ValidateTokenIDRelatedChecks(
 	mainnet bool,
 	localnet bool,
 	log logger.Logger,
-	syncTxChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error,
+	fetchGenesisTx func(peerDID, tokenID string) (*models.Transactions, error),
 ) error {
 	err := ValidateNewTokenContent(tokenID, isFullNode, testnet, mainnet, localnet, log)
 	if err != nil {
@@ -709,7 +702,7 @@ func ValidateTokenIDRelatedChecks(
 	//First check whether the token is a part token or not. If it is a part token, then check whether the parent token is burnt.
 	devidedParts := strings.Split(tokenID, "_")
 	if len(devidedParts) == 3 {
-		err, isParentTokenBurnt := IsParentTokenBurnt(isFullNode, tokenID, currentTokenOwner, currentTxID, previousTransactionID, currentTxnInfo, w, log, syncTxChains)
+		err, isParentTokenBurnt := IsParentTokenBurnt(isFullNode, tokenID, currentTokenOwner, currentTxID, previousTransactionID, currentTxnInfo, w, log, fetchGenesisTx)
 		if err != nil {
 			return fmt.Errorf("failed to validate parent token burnt: %w", err)
 		}
@@ -948,6 +941,10 @@ func ValidateIPFSPinChecks(txnInfo *models.TransactionInfo, isFullnode bool, che
 //   - testnet, mainnet, localnet: network mode flags
 //   - checkPinned: function to check IPFS pin status (tokenID, prevTxnID) → error
 //   - syncTxChains: callback to sync transaction chains from peer (injected from core to avoid cyclic import)
+//   - fetchGenesisTx: callback to fetch ONLY a token's genesis (position 0) transaction from
+//     a peer, without persisting anything locally (injected from core to avoid cyclic import).
+//     Used by verification-only checks (IsParentTokenBurnt, ValidateMinterAllowlist) that must
+//     not risk ingesting a sibling transaction still being validated elsewhere.
 //   - transferNFTOwnership: from ConsensusRequest envelope. Fullnode passes false.
 func ValidateTransaction(
 	tx *models.Transactions,
@@ -961,6 +958,7 @@ func ValidateTransaction(
 	localnet bool,
 	checkPinned func(tokenID, previousTxnID string) error,
 	syncTxChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error,
+	fetchGenesisTx func(peerDID, tokenID string) (*models.Transactions, error),
 	transferNFTOwnership bool,
 ) (bool, error) {
 	var txnInfo models.TransactionInfo
@@ -998,14 +996,14 @@ func ValidateTransaction(
 	}
 
 	//If transaction is a genesis transaction fullnode should do the below check addordingly
-	if err := ValidateMinterAllowlist(&txnInfo, tx.ID, isFullnode, w, log, syncTxChains, testnet, mainnet); err != nil {
+	if err := ValidateMinterAllowlist(&txnInfo, tx.ID, isFullnode, w, log, fetchGenesisTx, testnet, mainnet); err != nil {
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
 
 	// 7. ValidateTokenIDRelatedChecks for each RBT token in Tokens and CommittedTokens and pledged tokens
 	if txnInfo.Tokens.RBT != nil {
 		for _, token := range txnInfo.Tokens.RBT {
-			if err := ValidateTokenIDRelatedChecks(token.TokenID, txnInfo.Initiator, tx.ID, token.PreviousTransactionID, &txnInfo, isFullnode, w, testnet, mainnet, localnet, log, syncTxChains); err != nil {
+			if err := ValidateTokenIDRelatedChecks(token.TokenID, txnInfo.Initiator, tx.ID, token.PreviousTransactionID, &txnInfo, isFullnode, w, testnet, mainnet, localnet, log, fetchGenesisTx); err != nil {
 				return false, fmt.Errorf("ValidateTransaction: token %s: %w", token.TokenID, err)
 
 			}
@@ -1013,7 +1011,7 @@ func ValidateTransaction(
 	}
 
 	for _, t := range txnInfo.CommittedTokens {
-		if err := ValidateTokenIDRelatedChecks(t.TokenID, txnInfo.Initiator, tx.ID, t.PreviousTransactionID, &txnInfo, isFullnode, w, testnet, mainnet, localnet, log, syncTxChains); err != nil {
+		if err := ValidateTokenIDRelatedChecks(t.TokenID, txnInfo.Initiator, tx.ID, t.PreviousTransactionID, &txnInfo, isFullnode, w, testnet, mainnet, localnet, log, fetchGenesisTx); err != nil {
 			return false, fmt.Errorf("ValidateTransaction: committed token %s: %w", t.TokenID, err)
 		}
 	}
@@ -1022,7 +1020,7 @@ func ValidateTransaction(
 
 	for _, quorum := range txnInfo.Quorums {
 		for _, t := range quorum.Tokens {
-			if err := ValidateTokenIDRelatedChecks(t.TokenID, quorum.Did, tx.ID, t.PreviousTransactionID, &txnInfo, isFullnode, w, testnet, mainnet, localnet, log, syncTxChains); err != nil {
+			if err := ValidateTokenIDRelatedChecks(t.TokenID, quorum.Did, tx.ID, t.PreviousTransactionID, &txnInfo, isFullnode, w, testnet, mainnet, localnet, log, fetchGenesisTx); err != nil {
 				return false, fmt.Errorf("ValidateTransaction: quorum %s token %s: %w", quorum.Did, t.TokenID, err)
 
 			}
