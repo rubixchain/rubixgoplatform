@@ -551,6 +551,8 @@ func IsParentTokenBurnt(
 	tokenID string,
 	currentTokenOwner string,
 	currentTxID string,
+	previousTransactionID string,
+	currentTxnInfo *models.TransactionInfo,
 	w *wallet.Wallet,
 	log logger.Logger,
 	syncTxChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error,
@@ -573,7 +575,32 @@ func IsParentTokenBurnt(
 		"parentTokenID", parentTokenID,
 		"currentTokenOwner", currentTokenOwner,
 		"isFullNode", isFullNode,
+		"previousTransactionID", previousTransactionID,
 	)
+
+	// Self-referential shortcut: an empty PreviousTransactionID means this
+	// token's genesis IS the transaction currently being validated — its
+	// CommittedTokens are already in memory as currentTxnInfo. No local DB
+	// lookup or peer sync is needed (or safe): the peer sync path fetches the
+	// token's CURRENT full chain with no exclusion, so if another transaction
+	// spending this token is concurrently mid-validation elsewhere, that sync
+	// can pull its entry in and persist it before this fullnode has actually
+	// validated it — corrupting the concurrent transaction's own chain-tip
+	// expectations. See TokenChainIntigrityCheck for the exclusion-based
+	// pattern used when checking chain state that isn't self-referential.
+	if previousTransactionID == "" {
+		if currentTxnInfo == nil {
+			return fmt.Errorf("IsParentTokenBurnt: token %s has empty PreviousTransactionID but currentTxnInfo is nil", tokenID), false
+		}
+		for _, committedToken := range currentTxnInfo.CommittedTokens {
+			if committedToken.TokenID == parentTokenID {
+				log.Debug("IsParentTokenBurnt: result (self-referential, no sync needed)", "currentTxID", currentTxID, "tokenID", tokenID, "parentTokenID", parentTokenID, "isBurnt", true)
+				return nil, true
+			}
+		}
+		log.Debug("IsParentTokenBurnt: result (self-referential, no sync needed)", "currentTxID", currentTxID, "tokenID", tokenID, "parentTokenID", parentTokenID, "isBurnt", false)
+		return nil, false
+	}
 
 	var genesisTx *models.Transactions
 	if isFullNode {
@@ -664,6 +691,8 @@ func ValidateTokenIDRelatedChecks(
 	tokenID string,
 	currentTokenOwner string,
 	currentTxID string,
+	previousTransactionID string,
+	currentTxnInfo *models.TransactionInfo,
 	isFullNode bool,
 	w *wallet.Wallet,
 	testnet bool,
@@ -680,7 +709,7 @@ func ValidateTokenIDRelatedChecks(
 	//First check whether the token is a part token or not. If it is a part token, then check whether the parent token is burnt.
 	devidedParts := strings.Split(tokenID, "_")
 	if len(devidedParts) == 3 {
-		err, isParentTokenBurnt := IsParentTokenBurnt(isFullNode, tokenID, currentTokenOwner, currentTxID, w, log, syncTxChains)
+		err, isParentTokenBurnt := IsParentTokenBurnt(isFullNode, tokenID, currentTokenOwner, currentTxID, previousTransactionID, currentTxnInfo, w, log, syncTxChains)
 		if err != nil {
 			return fmt.Errorf("failed to validate parent token burnt: %w", err)
 		}
@@ -976,7 +1005,7 @@ func ValidateTransaction(
 	// 7. ValidateTokenIDRelatedChecks for each RBT token in Tokens and CommittedTokens and pledged tokens
 	if txnInfo.Tokens.RBT != nil {
 		for _, token := range txnInfo.Tokens.RBT {
-			if err := ValidateTokenIDRelatedChecks(token.TokenID, txnInfo.Initiator, tx.ID, isFullnode, w, testnet, mainnet, localnet, log, syncTxChains); err != nil {
+			if err := ValidateTokenIDRelatedChecks(token.TokenID, txnInfo.Initiator, tx.ID, token.PreviousTransactionID, &txnInfo, isFullnode, w, testnet, mainnet, localnet, log, syncTxChains); err != nil {
 				return false, fmt.Errorf("ValidateTransaction: token %s: %w", token.TokenID, err)
 
 			}
@@ -984,7 +1013,7 @@ func ValidateTransaction(
 	}
 
 	for _, t := range txnInfo.CommittedTokens {
-		if err := ValidateTokenIDRelatedChecks(t.TokenID, txnInfo.Initiator, tx.ID, isFullnode, w, testnet, mainnet, localnet, log, syncTxChains); err != nil {
+		if err := ValidateTokenIDRelatedChecks(t.TokenID, txnInfo.Initiator, tx.ID, t.PreviousTransactionID, &txnInfo, isFullnode, w, testnet, mainnet, localnet, log, syncTxChains); err != nil {
 			return false, fmt.Errorf("ValidateTransaction: committed token %s: %w", t.TokenID, err)
 		}
 	}
@@ -993,7 +1022,7 @@ func ValidateTransaction(
 
 	for _, quorum := range txnInfo.Quorums {
 		for _, t := range quorum.Tokens {
-			if err := ValidateTokenIDRelatedChecks(t.TokenID, quorum.Did, tx.ID, isFullnode, w, testnet, mainnet, localnet, log, syncTxChains); err != nil {
+			if err := ValidateTokenIDRelatedChecks(t.TokenID, quorum.Did, tx.ID, t.PreviousTransactionID, &txnInfo, isFullnode, w, testnet, mainnet, localnet, log, syncTxChains); err != nil {
 				return false, fmt.Errorf("ValidateTransaction: quorum %s token %s: %w", quorum.Did, t.TokenID, err)
 
 			}
