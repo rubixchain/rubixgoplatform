@@ -394,6 +394,14 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.Transac
 			tokenStatus = int16(constants.TokenStatus_Deployed)
 		case int16(models.GetTokenRoleID(constants.TokenRole_Execute)):
 			tokenStatus = int16(constants.TokenStatus_Executed)
+		// A consumed parent must not default to Free, or it can be re-selected by
+		// LockTokensForSplit and re-split into a duplicate genesis (double-mint).
+		// Mirror the originating node: Commit -> Committed, Burn -> Burnt.
+		// See docs/PROBLEM.md.
+		case int16(models.GetTokenRoleID(constants.TokenRole_Commit)):
+			tokenStatus = int16(constants.TokenStatus_Committed)
+		case int16(models.GetTokenRoleID(constants.TokenRole_Burn)):
+			tokenStatus = int16(constants.TokenStatus_Burnt)
 		}
 
 		newToken := models.Token{
@@ -473,6 +481,15 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.Transac
 		lastStatus = int16(constants.TokenStatus_Deployed)
 	case int16(models.GetTokenRoleID(constants.TokenRole_Execute)):
 		lastStatus = int16(constants.TokenStatus_Executed)
+	// A consumed parent must stay consumed after sync. This update runs even
+	// for pre-existing tokens, so without these cases a re-synced burnt parent
+	// would be overwritten back to Free and become re-splittable (double-mint).
+	// Mirror the originating node: Commit -> Committed, Burn -> Burnt.
+	// See docs/PROBLEM.md.
+	case int16(models.GetTokenRoleID(constants.TokenRole_Commit)):
+		lastStatus = int16(constants.TokenStatus_Committed)
+	case int16(models.GetTokenRoleID(constants.TokenRole_Burn)):
+		lastStatus = int16(constants.TokenStatus_Burnt)
 	}
 	// For NFT executions, ownership doesn't change
 	// in sync with the chain head when a non-owner subscriber executes an NFT.
