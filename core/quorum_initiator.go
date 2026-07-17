@@ -241,7 +241,22 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 	syncTxChains := func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error {
 		return c.SyncTransactionChainsFromPeer(peerDID, tokenIDs, prevTxIDs, excludeTxIDs, false, c.fullNode)
 	}
-	isTransactionInfoValidated, err := consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, nil, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains, consensusRequest.TransferNFTOwnership)
+	// Committed (burnt parent) tokens are verified against an authoritative full
+	// node so a rolled-back initiator cannot drive a replayed split through
+	// consensus.
+	syncAuthoritative := func(tokenIDs []string) (map[string]string, error) {
+		return c.syncTokensFromFullnode(tokenIDs)
+	}
+	// Resolve a split genesis transaction by ID so the replay check can read the
+	// burnt parents it carries, and read a parent's burning transaction from its
+	// local (or freshly-synced) chain.
+	getTxByID := func(txID string) (*models.TransactionInfo, error) {
+		return c.getTransactionInfoByID(txID)
+	}
+	getParentBurnTx := func(parentID string) (string, bool, error) {
+		return c.getParentBurnTxID(parentID)
+	}
+	isTransactionInfoValidated, err := consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, nil, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains, syncAuthoritative, getTxByID, getParentBurnTx, consensusRequest.TransferNFTOwnership)
 	if err != nil || !isTransactionInfoValidated {
 		c.log.Error("initiateConsensusHandler: transaction info validation failed", "err", err)
 		if err != nil {
