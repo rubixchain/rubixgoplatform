@@ -1003,6 +1003,7 @@ func ValidateTransaction(
 	// 7. ValidateTokenIDRelatedChecks for each RBT token in Tokens and CommittedTokens and pledged tokens
 	if txnInfo.Tokens.RBT != nil {
 		for _, token := range txnInfo.Tokens.RBT {
+			log.Debug("txn tokens: prev txn id ", token.PreviousTransactionID)
 			if err := ValidateTokenIDRelatedChecks(token.TokenID, txnInfo.Initiator, tx.ID, token.PreviousTransactionID, &txnInfo, isFullnode, w, testnet, mainnet, localnet, log, fetchGenesisTx); err != nil {
 				return false, fmt.Errorf("ValidateTransaction: token %s: %w", token.TokenID, err)
 
@@ -1011,6 +1012,7 @@ func ValidateTransaction(
 	}
 
 	for _, t := range txnInfo.CommittedTokens {
+		log.Debug("committed tokens: prev txn id ", t.PreviousTransactionID)
 		if err := ValidateTokenIDRelatedChecks(t.TokenID, txnInfo.Initiator, tx.ID, t.PreviousTransactionID, &txnInfo, isFullnode, w, testnet, mainnet, localnet, log, fetchGenesisTx); err != nil {
 			return false, fmt.Errorf("ValidateTransaction: committed token %s: %w", t.TokenID, err)
 		}
@@ -1020,6 +1022,7 @@ func ValidateTransaction(
 
 	for _, quorum := range txnInfo.Quorums {
 		for _, t := range quorum.Tokens {
+			log.Debug("pledge tokens: prev txn id ", t.PreviousTransactionID)
 			if err := ValidateTokenIDRelatedChecks(t.TokenID, quorum.Did, tx.ID, t.PreviousTransactionID, &txnInfo, isFullnode, w, testnet, mainnet, localnet, log, fetchGenesisTx); err != nil {
 				return false, fmt.Errorf("ValidateTransaction: quorum %s token %s: %w", quorum.Did, t.TokenID, err)
 
