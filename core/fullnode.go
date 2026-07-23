@@ -81,6 +81,7 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	publisherDetails := models.DID{
 		DID:    txInfo.Initiator,
 		PeerID: peerID,
+		Local:  peerID == c.peerID, // This was empty and was getting updated to false by default, so we set it based on the peerID comparison
 	}
 	err = c.AddPeerDetails(publisherDetails)
 	if err != nil {
