@@ -73,20 +73,36 @@ func validateMinterAllowlist(
 		return nil
 	}
 
-	tokensToCheck := make([]*models.TokenInfo, 0)
-	if txnInfo.Tokens != nil {
-		tokensToCheck = append(tokensToCheck, txnInfo.Tokens.RBT...)
+	// mintCheckToken pairs a token with the DID that actually holds its chain
+	// history — needed because, for pledge tokens, that's the pledging quorum,
+	// not the transaction initiator (mirrors syncFromPeerDID in checks.go's
+	// TokenChainIntegrityCheck).
+	type mintCheckToken struct {
+		token       *models.TokenInfo
+		genesisPeer string
 	}
-	tokensToCheck = append(tokensToCheck, txnInfo.CommittedTokens...)
+
+	tokensToCheck := make([]mintCheckToken, 0)
+	if txnInfo.Tokens != nil {
+		for _, t := range txnInfo.Tokens.RBT {
+			tokensToCheck = append(tokensToCheck, mintCheckToken{token: t, genesisPeer: txnInfo.Initiator})
+		}
+	}
+	for _, t := range txnInfo.CommittedTokens {
+		tokensToCheck = append(tokensToCheck, mintCheckToken{token: t, genesisPeer: txnInfo.Initiator})
+	}
 	if isFullnode {
 		for _, q := range txnInfo.Quorums {
 			if q == nil {
 				continue
 			}
-			tokensToCheck = append(tokensToCheck, q.Tokens...)
+			for _, t := range q.Tokens {
+				tokensToCheck = append(tokensToCheck, mintCheckToken{token: t, genesisPeer: q.Did})
+			}
 		}
 	}
-	for _, t := range tokensToCheck {
+	for _, mc := range tokensToCheck {
+		t := mc.token
 		if t == nil || t.TokenID == "" {
 			continue
 		}
@@ -108,8 +124,8 @@ func validateMinterAllowlist(
 			// persists anything locally, so there's no risk of ingesting a
 			// sibling transaction that's still being validated elsewhere.
 			log.Debug("ValidateMinterAllowlist: whole-token genesis missing locally for part transfer, fetching genesis-only from peer",
-				"currentTxID", currentTxID, "partTokenID", t.TokenID, "wholeID", wholeID, "peerDID", txnInfo.Initiator)
-			genesisTx, fetchErr := fetchGenesisTx(txnInfo.Initiator, wholeID)
+				"currentTxID", currentTxID, "partTokenID", t.TokenID, "wholeID", wholeID, "peerDID", mc.genesisPeer)
+			genesisTx, fetchErr := fetchGenesisTx(mc.genesisPeer, wholeID)
 			if fetchErr != nil {
 				return fmt.Errorf("ValidateMinterAllowlist: whole-token genesis fetch failed for %s (whole %s): %w",
 					t.TokenID, wholeID, fetchErr)
