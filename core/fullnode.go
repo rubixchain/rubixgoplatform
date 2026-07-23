@@ -23,7 +23,7 @@ func (c *Core) SubscribeTxnSetup() {
 	if c.fullNode {
 		c.initDynamicTxnProcessor()
 		c.l.AddRoute(setup.APISyncTransactionInfoFromFullnode, "POST", c.syncTransactionInfoFromFullnode)
-		c.registerRecoveryRoute()
+		c.registerRecoveryRoutes()
 	}
 
 	topic := constants.Event_RubixTxns

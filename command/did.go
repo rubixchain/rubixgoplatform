@@ -100,12 +100,23 @@ func (cmd *Command) RegsiterDIDCmd() {
 }
 
 func (cmd *Command) RecoverWalletFromFullnodeCmd() {
-	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
-	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !isAlphanumeric {
-		cmd.log.Error("Invalid DID")
-		return
+	// Whole-node recovery loops every local DID, so it needs no single DID.
+	if !cmd.recoverAllDIDs {
+		isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+		if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !isAlphanumeric {
+			cmd.log.Error("Invalid DID")
+			return
+		}
 	}
-	br, err := cmd.c.RecoverWalletFromFullnode(cmd.did)
+	req := &types.RecoverWalletAdvancedRequest{
+		DID:        cmd.did,
+		Mode:       cmd.recoverMode,
+		TokenTypes: splitCSV(cmd.recoverTokenTypes),
+		TokenIDs:   splitCSV(cmd.recoverTokenIDs),
+		SelfTest:   cmd.recoverSelfTest,
+		AllDIDs:    cmd.recoverAllDIDs,
+	}
+	br, err := cmd.c.RecoverWalletFromFullnode(req)
 	if err != nil {
 		cmd.log.Error("Failed to recover wallet from fullnode", "err", err)
 		return
@@ -122,6 +133,22 @@ func (cmd *Command) RecoverWalletFromFullnodeCmd() {
 		return
 	}
 	cmd.log.Info("Wallet recovery from fullnode completed: " + msg)
+}
+
+// splitCSV splits a comma-separated flag value into trimmed, non-empty items, or
+// nil when the value is empty.
+func splitCSV(s string) []string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 func (cmd *Command) SetupDIDCmd() {

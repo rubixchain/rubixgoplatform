@@ -192,6 +192,11 @@ type Command struct {
 	startIndex                   int
 	enableAuth                   bool
 	did                          string
+	recoverMode                  string
+	recoverTokenTypes            string
+	recoverTokenIDs              string
+	recoverSelfTest              bool
+	recoverAllDIDs               bool
 	token                        string
 	arbitaryMode                 bool
 	tokenList                    string
@@ -434,6 +439,11 @@ func Run(args []string) {
 	flag.IntVar(&cmd.numTokens, "numTokens", 1, "Number of tokens")
 	flag.IntVar(&cmd.startIndex, "startIndex", 0, "startIndex to generate test rbt tokens locally")
 	flag.StringVar(&cmd.did, "did", "", "DID")
+	flag.StringVar(&cmd.recoverMode, "recoverMode", "", "Recovery mode: full, delta, or dryrun (default full)")
+	flag.StringVar(&cmd.recoverTokenTypes, "recoverTokenTypes", "", "Comma-separated token types to recover: rbt,ft,nft (default all)")
+	flag.StringVar(&cmd.recoverTokenIDs, "recoverTokenIDs", "", "Comma-separated token ids to recover (default all)")
+	flag.BoolVar(&cmd.recoverSelfTest, "recoverSelfTest", false, "Verify each recovered token after the pull")
+	flag.BoolVar(&cmd.recoverAllDIDs, "recoverAllDIDs", false, "Recover every local DID on this node")
 	flag.BoolVar(&cmd.enableAuth, "enableAuth", false, "Enable authentication")
 	flag.BoolVar(&cmd.arbitaryMode, "arbitaryMode", false, "Enable arbitary mode")
 	flag.StringVar(&cmd.tokenList, "tokenList", "tokens.txt", "Token lis")

@@ -342,6 +342,21 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             created_at TIMESTAMPTZ DEFAULT NOW(),
             updated_at TIMESTAMPTZ DEFAULT NOW()
         );
+        CREATE TABLE IF NOT EXISTS fullnode_txs (
+            transaction_id TEXT NOT NULL,
+            did            TEXT NOT NULL,
+            role           TEXT NOT NULL CHECK (role IN ('initiator','quorum','receiver')),
+            epoch          BIGINT,
+            created_at     TIMESTAMPTZ DEFAULT NOW(),
+            updated_at     TIMESTAMPTZ DEFAULT NOW(),
+            PRIMARY KEY (transaction_id, did),
+            CONSTRAINT fk_fp_tx
+                FOREIGN KEY (transaction_id)
+                REFERENCES fullnode_transactions(id)
+                DEFERRABLE INITIALLY DEFERRED
+        );
+        CREATE INDEX IF NOT EXISTS idx_fullnode_txs_did_role ON fullnode_txs(did, role);
+        CREATE INDEX IF NOT EXISTS idx_fullnode_txs_did ON fullnode_txs(did);
         CREATE TABLE IF NOT EXISTS fullnode_invalid_transactions (
         transaction JSON NOT NULL,
         reason TEXT NOT NULL,
@@ -368,6 +383,18 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
         );
         CREATE INDEX IF NOT EXISTS idx_ipfs_providers_cid ON ipfs_providers(cid);
         CREATE INDEX IF NOT EXISTS idx_ipfs_providers_did ON ipfs_providers(did);
+
+        CREATE TABLE IF NOT EXISTS recovery_progress (
+            did           TEXT PRIMARY KEY,
+            mode          TEXT NOT NULL,
+            phase         TEXT NOT NULL,
+            last_token_id TEXT NOT NULL DEFAULT '',
+            last_position BIGINT NOT NULL DEFAULT 0,
+            last_tx_id    TEXT NOT NULL DEFAULT '',
+            status        TEXT NOT NULL,
+            created_at    TIMESTAMPTZ DEFAULT NOW(),
+            updated_at    TIMESTAMPTZ DEFAULT NOW()
+        );
     `)
 	return err
 }

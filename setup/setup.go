@@ -73,16 +73,9 @@ const (
 
 	// Fullnode endpoints
 	APISyncTransactionInfoFromFullnode string = "/rubix/v1/fullnode/sync"
-	APIRecoverFromFullnode             string = "/rubix/v1/fullnode/recover"
-	// APIRecoverChallenge issues a one-time, single-use nonce the recovering
-	// node signs to prove ownership of the DID before any chain data is served.
-	APIRecoverChallenge string = "/rubix/v1/fullnode/recover-challenge"
-
-	// Operator-facing HTTP endpoint on the recovering normal node that triggers
-	// fullnode-backed recovery (orchestrates fetching fullnodes.json, dialing
-	// a fullnode over libp2p, calling APIRecoverFromFullnode in a paginated
-	// loop, and persisting results locally).
-	APIRecoverWalletFromFullnode string = "/rubix/v1/sync"
+	APIRecoverWallet                   string = "/rubix/v1/fullnode/sync/wallet"
+	APIRecoverWalletChallenge          string = "/rubix/v1/fullnode/sync/challenge"
+	APIRecoverWalletFromFullnode       string = "/rubix/v1/sync" // operator-facing trigger for fullnode-backed recovery (full by default, advanced via options)
 )
 
 // jwt.RegisteredClaims

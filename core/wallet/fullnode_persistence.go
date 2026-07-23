@@ -96,6 +96,15 @@ func (w *Wallet) PersistFullNodeTransaction(ctx context.Context, req *FullNodePe
 		return err
 	}
 
+	// Record each DID's role (initiator/quorum/receiver) in this transaction into
+	// fullnode_txs so a DID's history can be fetched by role. Part of the same tx
+	// so fullnode_txs stays consistent with the committed transaction.
+	if roles := deriveFullNodeTxsRoles(req.TransactionInfo); len(roles) > 0 {
+		if err := w.insertFullNodeTxs(ctx, tx, req.Transaction.ID, req.TransactionInfo.Epoch, roles); err != nil {
+			return err
+		}
+	}
+
 	tokenChainRows := make([]models.TokenChain, 0, len(inputs))
 	for _, input := range inputs {
 		roleName := input.roleName
@@ -163,6 +172,49 @@ func (w *Wallet) PersistFullNodeTransaction(ctx context.Context, req *FullNodePe
 
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("fullnode persistence: commit: %w", err)
+	}
+	return nil
+}
+
+// deriveFullNodeTxsRoles returns each DID's role in the transaction
+// (initiator, receiver, or quorum) from the parsed transaction info. Priority is
+// initiator > receiver (owner) > quorum, so there is one role per DID, matching
+// the fullnode_txs one-row-per-(tx, did) model.
+func deriveFullNodeTxsRoles(txInfo *models.TransactionInfo) map[string]string {
+	if txInfo == nil {
+		return nil
+	}
+	roles := make(map[string]string)
+	if txInfo.Initiator != "" {
+		roles[txInfo.Initiator] = ExecutionRoleInitiator
+	}
+	if txInfo.Owner != "" {
+		if _, ok := roles[txInfo.Owner]; !ok {
+			roles[txInfo.Owner] = ExecutionRoleReceiver
+		}
+	}
+	for _, q := range txInfo.Quorums {
+		if q == nil || q.Did == "" {
+			continue
+		}
+		if _, ok := roles[q.Did]; !ok {
+			roles[q.Did] = ExecutionRoleQuorum
+		}
+	}
+	return roles
+}
+
+// insertFullNodeTxs records the per-DID role rows for a transaction in
+// fullnode_txs. Idempotent under duplicate pubsub deliveries via ON CONFLICT.
+func (w *Wallet) insertFullNodeTxs(ctx context.Context, tx pgx.Tx, txID string, epoch int, roles map[string]string) error {
+	for did, role := range roles {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO fullnode_txs (transaction_id, did, role, epoch, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, NOW(), NOW())
+			ON CONFLICT (transaction_id, did) DO NOTHING
+		`, txID, did, role, epoch); err != nil {
+			return fmt.Errorf("fullnode persistence: insert fullnode_txs (tx %q did %q): %w", txID, did, err)
+		}
 	}
 	return nil
 }
