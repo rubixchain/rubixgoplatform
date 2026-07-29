@@ -676,12 +676,6 @@ func (w *Wallet) PersistFullNodeSyncedTokenChain(
 		return nil
 	}
 
-	txIDs := make([]string, 0, len(newTxs))
-	for i := range newTxs {
-		txIDs = append(txIDs, newTxs[i].ID)
-	}
-	w.log.Debug("PersistFullNodeSyncedTokenChain: DB write starting", "tokenID", tokenID, "txIDs", txIDs, "entryCount", len(entries))
-
 	tx, err := w.BeginTx(ctx)
 	if err != nil {
 		return fmt.Errorf("fullnode sync persistence: begin tx: %w", err)
@@ -920,6 +914,5 @@ func (w *Wallet) PersistFullNodeSyncedTokenChain(
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("fullnode sync persistence: commit: %w", err)
 	}
-	w.log.Debug("PersistFullNodeSyncedTokenChain: DB write committed", "tokenID", tokenID, "lastTxID", lastEntry.TransactionID, "lastPosition", lastEntry.Position)
 	return nil
 }

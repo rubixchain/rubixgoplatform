@@ -196,12 +196,10 @@ func (w *Wallet) GetLatestTransactionIdByTokenId(tokenID string, isFullNode bool
 	var latestTxnId string
 	if err := row.Scan(&latestTxnId); err != nil {
 		if err == pgx.ErrNoRows {
-			w.log.Debug("GetLatestTransactionIdByTokenId: DB read", "tokenID", tokenID, "isFullNode", isFullNode, "found", false)
 			return "", fmt.Errorf("latest transaction id not found for token %s", tokenID)
 		}
 		return "", fmt.Errorf("GetLatestTransactionIdByTokenId scan: %w", err)
 	}
-	w.log.Debug("GetLatestTransactionIdByTokenId: DB read", "tokenID", tokenID, "isFullNode", isFullNode, "found", true, "latestTxnId", latestTxnId)
 	return latestTxnId, nil
 }
 

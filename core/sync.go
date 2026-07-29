@@ -258,22 +258,6 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.Transac
 		// No local chain at all — treat as empty (receiver never held this token).
 		localChain = nil
 	}
-	localTailTxID := ""
-	if len(localChain) > 0 {
-		localTailTxID = localChain[len(localChain)-1].TransactionID
-	}
-	remoteTailTxID := ""
-	if len(remoteTxs) > 0 {
-		remoteTailTxID = remoteTxs[len(remoteTxs)-1].Tx.ID
-	}
-	c.log.Debug("applyTokenChainFromSync: DB read before apply",
-		"tokenID", tokenID,
-		"localChainLen", len(localChain),
-		"localTailTxID", localTailTxID,
-		"remoteChainLen", len(remoteTxs),
-		"remoteTailTxID", remoteTailTxID,
-	)
-
 	// Step 1a: PrevTxID short-circuit — if the sender's previous transaction ID for this
 	// token already exists in our local chain, we already have the full history up to
 	// the current transaction. No sync needed.
@@ -547,11 +531,6 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.Transac
 
 	// Atomic batch insert — all tokenchain rows + index rebuild in one DB transaction.
 	// A crash mid-loop rolls back everything, leaving the chain consistent.
-	writeTxIDs := make([]string, 0, len(entries))
-	for _, e := range entries {
-		writeTxIDs = append(writeTxIDs, e.TransactionID)
-	}
-	c.log.Debug("applyTokenChainFromSync: DB write starting", "tokenID", tokenID, "newTxIDs", writeTxIDs, "startPos", nextPosition)
 	if err := c.w.ApplyTokenChainBatch(c.Ctx, tokenID, entries); err != nil {
 		return fmt.Errorf("applyTokenChainFromSync: ApplyTokenChainBatch: %w", err)
 	}
@@ -628,22 +607,6 @@ func (c *Core) applyTokenChainFromSyncForFullNode(tokenID string, remoteTxs []ty
 	if err != nil {
 		localChain = nil
 	}
-	localTailTxID := ""
-	if len(localChain) > 0 {
-		localTailTxID = localChain[len(localChain)-1].TransactionID
-	}
-	remoteTailTxID := ""
-	if len(remoteTxs) > 0 {
-		remoteTailTxID = remoteTxs[len(remoteTxs)-1].Tx.ID
-	}
-	c.log.Debug("applyTokenChainFromSyncForFullNode: DB read before apply",
-		"tokenID", tokenID,
-		"localChainLen", len(localChain),
-		"localTailTxID", localTailTxID,
-		"remoteChainLen", len(remoteTxs),
-		"remoteTailTxID", remoteTailTxID,
-	)
-
 	if prevTxID != "" && len(localChain) > 0 {
 		for _, lc := range localChain {
 			if lc.TransactionID == prevTxID {
@@ -820,15 +783,6 @@ func (c *Core) applyTokenChainFromSyncForFullNode(tokenID string, remoteTxs []ty
 	var lastTxInfo models.TransactionInfo
 	_ = json.Unmarshal(newTxs[len(newTxs)-1].tx.Info, &lastTxInfo)
 
-	newTxIDs := make([]string, 0, len(rawTxs))
-	for _, t := range rawTxs {
-		newTxIDs = append(newTxIDs, t.ID)
-	}
-	c.log.Debug("applyTokenChainFromSyncForFullNode: DB write starting",
-		"tokenID", tokenID,
-		"newTxIDs", newTxIDs,
-		"startPos", nextPosition,
-	)
 	if err := c.w.PersistFullNodeSyncedTokenChain(c.Ctx, tokenID, rawTxs, entries, &lastTxInfo, tokenType, lastRole); err != nil {
 		return fmt.Errorf("applyTokenChainFromSyncForFullNode: %w", err)
 	}

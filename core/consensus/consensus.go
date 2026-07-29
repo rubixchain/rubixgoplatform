@@ -68,18 +68,11 @@ func ReqPledgeToken(
 		// wrong transaction's CommittedTokens and fail a legitimate pledge).
 		// Backfill it with genTX.ID, mirroring the same fixup
 		// BuildTransactionInfoFromRequest already does for transfer tokens.
-		backfilledCount := 0
 		for _, t := range pledgeTokenDetails {
 			if t.PreviousTransactionID == "" {
 				t.PreviousTransactionID = genTX.ID
-				backfilledCount++
 			}
 		}
-		log.Debug("ReqPledgeToken: backfilled PreviousTransactionID for split-derived pledge tokens",
-			"genesisTxID", genTX.ID,
-			"pledgeTokenCount", len(pledgeTokenDetails),
-			"backfilledCount", backfilledCount,
-		)
 
 		if errPersist := w.PersistGenesisTransaction(&wallet.PersistGenesisTransactionReq{
 			DID:                  dc.GetDID(),

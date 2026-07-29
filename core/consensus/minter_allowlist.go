@@ -29,21 +29,19 @@ type genesisInitiatorLookup interface {
 // NFT, FT, and SmartContract entries are skipped.
 func ValidateMinterAllowlist(
 	txnInfo *models.TransactionInfo,
-	currentTxID string,
 	isFullnode bool,
 	w *wallet.Wallet,
 	log logger.Logger,
 	fetchGenesisTx func(peerDID, tokenID string) (*models.Transactions, error),
 	testnet, mainnet bool,
 ) error {
-	return validateMinterAllowlist(txnInfo, currentTxID, isFullnode, w, log, fetchGenesisTx, testnet, mainnet)
+	return validateMinterAllowlist(txnInfo, isFullnode, w, log, fetchGenesisTx, testnet, mainnet)
 }
 
 // validateMinterAllowlist is the test-friendly entry that takes an interface
 // for the wallet lookup.
 func validateMinterAllowlist(
 	txnInfo *models.TransactionInfo,
-	currentTxID string,
 	isFullnode bool,
 	w genesisInitiatorLookup,
 	log logger.Logger,
@@ -123,8 +121,6 @@ func validateMinterAllowlist(
 			// Fetch ONLY the genesis transaction from the peer — this never
 			// persists anything locally, so there's no risk of ingesting a
 			// sibling transaction that's still being validated elsewhere.
-			log.Debug("ValidateMinterAllowlist: whole-token genesis missing locally for part transfer, fetching genesis-only from peer",
-				"currentTxID", currentTxID, "partTokenID", t.TokenID, "wholeID", wholeID, "peerDID", mc.genesisPeer)
 			genesisTx, fetchErr := fetchGenesisTx(mc.genesisPeer, wholeID)
 			if fetchErr != nil {
 				return fmt.Errorf("ValidateMinterAllowlist: whole-token genesis fetch failed for %s (whole %s): %w",
@@ -141,8 +137,6 @@ func validateMinterAllowlist(
 				minter = genesisInfo.Initiator
 				lookupErr = nil
 			}
-			log.Debug("ValidateMinterAllowlist: post-fetch minter resolution",
-				"currentTxID", currentTxID, "wholeID", wholeID, "minter", minter, "lookupErr", lookupErr)
 		}
 		// Fallback: if local genesis lookup still fails and the current
 		// transaction declares itself as the mint for this whole token
