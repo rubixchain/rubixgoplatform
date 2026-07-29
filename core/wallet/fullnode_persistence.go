@@ -237,7 +237,7 @@ func (w *Wallet) insertFullNodeTransaction(ctx context.Context, tx pgx.Tx, trans
 	if err != nil {
 		return fmt.Errorf("fullnode persistence: insert fullnode transaction: %w", err)
 	}
-	w.log.Debug("insertFullNodeTransaction: DB write", "transactionID", transaction.ID)
+	w.log.Debug("insertFullNodeTransaction: Transactions inserted successfully")
 	return nil
 }
 
