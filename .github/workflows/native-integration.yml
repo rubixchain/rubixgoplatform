@@ -85,11 +85,24 @@ jobs:
           Add-Content -Path $env:GITHUB_PATH -Value $pgbin
 
       # ---- Build the node binary natively (CGO, no cross-compile) --------- #
+      # macOS needs -linkmode=external. The darwin build imports system dylibs
+      # (via net, os/user, crypto/x509), and Go 1.22's *internal* linker emits no
+      # LC_UUID load command — which macOS 15+/26 dyld hard-rejects, aborting the
+      # binary at launch with SIGABRT (exit 134) before main() ever runs.
+      # CGO_ENABLED=1 does not switch linkers by itself: the repo has no cgo code
+      # of its own, so the toolchain still links internally. Forcing the external
+      # linker routes the link through the system `ld`, which writes LC_UUID.
+      # Linux is unaffected and stays on the default linker.
       - name: Build rubixgoplatform (Unix)
         if: runner.os != 'Windows'
         env:
           CGO_ENABLED: '1'
-        run: go build -o ${{ matrix.bin_path }}
+        run: |
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            go build -ldflags='-linkmode=external' -o ${{ matrix.bin_path }}
+          else
+            go build -o ${{ matrix.bin_path }}
+          fi
 
       # Prove the binary actually runs on this runner before the suite spends
       # minutes provisioning Postgres and IPFS. A SIGABRT here (rather than
