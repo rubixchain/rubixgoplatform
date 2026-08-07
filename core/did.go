@@ -1,10 +1,14 @@
 package core
 
 import (
+	"encoding/hex"
 	"fmt"
+	"os"
+	"path"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/crypto"
 	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
@@ -59,6 +63,80 @@ func (c *Core) CreateDID(didCreate *types.DIDCreate) (did string, err error) {
 	}
 
 	return did, nil
+}
+
+// GetPubKeyByDID is the reverse of CreateDIDFromPubKey: it resolves the public
+// key a DID was derived from.
+//
+// A DID is the IPFS hash of the directory holding that DID's pubKey.pem, so the
+// key is always recoverable by one of two routes:
+//
+//  1. locally — the node owns the DID, or FetchDID already pulled the foreign
+//     DID's directory into <didDir>/<did>/;
+//  2. from IPFS via FetchDID, which uses the DID directly as the content hash.
+//
+// Route 2 caches the DID under didDir as a side effect, exactly as it does for
+// FetchDID's other callers, so a foreign DID queried here becomes locally
+// resolvable afterwards.
+func (c *Core) GetPubKeyByDID(didStr string) (*models.DIDPublicKeyResult, error) {
+	pemBytes, source, err := c.readPubKeyPEM(didStr)
+	if err != nil {
+		return nil, err
+	}
+
+	// pubKey.pem is a plain "PUBLIC KEY" PEM block — the password guarding
+	// pvtKey.pem ("ENCRYPTED PRIVATE KEY") does not apply to the public half,
+	// so DecodeBIPKeyPair is called with an empty password here exactly as
+	// DIDLite.SignVerify and DID.CreateDIDFromPubKey do.
+	_, pubKey, err := crypto.DecodeBIPKeyPair("", nil, pemBytes)
+	if err != nil {
+		return nil, fmt.Errorf("GetPubKeyByDID: failed to decode %s for DID %s (source: %s), err: %w",
+			constants.PubKeyFileName, didStr, source, err)
+	}
+	if len(pubKey) == 0 {
+		return nil, fmt.Errorf("GetPubKeyByDID: %s for DID %s (source: %s) is empty",
+			constants.PubKeyFileName, didStr, source)
+	}
+
+	return &models.DIDPublicKeyResult{
+		DID:       didStr,
+		PublicKey: hex.EncodeToString(pubKey),
+		Source:    source,
+	}, nil
+}
+
+// readPubKeyPEM returns the raw pubKey.pem contents for didStr along with where
+// it came from. The local copy always wins; on a miss, FetchDID pulls the DID
+// directory out of IPFS and the very same local read is retried, so there is
+// exactly one code path that turns a pubKey.pem on disk into bytes.
+func (c *Core) readPubKeyPEM(didStr string) ([]byte, string, error) {
+	pubKeyPath := path.Join(c.didDir, didStr, constants.PubKeyFileName)
+
+	pemBytes, err := os.ReadFile(pubKeyPath)
+	if err == nil {
+		return pemBytes, models.PubKeySourceLocal, nil
+	}
+
+	// Not held locally. FetchDID is the single source of truth for pulling a
+	// DID out of IPFS: it creates <didDir>/<did>/ and ipfsOps.Get's the DID
+	// hash into it under a 2-minute timeout, landing pubKey.pem at exactly the
+	// path read above. Like every other FetchDID caller (SetupForienDID,
+	// InitialiseDID), this caches the fetched DID locally.
+	if c.ipfsOps == nil {
+		return nil, "", fmt.Errorf("GetPubKeyByDID: DID %s is not present locally and IPFS is not initialised on this node",
+			didStr)
+	}
+	if err := c.FetchDID(didStr); err != nil {
+		return nil, "", fmt.Errorf("GetPubKeyByDID: DID %s is not present locally and could not be fetched from IPFS, err: %w",
+			didStr, err)
+	}
+
+	pemBytes, err = os.ReadFile(pubKeyPath)
+	if err != nil {
+		return nil, "", fmt.Errorf("GetPubKeyByDID: fetched DID %s from IPFS but failed to read %s, err: %w",
+			didStr, constants.PubKeyFileName, err)
+	}
+	return pemBytes, models.PubKeySourceIPFS, nil
 }
 
 func (c *Core) GetDIDs() []string {
