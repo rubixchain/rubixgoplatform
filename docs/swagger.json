@@ -228,6 +228,56 @@
                 }
             }
         },
+        "/rubix/v1/dids/{did}/public_key": {
+            "get": {
+                "description": "Returns the hex-encoded public key a DID was derived from — the reverse of creating a DID from a public key. The key is read from the node's local copy of the DID's pubKey.pem when present; otherwise the DID is fetched from IPFS (the DID is the IPFS hash of its public key directory) and cached locally, as with any other foreign DID. The `source` field reports which route was used (\"local\" or \"ipfs\"). The returned key is verified by re-deriving the DID from it before the response is sent.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "DID"
+                ],
+                "summary": "Get Public Key by DID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "DID (e.g. bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)",
+                        "name": "did",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.BasicResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "result": {
+                                            "$ref": "#/definitions/models.DIDPublicKeyResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/rubix/v1/dids/{did}/register": {
             "post": {
                 "description": "Registers a DID on the network.",
@@ -1316,6 +1366,20 @@
                 "result": {},
                 "status": {
                     "type": "boolean"
+                }
+            }
+        },
+        "models.DIDPublicKeyResult": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "public_key": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
                 }
             }
         },
