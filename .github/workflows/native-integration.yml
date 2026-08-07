@@ -91,6 +91,38 @@ jobs:
           CGO_ENABLED: '1'
         run: go build -o ${{ matrix.bin_path }}
 
+      # Prove the binary actually runs on this runner before the suite spends
+      # minutes provisioning Postgres and IPFS. A SIGABRT here (rather than
+      # inside the harness) is far cheaper to diagnose: the arch/linkage dump
+      # below plus the binary's own stderr pinpoint it immediately.
+      - name: Verify binary is runnable (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          echo "=== go env ==="
+          go env GOOS GOARCH CGO_ENABLED
+          echo "=== uname ==="
+          uname -m
+          echo "=== file ==="
+          file ${{ matrix.bin_path }}
+          echo "=== dynamic libraries ==="
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            otool -L ${{ matrix.bin_path }} || true
+          else
+            ldd ${{ matrix.bin_path }} || true
+          fi
+          echo "=== smoke test: init into a temp dir ==="
+          SMOKE_DIR="$(mktemp -d)"
+          set +e
+          ./${{ matrix.bin_path }} init -p "$SMOKE_DIR"
+          RC=$?
+          set -e
+          echo "init exit code: $RC"
+          if [ $RC -ne 0 ]; then
+            echo "::error::Node binary failed to run on ${{ matrix.os }} (exit $RC). See the arch/linkage dump above."
+            exit $RC
+          fi
+          ls -la "$SMOKE_DIR"
+
       - name: Build rubixgoplatform (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -106,6 +138,46 @@ jobs:
           --config test/integration/config.native.json
           --small-test --run-all-tests
 
+      # A process killed by a signal (e.g. SIGABRT from a dyld load failure) may
+      # write nothing to its own stderr — macOS routes the reason to the crash
+      # reporter instead. These reports name the termination reason and the
+      # faulting library outright, so they close the gap when the harness logs
+      # show only "died with SIGABRT" and an empty stderr.
+      - name: Dump macOS crash reports on failure
+        if: failure() && runner.os == 'macOS'
+        run: |
+          echo "=== DiagnosticReports directory ==="
+          ls -la ~/Library/Logs/DiagnosticReports/ 2>/dev/null || echo "(no user DiagnosticReports dir)"
+          ls -la /Library/Logs/DiagnosticReports/ 2>/dev/null || echo "(no system DiagnosticReports dir)"
+
+          echo "=== rubixgoplatform crash reports ==="
+          # .ips is the modern format; .crash is the legacy one. Copy them into
+          # the artifact path so they survive the runner being torn down.
+          #
+          # `find` rather than a shell glob: an unmatched glob is passed through
+          # literally by bash and is a hard error in zsh, so globbing here would
+          # be shell-dependent. find just prints nothing when there is no match.
+          mkdir -p test/native/data/crashreports
+          found=0
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            found=1
+            echo "----- $f -----"
+            cat "$f" || true
+            cp "$f" test/native/data/crashreports/ 2>/dev/null || true
+          done <<EOF
+          $(find ~/Library/Logs/DiagnosticReports /Library/Logs/DiagnosticReports \
+              -maxdepth 1 \( -name 'rubixgoplatform*.ips' -o -name 'rubixgoplatform*.crash' \) \
+              2>/dev/null)
+          EOF
+
+          if [ "$found" -eq 0 ]; then
+            echo "(no rubixgoplatform crash reports found)"
+            echo "=== most recent crash reports of any process, for context ==="
+            find ~/Library/Logs/DiagnosticReports /Library/Logs/DiagnosticReports \
+              -maxdepth 1 -name '*.ips' 2>/dev/null | head -10 || true
+          fi
+
       - name: Upload run artifacts
         if: always()
         uses: actions/upload-artifact@v7
@@ -115,4 +187,5 @@ jobs:
             test/docker/data/stress/logs/**
             test/native/data/**/*.log
             test/native/data/**/pgdata/server.log
+            test/native/data/crashreports/**
           if-no-files-found: warn
