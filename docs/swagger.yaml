@@ -307,8 +307,7 @@ paths:
         local copy of the DID's pubKey.pem when present; otherwise the DID is fetched
         from IPFS (the DID is the IPFS hash of its public key directory) and cached
         locally, as with any other foreign DID. The `source` field reports which route
-        was used ("local" or "ipfs"). The returned key is verified by re-deriving
-        the DID from it before the response is sent.
+        was used ("local" or "ipfs").
       parameters:
       - description: DID (e.g. bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)
         in: path
