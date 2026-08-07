@@ -73,6 +73,14 @@ type TransactionTokenDetails struct {
 	NFT                  []NFTInfo           `json:"nft"`
 	SmartContract        []SmartContractInfo `json:"smartContract"`
 	TransferNFTOwnership bool                `json:"transferNftOwnership"`
+	// BurnNFT, when true, permanently destroys the NFTs listed in NFT rather
+	// than executing or transferring them. A burn is a non-consensus,
+	// self-signed transaction: it is persisted locally and published to both
+	// the rubix_txn stream (so quorums that pledged against this NFT can
+	// release their collateral) and the NFT's own topic (so subscribers learn
+	// the NFT is dead). Mutually exclusive with TransferNFTOwnership, and
+	// cannot be combined with RBT/FT/SmartContract in the same request.
+	BurnNFT bool `json:"burnNft"`
 }
 
 // Gave the key names as FTInfo, NFTInfo and SmartContract info for now as these are the informations which are required to perform the transfer operation
