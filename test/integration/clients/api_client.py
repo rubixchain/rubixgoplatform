@@ -586,6 +586,159 @@ class NodeClient:
         response = self.complete_transaction(req_id, password)
         return {"req_id": req_id, "response": response}
 
+    def initiate_nft_burn(
+        self,
+        owner_did: str,
+        nft_id: str,
+        nft_value: float = 1.0,
+        data: str = "NFT burn",
+    ) -> str:
+        """Step 1: Initiate an NFT burn. Returns request ID for the signature step.
+
+        A burn permanently destroys the NFT. Unlike an execute or a transfer it
+        does NOT go through quorum consensus — it is a self-signed transaction
+        that is persisted locally and published to the network so quorums that
+        pledged against this NFT can release their collateral.
+
+        Args:
+            owner_did: DID that owns the NFT (must match the on-chain owner)
+            nft_id: NFT token hash
+            nft_value: NFT value (default: 1.0)
+            data: Transaction description
+
+        Returns:
+            Request ID for the signature step, or None when the node completed
+            the request without needing a signature. That happens when every
+            NFT in the request is already burnt: the burn is idempotent, so the
+            node short-circuits with {"status": true, "result": null} instead of
+            opening a signature challenge.
+
+        Raises:
+            RuntimeError: if the node rejects the burn (e.g. the NFT is a parent
+                with live children, is not owned by owner_did, or is in a status
+                that cannot be burnt). Negative tests rely on this.
+        """
+        log.info(
+            "[%s] Initiating NFT burn: did=%s  nft=%s",
+            self.name,
+            owner_did[:20] + "...",
+            nft_id,
+        )
+
+        payload = {
+            "initiator": owner_did,
+            "owner": owner_did,
+            "tokens": {
+                "rbt": 0,
+                "ft": [],
+                "nft": [
+                    {
+                        "nftId": nft_id,
+                        "value": nft_value,
+                        "data": data,
+                    }
+                ],
+                "smartContract": [],
+                "transferNftOwnership": False,
+                "burnNft": True,
+            },
+            "memo": f"NFT {nft_id[:8]}... burn",
+        }
+
+        resp = self._post_raw("/rubix/v1/tx", payload)
+        result = resp.get("result")
+        if not result:
+            # Idempotent short-circuit: the NFT was already burnt, so there is
+            # no pending transaction to sign. _post_raw already raised if the
+            # node reported status:false, so reaching here means success.
+            log.info(
+                "[%s] NFT burn returned without a signature challenge (already burnt): %s",
+                self.name,
+                resp.get("message"),
+            )
+            return None
+        req_id: str = result["id"]
+        log.info("[%s] NFT burn initiated, req_id=%s", self.name, req_id)
+        return req_id
+
+    def initiate_nft_burn_raw(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """POST an arbitrary burn payload to /rubix/v1/tx without shaping it.
+
+        Negative tests need to send combinations the typed helpers deliberately
+        cannot produce — burnNft together with transferNftOwnership, or with an
+        RBT amount, or naming an NFT the caller does not own. This passes the
+        payload through untouched so the SERVER decides whether to reject it.
+
+        Raises:
+            RuntimeError: when the node rejects the request. That is the
+                expected outcome for most callers of this method.
+        """
+        log.info("[%s] Initiating RAW NFT burn payload", self.name)
+        return self._post_raw("/rubix/v1/tx", payload)
+
+    @staticmethod
+    def build_burn_payload(
+        owner_did: str,
+        nft_entries: list,
+        *,
+        transfer_ownership: bool = False,
+        rbt: float = 0,
+        ft: Optional[list] = None,
+        smart_contract: Optional[list] = None,
+        memo: str = "NFT burn",
+    ) -> Dict[str, Any]:
+        """Build a /rubix/v1/tx burn payload, including deliberately invalid ones.
+
+        nft_entries is a list of {"nftId", "value", "data"} dicts, so callers can
+        pass zero, one, or many NFTs.
+        """
+        return {
+            "initiator": owner_did,
+            "owner": owner_did,
+            "tokens": {
+                "rbt": rbt,
+                "ft": ft or [],
+                "nft": nft_entries,
+                "smartContract": smart_contract or [],
+                "transferNftOwnership": transfer_ownership,
+                "burnNft": True,
+            },
+            "memo": memo,
+        }
+
+    def burn_nft(
+        self,
+        owner_did: str,
+        nft_id: str,
+        nft_value: float = 1.0,
+        data: str = "NFT burn",
+        password: str = "mypassword",
+    ) -> Dict[str, Any]:
+        """Convenience: Initiate + complete an NFT burn in one call.
+
+        Args:
+            owner_did: DID that owns the NFT
+            nft_id: NFT token hash
+            nft_value: NFT value (default: 1.0)
+            data: Transaction description
+            password: Password for signature
+
+        Returns:
+            {"req_id": <str>, "response": <dict>}
+        """
+        req_id = self.initiate_nft_burn(
+            owner_did=owner_did,
+            nft_id=nft_id,
+            nft_value=nft_value,
+            data=data,
+        )
+        if req_id is None:
+            # Already burnt — nothing to sign. Report success with no req_id so
+            # callers can distinguish "burnt just now" from "was already burnt".
+            return {"req_id": None, "response": None, "already_burnt": True}
+        response = self.complete_transaction(req_id, password)
+        return {"req_id": req_id, "response": response}
+
     def transfer_nft_ownership(
         self,
         sender_did: str,

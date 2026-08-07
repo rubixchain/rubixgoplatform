@@ -1044,6 +1044,7 @@ FROM tokens;
         nft_self_execute: bool = False,
         nft_transfer: bool = False,
         nft_cross_execute: bool = False,
+        nft_burn: bool = False,
         sc_count: int = 0,
         sc_execute: bool = False,
         sc_only: bool = False,
@@ -1148,6 +1149,21 @@ FROM tokens;
                 log.info("=== NFT REPEATED EXECUTION START (%d rounds) ===", exec_rounds)
                 nft_exec_stats = self.nft_engine.run_repeated_executions(exec_rounds)
                 log.info("=== NFT REPEATED EXECUTION COMPLETE ===")
+
+            # NFT burn — MUST be last among the NFT phases: a burnt NFT can no
+            # longer be executed or transferred, so running this earlier would
+            # break every phase that follows. The parent-rejection test also
+            # depends on run_nft_mint_children having already run.
+            if nft_burn:
+                log.info("=== NFT BURN START ===")
+                self.nft_engine.run_nft_burn()
+                self.nft_engine.run_nft_burn_parent_rejected()
+                self.nft_engine.run_nft_burn_idempotent()
+                # Negatives run last: the child-burn positive case at the end
+                # destroys a child NFT, which would make the parent burnable and
+                # invalidate run_nft_burn_parent_rejected if it ran earlier.
+                self.nft_engine.run_nft_burn_negatives()
+                log.info("=== NFT BURN COMPLETE ===")
 
             # NFT API verification (exercises list, chain, fetch, balance, tx APIs)
             log.info("=== NFT API VERIFICATION START ===")
