@@ -417,6 +417,7 @@ class StressRunner:
           - GET /rubix/v1/tx/{did}/{token_type}  (tx history by DID + type)
           - GET /rubix/v1/nfts/{nft_id}/children
           - GET /rubix/v1/nfts/{nft_id}/parent
+          - GET /rubix/v1/dids/{did}/public_key
 
         tx-history: assert nodeA reports >=1 rbt transaction (the shuttle moved
         RBT from did_a), proving the endpoint returns the history we created.
@@ -424,8 +425,15 @@ class StressRunner:
         deployed NFT (our test NFTs have no hierarchy, so an empty-but-OK
         response is the expected, correct result — this is an endpoint smoke
         test, not a hierarchy assertion).
+        public_key: assert both the owning node and a remote node resolve the
+        SAME key for did_a. Because a DID is the IPFS hash of its public key,
+        agreement across nodes is the real correctness property — whether the
+        remote answered from its local cache or from IPFS.
         """
         results: List[Dict[str, str]] = []
+
+        # --- public key by DID (local + cross-node agreement) ---
+        results.extend(self._verify_public_key_api())
 
         # --- tx history by DID + token_type ---
         if self.did_a:
@@ -482,6 +490,60 @@ class StressRunner:
                     "detail": f"get_nft_parent error: {exc}",
                 })
 
+        return results
+
+    def _verify_public_key_api(self) -> List[Dict[str, str]]:
+        """Assert GET /rubix/v1/dids/{did}/public_key resolves did_a on both the
+        owning node (local pubKey.pem) and a remote node (local cache or IPFS),
+        and that the two agree byte-for-byte."""
+        results: List[Dict[str, str]] = []
+        if not self.did_a:
+            return results
+
+        try:
+            own = self.node_a.get_public_key(self.did_a)
+        except Exception as exc:  # noqa: BLE001
+            return [{
+                "check": "DID_PUBLIC_KEY_LOCAL",
+                "status": "FAIL",
+                "detail": f"nodeA get_public_key error: {exc}",
+            }]
+
+        own_key = own.get("public_key") or ""
+        # nodeA owns did_a, so its own copy must come from disk, not the network.
+        local_ok = bool(own_key) and own.get("source") == "local"
+        results.append({
+            "check": "DID_PUBLIC_KEY_LOCAL",
+            "status": "PASS" if local_ok else "FAIL",
+            "detail": (
+                f"nodeA resolved did_a key from source={own.get('source')}, "
+                f"len(hex)={len(own_key)}"
+                + ("" if local_ok else " (expected non-empty key with source='local')")
+            ),
+        })
+
+        # A remote node must resolve the SAME key — from its cached copy of the
+        # DID directory, or straight from IPFS if it never fetched did_a.
+        try:
+            remote = self.node_b.get_public_key(self.did_a)
+        except Exception as exc:  # noqa: BLE001
+            results.append({
+                "check": "DID_PUBLIC_KEY_CROSS_NODE",
+                "status": "FAIL",
+                "detail": f"nodeB get_public_key error: {exc}",
+            })
+            return results
+
+        remote_key = remote.get("public_key") or ""
+        match = bool(own_key) and own_key == remote_key
+        results.append({
+            "check": "DID_PUBLIC_KEY_CROSS_NODE",
+            "status": "PASS" if match else "FAIL",
+            "detail": (
+                f"nodeB resolved did_a key from source={remote.get('source')}; "
+                + ("matches nodeA" if match else "DIFFERS from nodeA's key")
+            ),
+        })
         return results
 
     # ------------------------------------------------------------------

@@ -140,6 +140,26 @@ class NodeClient:
         log.info("[%s] Registering DID %s…", self.name, did)
         return self._post(f"/rubix/v1/dids/{did}/register", {})
 
+    def get_public_key(self, did: str) -> Dict[str, Any]:
+        """Resolve the public key *did* was derived from.
+
+        Reverse of creating a DID from a public key. The node answers from its
+        local pubKey.pem when it has one, otherwise it fetches the DID from
+        IPFS (the DID is the IPFS hash of the key directory) and caches it, so
+        a repeat call for the same DID reports source "local".
+
+        Returns:
+            The "result" dict: {"did", "public_key" (hex), "source"} where
+            source is "local" or "ipfs".
+        """
+        resp = self._get(f"/rubix/v1/dids/{did}/public_key")
+        result: Dict[str, Any] = resp.get("result") or {}
+        log.info(
+            "[%s] Public key for %s… resolved from %s",
+            self.name, did[:12], result.get("source"),
+        )
+        return result
+
     # ------------------------------------------------------------------
     # Peer management
     # ------------------------------------------------------------------
