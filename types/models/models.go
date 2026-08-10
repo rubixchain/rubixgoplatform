@@ -343,17 +343,6 @@ type DIDResult struct {
 	PeerID string `json:"peer_id"`
 }
 
-// Source values for DIDPublicKeyResult.Source.
-const (
-	// PubKeySourceLocal means the key was read from the node's own
-	// <didDir>/<did>/pubKey.pem.
-	PubKeySourceLocal string = "local"
-	// PubKeySourceIPFS means the key was fetched from IPFS by FetchDID, using
-	// the DID as the content hash. That fetch caches the DID under didDir, so
-	// a subsequent lookup for the same DID reports PubKeySourceLocal.
-	PubKeySourceIPFS string = "ipfs"
-)
-
 // DIDPublicKeyResult is the result payload of GET /rubix/v1/dids/{did}/public_key.
 // PublicKey is the hex of the raw (PEM-decoded) uncompressed secp256k1 point —
 // the same 65 bytes secp256k1.ParsePubKey consumes elsewhere, and the same
@@ -361,7 +350,6 @@ const (
 type DIDPublicKeyResult struct {
 	DID       string `json:"did"`
 	PublicKey string `json:"public_key"`
-	Source    string `json:"source"`
 }
 
 type TokenDetail struct {

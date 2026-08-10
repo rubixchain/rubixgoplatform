@@ -79,7 +79,7 @@ func (c *Core) CreateDID(didCreate *types.DIDCreate) (did string, err error) {
 // FetchDID's other callers, so a foreign DID queried here becomes locally
 // resolvable afterwards.
 func (c *Core) GetPubKeyByDID(didStr string) (*models.DIDPublicKeyResult, error) {
-	pemBytes, source, err := c.readPubKeyPEM(didStr)
+	pemBytes, err := c.readPubKeyPEM(didStr)
 	if err != nil {
 		return nil, err
 	}
@@ -90,31 +90,30 @@ func (c *Core) GetPubKeyByDID(didStr string) (*models.DIDPublicKeyResult, error)
 	// DIDLite.SignVerify and DID.CreateDIDFromPubKey do.
 	_, pubKey, err := crypto.DecodeBIPKeyPair("", nil, pemBytes)
 	if err != nil {
-		return nil, fmt.Errorf("GetPubKeyByDID: failed to decode %s for DID %s (source: %s), err: %w",
-			constants.PubKeyFileName, didStr, source, err)
+		return nil, fmt.Errorf("GetPubKeyByDID: failed to decode %s for DID %s, err: %w",
+			constants.PubKeyFileName, didStr, err)
 	}
 	if len(pubKey) == 0 {
-		return nil, fmt.Errorf("GetPubKeyByDID: %s for DID %s (source: %s) is empty",
-			constants.PubKeyFileName, didStr, source)
+		return nil, fmt.Errorf("GetPubKeyByDID: %s for DID %s is empty",
+			constants.PubKeyFileName, didStr)
 	}
 
 	return &models.DIDPublicKeyResult{
 		DID:       didStr,
 		PublicKey: hex.EncodeToString(pubKey),
-		Source:    source,
 	}, nil
 }
 
-// readPubKeyPEM returns the raw pubKey.pem contents for didStr along with where
-// it came from. The local copy always wins; on a miss, FetchDID pulls the DID
-// directory out of IPFS and the very same local read is retried, so there is
-// exactly one code path that turns a pubKey.pem on disk into bytes.
-func (c *Core) readPubKeyPEM(didStr string) ([]byte, string, error) {
+// readPubKeyPEM returns the raw pubKey.pem contents for didStr. The local copy
+// always wins; on a miss, FetchDID pulls the DID directory out of IPFS and the
+// very same local read is retried, so there is exactly one code path that turns
+// a pubKey.pem on disk into bytes.
+func (c *Core) readPubKeyPEM(didStr string) ([]byte, error) {
 	pubKeyPath := path.Join(c.didDir, didStr, constants.PubKeyFileName)
 
 	pemBytes, err := os.ReadFile(pubKeyPath)
 	if err == nil {
-		return pemBytes, models.PubKeySourceLocal, nil
+		return pemBytes, nil
 	}
 
 	// Not held locally. FetchDID is the single source of truth for pulling a
@@ -123,20 +122,20 @@ func (c *Core) readPubKeyPEM(didStr string) ([]byte, string, error) {
 	// path read above. Like every other FetchDID caller (SetupForienDID,
 	// InitialiseDID), this caches the fetched DID locally.
 	if c.ipfsOps == nil {
-		return nil, "", fmt.Errorf("GetPubKeyByDID: DID %s is not present locally and IPFS is not initialised on this node",
+		return nil, fmt.Errorf("GetPubKeyByDID: DID %s is not present locally and IPFS is not initialised on this node",
 			didStr)
 	}
 	if err := c.FetchDID(didStr); err != nil {
-		return nil, "", fmt.Errorf("GetPubKeyByDID: DID %s is not present locally and could not be fetched from IPFS, err: %w",
+		return nil, fmt.Errorf("GetPubKeyByDID: DID %s is not present locally and could not be fetched from IPFS, err: %w",
 			didStr, err)
 	}
 
 	pemBytes, err = os.ReadFile(pubKeyPath)
 	if err != nil {
-		return nil, "", fmt.Errorf("GetPubKeyByDID: fetched DID %s from IPFS but failed to read %s, err: %w",
+		return nil, fmt.Errorf("GetPubKeyByDID: fetched DID %s from IPFS but failed to read %s, err: %w",
 			didStr, constants.PubKeyFileName, err)
 	}
-	return pemBytes, models.PubKeySourceIPFS, nil
+	return pemBytes, nil
 }
 
 func (c *Core) GetDIDs() []string {

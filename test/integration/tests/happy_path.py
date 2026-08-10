@@ -510,15 +510,14 @@ class StressRunner:
             }]
 
         own_key = own.get("public_key") or ""
-        # nodeA owns did_a, so its own copy must come from disk, not the network.
-        local_ok = bool(own_key) and own.get("source") == "local"
+        # 65-byte uncompressed secp256k1 point, hex-encoded.
+        local_ok = len(own_key) == 130
         results.append({
             "check": "DID_PUBLIC_KEY_LOCAL",
             "status": "PASS" if local_ok else "FAIL",
             "detail": (
-                f"nodeA resolved did_a key from source={own.get('source')}, "
-                f"len(hex)={len(own_key)}"
-                + ("" if local_ok else " (expected non-empty key with source='local')")
+                f"nodeA resolved did_a key, len(hex)={len(own_key)}"
+                + ("" if local_ok else " (expected 130 hex chars)")
             ),
         })
 
@@ -540,7 +539,7 @@ class StressRunner:
             "check": "DID_PUBLIC_KEY_CROSS_NODE",
             "status": "PASS" if match else "FAIL",
             "detail": (
-                f"nodeB resolved did_a key from source={remote.get('source')}; "
+                "nodeB resolved did_a key; "
                 + ("matches nodeA" if match else "DIFFERS from nodeA's key")
             ),
         })

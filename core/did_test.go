@@ -11,7 +11,6 @@ import (
 
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/rubixchain/rubixgoplatform/constants"
-	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
 // -----------------------------------------------------------------------------
@@ -63,7 +62,7 @@ func writeDIDPubKey(t *testing.T, c *Core, did string, pemBytes []byte) {
 // -----------------------------------------------------------------------------
 
 // A locally held DID is answered from disk: the response carries the hex of the
-// PEM-decoded key and reports source "local".
+// PEM-decoded key.
 func TestGetPubKeyByDIDLocal(t *testing.T) {
 	c := newCoreWithDIDDir(t)
 	pemBytes, raw := newPubKeyPEM(t)
@@ -77,9 +76,6 @@ func TestGetPubKeyByDIDLocal(t *testing.T) {
 	}
 	if res.DID != testDID {
 		t.Errorf("did: got %q, want %q", res.DID, testDID)
-	}
-	if res.Source != models.PubKeySourceLocal {
-		t.Errorf("source: got %q, want %q", res.Source, models.PubKeySourceLocal)
 	}
 
 	// Hex, not base64 -- the same encoding DIDCreate.PubKey takes, so the
