@@ -88,43 +88,59 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	}
 
 	if c.fullNode {
-		// Cheaply reject already-seen transactions without blocking.
-		if _, exists := c.txnProcessor.processedTxns.Load(newEvent.TransactionID); exists {
-			c.log.Info("Duplicate transaction ignored", "txnID", newEvent.TransactionID)
-			return
+		c.queueFullnodeTransaction(&newEvent)
+	}
+}
+
+// queueFullnodeTransaction admits a transaction and hands it to the worker pool.
+//
+// Split out of TxnCallBack so the admission/enqueue interaction can be tested
+// without a database — everything above this point in TxnCallBack needs a wallet.
+//
+// Admission is reserved up front rather than recorded after a successful send.
+// The previous order (check, enqueue, then mark) was a check-then-act race:
+// pubsub gives every message its own goroutine (types/pubsub.go:164), so two
+// deliveries of the same transaction could both pass the check and both enqueue.
+// Reserving first closes that window, and every path that fails to hand the event
+// to a worker releases the reservation, which preserves the original invariant
+// that a failed send must not poison the dedup map.
+func (c *Core) queueFullnodeTransaction(newEvent *models.EventTransaction) {
+	// Cheaply reject already-seen transactions without blocking.
+	if !c.txnProcessor.admit(newEvent.TransactionID) {
+		c.log.Info("Duplicate transaction ignored", "txnID", newEvent.TransactionID)
+		return
+	}
+
+	// Update queue length metric for dynamic scaling
+	currentQueueLen := int64(len(c.txnProcessor.txnQueue))
+	atomic.StoreInt64(&c.txnProcessor.queueLength, currentQueueLen)
+
+	// Queue transaction for processing with enhanced timeout handling
+	select {
+	case c.txnProcessor.txnQueue <- newEvent:
+		atomic.AddInt64(&c.txnProcessor.processedTxnCount, 1)
+		c.log.Debug("Transaction queued successfully",
+			"txnID", newEvent.TransactionID,
+			"queueLength", currentQueueLen)
+
+	case <-time.After(c.txnProcessor.enqueueTimeout):
+		// No worker ever saw this event, so give up the reservation: a later
+		// re-delivery has to be free to try again instead of being rejected as a
+		// duplicate until dedupMapCleaner sweeps the entry.
+		c.txnProcessor.releaseAdmission(newEvent.TransactionID)
+		c.log.Error("Failed to queue transaction - queue full, will retry on next delivery",
+			"txnID", newEvent.TransactionID,
+			"queueLength", len(c.txnProcessor.txnQueue))
+
+		if currentQueueLen > int64(c.txnProcessor.queueThreshold) {
+			c.log.Warn("Queue threshold exceeded - scaling may be needed",
+				"current", currentQueueLen,
+				"threshold", c.txnProcessor.queueThreshold)
 		}
 
-		// Update queue length metric for dynamic scaling
-		currentQueueLen := int64(len(c.txnProcessor.txnQueue))
-		atomic.StoreInt64(&c.txnProcessor.queueLength, currentQueueLen)
-
-		// Queue transaction for processing with enhanced timeout handling
-		select {
-		case c.txnProcessor.txnQueue <- &newEvent:
-			// Mark as seen only AFTER successful enqueue so a failed send
-			// doesn't permanently poison the dedup map.
-			c.txnProcessor.processedTxns.Store(newEvent.TransactionID, time.Now())
-			atomic.AddInt64(&c.txnProcessor.processedTxnCount, 1)
-			c.log.Debug("Transaction queued successfully",
-				"txnID", newEvent.TransactionID,
-				"queueLength", currentQueueLen)
-
-		case <-time.After(10 * time.Second):
-			c.log.Error("Failed to queue transaction - queue full, will retry on next delivery",
-				"txnID", newEvent.TransactionID,
-				"queueLength", len(c.txnProcessor.txnQueue))
-
-			if currentQueueLen > int64(c.txnProcessor.queueThreshold) {
-				c.log.Warn("Queue threshold exceeded - scaling may be needed",
-					"current", currentQueueLen,
-					"threshold", c.txnProcessor.queueThreshold)
-			}
-			return
-
-		case <-c.txnProcessor.ctx.Done():
-			c.log.Info("Transaction processor shutting down")
-			return
-		}
+	case <-c.txnProcessor.ctx.Done():
+		c.txnProcessor.releaseAdmission(newEvent.TransactionID)
+		c.log.Info("Transaction processor shutting down")
 	}
 }
 
@@ -161,10 +177,10 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 			"workerID", workerID)
 	}
 
-	// All retries exhausted — remove from dedup map so future pubsub
+	// All retries exhausted — release the admission so future pubsub
 	// re-deliveries can attempt processing again (conditions may change,
 	// e.g. peer becomes reachable for chain sync).
-	c.txnProcessor.processedTxns.Delete(txnEvent.TransactionID)
+	c.txnProcessor.releaseAdmission(txnEvent.TransactionID)
 
 	// If the terminal failure is a validation failure, persist it once to the
 	// invalid transactions table for audit. Doing this only here (instead of

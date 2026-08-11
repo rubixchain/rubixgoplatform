@@ -44,6 +44,11 @@ type DynamicTxnProcessor struct {
 	maxRetries int
 	retryDelay time.Duration
 
+	// How long an admitted transaction waits for room in txnQueue before it is
+	// dropped and its admission released. A field rather than a literal so the
+	// queue-full path is testable without a ten-second test.
+	enqueueTimeout time.Duration
+
 	// Resource monitor
 	resourceMonitor *ResourceMonitor
 }
@@ -69,6 +74,7 @@ func (c *Core) initDynamicTxnProcessor() {
 		workerChannels:  make(map[int]chan struct{}),
 		maxRetries:      3,
 		retryDelay:      time.Second * 2,
+		enqueueTimeout:  time.Second * 10,
 		resourceMonitor: &ResourceMonitor{}, // INITIALIZE YOUR MONITOR
 	}
 
@@ -333,6 +339,33 @@ func (c *Core) workerHealthCheck() {
 			return
 		}
 	}
+}
+
+// admit reserves txnID for processing and reports whether this caller won the
+// reservation. A false return means the transaction was already admitted and the
+// caller must drop it.
+//
+// The reservation has to be atomic. pubsub dispatches every message on its own
+// goroutine (types/pubsub.go:164), so TxnCallBack runs concurrently with itself,
+// and a Load-then-Store pair leaves a window in which two deliveries of the same
+// transaction both observe "not seen" and both enqueue.
+//
+// The stored value is the admission time, which dedupMapCleaner reads to expire
+// entries after dedupTTL.
+func (p *DynamicTxnProcessor) admit(txnID string) bool {
+	_, alreadyAdmitted := p.processedTxns.LoadOrStore(txnID, time.Now())
+	return !alreadyAdmitted
+}
+
+// releaseAdmission drops a reservation taken by admit, making txnID eligible for
+// admission again on a later pubsub delivery.
+//
+// It must be called on every path that admits a transaction without handing it to
+// a worker, and once a transaction has exhausted its retries. Skipping it leaves
+// the transaction suppressed until dedupMapCleaner sweeps the entry dedupTTL
+// later.
+func (p *DynamicTxnProcessor) releaseAdmission(txnID string) {
+	p.processedTxns.Delete(txnID)
 }
 
 const dedupTTL = 10 * time.Minute
