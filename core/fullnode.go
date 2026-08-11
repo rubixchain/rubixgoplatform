@@ -81,6 +81,7 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 	publisherDetails := models.DID{
 		DID:    txInfo.Initiator,
 		PeerID: peerID,
+		Local:  peerID == c.peerID, // This was empty and was getting updated to false by default, so we set it based on the peerID comparison
 	}
 	err = c.AddPeerDetails(publisherDetails)
 	if err != nil {
@@ -220,9 +221,18 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 	syncTxChains := func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error {
 		return c.SyncTransactionChainsFromPeer(peerDID, tokenIDs, prevTxIDs, excludeTxIDs, false, c.fullNode)
 	}
+	syncAuthoritative := func(tokenIDs []string) (map[string]string, error) {
+		return c.syncTokensFromFullnode(tokenIDs)
+	}
+	getTxByID := func(txID string) (*models.TransactionInfo, error) {
+		return c.getTransactionInfoByID(txID)
+	}
+	getParentBurnTx := func(parentID string) (string, bool, error) {
+		return c.getParentBurnTxID(parentID)
+	}
 	// Fullnode trusts the quorum's earlier transfer-auth decision; the flag
 	// is not in the EventTransaction.
-	_, err = consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, quorumDCs, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains, false)
+	_, err = consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, quorumDCs, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains, syncAuthoritative, getTxByID, getParentBurnTx, false)
 	if err != nil {
 		c.log.Error("processSingleTransaction:failed to validate transaction", "error", err)
 		// Storing the invalid transaction is deferred to processTxnWithRetry,

@@ -10,6 +10,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/constants"
 	rubixsync "github.com/rubixchain/rubixgoplatform/core/sync"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
+	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
@@ -152,6 +153,198 @@ func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, 
 
 	c.log.Info("SyncTransactionChainsFromPeer: Sync completed", "peerDID", peerDID, "tokenCount", len(tokenIDs))
 	return nil
+}
+
+// syncTokensFromFullnode fetches the given tokens' chains from an authoritative
+// full node (selected from the canonical fullnodes list) and returns, for each
+// token the full node knows, the ID of the transaction that BURNT it (the last
+// role=burn entry), or "" if the full node's chain shows it as not burnt.
+//
+// This exists so consensus validation can verify a burnt/committed parent
+// token's TRUE latest state instead of trusting the transaction initiator's
+// view — a rolled-back initiator can serve a stale (pre-burn) parent chain and
+// drive a replayed split through consensus.
+//
+// It deliberately does NOT persist the fetched chain into the local wallet.
+// The only consumer (ValidateSplitParentsAgainstFullnode) needs a single fact
+// per ancestor — "which tx burnt it" — which the SyncedTxn response already
+// carries (id + role per entry). Persisting via applyTokenChainFromSync would
+// (a) require the transaction SIGNATURE, which the fullnode sync-info endpoint
+// (SyncedTxn) does not transmit — the insert into `transactions` (signature NOT
+// NULL) would fail — and (b) pollute this node's wallet with fullnode chains for
+// tokens it does not own. Reading the burn tx straight from the response avoids
+// both. (See the commented-out apply-based variant below for the alternative
+// that would additionally need the SyncedTxn signature plumbing.)
+//
+// The fullnode sync endpoint (APISyncTransactionInfoFromFullnode) is any-peer
+// callable and requires no ownership proof, so unlike wallet recovery this does
+// not fetch/sign a nonce. It paginates until all pages are consumed.
+//
+// Returned map keys are only the tokens the fullnode actually returned data
+// for; a token absent from the map means the fullnode had no chain for it.
+func (c *Core) syncTokensFromFullnode(tokenIDs []string) (map[string]string, error) {
+	if len(tokenIDs) == 0 {
+		return map[string]string{}, nil
+	}
+
+	peerID, err := c.selectActiveFullnodePeer(c.Ctx)
+	if err != nil {
+		return nil, fmt.Errorf("syncTokensFromFullnode: select fullnode peer: %w", err)
+	}
+
+	peer, err := c.pm.OpenPeerConn(peerID, "", c.getCoreAppName(peerID))
+	if err != nil {
+		return nil, fmt.Errorf("syncTokensFromFullnode: connect to fullnode %s: %w", peerID, err)
+	}
+	defer peer.Close()
+
+	c.log.Info("syncTokensFromFullnode: syncing parent tokens from fullnode",
+		"fullnode_peer", peerID, "tokenCount", len(tokenIDs))
+
+	burnRole := int16(models.GetTokenRoleID(constants.TokenRole_Burn))
+	// burnTxByToken[tokenID] = the ID of the last role=burn entry the fullnode
+	// served for that token; "" recorded when the fullnode returned the chain
+	// but it has no burn entry (token still free on the authoritative record).
+	burnTxByToken := make(map[string]string, len(tokenIDs))
+	tokensInResponse := make(map[string]struct{}, len(tokenIDs))
+
+	pageNumber := 1
+	for {
+		syncReq := types.SyncTransactionInfoFromFullnodeRequest{
+			TokenIDs:   tokenIDs,
+			PageNumber: pageNumber,
+		}
+		// The fullnode wraps the result in a BasicResponse envelope
+		// ({status, message, result}), and SendJSONRequest decodes the raw body
+		// into the target WITHOUT unwrapping. Decoding directly into a bare
+		// SyncTransactionInfoFromFullnodeResult therefore silently yields a
+		// zero-value (Data=nil, TotalItems=0) — the payload lives under "result".
+		// Decode into the envelope and read the typed Result.
+		var syncEnvelope struct {
+			Status  bool                                        `json:"status"`
+			Message string                                      `json:"message"`
+			Result  types.SyncTransactionInfoFromFullnodeResult `json:"result"`
+		}
+		if err := peer.SendJSONRequest("POST", setup.APISyncTransactionInfoFromFullnode, nil, &syncReq, &syncEnvelope, false, 30*time.Second); err != nil {
+			return nil, fmt.Errorf("syncTokensFromFullnode: request page %d from %s: %w", pageNumber, peerID, err)
+		}
+		syncResp := syncEnvelope.Result
+
+		c.log.Debug("syncTokensFromFullnode: page received",
+			"fullnode_peer", peerID, "page", pageNumber, "totalPages", syncResp.TotalPages,
+			"tokensInPage", len(syncResp.Data), "totalItems", syncResp.TotalItems,
+			"divergentTokens", syncResp.DivergentTokens)
+
+		for tokenID, syncedTxns := range syncResp.Data {
+			tokensInResponse[tokenID] = struct{}{}
+			// Entries are position-ordered; the last role=burn entry is the tx
+			// that consumed this token on the authoritative record. We read it
+			// straight from the response — no local persistence, no signature.
+			for _, st := range syncedTxns {
+				if st.Role == burnRole {
+					burnTxByToken[tokenID] = st.ID
+				}
+			}
+			if _, seen := burnTxByToken[tokenID]; !seen {
+				// Chain served but no burn entry → authoritatively not burnt.
+				burnTxByToken[tokenID] = ""
+			}
+
+			// --- OPTION A (apply-based) — INTENTIONALLY DISABLED --------------
+			// The alternative below persists the authoritative chain locally via
+			// applyTokenChainFromSync, so getParentBurnTxID could re-read it from
+			// the tokenchain table. It is disabled because it requires the
+			// transaction SIGNATURE (transactions.signature is NOT NULL), which
+			// the fullnode SyncedTxn payload does not currently carry — enabling
+			// it needs the SyncedTxn signature plumbing on the fullnode
+			// sync-serve path. It also writes fullnode chains into this node's
+			// wallet for tokens it does not own. Kept for reference only.
+			//
+			// remoteTxs := make([]types.TransactionWithRole, 0, len(syncedTxns))
+			// for _, st := range syncedTxns {
+			// 	remoteTxs = append(remoteTxs, types.TransactionWithRole{
+			// 		// Signature: st.Signature, // requires SyncedTxn.Signature (see Option A note)
+			// 		Tx:   models.Transactions{ID: st.ID, Info: st.Info},
+			// 		Role: st.Role,
+			// 	})
+			// }
+			// if len(remoteTxs) > 0 {
+			// 	if applyErr := c.applyTokenChainFromSync(tokenID, remoteTxs, "", false); applyErr != nil {
+			// 		c.log.Warn("syncTokensFromFullnode: apply failed (non-fatal)", "tokenID", tokenID, "err", applyErr)
+			// 	}
+			// }
+			// ------------------------------------------------------------------
+		}
+
+		if syncResp.TotalPages <= 0 || pageNumber >= syncResp.TotalPages {
+			break
+		}
+		pageNumber++
+	}
+
+	// Surface tokens the fullnode returned NOTHING for — the authoritative
+	// source has no chain to serve for them. This is the signal that made the
+	// replayed-split check accept: an empty fullnode response is indistinguishable
+	// from "ancestor is free" unless we log it explicitly.
+	missing := make([]string, 0)
+	for _, t := range tokenIDs {
+		if _, ok := tokensInResponse[t]; !ok {
+			missing = append(missing, t)
+		}
+	}
+	c.log.Info("syncTokensFromFullnode: sync completed",
+		"fullnode_peer", peerID, "tokenCount", len(tokenIDs),
+		"tokensReturnedByFullnode", len(tokensInResponse),
+		"tokensFullnodeHadNothingFor", missing, "burnTxByToken", burnTxByToken)
+	return burnTxByToken, nil
+}
+
+// getTransactionInfoByID fetches a stored transaction by ID and returns its
+// unmarshalled TransactionInfo. Used by the replayed-split check to read the
+// burnt parents carried in a split genesis transaction's CommittedTokens.
+// Returns an error if the transaction is not present locally or cannot be
+// decoded; callers treat a miss as "not a resolvable split genesis".
+func (c *Core) getTransactionInfoByID(txID string) (*models.TransactionInfo, error) {
+	if txID == "" {
+		return nil, fmt.Errorf("getTransactionInfoByID: empty transaction id")
+	}
+	txn, err := c.w.GetTransactionByID(txID, c.fullNode)
+	if err != nil {
+		return nil, err
+	}
+	var info models.TransactionInfo
+	if err := json.Unmarshal(txn.Info, &info); err != nil {
+		return nil, fmt.Errorf("getTransactionInfoByID: unmarshal info for %s: %w", txID, err)
+	}
+	return &info, nil
+}
+
+// getParentBurnTxID reads a parent token's chain and returns the ID of the
+// transaction that burnt it (the last row with role=burn), if any. Used by the
+// replayed-split check to confirm a parent was burnt by the split genesis that
+// claims it, and not by an earlier, different transaction. A parent that is not
+// burnt in the local (or freshly-synced) chain returns found=false.
+func (c *Core) getParentBurnTxID(parentID string) (string, bool, error) {
+	if parentID == "" {
+		return "", false, nil
+	}
+	chain, err := c.w.GetTokenChainByTokenID(parentID, c.fullNode)
+	if err != nil {
+		// No chain locally is not an error for this check — the caller falls
+		// back to an authoritative sync.
+		c.log.Debug("getParentBurnTxID: no local chain for token (unconfirmed)", "tokenID", parentID, "err", err)
+		return "", false, nil
+	}
+	burnRole := int16(models.GetTokenRoleID(constants.TokenRole_Burn))
+	burnTxID := ""
+	for _, row := range chain {
+		if row.Role == burnRole {
+			burnTxID = row.TransactionID
+		}
+	}
+	c.log.Debug("getParentBurnTxID: read token chain",
+		"tokenID", parentID, "chainLen", len(chain), "burnTxID", burnTxID, "burnt", burnTxID != "")
+	return burnTxID, burnTxID != "", nil
 }
 
 // applyTokenChainFromSync validates and applies synced transactions for a single token.
@@ -394,6 +587,13 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.Transac
 			tokenStatus = int16(constants.TokenStatus_Deployed)
 		case int16(models.GetTokenRoleID(constants.TokenRole_Execute)):
 			tokenStatus = int16(constants.TokenStatus_Executed)
+		// A consumed parent must not default to Free, or it can be re-selected by
+		// LockTokensForSplit and re-split into a duplicate genesis (double-mint).
+		// Mirror the originating node: Commit -> Committed, Burn -> Burnt.
+		case int16(models.GetTokenRoleID(constants.TokenRole_Commit)):
+			tokenStatus = int16(constants.TokenStatus_Committed)
+		case int16(models.GetTokenRoleID(constants.TokenRole_Burn)):
+			tokenStatus = int16(constants.TokenStatus_Burnt)
 		}
 
 		newToken := models.Token{
@@ -473,6 +673,14 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.Transac
 		lastStatus = int16(constants.TokenStatus_Deployed)
 	case int16(models.GetTokenRoleID(constants.TokenRole_Execute)):
 		lastStatus = int16(constants.TokenStatus_Executed)
+	// A consumed parent must stay consumed after sync. This update runs even
+	// for pre-existing tokens, so without these cases a re-synced burnt parent
+	// would be overwritten back to Free and become re-splittable (double-mint).
+	// Mirror the originating node: Commit -> Committed, Burn -> Burnt.
+	case int16(models.GetTokenRoleID(constants.TokenRole_Commit)):
+		lastStatus = int16(constants.TokenStatus_Committed)
+	case int16(models.GetTokenRoleID(constants.TokenRole_Burn)):
+		lastStatus = int16(constants.TokenStatus_Burnt)
 	}
 	// For NFT executions, ownership doesn't change
 	// in sync with the chain head when a non-owner subscriber executes an NFT.

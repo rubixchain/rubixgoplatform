@@ -59,6 +59,18 @@ type SyncTransactionInfoFromFullnodeResult struct {
 // unmarshal+remarshal on the server). Position is the entry's chain position
 // on the fullnode — the caller uses it to update KnownPositions for the next
 // request.
+//
+// NOTE (replayed-split check, Option A — DISABLED): SyncedTxn intentionally does
+// NOT carry the transaction Signature. The replayed-split verifier
+// (ValidateSplitParentsAgainstFullnode) consumes this endpoint but only needs
+// each ancestor's burn-tx ID, which it reads straight from these entries (id +
+// role) WITHOUT persisting the chain — so no signature is required. If a future
+// caller needs to APPLY the synced chain into a local wallet (whose transactions
+// table has signature NOT NULL), Option A would add a `Signature json.RawMessage
+// json:"signature"` field here, mirroring the recovery path's
+// RecoveredTransaction.Signature, and populate it in the sync-serve query +
+// handler (see core/wallet/fullnode.go GetFullNodeSyncedChainPageByOffset and
+// core/sync.go syncTokensFromFullnode's commented Option-A block).
 type SyncedTxn struct {
 	ID                    string          `json:"id"`
 	Role                  int16           `json:"role"`

@@ -400,6 +400,9 @@ func TestValidateTransaction_FailsOnInvalidInfoFields(t *testing.T) {
 		false, false, false,
 		func(string, string) error { return nil },
 		func(string, []string, map[string]string, []string) error { return nil },
+		func([]string) (map[string]string, error) { return map[string]string{}, nil }, // syncAuthoritative
+		func(string) (*models.TransactionInfo, error) { return nil, nil }, // getTxByID
+		func(string) (string, bool, error) { return "", false, nil },      // getParentBurnTx
 		false, // transferNFTOwnership
 	)
 	if err == nil {
@@ -428,11 +431,228 @@ func TestValidateTransaction_FailsOnTxIDMismatch(t *testing.T) {
 		false, false, false,
 		func(string, string) error { return nil },
 		func(string, []string, map[string]string, []string) error { return nil },
+		func([]string) (map[string]string, error) { return map[string]string{}, nil }, // syncAuthoritative
+		func(string) (*models.TransactionInfo, error) { return nil, nil }, // getTxByID
+		func(string) (string, bool, error) { return "", false, nil },      // getParentBurnTx
 		false, // transferNFTOwnership
 	)
 	if err == nil || !strings.Contains(err.Error(), "transaction ID mismatch") {
 		t.Fatalf("expected tx ID mismatch error, got: %v", err)
 	}
+}
+
+// =============================================================================
+// ValidateSplitParentsAgainstFullnode — replayed-RBT-split double-spend.
+//
+// The check derives each freshly-split child's ancestors (util TokenID
+// GetHierarchy) and, for each, compares the authoritative burn tx against the
+// child's minting genesis. Tests use a real hierarchical child so the derivation
+// is genuine: 1_1_14 -> ancestors [1_1_3, 1_1_1, 1_1]. Driven purely through the
+// injected callbacks; the *wallet.Wallet arg is unused, passed nil.
+// =============================================================================
+
+func TestValidateSplitParentsAgainstFullnode(t *testing.T) {
+	const (
+		genTX   = "genesis-split-tx-1"   // the split that mints the child now
+		otherTX = "genesis-split-tx-old" // an earlier different split (the replay's true burn)
+		childID = "1_1_14"               // freshly-minted child; ancestors: 1_1_3, 1_1_1, 1_1
+	)
+	// ancestors of childID, deepest→whole (must match util GetHierarchy output).
+	ancImmediate := "1_1_3"
+	ancMid := "1_1_1"
+	ancWhole := "1_1"
+
+	// A transfer of a freshly-split child: RBT token whose prev is the split genesis.
+	transferInfo := func() *models.TransactionInfo {
+		return &models.TransactionInfo{
+			Tokens: &models.TransactionTokens{
+				RBT: []*models.TokenInfo{
+					{TokenID: childID, PreviousTransactionID: genTX, TokenValue: 0.001},
+				},
+			},
+		}
+	}
+	// genTX is a split genesis. Its CommittedTokens declares which ancestors it
+	// burns; the check intersects this with the derived ancestors. We list all
+	// three ancestors with EMPTY prev to prove the check does NOT depend on the
+	// prev field (the old evasion) — only on the fullnode's burn-by-whom.
+	genInfo := &models.TransactionInfo{
+		CommittedTokens: []*models.TokenInfo{
+			{TokenID: ancImmediate, PreviousTransactionID: ""},
+			{TokenID: ancMid, PreviousTransactionID: ""},
+			{TokenID: ancWhole, PreviousTransactionID: ""},
+		},
+	}
+
+	getTxByIDReturning := func(info *models.TransactionInfo) func(string) (*models.TransactionInfo, error) {
+		return func(id string) (*models.TransactionInfo, error) {
+			if id == genTX {
+				return info, nil
+			}
+			return nil, errors.New("not found")
+		}
+	}
+	// burnMap: ancestorID -> (burnTx, burnt?). Missing entry => not burnt.
+	burnFrom := func(m map[string]string) func(string) (string, bool, error) {
+		return func(id string) (string, bool, error) {
+			if tx, ok := m[id]; ok {
+				return tx, true, nil
+			}
+			return "", false, nil
+		}
+	}
+
+	t.Run("legit split: ancestors burnt by this genesis / free -> accept", func(t *testing.T) {
+		// Immediate parent burnt by genTX (this split), higher ancestors free.
+		err := ValidateSplitParentsAgainstFullnode(
+			transferInfo(), testLogger(),
+			getTxByIDReturning(genInfo),
+			burnFrom(map[string]string{ancImmediate: genTX}),
+			func([]string) (map[string]string, error) { return map[string]string{}, nil },
+		)
+		if err != nil {
+			t.Fatalf("expected accept, got: %v", err)
+		}
+	})
+
+	t.Run("DEEP replay: an ANCESTOR burnt by a different tx (empty-prev evasion) -> reject", func(t *testing.T) {
+		// This is the case the old committed-parents check MISSED: the immediate
+		// parent looks freshly minted (burnt by genTX), but a higher ancestor
+		// (the resurrected level) is already burnt by an earlier split.
+		burns := map[string]string{
+			ancImmediate: genTX,   // freshly minted by this split
+			ancMid:       genTX,   // part of this split's run
+			ancWhole:     otherTX, // ALREADY consumed by an earlier split -> replay
+		}
+		err := ValidateSplitParentsAgainstFullnode(
+			transferInfo(), testLogger(),
+			getTxByIDReturning(genInfo),
+			burnFrom(burns),
+			func([]string) (map[string]string, error) {
+				t.Fatal("Tier-1 should reject before authoritative")
+				return nil, nil
+			},
+		)
+		if err == nil || !strings.Contains(err.Error(), "double spend") {
+			t.Fatalf("expected double spend rejection, got: %v", err)
+		}
+	})
+
+	t.Run("legit re-split of a low part: higher ancestor burnt by another tx but NOT in this genesis -> accept", func(t *testing.T) {
+		// The over-rejection guard. genTX splits only the immediate parent; the
+		// whole token was legitimately burnt long ago by a different split. Since
+		// genTX does NOT list the whole token in CommittedTokens, it must NOT be
+		// checked. genInfoLow lists only the immediate parent.
+		genInfoLow := &models.TransactionInfo{
+			CommittedTokens: []*models.TokenInfo{
+				{TokenID: ancImmediate, PreviousTransactionID: ""},
+			},
+		}
+		burns := map[string]string{
+			ancImmediate: genTX,   // this split burns it
+			ancWhole:     otherTX, // legitimately burnt by an EARLIER split; genTX doesn't touch it
+		}
+		err := ValidateSplitParentsAgainstFullnode(
+			transferInfo(), testLogger(),
+			getTxByIDReturning(genInfoLow),
+			burnFrom(burns),
+			func([]string) (map[string]string, error) { return map[string]string{}, nil },
+		)
+		if err != nil {
+			t.Fatalf("expected accept (higher ancestor not consumed by this split), got: %v", err)
+		}
+	})
+
+	t.Run("replay caught only after authoritative sync -> reject", func(t *testing.T) {
+		// Local view: ancestors not burnt (fresh quorum). Tier-2 sync returns
+		// the authoritative burn map revealing the whole token already burnt by
+		// otherTX. getParentBurnTx (tier-1) never resolves it locally.
+		err := ValidateSplitParentsAgainstFullnode(
+			transferInfo(), testLogger(),
+			getTxByIDReturning(genInfo),
+			burnFrom(map[string]string{}), // tier-1 finds nothing locally
+			func(ids []string) (map[string]string, error) {
+				return map[string]string{ancWhole: otherTX}, nil
+			},
+		)
+		if err == nil || !strings.Contains(err.Error(), "double spend") {
+			t.Fatalf("expected double spend after authoritative sync, got: %v", err)
+		}
+	})
+
+	t.Run("legit first split confirmed after authoritative sync (all free) -> accept", func(t *testing.T) {
+		err := ValidateSplitParentsAgainstFullnode(
+			transferInfo(), testLogger(),
+			getTxByIDReturning(genInfo),
+			burnFrom(map[string]string{}), // nothing burnt locally
+			// Authoritative sync serves the chains but none are burnt ("" per token).
+			func(ids []string) (map[string]string, error) {
+				m := make(map[string]string, len(ids))
+				for _, id := range ids {
+					m[id] = ""
+				}
+				return m, nil
+			},
+		)
+		if err != nil {
+			t.Fatalf("expected accept, got: %v", err)
+		}
+	})
+
+	t.Run("fullnode unreachable -> fail open (no reject)", func(t *testing.T) {
+		err := ValidateSplitParentsAgainstFullnode(
+			transferInfo(), testLogger(),
+			getTxByIDReturning(genInfo),
+			burnFrom(map[string]string{}), // never confirmable locally
+			func([]string) (map[string]string, error) { return nil, errors.New("fullnode down") },
+		)
+		if err != nil {
+			t.Fatalf("expected fail-open (nil), got: %v", err)
+		}
+	})
+
+	t.Run("prev is not a split genesis -> pass through", func(t *testing.T) {
+		err := ValidateSplitParentsAgainstFullnode(
+			transferInfo(), testLogger(),
+			func(string) (*models.TransactionInfo, error) { return nil, errors.New("not found") },
+			func(string) (string, bool, error) { t.Fatal("no ancestors to check"); return "", false, nil },
+			func([]string) (map[string]string, error) { t.Fatal("no ancestors to sync"); return nil, nil },
+		)
+		if err != nil {
+			t.Fatalf("expected pass-through, got: %v", err)
+		}
+	})
+
+	t.Run("split genesis with empty committedTokens -> pass through", func(t *testing.T) {
+		// getTxByID resolves but the tx has no committedTokens → not a split.
+		plainGen := &models.TransactionInfo{}
+		err := ValidateSplitParentsAgainstFullnode(
+			transferInfo(), testLogger(),
+			getTxByIDReturning(plainGen),
+			func(string) (string, bool, error) { t.Fatal("no ancestors to check"); return "", false, nil },
+			func([]string) (map[string]string, error) { t.Fatal("nothing to sync"); return nil, nil },
+		)
+		if err != nil {
+			t.Fatalf("expected pass-through, got: %v", err)
+		}
+	})
+
+	t.Run("whole-token transfer (no ancestors) -> pass through", func(t *testing.T) {
+		wholeXfer := &models.TransactionInfo{
+			Tokens: &models.TransactionTokens{
+				RBT: []*models.TokenInfo{{TokenID: "1_1", PreviousTransactionID: genTX}},
+			},
+		}
+		err := ValidateSplitParentsAgainstFullnode(
+			wholeXfer, testLogger(),
+			getTxByIDReturning(genInfo),
+			func(string) (string, bool, error) { return "", false, nil },
+			func([]string) (map[string]string, error) { return map[string]string{}, nil },
+		)
+		if err != nil {
+			t.Fatalf("expected pass-through for whole token, got: %v", err)
+		}
+	})
 }
 
 // =============================================================================

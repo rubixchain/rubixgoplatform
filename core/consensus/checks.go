@@ -817,6 +817,258 @@ func TokenChainIntegrityCheck(
 	return nil
 }
 
+// ValidateSplitParentsAgainstFullnode rejects a replayed RBT split (a
+// double-mint) by verifying, against an authoritative full node, the DERIVED
+// ancestor tokens of each freshly-split child — not the parent list the
+// initiator authored in the genesis's CommittedTokens.
+//
+// Why derived, not declared: a rolled-back initiator controls every field of a
+// split genesis's CommittedTokens (which parents it lists AND their claimed
+// prior tip). It can present a genuinely double-spent parent as an empty-prev
+// "fresh mint" and evade any check that trusts that list. Token IDs, by
+// contrast, are hierarchical and deterministic: from a transferred child C we
+// can DERIVE its full ancestor chain up to the whole token (util TokenID
+// GetHierarchy) with no initiator input.
+//
+// The invariant: a token is legitimately burnt exactly once, by the split that
+// consumes it. We check the tokens genTX BURNS (its CommittedTokens) intersected
+// with the DERIVED ancestors of its freshly-minted children — i.e. exactly the
+// ancestors this split actually consumes. For each such token A, the
+// authoritative full node's burn transaction must be either (a) absent (A still
+// free — this split is A's first consume) or (b) genTX itself. If the full node
+// says A was burnt by a DIFFERENT, earlier transaction, this split is
+// re-consuming an already-spent token — a replay — and is rejected.
+//
+// The intersection is essential: the derived hierarchy alone over-rejects a
+// legitimate split of a low part (whose higher ancestors were legitimately burnt
+// by earlier splits and which genTX does not touch); CommittedTokens alone is
+// initiator-authored. Intersecting checks only what genTX both derivably has as
+// an ancestor AND declares it burns.
+//
+// "Freshly-split child" = a transferred RBT token whose PreviousTransactionID
+// resolves (getTxByID) to a genesis carrying CommittedTokens. A plain transfer
+// of a pre-existing part has an ordinary (non-genesis) prev and is skipped.
+//
+// Tiering: the ancestor's burn tx is first read locally (getParentBurnTx). A
+// local "burnt by a different tx" is a provable replay (applyTokenChainFromSync
+// fork detection prevents a stale initiator sync from overwriting a genuine
+// local burn). Ancestors not locally confirmable are pulled once from an
+// authoritative full node (syncAuthoritative) and re-checked.
+//
+// Fallback: if the authoritative sync is unavailable or fails, this logs a
+// warning and returns nil (no rejection) so transactions keep flowing when no
+// full node is reachable, at the cost of no replay protection in that case.
+func ValidateSplitParentsAgainstFullnode(
+	txnInfo *models.TransactionInfo,
+	log logger.Logger,
+	getTxByID func(txID string) (*models.TransactionInfo, error),
+	getParentBurnTx func(parentID string) (burnTxID string, found bool, err error),
+	syncAuthoritative func(tokenIDs []string) (map[string]string, error),
+) error {
+	if getParentBurnTx == nil {
+		return nil
+	}
+
+	// ancestorGenesis maps a tokenID that a split genesis BURNS → that genesis
+	// (genTX). If the full node's burn tx for such a token differs from genTX,
+	// the token was already consumed by an earlier split → replay.
+	//
+	// The set to check is: the tokens genTX declares it burns (its
+	// CommittedTokens) INTERSECTED WITH the derived ancestors of the freshly-
+	// minted children. Why the intersection:
+	//   - Derived hierarchy alone over-rejects: a legitimate split of a low part
+	//     (e.g. a free 0.05) has higher ancestors (0.5, whole) that were burnt by
+	//     EARLIER legitimate splits — genTX does not touch them, so they must not
+	//     be checked.
+	//   - CommittedTokens alone is initiator-authored (which parents + their prev
+	//     are forgeable). But a genesis can only HARM by HIDING a burn (omitting
+	//     or empty-prev), never by adding a burn it isn't performing; and omission
+	//     breaks the minted children's derived parent linkage caught elsewhere.
+	// Intersecting the two: we check exactly the ancestors genTX both derivably
+	// has AND claims to burn — the tokens this split actually consumes.
+	ancestorGenesis := make(map[string]string)
+
+	// registerBurns records genTX's burnt tokens that are genuine ancestors of at
+	// least one freshly-minted child (derived), so we ignore forged/irrelevant IDs.
+	registerBurns := func(genTX string, childIDs []string, committed []*models.TokenInfo) {
+		if len(committed) == 0 {
+			return
+		}
+		// Derived ancestor set across all this genesis's minted children.
+		derived := make(map[string]struct{})
+		for _, childID := range childIDs {
+			ancestors, err := util.TokenID(childID).GetHierarchy()
+			if err != nil {
+				log.Debug("ValidateSplitParentsAgainstFullnode: could not derive hierarchy",
+					"tokenID", childID, "err", err)
+				continue
+			}
+			for _, a := range ancestors {
+				derived[a] = struct{}{}
+			}
+		}
+		for _, ct := range committed {
+			if ct == nil || ct.TokenID == "" {
+				continue
+			}
+			if _, ok := derived[ct.TokenID]; !ok {
+				continue // burnt token is not a derived ancestor of any minted child
+			}
+			if _, seen := ancestorGenesis[ct.TokenID]; !seen {
+				ancestorGenesis[ct.TokenID] = genTX
+			}
+		}
+	}
+
+	// Source 1: the transaction being validated is ITSELF a split genesis (the
+	// full node ingestion path) — its minted children are the RBT tokens it
+	// carries, and its own tx ID is genTX.
+	if len(txnInfo.CommittedTokens) > 0 && txnInfo.Tokens != nil {
+		if selfTxID, idErr := util.GetTransactionID(txnInfo); idErr == nil {
+			childIDs := make([]string, 0, len(txnInfo.Tokens.RBT))
+			for _, t := range txnInfo.Tokens.RBT {
+				if t != nil && t.TokenID != "" {
+					childIDs = append(childIDs, t.TokenID)
+				}
+			}
+			registerBurns(selfTxID, childIDs, txnInfo.CommittedTokens)
+		} else {
+			log.Warn("ValidateSplitParentsAgainstFullnode: could not compute self tx ID", "err", idErr)
+		}
+	}
+
+	// Source 2: the quorum consensus path — the transfer lists freshly-minted
+	// children whose PreviousTransactionID is the split genesis. Resolve genTX,
+	// and only if it is a split genesis (has CommittedTokens), register its burns.
+	if txnInfo.Tokens != nil && getTxByID != nil {
+		childrenByGenesis := make(map[string][]string)
+		for _, t := range txnInfo.Tokens.RBT {
+			if t == nil || t.TokenID == "" || t.PreviousTransactionID == "" {
+				continue
+			}
+			childrenByGenesis[t.PreviousTransactionID] = append(childrenByGenesis[t.PreviousTransactionID], t.TokenID)
+		}
+		for genTX, childIDs := range childrenByGenesis {
+			genInfo, err := getTxByID(genTX)
+			if err != nil || genInfo == nil || len(genInfo.CommittedTokens) == 0 {
+				// Not a resolvable split genesis (e.g. plain part transfer).
+				log.Debug("ValidateSplitParentsAgainstFullnode: genesis not a resolvable split (skipping)",
+					"genesis", genTX, "children", childIDs, "resolveErr", err, "committedTokens", func() int {
+						if genInfo == nil {
+							return -1
+						}
+						return len(genInfo.CommittedTokens)
+					}())
+				continue
+			}
+			log.Debug("ValidateSplitParentsAgainstFullnode: resolved split genesis for transferred children",
+				"genesis", genTX, "children", childIDs, "committedTokenCount", len(genInfo.CommittedTokens))
+			registerBurns(genTX, childIDs, genInfo.CommittedTokens)
+		}
+	}
+
+	if len(ancestorGenesis) == 0 {
+		log.Debug("ValidateSplitParentsAgainstFullnode: no split-genesis ancestors to check; nothing to do")
+		return nil
+	}
+
+	log.Debug("ValidateSplitParentsAgainstFullnode: checking split-genesis ancestors",
+		"ancestorCount", len(ancestorGenesis), "ancestorGenesis", ancestorGenesis)
+
+	// verifyAncestor checks one ancestor's burn tx against its expected genesis.
+	// Returns (rejectErr, confirmed). confirmed=false → not resolvable from this
+	// view; try the authoritative sync.
+	verifyAncestor := func(ancestorID, genTX string, tier string) (error, bool) {
+		burnTxID, found, err := getParentBurnTx(ancestorID)
+		if err != nil {
+			log.Warn("ValidateSplitParentsAgainstFullnode: getParentBurnTx errored; treating ancestor as unconfirmed",
+				"tier", tier, "ancestor", ancestorID, "expectedGenesis", genTX, "err", err)
+			return nil, false
+		}
+		if !found {
+			// Not burnt in this view: either genuinely free (legit first split of
+			// this ancestor) or the burn record just isn't here yet. Treated as
+			// unconfirmed so Tier 2 can fetch the authoritative record.
+			log.Debug("ValidateSplitParentsAgainstFullnode: ancestor not burnt in this view (unconfirmed)",
+				"tier", tier, "ancestor", ancestorID, "expectedGenesis", genTX)
+			return nil, false
+		}
+		if burnTxID != genTX {
+			log.Warn("ValidateSplitParentsAgainstFullnode: REPLAY DETECTED — ancestor burnt by a different tx than this split genesis",
+				"tier", tier, "ancestor", ancestorID, "burntBy", burnTxID, "thisSplitGenesis", genTX)
+			return fmt.Errorf("ValidateSplitParentsAgainstFullnode: ancestor %s already consumed (burnt by %s, not by this split genesis %s); double spend",
+				ancestorID, burnTxID, genTX), true
+		}
+		// Burnt by this split's genesis — part of the legitimate contiguous run.
+		log.Debug("ValidateSplitParentsAgainstFullnode: ancestor burnt by this split genesis (legit contiguous run)",
+			"tier", tier, "ancestor", ancestorID, "genesis", genTX)
+		return nil, true
+	}
+
+	// Tier 1 — LOCAL.
+	unconfirmed := make([]string, 0, len(ancestorGenesis))
+	for ancestorID, genTX := range ancestorGenesis {
+		rejectErr, confirmed := verifyAncestor(ancestorID, genTX, "local")
+		if rejectErr != nil {
+			return rejectErr
+		}
+		if !confirmed {
+			unconfirmed = append(unconfirmed, ancestorID)
+		}
+	}
+	log.Debug("ValidateSplitParentsAgainstFullnode: tier-1 (local) complete",
+		"confirmedLocally", len(ancestorGenesis)-len(unconfirmed), "unconfirmed", unconfirmed)
+
+	// Tier 2 — AUTHORITATIVE.
+	if len(unconfirmed) > 0 {
+		if syncAuthoritative == nil {
+			log.Warn("ValidateSplitParentsAgainstFullnode: no authoritative sync available; ACCEPTING (cannot verify)",
+				"tokens", unconfirmed)
+			return nil
+		}
+		log.Debug("ValidateSplitParentsAgainstFullnode: tier-2 syncing unconfirmed ancestors from authoritative fullnode",
+			"tokens", unconfirmed)
+		// syncAuthoritative returns the authoritative burn-tx per ancestor read
+		// straight from the fullnode's response (tokenID -> burnTxID; "" means
+		// the fullnode served the chain but it is not burnt; ABSENT means the
+		// fullnode had no chain for it). We compare that directly instead of
+		// re-reading a locally-persisted chain — the fullnode sync-info payload
+		// carries no signature, so it is never applied to this node's wallet.
+		authoritativeBurnTx, err := syncAuthoritative(unconfirmed)
+		if err != nil {
+			log.Warn("ValidateSplitParentsAgainstFullnode: authoritative fullnode sync failed; ACCEPTING (cannot verify)",
+				"tokens", unconfirmed, "err", err)
+			return nil
+		}
+		for _, ancestorID := range unconfirmed {
+			genTX := ancestorGenesis[ancestorID]
+			burnTxID, served := authoritativeBurnTx[ancestorID]
+			switch {
+			case !served || burnTxID == "":
+				// Fullnode has no burn for this ancestor (not served, or served
+				// but not burnt) → authoritatively not consumed → legitimate
+				// first-split. NOTE: a fullnode that simply lacks the record also
+				// lands here — this is fail-open, consistent with tier-1.
+				log.Warn("ValidateSplitParentsAgainstFullnode: ancestor not burnt on authoritative fullnode — ACCEPTING as legitimate first-split (NOTE: a fullnode missing the record also lands here)",
+					"ancestor", ancestorID, "expectedGenesis", genTX, "served", served)
+			case burnTxID != genTX:
+				log.Warn("ValidateSplitParentsAgainstFullnode: REPLAY DETECTED — ancestor burnt by a different tx than this split genesis",
+					"tier", "authoritative", "ancestor", ancestorID, "burntBy", burnTxID, "thisSplitGenesis", genTX)
+				return fmt.Errorf("ValidateSplitParentsAgainstFullnode: ancestor %s already consumed (burnt by %s, not by this split genesis %s); double spend",
+					ancestorID, burnTxID, genTX)
+			default:
+				// Burnt by this split's genesis — part of the legitimate run.
+				log.Debug("ValidateSplitParentsAgainstFullnode: ancestor burnt by this split genesis (legit contiguous run)",
+					"tier", "authoritative", "ancestor", ancestorID, "genesis", genTX)
+			}
+		}
+	}
+
+	log.Debug("ValidateSplitParentsAgainstFullnode: all ancestors verified; no replay detected (ACCEPT)",
+		"ancestorCount", len(ancestorGenesis))
+	return nil
+}
+
 // ValidateIPFSPinChecks validates IPFS pin status for all tokens.
 // checkPinned is a caller-supplied function that checks whether a given
 // token state hash is already pinned. It should return an error if pinned.
@@ -869,6 +1121,7 @@ func ValidateIPFSPinChecks(txnInfo *models.TransactionInfo, isFullnode bool, che
 //   - testnet, mainnet, localnet: network mode flags
 //   - checkPinned: function to check IPFS pin status (tokenID, prevTxnID) → error
 //   - syncTxChains: callback to sync transaction chains from peer (injected from core to avoid cyclic import)
+//   - syncAuthoritative: callback to sync tokens from an authoritative full node (for committed parent verification)
 //   - transferNFTOwnership: from ConsensusRequest envelope. Fullnode passes false.
 func ValidateTransaction(
 	tx *models.Transactions,
@@ -882,6 +1135,9 @@ func ValidateTransaction(
 	localnet bool,
 	checkPinned func(tokenID, previousTxnID string) error,
 	syncTxChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error,
+	syncAuthoritative func(tokenIDs []string) (map[string]string, error),
+	getTxByID func(txID string) (*models.TransactionInfo, error),
+	getParentBurnTx func(parentID string) (burnTxID string, found bool, err error),
 	transferNFTOwnership bool,
 ) (bool, error) {
 	var txnInfo models.TransactionInfo
@@ -907,6 +1163,13 @@ func ValidateTransaction(
 	}
 
 	if err := TokenChainIntegrityCheck(&txnInfo, tx.ID, isFullnode, w, log, syncTxChains); err != nil {
+		return false, fmt.Errorf("ValidateTransaction: %w", err)
+	}
+
+	// Reject a replayed RBT split (double-mint) by verifying each freshly-split
+	// child's DERIVED ancestor tokens against an authoritative full node rather
+	// than trusting the (possibly rolled-back) initiator's declared parents.
+	if err := ValidateSplitParentsAgainstFullnode(&txnInfo, log, getTxByID, getParentBurnTx, syncAuthoritative); err != nil {
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
 
