@@ -195,6 +195,34 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 	}
 	c.log.Info("Consensus request parsed successfully", "request", consensusRequest)
 
+	// Release-on-abort guard for the pledge lock.
+	//
+	// The initiator locks this quorum's selected pledge tokens (status Locked) in
+	// the earlier requestPledgeTokenHandler call, BEFORE this handler runs. Those
+	// locks are only transitioned to Pledged — and recorded in
+	// unpledge_sequence_info so CallBackQuorumUnpledge can later release them — by
+	// PledgeV2 near the end of this handler. Any early return before PledgeV2
+	// commits (a failed ValidateTransaction such as a rejected replay, a consensus
+	// failure, or any of the validation errors below) would otherwise leave those
+	// tokens stuck Locked forever: no unpledge_sequence_info row exists, so the
+	// deferred CallBackQuorumUnpledge skips them, and nothing else frees them.
+	//
+	// This defer releases the locked tokens on every abort path unless
+	// pledgeCommitted is set true immediately after PledgeV2 succeeds.
+	pledgeCommitted := false
+	defer func() {
+		if pledgeCommitted {
+			return
+		}
+		if releaseErr := c.w.ReleaseAllLockedRBTTokensForDID(c.w.Ctx, quorumDid, consensusRequest.ReferenceId); releaseErr != nil {
+			c.log.Error("initiateConsensusHandler: failed to release locked tokens on abort",
+				"did", quorumDid, "referenceID", consensusRequest.ReferenceId, "err", releaseErr)
+		} else {
+			c.log.Info("initiateConsensusHandler: released locked tokens on abort (pledge not committed)",
+				"did", quorumDid, "referenceID", consensusRequest.ReferenceId)
+		}
+	}()
+
 	// Validation pipeline: run stateless checks BEFORE calling InitiateConsensus
 
 	// Check 0: Nil-check TransactionInfo
@@ -241,10 +269,25 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 	syncTxChains := func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error {
 		return c.SyncTransactionChainsFromPeer(peerDID, tokenIDs, prevTxIDs, excludeTxIDs, false, c.fullNode)
 	}
+	// Committed (burnt parent) tokens are verified against an authoritative full
+	// node so a rolled-back initiator cannot drive a replayed split through
+	// consensus.
+	syncAuthoritative := func(tokenIDs []string) (map[string]string, error) {
+		return c.syncTokensFromFullnode(tokenIDs)
+	}
+	// Resolve a split genesis transaction by ID so the replay check can read the
+	// burnt parents it carries, and read a parent's burning transaction from its
+	// local (or freshly-synced) chain.
+	getTxByID := func(txID string) (*models.TransactionInfo, error) {
+		return c.getTransactionInfoByID(txID)
+	}
+	getParentBurnTx := func(parentID string) (string, bool, error) {
+		return c.getParentBurnTxID(parentID)
+	}
 	fetchGenesisTx := func(peerDID, tokenID string) (*models.Transactions, error) {
 		return c.FetchGenesisTransactionFromPeer(peerDID, tokenID)
 	}
-	isTransactionInfoValidated, err := consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, nil, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains, fetchGenesisTx, consensusRequest.TransferNFTOwnership)
+	isTransactionInfoValidated, err := consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, nil, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains, syncAuthoritative, getTxByID, getParentBurnTx, fetchGenesisTx, consensusRequest.TransferNFTOwnership)
 	if err != nil || !isTransactionInfoValidated {
 		c.log.Error("initiateConsensusHandler: transaction info validation failed", "err", err)
 		if err != nil {
@@ -408,6 +451,12 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 		// Alerting is needed to investigate and resolve the underlying issue.
 		return c.l.RenderJSON(request, response, http.StatusInternalServerError)
 	}
+
+	// PledgeV2 committed the pledge: the tokens are now Pledged and recorded in
+	// unpledge_sequence_info, so CallBackQuorumUnpledge owns their release. Disarm
+	// the abort-release guard so it does not free tokens that are legitimately
+	// pledged.
+	pledgeCommitted = true
 
 	return c.l.RenderJSON(request, &consensusResponse, http.StatusOK)
 }

@@ -255,6 +255,14 @@ func (w *Wallet) GetFullNodeSyncedChainPageByOffset(
 		return nil, nil, nil
 	}
 
+	// NOTE (replayed-split check, Option A — DISABLED): this SELECT deliberately
+	// omits t.signature, so SyncedTxn carries no signature. The only current
+	// consumer (ValidateSplitParentsAgainstFullnode) does not persist the chain,
+	// so it does not need it. To enable Option A (applying the synced chain into a
+	// signature-NOT-NULL transactions table), add `, t.signature` to the SELECT,
+	// add a Signature field to syncChainRow, and set SyncedTxn.Signature in the
+	// SyncedTxn build below — mirroring the recovery query in
+	// core/wallet/recovery.go which selects t.info AND t.signature.
 	rows, err := w.db.Pool().Query(w.Ctx, `
 		SELECT tc.token_id, tc.transaction_id, tc.role, tc.position,
 		       tc.previous_transaction_id, t.info

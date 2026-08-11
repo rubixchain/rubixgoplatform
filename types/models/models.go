@@ -343,6 +343,15 @@ type DIDResult struct {
 	PeerID string `json:"peer_id"`
 }
 
+// DIDPublicKeyResult is the result payload of GET /rubix/v1/dids/{did}/public_key.
+// PublicKey is the hex of the raw (PEM-decoded) uncompressed secp256k1 point —
+// the same 65 bytes secp256k1.ParsePubKey consumes elsewhere, and the same
+// encoding DIDCreate.PubKey takes when creating a DID from a public key.
+type DIDPublicKeyResult struct {
+	DID       string `json:"did"`
+	PublicKey string `json:"public_key"`
+}
+
 type TokenDetail struct {
 	Token  string `json:"token"`
 	Status int    `json:"status"`

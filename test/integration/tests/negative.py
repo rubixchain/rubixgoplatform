@@ -22,7 +22,8 @@ Cases (4 families):
   - decimal/precision: transfer with more than MaxSupportedDecimalPlaces (3)
     decimal places.
   - FT over-transfer: transfer more FTs than the DID holds.
-  - invalid inputs: unknown/malformed receiver DID; non-positive amount.
+  - invalid inputs: unknown/malformed receiver DID; non-positive amount;
+    malformed DID on the public-key lookup.
 """
 
 from __future__ import annotations
@@ -219,5 +220,14 @@ class NegativeEngine:
             lambda: self.node_a.transfer_rbt(self.did_a, self.did_b, -5, self.password),
             _REASON_BAD_AMOUNT + _REASON_INSUFFICIENT,
             unchanged={"nodeA_balance": (lambda: self.node_a.get_balance(self.did_a), bal_a)},
+        ))
+
+        # (c) Public-key lookup for a malformed DID. Must be rejected by the
+        # handler's DID validation, BEFORE any IPFS resolution is attempted —
+        # otherwise a junk DID would stall the request on a DHT lookup.
+        out.append(self._expect_rejection(
+            "NEG_PUBLIC_KEY_MALFORMED_DID",
+            lambda: self.node_a.get_public_key("bafyinvalidnonexistentdid000000000000"),
+            _REASON_INVALID_DID,
         ))
         return out
