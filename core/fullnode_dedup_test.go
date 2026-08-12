@@ -25,6 +25,7 @@ func newTestProcessor(queueCap int, enqueueTimeout time.Duration) (*DynamicTxnPr
 		cancel:         cancel,
 		queueThreshold: 100,
 		enqueueTimeout: enqueueTimeout,
+		inflight:       newInflightRegistry(),
 	}
 	return p, cancel
 }

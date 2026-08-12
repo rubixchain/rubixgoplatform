@@ -4,6 +4,7 @@ import (
 	"context"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/types/models"
@@ -31,10 +32,21 @@ type DynamicTxnProcessor struct {
 	scaleDownDelay  time.Duration
 	lastScaleAction time.Time
 
+	// Received-but-unresolved transactions. Distinct from processedTxns, which
+	// is a seen-recently set rather than a live one.
+	inflight *inflightRegistry
+
 	// Metrics
 	queueLength        int64
 	averageProcessTime time.Duration
 	processedTxnCount  int64 // ADD ATOMIC COUNTER
+
+	// Bundling observation counters, read via sync/atomic. depsObserved counts
+	// every declared PreviousTransactionID edge; depsInFlight counts the subset
+	// whose producer was still being processed when the consumer arrived. Their
+	// ratio is what sizes the readiness gate in a later commit.
+	depsObserved int64
+	depsInFlight int64
 
 	// Worker management
 	workerChannels  map[int]chan struct{}
@@ -75,6 +87,7 @@ func (c *Core) initDynamicTxnProcessor() {
 		maxRetries:      3,
 		retryDelay:      time.Second * 2,
 		enqueueTimeout:  time.Second * 10,
+		inflight:        newInflightRegistry(),
 		resourceMonitor: &ResourceMonitor{}, // INITIALIZE YOUR MONITOR
 	}
 
@@ -386,6 +399,15 @@ func (c *Core) dedupMapCleaner() {
 				}
 				return true
 			})
+
+			// Piggy-backed on the existing sweep rather than adding another
+			// ticker. inflight should hover near the number of busy workers; a
+			// value that climbs steadily means entries are leaking.
+			c.log.Info("Fullnode ingest metrics",
+				"inflight", c.txnProcessor.inflight.len(),
+				"queueLength", len(c.txnProcessor.txnQueue),
+				"depsObserved", atomic.LoadInt64(&c.txnProcessor.depsObserved),
+				"depsInFlight", atomic.LoadInt64(&c.txnProcessor.depsInFlight))
 		case <-c.txnProcessor.ctx.Done():
 			return
 		}
