@@ -5,6 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -102,6 +103,77 @@ func (r *inflightRegistry) len() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return len(r.byID)
+}
+
+// idSet returns a snapshot of the in-flight transaction IDs.
+//
+// A copy rather than a live view: callers use it while doing network and
+// database work, and the lock must not be held across either.
+func (r *inflightRegistry) idSet() map[string]bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	ids := make(map[string]bool, len(r.byID))
+	for id := range r.byID {
+		ids[id] = true
+	}
+	return ids
+}
+
+// truncateAtInflight returns the longest prefix of txs that contains no
+// transaction currently in flight.
+//
+// A peer returns a token's chain as it stands on that peer, which can include
+// transactions this fullnode has received but not yet validated. Applying those
+// persists a chain entry the fullnode never checked, and it advances the local
+// tip past what the still-in-flight transaction expects — that transaction then
+// fails its own integrity check with a chain mismatch, caused entirely by a sync
+// performed on someone else's behalf.
+//
+// Cutting to a prefix is what makes this safe. Dropping entries from the middle
+// instead would leave a hole, and applyTokenChainFromSyncForFullNode rejects a
+// chain whose links do not join up, failing the whole sync rather than trimming
+// it. A prefix of a valid chain is always itself a valid chain.
+func truncateAtInflight(txs []types.TransactionWithRole, inflight map[string]bool) []types.TransactionWithRole {
+	if len(inflight) == 0 {
+		return txs
+	}
+	for i, tx := range txs {
+		if inflight[tx.Tx.ID] {
+			return txs[:i]
+		}
+	}
+	return txs
+}
+
+// guardAgainstInflight trims a peer's chain response so it cannot carry an
+// entry belonging to a transaction this node is still processing.
+//
+// Returns txs unchanged when there is nothing to trim, including on a node with
+// no transaction processor, so the non-fullnode sync path is unaffected.
+func (c *Core) guardAgainstInflight(tokenID string, txs []types.TransactionWithRole) []types.TransactionWithRole {
+	if c.txnProcessor == nil || c.txnProcessor.inflight == nil {
+		return txs
+	}
+
+	guarded := truncateAtInflight(txs, c.txnProcessor.inflight.idSet())
+	if len(guarded) == len(txs) {
+		return txs
+	}
+
+	// Worth an Info line: this is the difference between the fullnode ingesting
+	// an unvalidated sibling and not. A token that truncates on every sync
+	// points at a leaked registry entry rather than genuine concurrency.
+	var firstDropped string
+	if len(guarded) < len(txs) {
+		firstDropped = txs[len(guarded)].Tx.ID
+	}
+	c.log.Info("Chain sync truncated at an in-flight transaction",
+		"tokenID", tokenID,
+		"remoteCount", len(txs),
+		"appliedCount", len(guarded),
+		"stoppedAt", firstDropped)
+
+	return guarded
 }
 
 // registerInflight records txnEvent as in flight and counts the dependency edges
