@@ -230,9 +230,12 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 	getParentBurnTx := func(parentID string) (string, bool, error) {
 		return c.getParentBurnTxID(parentID)
 	}
+	fetchGenesisTx := func(peerDID, tokenID string) (*models.Transactions, error) {
+		return c.FetchGenesisTransactionFromPeer(peerDID, tokenID)
+	}
 	// Fullnode trusts the quorum's earlier transfer-auth decision; the flag
 	// is not in the EventTransaction.
-	_, err = consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, quorumDCs, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains, syncAuthoritative, getTxByID, getParentBurnTx, false)
+	_, err = consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, quorumDCs, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains, syncAuthoritative, getTxByID, getParentBurnTx, fetchGenesisTx, false)
 	if err != nil {
 		c.log.Error("processSingleTransaction:failed to validate transaction", "error", err)
 		// Storing the invalid transaction is deferred to processTxnWithRetry,

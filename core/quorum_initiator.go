@@ -284,7 +284,10 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 	getParentBurnTx := func(parentID string) (string, bool, error) {
 		return c.getParentBurnTxID(parentID)
 	}
-	isTransactionInfoValidated, err := consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, nil, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains, syncAuthoritative, getTxByID, getParentBurnTx, consensusRequest.TransferNFTOwnership)
+	fetchGenesisTx := func(peerDID, tokenID string) (*models.Transactions, error) {
+		return c.FetchGenesisTransactionFromPeer(peerDID, tokenID)
+	}
+	isTransactionInfoValidated, err := consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, nil, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains, syncAuthoritative, getTxByID, getParentBurnTx, fetchGenesisTx, consensusRequest.TransferNFTOwnership)
 	if err != nil || !isTransactionInfoValidated {
 		c.log.Error("initiateConsensusHandler: transaction info validation failed", "err", err)
 		if err != nil {

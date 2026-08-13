@@ -403,6 +403,7 @@ func TestValidateTransaction_FailsOnInvalidInfoFields(t *testing.T) {
 		func([]string) (map[string]string, error) { return map[string]string{}, nil }, // syncAuthoritative
 		func(string) (*models.TransactionInfo, error) { return nil, nil }, // getTxByID
 		func(string) (string, bool, error) { return "", false, nil },      // getParentBurnTx
+		func(string, string) (*models.Transactions, error) { return nil, nil },
 		false, // transferNFTOwnership
 	)
 	if err == nil {
@@ -434,6 +435,7 @@ func TestValidateTransaction_FailsOnTxIDMismatch(t *testing.T) {
 		func([]string) (map[string]string, error) { return map[string]string{}, nil }, // syncAuthoritative
 		func(string) (*models.TransactionInfo, error) { return nil, nil }, // getTxByID
 		func(string) (string, bool, error) { return "", false, nil },      // getParentBurnTx
+		func(string, string) (*models.Transactions, error) { return nil, nil },
 		false, // transferNFTOwnership
 	)
 	if err == nil || !strings.Contains(err.Error(), "transaction ID mismatch") {
