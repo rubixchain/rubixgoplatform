@@ -89,6 +89,13 @@ type inflightRegistry struct {
 	// constant directly so a test can reach the cap without parking 64
 	// transactions.
 	maxWaiters int
+
+	// parent is the union-find forest over transaction IDs and members maps each
+	// root to its full membership. Together they answer which bundle a
+	// transaction belongs to; see fullnode_components.go. Both are guarded by
+	// the mutex above rather than one of their own.
+	parent  map[string]string
+	members map[string][]string
 }
 
 func newInflightRegistry() *inflightRegistry {
@@ -96,6 +103,8 @@ func newInflightRegistry() *inflightRegistry {
 		byID:       make(map[string]*inflightTxn),
 		waitingOn:  make(map[string][]*inflightTxn),
 		maxWaiters: maxWaitersPerProducer,
+		parent:     make(map[string]string),
+		members:    make(map[string][]string),
 	}
 }
 
@@ -119,10 +128,16 @@ func (r *inflightRegistry) register(t *inflightTxn) bool {
 
 // unregister removes id. It is a no-op if id is absent, so callers can defer it
 // unconditionally.
+//
+// This is the only point at which the pipeline shrinks, so it is also where a
+// component gets the chance to be found dead. Pruning here rather than on a
+// sweep means a bundle is forgotten as soon as its last member leaves, with no
+// interval during which the forest holds work that has already finished.
 func (r *inflightRegistry) unregister(id string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.byID, id)
+	r.pruneComponentLocked(id)
 }
 
 // has reports whether id is currently in flight.
@@ -443,6 +458,12 @@ func (c *Core) registerInflight(txnEvent *models.EventTransaction) *inflightTxn 
 					"txnID", entry.id, "dependsOn", dep)
 			}
 		}
+
+		// Forward linkage: this transaction and every producer it names are one
+		// bundle. Every declared producer, not merely the unresolved ones — a
+		// bundle is who relates to whom, which does not change because one
+		// member happened to be persisted before another arrived.
+		c.txnProcessor.inflight.linkComponent(entry.id, entry.deps)
 	}
 
 	// The reverse edge. This transaction may be the producer that others have
@@ -450,13 +471,32 @@ func (c *Core) registerInflight(txnEvent *models.EventTransaction) *inflightTxn 
 	// harmless: they are woken when this transaction persists, without ever
 	// having had to know it was coming.
 	//
-	// Nothing has to be done here to make that happen — the edges were recorded
-	// when they parked — but this is the only point at which the out-of-order
-	// case is visible, and its frequency is what justifies the machinery.
-	if waiters := c.txnProcessor.inflight.waitersOf(entry.id); len(waiters) > 0 {
+	// Nothing has to be done here to release them — the edges were recorded when
+	// they parked — but this is the only point at which the out-of-order case is
+	// visible, and its frequency is what justifies the machinery.
+	waiters := c.txnProcessor.inflight.waitersOf(entry.id)
+	if len(waiters) > 0 {
 		atomic.AddInt64(&c.txnProcessor.revEdges, int64(len(waiters)))
+
+		// Reverse linkage. Redundant as things stand, because a transaction only
+		// ever parks on a producer it declared and its own registration already
+		// merged the two. It is here because that redundancy is a property of
+		// the parking rule rather than of the forest: if parking ever extends
+		// beyond the declared dependency set, this is the direction that would
+		// otherwise be silently lost.
+		c.txnProcessor.inflight.linkComponent(entry.id, waiters)
+
 		c.log.Debug("registerInflight: transactions are already waiting on this one",
 			"txnID", entry.id, "waiters", waiters)
+	}
+
+	// Observation only at this commit. The consumer is the per-bundle sync memo,
+	// which cannot be scoped until this identity exists.
+	if len(entry.deps) > 0 || len(waiters) > 0 {
+		if members := c.txnProcessor.inflight.componentMembers(entry.id); len(members) > 1 {
+			c.log.Debug("registerInflight: transaction belongs to a bundle",
+				"txnID", entry.id, "bundleSize", len(members), "members", members)
+		}
 	}
 
 	return entry

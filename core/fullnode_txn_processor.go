@@ -425,9 +425,9 @@ func (c *Core) dedupMapCleaner() {
 			// ticker. inflight should hover near the number of busy workers; a
 			// value that climbs steadily means entries are leaking.
 			//
-			// waitingOn is the same kind of signal: it should rise and fall with
-			// parked, and a value that only ever rises means a waiter is failing
-			// to unpark.
+			// waitingOn and components are the same kind of signal: both should
+			// rise and fall with the workload, and either one only ever rising
+			// means something is failing to unpark or to prune.
 			c.log.Info("Fullnode ingest metrics",
 				"inflight", c.txnProcessor.inflight.len(),
 				"queueLength", len(c.txnProcessor.txnQueue),
@@ -435,6 +435,7 @@ func (c *Core) dedupMapCleaner() {
 				"depsInFlight", atomic.LoadInt64(&c.txnProcessor.depsInFlight),
 				"parked", atomic.LoadInt64(&c.txnProcessor.parkedCount),
 				"waitingOn", c.txnProcessor.inflight.waitingLen(),
+				"components", c.txnProcessor.inflight.componentLen(),
 				"revEdges", atomic.LoadInt64(&c.txnProcessor.revEdges),
 				"cascadeReleases", atomic.LoadInt64(&c.txnProcessor.cascadeReleases))
 		case <-c.txnProcessor.ctx.Done():
