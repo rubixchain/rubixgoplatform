@@ -250,8 +250,12 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 		quorumDCs[quorum.Did] = quorumDIDCrypto
 	}
 
+	// The sync-once gate. excludeTxIDs is passed straight through: the guard that
+	// keeps an in-flight sibling's chain entry out lives one layer down, in the
+	// apply loop, and duplicating it here as a peer-side exclusion would make the
+	// peer return a chain with a hole in it rather than a shorter one.
 	syncTxChains := func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error {
-		return c.SyncTransactionChainsFromPeer(peerDID, tokenIDs, prevTxIDs, excludeTxIDs, false, c.fullNode)
+		return c.syncChainsOnce(txn.ID, peerDID, tokenIDs, prevTxIDs, excludeTxIDs)
 	}
 	fetchGenesisTx := func(peerDID, tokenID string) (*models.Transactions, error) {
 		return c.FetchGenesisTransactionFromPeer(peerDID, tokenID)
@@ -275,6 +279,13 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 		c.log.Error("processSingleTransaction:failed to persist fullnode transaction", "error", err, "transaction_id", txn.ID)
 		return fmt.Errorf("processSingleTransaction: failed to persist fullnode transaction: %w", err)
 	}
+
+	// This node has just advanced the tip of every token the transaction
+	// touched, so anything the memo remembers about them now describes a chain
+	// one entry short. Forget it before waking anybody: a released waiter starts
+	// validating immediately, and it must not be handed a reason to skip a sync
+	// it now genuinely needs.
+	c.invalidateSyncedTokens(transactionTokenIDs(transactionInfo))
 
 	// This transaction is now a producer that has resolved, so wake anything
 	// held behind it. The call sits here, after the persist returns, and not

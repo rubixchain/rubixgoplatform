@@ -28,6 +28,16 @@ type bundleConfig struct {
 	// unresolvable dependencies degrades to today's behaviour instead of
 	// consuming the worker pool.
 	maxParked int
+
+	// syncMemoTTL is how long a successful chain sync is remembered, so a later
+	// member of the same bundle does not repeat it.
+	//
+	// Short on purpose. The memo can only ever suppress a sync that would have
+	// been redundant, and the integrity check re-reads every token from the
+	// database afterwards regardless, so a wrong suppression fails loudly rather
+	// than persisting bad data. A few seconds covers a bundle arriving together
+	// without keeping opinions about a chain long enough for them to go stale.
+	syncMemoTTL time.Duration
 }
 
 func defaultBundleConfig() bundleConfig {
@@ -35,5 +45,6 @@ func defaultBundleConfig() bundleConfig {
 		inflightWait: 5 * time.Second,
 		unknownWait:  1 * time.Second,
 		maxParked:    1000,
+		syncMemoTTL:  5 * time.Second,
 	}
 }

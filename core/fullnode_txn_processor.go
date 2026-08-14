@@ -44,6 +44,15 @@ type DynamicTxnProcessor struct {
 	// without a database; initDynamicTxnProcessor points it at the real probe.
 	resolveDependency func(depID string) (bool, error)
 
+	// syncMemo records which chain syncs a bundle has already performed, so its
+	// later members do not repeat them.
+	syncMemo *syncedTokenMemo
+
+	// syncChains fetches token chains from a peer. A field for the same reason
+	// resolveDependency is one: the memo's rule is to mark on success only, and
+	// that rule cannot be exercised against a real peer.
+	syncChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error
+
 	// Metrics
 	queueLength        int64
 	averageProcessTime time.Duration
@@ -61,11 +70,18 @@ type DynamicTxnProcessor struct {
 	// committing rather than by their own timer; the gap between it and the
 	// number that parked is how many holds ended in a timeout, which is the
 	// number that says whether the wait tiers are set correctly.
+	//
+	// syncsIssued and syncsSkipped count tokens, not calls, so they are directly
+	// comparable: of every token the integrity check wanted fetched, skipped is
+	// the share the bundle had already fetched from that same peer. That ratio is
+	// the entire measurable effect of the sync-once gate.
 	depsObserved    int64
 	depsInFlight    int64
 	parkedCount     int64
 	revEdges        int64
 	cascadeReleases int64
+	syncsIssued     int64
+	syncsSkipped    int64
 
 	// Worker management
 	workerChannels  map[int]chan struct{}
@@ -89,6 +105,7 @@ func (c *Core) initDynamicTxnProcessor() {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	numCPU := runtime.NumCPU()
+	bundleCfg := defaultBundleConfig()
 
 	c.txnProcessor = &DynamicTxnProcessor{
 		txnQueue:        make(chan *models.EventTransaction, 10000),
@@ -107,10 +124,14 @@ func (c *Core) initDynamicTxnProcessor() {
 		retryDelay:      time.Second * 2,
 		enqueueTimeout:  time.Second * 10,
 		inflight:        newInflightRegistry(),
-		bundle:          defaultBundleConfig(),
+		bundle:          bundleCfg,
+		syncMemo:        newSyncedTokenMemo(bundleCfg.syncMemoTTL),
 		resourceMonitor: &ResourceMonitor{}, // INITIALIZE YOUR MONITOR
 	}
 	c.txnProcessor.resolveDependency = c.dependencyResolved
+	c.txnProcessor.syncChains = func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error {
+		return c.SyncTransactionChainsFromPeer(peerDID, tokenIDs, prevTxIDs, excludeTxIDs, false, c.fullNode)
+	}
 
 	// Start initial workers
 	for i := 0; i < c.txnProcessor.currentWorkers; i++ {
@@ -428,6 +449,8 @@ func (c *Core) dedupMapCleaner() {
 			// waitingOn and components are the same kind of signal: both should
 			// rise and fall with the workload, and either one only ever rising
 			// means something is failing to unpark or to prune.
+			c.txnProcessor.syncMemo.sweep()
+
 			c.log.Info("Fullnode ingest metrics",
 				"inflight", c.txnProcessor.inflight.len(),
 				"queueLength", len(c.txnProcessor.txnQueue),
@@ -437,7 +460,10 @@ func (c *Core) dedupMapCleaner() {
 				"waitingOn", c.txnProcessor.inflight.waitingLen(),
 				"components", c.txnProcessor.inflight.componentLen(),
 				"revEdges", atomic.LoadInt64(&c.txnProcessor.revEdges),
-				"cascadeReleases", atomic.LoadInt64(&c.txnProcessor.cascadeReleases))
+				"cascadeReleases", atomic.LoadInt64(&c.txnProcessor.cascadeReleases),
+				"syncsIssued", atomic.LoadInt64(&c.txnProcessor.syncsIssued),
+				"syncsSkipped", atomic.LoadInt64(&c.txnProcessor.syncsSkipped),
+				"syncMemo", c.txnProcessor.syncMemo.len())
 		case <-c.txnProcessor.ctx.Done():
 			return
 		}

@@ -28,7 +28,8 @@ func newTestProcessor(queueCap int, enqueueTimeout time.Duration) (*DynamicTxnPr
 		inflight:       newInflightRegistry(),
 		// Production defaults, since the readiness gate is always active and a
 		// zero bundleConfig would mean no parked cap at all.
-		bundle: defaultBundleConfig(),
+		bundle:   defaultBundleConfig(),
+		syncMemo: newSyncedTokenMemo(defaultBundleConfig().syncMemoTTL),
 	}
 	return p, cancel
 }

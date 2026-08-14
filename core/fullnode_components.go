@@ -115,6 +115,26 @@ func (r *inflightRegistry) componentMembers(id string) []string {
 	return members
 }
 
+// componentRoot returns the identifier of id's component, or "" if it has none.
+//
+// The root is an artefact of how the merges happened to fall, and it changes if
+// two components of similar size meet. Nothing may depend on its stability: it
+// exists to key work that is scoped to a bundle, where a changed root costs a
+// cache miss and never a wrong answer.
+func (r *inflightRegistry) componentRoot(id string) string {
+	if id == "" {
+		return ""
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, tracked := r.parent[id]; !tracked {
+		return ""
+	}
+	return r.findLocked(id)
+}
+
 // componentLen returns how many transaction IDs the forest holds.
 //
 // Observability, and the assertion that matters most in the tests. Unlike byID
