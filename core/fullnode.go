@@ -154,10 +154,18 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 	// Mark the transaction as in flight for exactly as long as this worker owns
 	// it. The defer is what guarantees that: dynamicWorker recovers from panics
 	// (fullnode_txn_processor.go, dynamicWorker), so an early return or a panic
-	// must not leave a stale entry behind. Nothing reads the registry yet beyond
-	// metrics.
+	// must not leave a stale entry behind.
 	if entry := c.registerInflight(txnEvent); entry != nil {
 		defer c.txnProcessor.inflight.unregister(entry.id)
+
+		// Wait here, once, rather than inside the retry loop below: a producer
+		// that never arrives would otherwise cost the wait on every attempt.
+		// An expired wait returns nil and the transaction proceeds normally.
+		if err := c.awaitDependencies(entry); err != nil {
+			c.log.Info("processTxnWithRetry: abandoning transaction before validation",
+				"txnID", txnEvent.TransactionID, "reason", err)
+			return
+		}
 	}
 
 	var lastErr error

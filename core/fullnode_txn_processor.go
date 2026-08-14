@@ -36,6 +36,14 @@ type DynamicTxnProcessor struct {
 	// is a seen-recently set rather than a live one.
 	inflight *inflightRegistry
 
+	// Dependency-aware ingest settings. Always active; see bundleConfig.
+	bundle bundleConfig
+
+	// resolveDependency reports whether a producer transaction is persisted.
+	// A field rather than a direct call so the readiness gate can be tested
+	// without a database; initDynamicTxnProcessor points it at the real probe.
+	resolveDependency func(depID string) (bool, error)
+
 	// Metrics
 	queueLength        int64
 	averageProcessTime time.Duration
@@ -44,9 +52,12 @@ type DynamicTxnProcessor struct {
 	// Bundling observation counters, read via sync/atomic. depsObserved counts
 	// every declared PreviousTransactionID edge; depsInFlight counts the subset
 	// whose producer was still being processed when the consumer arrived. Their
-	// ratio is what sizes the readiness gate in a later commit.
+	// ratio is what sizes the readiness gate. parkedCount is how many
+	// transactions are waiting on a producer right now, and is what maxParked
+	// bounds.
 	depsObserved int64
 	depsInFlight int64
+	parkedCount  int64
 
 	// Worker management
 	workerChannels  map[int]chan struct{}
@@ -88,8 +99,10 @@ func (c *Core) initDynamicTxnProcessor() {
 		retryDelay:      time.Second * 2,
 		enqueueTimeout:  time.Second * 10,
 		inflight:        newInflightRegistry(),
+		bundle:          defaultBundleConfig(),
 		resourceMonitor: &ResourceMonitor{}, // INITIALIZE YOUR MONITOR
 	}
+	c.txnProcessor.resolveDependency = c.dependencyResolved
 
 	// Start initial workers
 	for i := 0; i < c.txnProcessor.currentWorkers; i++ {
