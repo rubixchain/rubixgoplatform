@@ -17,7 +17,6 @@ func awaitTestConfig() bundleConfig {
 		inflightWait: 300 * time.Millisecond,
 		unknownWait:  40 * time.Millisecond,
 		maxParked:    10,
-		pollInterval: 5 * time.Millisecond,
 	}
 }
 
@@ -54,10 +53,6 @@ func TestDefaultBundleConfigIsUsable(t *testing.T) {
 	}
 	if cfg.maxParked <= 0 {
 		t.Errorf("maxParked = %d, want a positive cap", cfg.maxParked)
-	}
-	if cfg.pollInterval <= 0 || cfg.pollInterval > cfg.unknownWait {
-		t.Errorf("pollInterval %v must be positive and no longer than the shortest tier %v",
-			cfg.pollInterval, cfg.unknownWait)
 	}
 }
 
@@ -129,38 +124,42 @@ func TestAwaitDependenciesInFlightProducerUsesLongTier(t *testing.T) {
 	}
 }
 
-// The whole point of the gate: the producer lands while the consumer is held,
-// and the consumer proceeds immediately rather than syncing it from a peer.
-func TestAwaitDependenciesReturnsEarlyWhenProducerResolves(t *testing.T) {
+// The lost-wakeup window, and why the gate probes twice.
+//
+// Between the first probe and the parking that follows it, the producer can
+// commit — and its release finds nobody, because the edge does not exist yet.
+// A ready channel closes once and is never rearmed, so without the second probe
+// this transaction would wait out its whole timer for a producer that is already
+// on disk.
+//
+// The probe here reports unresolved exactly once, which is that interleaving.
+func TestAwaitDependenciesReprobesAfterParking(t *testing.T) {
 	cfg := awaitTestConfig()
 	cfg.inflightWait = time.Second
-	var persisted atomic.Bool
+	cfg.unknownWait = time.Second
+	var probes atomic.Int64
 	c, p, cancel := newAwaitCore(t, cfg, func(dep string) (bool, error) {
-		return persisted.Load(), nil
+		return probes.Add(1) > 1, nil
 	})
 	defer cancel()
-
-	p.inflight.register(newInflightEntry("txn-S"))
-	go func() {
-		time.Sleep(30 * time.Millisecond)
-		persisted.Store(true)
-	}()
 
 	start := time.Now()
 	if err := c.awaitDependencies(newInflightEntry("txn-T", "txn-S")); err != nil {
 		t.Fatalf("awaitDependencies() = %v, want nil", err)
 	}
-	elapsed := time.Since(start)
-	if elapsed >= cfg.inflightWait {
-		t.Errorf("waited the full %v; the producer resolved and should have released it early", cfg.inflightWait)
+	if elapsed := time.Since(start); elapsed > 50*time.Millisecond {
+		t.Errorf("waited %v for a producer that resolved while the edge was being recorded", elapsed)
 	}
-	if elapsed < 25*time.Millisecond {
-		t.Errorf("returned after %v, before the producer was persisted", elapsed)
+	if got := probes.Load(); got < 2 {
+		t.Errorf("probed %d times, want a second probe after parking", got)
+	}
+	if got := p.inflight.waitingLen(); got != 0 {
+		t.Errorf("waitingOn holds %d producers, want 0 — the edge should have been given back", got)
 	}
 }
 
-// Closing ready must release the wait. Nothing closes it yet — the cascade does,
-// in a later commit — so this pins the contract that commit depends on.
+// Closing ready releases the wait. The cascade is what closes it in production;
+// this pins the contract independently of that path.
 func TestAwaitDependenciesReleasedByReadyChannel(t *testing.T) {
 	cfg := awaitTestConfig()
 	cfg.inflightWait = time.Second
@@ -171,7 +170,7 @@ func TestAwaitDependenciesReleasedByReadyChannel(t *testing.T) {
 	entry := newInflightEntry("txn-T", "txn-S")
 	go func() {
 		time.Sleep(20 * time.Millisecond)
-		close(entry.ready)
+		entry.markReady()
 	}()
 
 	start := time.Now()
@@ -180,6 +179,21 @@ func TestAwaitDependenciesReleasedByReadyChannel(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed >= time.Second {
 		t.Errorf("waited %v; closing ready should have released it", elapsed)
+	}
+}
+
+// Every wait must give its edges back, however it ended. A waiter that timed out
+// and left itself in waitingOn would be resurrected by a producer arriving much
+// later, and its list would grow for the lifetime of the process.
+func TestAwaitDependenciesUnparksOnTimeout(t *testing.T) {
+	c, p, cancel := newAwaitCore(t, awaitTestConfig(), resolvedSet())
+	defer cancel()
+
+	if err := c.awaitDependencies(newInflightEntry("txn-T", "txn-S", "txn-Q")); err != nil {
+		t.Fatalf("awaitDependencies() = %v, want nil", err)
+	}
+	if got := p.inflight.waitingLen(); got != 0 {
+		t.Errorf("waitingOn holds %d producers after the wait expired, want 0", got)
 	}
 }
 

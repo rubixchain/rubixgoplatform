@@ -28,11 +28,6 @@ type bundleConfig struct {
 	// unresolvable dependencies degrades to today's behaviour instead of
 	// consuming the worker pool.
 	maxParked int
-
-	// pollInterval is how often a waiting transaction re-checks its producers.
-	// Polling is what resolves a wait today; the cascade release that makes it
-	// event-driven arrives in a later commit.
-	pollInterval time.Duration
 }
 
 func defaultBundleConfig() bundleConfig {
@@ -40,6 +35,5 @@ func defaultBundleConfig() bundleConfig {
 		inflightWait: 5 * time.Second,
 		unknownWait:  1 * time.Second,
 		maxParked:    1000,
-		pollInterval: 250 * time.Millisecond,
 	}
 }

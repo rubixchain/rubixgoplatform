@@ -276,6 +276,17 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 		return fmt.Errorf("processSingleTransaction: failed to persist fullnode transaction: %w", err)
 	}
 
+	// This transaction is now a producer that has resolved, so wake anything
+	// held behind it. The call sits here, after the persist returns, and not
+	// anywhere earlier: PersistFullNodeTransaction writes the chain entry inside
+	// its own database transaction, and a waiter woken before that commits would
+	// re-probe, still not find the row, and have spent its one wake-up.
+	//
+	// Nothing is released when the persist fails. The waiters then fall back to
+	// their timers and behave as they did before the cascade existed, which is
+	// correct: there is no row for them to have been waiting for.
+	c.releaseWaiters(txn.ID)
+
 	return nil
 }
 
