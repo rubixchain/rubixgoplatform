@@ -2,9 +2,9 @@ package core
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -162,6 +162,22 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 		// that never arrives would otherwise cost the wait on every attempt.
 		// An expired wait returns nil and the transaction proceeds normally.
 		if err := c.awaitDependencies(entry); err != nil {
+			// A producer found invalid is a verdict on this transaction too,
+			// reached without validating it: it spends an output of something
+			// that never legitimately existed. Dead-letter it and stop. Its own
+			// consumers were failed by the same walk that failed this one, so
+			// there is nothing further to propagate from here.
+			//
+			// Admission is deliberately not released. The verdict is terminal,
+			// and letting a re-delivery back in would only produce a second
+			// dead-letter row for the same conclusion.
+			if errors.Is(err, errProducerFailed) {
+				c.log.Info("processTxnWithRetry: not validating, a producer of this transaction failed",
+					"txnID", txnEvent.TransactionID, "workerID", workerID, "reason", err)
+				c.storeInvalidTransaction(txnEvent, err)
+				return
+			}
+
 			c.log.Info("processTxnWithRetry: abandoning transaction before validation",
 				"txnID", txnEvent.TransactionID, "reason", err)
 			return
@@ -192,25 +208,50 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 			"attempt", attempt+1,
 			"error", err,
 			"workerID", workerID)
+
+		// A verdict does not change on re-reading the same data, so the
+		// remaining attempts would only postpone it — and everything parked on
+		// this transaction stays parked while they run, which is what would
+		// leave the propagation below with nobody left to reach.
+		if errors.Is(err, errValidationFailed) {
+			break
+		}
 	}
 
-	// All retries exhausted — release the admission so future pubsub
-	// re-deliveries can attempt processing again (conditions may change,
-	// e.g. peer becomes reachable for chain sync).
-	c.txnProcessor.releaseAdmission(txnEvent.TransactionID)
+	if errors.Is(lastErr, errValidationFailed) {
+		// Terminal, and this node's own conclusion. Record it once — here
+		// rather than inside processSingleTransaction, so a row is written per
+		// transaction and not per attempt — and fail everything that was
+		// waiting to build on it.
+		//
+		// Admission is not released: the verdict will not change, so a
+		// re-delivery would only reach it again.
+		c.storeInvalidTransaction(txnEvent, lastErr)
+		c.failDownstream(txnEvent.TransactionID, lastErr)
+		return
+	}
 
-	// If the terminal failure is a validation failure, persist it once to the
-	// invalid transactions table for audit. Doing this only here (instead of
-	// inside processSingleTransaction) avoids writing the same row once per
-	// retry attempt.
-	if lastErr != nil &&
-		txnEvent.Transaction != nil &&
-		strings.Contains(lastErr.Error(), "failed to validate transaction") {
-		if persistErr := c.w.StoreInvalidTransaction(txnEvent.Transaction, lastErr.Error()); persistErr != nil {
-			c.log.Error("processTxnWithRetry: failed to persist invalid transaction",
-				"txnID", txnEvent.TransactionID,
-				"error", persistErr)
-		}
+	// Transient, or no verdict at all. Release the admission so future pubsub
+	// re-deliveries can attempt processing again — conditions may change, for
+	// instance a peer becoming reachable for chain sync. Nothing is
+	// dead-lettered and nothing downstream is touched: this says nothing about
+	// the transaction, and the consumers waiting on it keep their own retries.
+	c.txnProcessor.releaseAdmission(txnEvent.TransactionID)
+}
+
+// storeInvalidTransaction records a terminal verdict in the audit table.
+//
+// The stored reason is the error's own message, which is why classification is
+// attached beside the message rather than wrapped into it: what lands in this
+// table reads exactly as it did before typed errors existed.
+func (c *Core) storeInvalidTransaction(txnEvent *models.EventTransaction, cause error) {
+	if txnEvent == nil || txnEvent.Transaction == nil || cause == nil {
+		return
+	}
+	if err := c.w.StoreInvalidTransaction(txnEvent.Transaction, cause.Error()); err != nil {
+		c.log.Error("processTxnWithRetry: failed to persist invalid transaction",
+			"txnID", txnEvent.TransactionID,
+			"error", err)
 	}
 }
 
@@ -258,7 +299,11 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 		return c.syncChainsOnce(txn.ID, peerDID, tokenIDs, prevTxIDs, excludeTxIDs)
 	}
 	fetchGenesisTx := func(peerDID, tokenID string) (*models.Transactions, error) {
-		return c.FetchGenesisTransactionFromPeer(peerDID, tokenID)
+		// Tagged transient for the same reason the chain sync is: this reaches
+		// out to a peer, and a peer that cannot be reached is not a verdict on
+		// the transaction.
+		txn, err := c.FetchGenesisTransactionFromPeer(peerDID, tokenID)
+		return txn, classify(errDependencyTimeout, err)
 	}
 	// Fullnode trusts the quorum's earlier transfer-auth decision; the flag
 	// is not in the EventTransaction.
@@ -266,9 +311,16 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 	if err != nil {
 		c.log.Error("processSingleTransaction:failed to validate transaction", "error", err)
 		// Storing the invalid transaction is deferred to processTxnWithRetry,
-		// which records it once after all retries are exhausted instead of on
-		// every attempt.
-		return fmt.Errorf("processSingleTransaction: failed to validate transaction: %w", err)
+		// which records it once instead of on every attempt.
+		//
+		// The message is unchanged, deliberately. classify attaches the verdict
+		// as a second branch of the error tree rather than wrapping it into the
+		// text, so "failed to validate transaction" still appears here byte for
+		// byte and anything matching on it keeps working.
+		return classify(
+			classifyValidationFailure(err),
+			fmt.Errorf("processSingleTransaction: failed to validate transaction: %w", err),
+		)
 	}
 
 	//store the transaction

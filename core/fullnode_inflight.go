@@ -40,6 +40,13 @@ type inflightTxn struct {
 	// be able to disagree: the count reaching zero is precisely the condition
 	// that closes ready.
 	pending int
+
+	// failure is set when a producer of this transaction was found invalid, and
+	// is the reason the wait ended. Guarded by inflightRegistry.mu and read back
+	// through failureOf — a waiter woken by a release and a walk that fails it
+	// are two different goroutines, and the channel close alone does not order
+	// them.
+	failure error
 }
 
 // markReady closes ready, at most once.
@@ -270,6 +277,76 @@ func (r *inflightRegistry) release(producerID string) []*inflightTxn {
 		}
 	}
 	return freed
+}
+
+// failWaiters records cause against every transaction transitively waiting on
+// producerID, and returns them so the caller can wake them.
+//
+// The walk follows waitingOn forwards only — a producer to those parked on it,
+// then to those parked on *them*. That direction is the whole safety property:
+// it can only ever reach transactions that declared a dependency on something
+// downstream of the failure. A transaction that produced the failed one, or that
+// merely shares a bundle with it, is never on this path and is never touched.
+//
+// Iterative with a visited set rather than recursive. A malformed graph must
+// come out as a bounded walk rather than a blown stack, and the same visited set
+// is what makes a cycle terminate.
+//
+// An entry that already carries a failure is left exactly as it is. That is not
+// only tidiness: its failure may already have been read by a waiter woken
+// through the channel, and writing to it again would be a write racing that
+// read.
+func (r *inflightRegistry) failWaiters(producerID string, cause error) []*inflightTxn {
+	if producerID == "" || cause == nil {
+		return nil
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	visited := map[string]bool{producerID: true}
+	frontier := []string{producerID}
+	var failed []*inflightTxn
+
+	for len(frontier) > 0 {
+		current := frontier[0]
+		frontier = frontier[1:]
+
+		waiters, tracked := r.waitingOn[current]
+		if !tracked {
+			continue
+		}
+		delete(r.waitingOn, current)
+
+		for _, w := range waiters {
+			if w.pending > 0 {
+				w.pending--
+			}
+			if visited[w.id] || w.failure != nil {
+				continue
+			}
+			visited[w.id] = true
+			w.failure = cause
+			failed = append(failed, w)
+			frontier = append(frontier, w.id)
+		}
+	}
+	return failed
+}
+
+// failureOf reports the failure recorded against t, if any.
+//
+// Taken under the lock rather than read directly after the channel close. A
+// release and a failure are raised by different goroutines, and only the lock
+// orders the write against this read.
+func (r *inflightRegistry) failureOf(t *inflightTxn) error {
+	if t == nil {
+		return nil
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return t.failure
 }
 
 // waitersOf returns the IDs parked on producerID.
@@ -530,4 +607,36 @@ func (c *Core) releaseWaiters(producerID string) {
 	atomic.AddInt64(&c.txnProcessor.cascadeReleases, int64(len(freed)))
 	c.log.Debug("Released transactions waiting on a now-persisted producer",
 		"producerID", producerID, "released", ids)
+}
+
+// failDownstream abandons every transaction that was waiting to build on a
+// producer this node has found invalid.
+//
+// Only ever called for a deterministic verdict. A transient failure — an
+// unreachable peer, a chain that could not be fetched — says nothing about the
+// consumers and must leave them to their own retries; failing them on one of
+// those would destroy the recovery path that is currently the only one they
+// have.
+//
+// Forward only. Nothing that produced this transaction, and nothing that merely
+// shares a bundle with it, is affected, and no transaction already committed is
+// ever reconsidered — a persisted row is final.
+func (c *Core) failDownstream(producerID string, cause error) {
+	if c.txnProcessor == nil || c.txnProcessor.inflight == nil {
+		return
+	}
+
+	failed := c.txnProcessor.inflight.failWaiters(producerID, cause)
+	if len(failed) == 0 {
+		return
+	}
+
+	ids := make([]string, 0, len(failed))
+	for _, waiter := range failed {
+		waiter.markReady()
+		ids = append(ids, waiter.id)
+	}
+	atomic.AddInt64(&c.txnProcessor.failuresPropagated, int64(len(failed)))
+	c.log.Info("Failing transactions that depend on an invalid producer",
+		"producerID", producerID, "failed", ids, "cause", cause)
 }

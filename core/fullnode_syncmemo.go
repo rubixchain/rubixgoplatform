@@ -286,7 +286,13 @@ func (c *Core) syncChainsOnce(txnID, peerDID string, tokenIDs []string, prevTxID
 	// entries for filtered-out tokens are never looked at.
 	atomic.AddInt64(&p.syncsIssued, int64(len(tokens)))
 	if err := p.syncChains(peerDID, tokens, prevTxIDs, excludeTxIDs); err != nil {
-		return err
+		// Tagged as it leaves, because by the time it reaches the caller it will
+		// be indistinguishable from a verdict on the transaction. Validation
+		// calls this to fill gaps in a chain, so an unreachable peer arrives
+		// there as a validation failure — and dead-lettering a transaction, let
+		// alone everything downstream of it, because a peer was down is the one
+		// outcome this classification exists to prevent.
+		return classify(errDependencyTimeout, err)
 	}
 
 	c.markSynced(bundle, peerDID, tokens)

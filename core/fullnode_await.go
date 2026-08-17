@@ -186,6 +186,18 @@ func (c *Core) awaitDependencies(t *inflightTxn) error {
 
 	select {
 	case <-t.ready:
+		// The channel is closed for either outcome, so which one it was has to
+		// be asked for. A producer found invalid is the one case where this
+		// transaction must not go on to validation: it declares that it spends
+		// an output of something this node has determined never legitimately
+		// existed, so validating it would only reach the same conclusion more
+		// slowly, after a peer sync that cannot help.
+		if failure := p.inflight.failureOf(t); failure != nil {
+			c.log.Info("awaitDependencies: a producer failed validation",
+				"txnID", t.id, "waited", time.Since(started), "cause", failure)
+			return fmt.Errorf("awaitDependencies: %w: %w", errProducerFailed, failure)
+		}
+
 		c.log.Debug("awaitDependencies: released by its producers",
 			"txnID", t.id, "waited", time.Since(started))
 		return nil

@@ -75,13 +75,19 @@ type DynamicTxnProcessor struct {
 	// comparable: of every token the integrity check wanted fetched, skipped is
 	// the share the bundle had already fetched from that same peer. That ratio is
 	// the entire measurable effect of the sync-once gate.
-	depsObserved    int64
-	depsInFlight    int64
-	parkedCount     int64
-	revEdges        int64
-	cascadeReleases int64
-	syncsIssued     int64
-	syncsSkipped    int64
+	//
+	// failuresPropagated counts transactions abandoned because a producer of
+	// theirs was found invalid. It should be rare, and it is the number to look
+	// at first if good transactions start being dead-lettered: every one of them
+	// is a verdict this node reached without validating the transaction itself.
+	depsObserved       int64
+	depsInFlight       int64
+	parkedCount        int64
+	revEdges           int64
+	cascadeReleases    int64
+	syncsIssued        int64
+	syncsSkipped       int64
+	failuresPropagated int64
 
 	// Worker management
 	workerChannels  map[int]chan struct{}
@@ -463,7 +469,8 @@ func (c *Core) dedupMapCleaner() {
 				"cascadeReleases", atomic.LoadInt64(&c.txnProcessor.cascadeReleases),
 				"syncsIssued", atomic.LoadInt64(&c.txnProcessor.syncsIssued),
 				"syncsSkipped", atomic.LoadInt64(&c.txnProcessor.syncsSkipped),
-				"syncMemo", c.txnProcessor.syncMemo.len())
+				"syncMemo", c.txnProcessor.syncMemo.len(),
+				"failuresPropagated", atomic.LoadInt64(&c.txnProcessor.failuresPropagated))
 		case <-c.txnProcessor.ctx.Done():
 			return
 		}
