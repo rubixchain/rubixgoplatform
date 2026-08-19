@@ -159,20 +159,30 @@ func (r *inflightRegistry) componentLen() int {
 // member of a live component would be wrong — the survivors are still one
 // bundle — and removing one member of a dead component leaves the rest of it
 // stranded with nothing left to trigger another sweep.
-func (r *inflightRegistry) pruneComponentLocked(id string) {
+//
+// Returns the membership it dropped, sorted, or nil if nothing drained. That
+// return is the only moment a bundle is ever complete: while any member is still
+// in flight the set can still grow, and immediately afterwards the forest has
+// forgotten it. Sorted so that the same bundle reads identically wherever it is
+// logged, including on a different node.
+func (r *inflightRegistry) pruneComponentLocked(id string) []string {
 	if _, tracked := r.parent[id]; !tracked {
-		return
+		return nil
 	}
 
 	root := r.findLocked(id)
 	for _, member := range r.members[root] {
 		if _, live := r.byID[member]; live {
-			return
+			return nil
 		}
 	}
 
-	for _, member := range r.members[root] {
+	drained := r.members[root]
+	for _, member := range drained {
 		delete(r.parent, member)
 	}
 	delete(r.members, root)
+
+	sort.Strings(drained)
+	return drained
 }

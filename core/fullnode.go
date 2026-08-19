@@ -156,7 +156,7 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 	// (fullnode_txn_processor.go, dynamicWorker), so an early return or a panic
 	// must not leave a stale entry behind.
 	if entry := c.registerInflight(txnEvent); entry != nil {
-		defer c.txnProcessor.inflight.unregister(entry.id)
+		defer c.unregisterInflight(entry.id)
 
 		// Wait here, once, rather than inside the retry loop below: a producer
 		// that never arrives would otherwise cost the wait on every attempt.

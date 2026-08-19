@@ -43,8 +43,8 @@ func TestRegistryRegisterAndHas(t *testing.T) {
 	if r.has("txn-1") {
 		t.Error("has() true for an unregistered ID")
 	}
-	if !r.register(newInflightEntry("txn-1")) {
-		t.Fatal("register() returned false for a new ID")
+	if r.register(newInflightEntry("txn-1")) != registered {
+		t.Fatal("register() did not register a new ID")
 	}
 	if !r.has("txn-1") {
 		t.Error("has() false immediately after register()")
@@ -61,11 +61,11 @@ func TestRegistryRegisterRejectsDuplicate(t *testing.T) {
 	r := newInflightRegistry()
 	first := newInflightEntry("txn-1")
 
-	if !r.register(first) {
-		t.Fatal("first register() returned false")
+	if r.register(first) != registered {
+		t.Fatal("first register() did not register the entry")
 	}
-	if r.register(newInflightEntry("txn-1")) {
-		t.Error("second register() of the same ID returned true, want false")
+	if got := r.register(newInflightEntry("txn-1")); got != alreadyInFlight {
+		t.Errorf("second register() of the same ID = %v, want alreadyInFlight", got)
 	}
 	if got := r.len(); got != 1 {
 		t.Errorf("len() = %d after a rejected duplicate, want 1", got)
@@ -78,11 +78,11 @@ func TestRegistryRegisterRejectsDuplicate(t *testing.T) {
 func TestRegistryRejectsNilAndEmptyID(t *testing.T) {
 	r := newInflightRegistry()
 
-	if r.register(nil) {
-		t.Error("register(nil) returned true")
+	if r.register(nil) == registered {
+		t.Error("register(nil) registered an entry")
 	}
-	if r.register(newInflightEntry("")) {
-		t.Error("register() with an empty ID returned true")
+	if r.register(newInflightEntry("")) == registered {
+		t.Error("register() with an empty ID registered an entry")
 	}
 	if r.has("") {
 		t.Error("has(\"\") returned true")
@@ -109,8 +109,8 @@ func TestRegistryUnregisterIsSafeAndIdempotent(t *testing.T) {
 	if got := r.len(); got != 0 {
 		t.Errorf("len() = %d, want 0", got)
 	}
-	if !r.register(newInflightEntry("txn-1")) {
-		t.Error("register() after unregister() returned false; the ID should be free again")
+	if r.register(newInflightEntry("txn-1")) != registered {
+		t.Error("register() after unregister() failed; the ID should be free again")
 	}
 }
 
@@ -132,7 +132,7 @@ func TestRegistryIsSafeUnderConcurrency(t *testing.T) {
 		go func() { // owner: register, then release
 			defer done.Done()
 			start.Wait()
-			if r.register(newInflightEntry(id)) {
+			if r.register(newInflightEntry(id)) == registered {
 				atomic.AddInt64(&wins, 1)
 				r.unregister(id)
 			}
@@ -171,7 +171,7 @@ func TestRegistrySingleOwnerUnderContention(t *testing.T) {
 		go func() {
 			defer done.Done()
 			start.Wait()
-			if r.register(newInflightEntry("txn-contended")) {
+			if r.register(newInflightEntry("txn-contended")) == registered {
 				atomic.AddInt64(&wins, 1)
 			}
 		}()

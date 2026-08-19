@@ -80,6 +80,13 @@ type DynamicTxnProcessor struct {
 	// theirs was found invalid. It should be rare, and it is the number to look
 	// at first if good transactions start being dead-lettered: every one of them
 	// is a verdict this node reached without validating the transaction itself.
+	//
+	// registryFullEvents and staleSwept are the two that should stay at zero on
+	// a healthy node. The first counts transactions processed untracked because
+	// the registry was full; the second counts entries removed because they
+	// outlived any plausible amount of work, which means a worker died without
+	// releasing one. bundlesDrained counts completed bundles, and is the
+	// denominator the other bundling numbers are read against.
 	depsObserved       int64
 	depsInFlight       int64
 	parkedCount        int64
@@ -88,6 +95,9 @@ type DynamicTxnProcessor struct {
 	syncsIssued        int64
 	syncsSkipped       int64
 	failuresPropagated int64
+	bundlesDrained     int64
+	registryFullEvents int64
+	staleSwept         int64
 
 	// Worker management
 	workerChannels  map[int]chan struct{}
@@ -457,6 +467,15 @@ func (c *Core) dedupMapCleaner() {
 			// means something is failing to unpark or to prune.
 			c.txnProcessor.syncMemo.sweep()
 
+			// The registry has no natural expiry — an entry leaves when its
+			// worker is done with it — so this is the only thing that would ever
+			// notice one that never left. It should always find nothing.
+			if stale := c.txnProcessor.inflight.sweepStale(inflightTTL); len(stale) > 0 {
+				atomic.AddInt64(&c.txnProcessor.staleSwept, int64(len(stale)))
+				c.log.Error("Swept in-flight entries that outlived any plausible processing time",
+					"count", len(stale), "txnIDs", stale, "ttl", inflightTTL)
+			}
+
 			c.log.Info("Fullnode ingest metrics",
 				"inflight", c.txnProcessor.inflight.len(),
 				"queueLength", len(c.txnProcessor.txnQueue),
@@ -470,7 +489,10 @@ func (c *Core) dedupMapCleaner() {
 				"syncsIssued", atomic.LoadInt64(&c.txnProcessor.syncsIssued),
 				"syncsSkipped", atomic.LoadInt64(&c.txnProcessor.syncsSkipped),
 				"syncMemo", c.txnProcessor.syncMemo.len(),
-				"failuresPropagated", atomic.LoadInt64(&c.txnProcessor.failuresPropagated))
+				"failuresPropagated", atomic.LoadInt64(&c.txnProcessor.failuresPropagated),
+				"bundlesDrained", atomic.LoadInt64(&c.txnProcessor.bundlesDrained),
+				"registryFull", atomic.LoadInt64(&c.txnProcessor.registryFullEvents),
+				"staleSwept", atomic.LoadInt64(&c.txnProcessor.staleSwept))
 		case <-c.txnProcessor.ctx.Done():
 			return
 		}
