@@ -70,8 +70,9 @@ func ValidateTransactionInfoFields(txnInfo *models.TransactionInfo) error {
 
 	if txnInfo.Tokens == nil ||
 		(len(txnInfo.Tokens.RBT) == 0 && len(txnInfo.Tokens.NFT) == 0 &&
-			len(txnInfo.Tokens.FT) == 0 && len(txnInfo.Tokens.SmartContract) == 0) {
-		return fmt.Errorf("transaction must contain at least one transfer token (RBT, NFT, FT, or SmartContract)")
+			len(txnInfo.Tokens.FT) == 0 && len(txnInfo.Tokens.SmartContract) == 0 &&
+			len(txnInfo.Tokens.Properties) == 0) {
+		return fmt.Errorf("transaction must contain at least one transfer token (RBT, NFT, FT, SmartContract, or Properties)")
 	}
 
 	return nil

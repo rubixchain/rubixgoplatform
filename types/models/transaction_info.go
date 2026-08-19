@@ -32,6 +32,10 @@ type TransactionTokens struct {
 	NFT           []*TokenInfo `json:"nft"`
 	FT            []*TokenInfo `json:"ft"`
 	SmartContract []*TokenInfo `json:"smartContract"`
+	// Properties must stay last and keep omitempty: without it every
+	// transaction emits "properties":null and hashes differently from legacy
+	// nodes. Pinned by transaction_info_hash_test.go.
+	Properties []*TokenInfo `json:"properties,omitempty"`
 }
 
 type TokenInfo struct {

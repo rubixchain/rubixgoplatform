@@ -43,6 +43,43 @@ func (w *Wallet) addProtocolValuesToLookupTables() error {
 		}
 	}
 
+	if err := w.assertLookupIDsMatchProtocolOrder(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// assertLookupIDsMatchProtocolOrder verifies that the IDs Go computes
+// positionally (idx+1 from the slices in types/models/lookup.go) match the IDs
+// Postgres assigned via GENERATED ALWAYS AS IDENTITY. If they diverge, every
+// token row is written with the wrong type or role and nothing errors, so
+// failing to boot is preferable.
+func (w *Wallet) assertLookupIDsMatchProtocolOrder() error {
+	for _, t := range models.TokenTypeTypes {
+		var dbID int
+		if err := w.db.Pool().QueryRow(w.Ctx,
+			`SELECT id FROM token_type WHERE name = $1`, t.Name,
+		).Scan(&dbID); err != nil {
+			return fmt.Errorf("lookup integrity: unable to read token_type id for %q: %w", t.Name, err)
+		}
+		if goID := models.GetTokenTypeID(t.Name); goID != dbID {
+			return fmt.Errorf("lookup integrity: token_type %q is id %d in the database but %d in the protocol order (types/models/lookup.go); entries may only be appended", t.Name, dbID, goID)
+		}
+	}
+
+	for _, r := range models.TokenRoleTypes {
+		var dbID int
+		if err := w.db.Pool().QueryRow(w.Ctx,
+			`SELECT id FROM token_role WHERE name = $1`, r.Name,
+		).Scan(&dbID); err != nil {
+			return fmt.Errorf("lookup integrity: unable to read token_role id for %q: %w", r.Name, err)
+		}
+		if goID := models.GetTokenRoleID(r.Name); goID != dbID {
+			return fmt.Errorf("lookup integrity: token_role %q is id %d in the database but %d in the protocol order (types/models/lookup.go); entries may only be appended", r.Name, dbID, goID)
+		}
+	}
+
 	return nil
 }
 
