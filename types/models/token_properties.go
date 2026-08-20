@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/rubixchain/rubixgoplatform/constants"
 )
 
 // TokenProperties is the permission document governing a token, stored in IPFS.
@@ -123,9 +125,17 @@ func (p *TokenProperties) Validate() error {
 			unknown, p.Version)
 	}
 
-	if p.Policy.ValidFrom < 0 || p.Policy.ValidTo < 0 {
-		return fmt.Errorf("properties validity bounds must not be negative (from=%d to=%d)",
-			p.Policy.ValidFrom, p.Policy.ValidTo)
+	// Bounds are Unix seconds; 0 means unbounded. A non-zero value below the
+	// network's own start date is meaningless as a policy time and is usually a
+	// year number typed where an epoch was expected.
+	minEpoch := int64(constants.MinTransactionEpochUnix)
+	if p.Policy.ValidFrom != 0 && p.Policy.ValidFrom < minEpoch {
+		return fmt.Errorf("properties valid_from %d is not a plausible Unix time in seconds (must be 0 or at least %d)",
+			p.Policy.ValidFrom, minEpoch)
+	}
+	if p.Policy.ValidTo != 0 && p.Policy.ValidTo < minEpoch {
+		return fmt.Errorf("properties valid_to %d is not a plausible Unix time in seconds (must be 0 or at least %d)",
+			p.Policy.ValidTo, minEpoch)
 	}
 	if p.Policy.ValidFrom != 0 && p.Policy.ValidTo != 0 && p.Policy.ValidFrom > p.Policy.ValidTo {
 		return fmt.Errorf("properties validity window is inverted (from=%d > to=%d)",

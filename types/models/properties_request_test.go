@@ -10,8 +10,8 @@ import (
 func TestPropertiesInfoToDocument(t *testing.T) {
 	info := &models.PropertiesInfo{
 		Transferable:          true,
-		ValidFrom:             100,
-		ValidTo:               200,
+		ValidFrom:             1775001700,
+		ValidTo:               1775002000,
 		AllowedSubnets:        []string{"testnet"},
 		AllowedSmartContracts: []string{"QmContract"},
 	}
@@ -23,7 +23,7 @@ func TestPropertiesInfoToDocument(t *testing.T) {
 	if !doc.IsTransferable() {
 		t.Error("transferable should map to the flag bit")
 	}
-	if doc.Policy.ValidFrom != 100 || doc.Policy.ValidTo != 200 {
+	if doc.Policy.ValidFrom != 1775001700 || doc.Policy.ValidTo != 1775002000 {
 		t.Errorf("policy not carried over: %+v", doc.Policy)
 	}
 	if err := doc.Validate(); err != nil {

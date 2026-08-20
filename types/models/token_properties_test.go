@@ -17,7 +17,7 @@ func TestTokenPropertiesRoundTrip(t *testing.T) {
 	in := &models.TokenProperties{
 		Version: models.PropertiesDocVersion,
 		Flags:   models.FlagTransferable,
-		Policy:  models.PropertiesPolicy{ValidFrom: 100, ValidTo: 200},
+		Policy:  models.PropertiesPolicy{ValidFrom: 1775001700, ValidTo: 1775002000},
 		Restriction: models.PropertiesRestrict{
 			Whitelist:             validQmCID,
 			Admins:                validQmCID2,
@@ -82,7 +82,9 @@ func TestParseTokenPropertiesFailsClosed(t *testing.T) {
 		{"unknown top-level field", `{"v":1,"f":0,"p":{},"r":{},"extra":true}`},
 		{"unknown nested field", `{"v":1,"f":0,"p":{"nope":1},"r":{}}`},
 		{"negative valid_from", `{"v":1,"f":0,"p":{"valid_from":-5,"valid_to":0},"r":{}}`},
-		{"inverted window", `{"v":1,"f":0,"p":{"valid_from":500,"valid_to":100},"r":{}}`},
+		{"year number instead of epoch", `{"v":1,"f":0,"p":{"valid_from":0,"valid_to":2027},"r":{}}`},
+		{"valid_from below network start", `{"v":1,"f":0,"p":{"valid_from":1000000000,"valid_to":0},"r":{}}`},
+		{"inverted window", `{"v":1,"f":0,"p":{"valid_from":1775002000,"valid_to":1775001700},"r":{}}`},
 	}
 
 	for _, tc := range cases {
