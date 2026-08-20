@@ -34,6 +34,14 @@ func (c *Core) validateNFTBurnRequest(request *models.TransactionRequest) (alrea
 	if request.Tokens.TransferNFTOwnership {
 		return nil, fmt.Errorf("burnNft cannot be combined with transferNftOwnership")
 	}
+	// Burn is exempt from properties enforcement: its guards are local checks
+	// on the owner's own node, so any gate here is bypassable by a modified
+	// client. Blocking a burn would also re-strand the quorum collateral this
+	// feature exists to release. This guard only stops a properties token being
+	// smuggled into a burn request.
+	if request.Tokens.SetProperties || request.Tokens.Properties != nil {
+		return nil, fmt.Errorf("burnNft cannot be combined with setProperties")
+	}
 
 	ownerDID := request.Initiator
 	if ownerDID == "" {

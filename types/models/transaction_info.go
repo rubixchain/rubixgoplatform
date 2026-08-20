@@ -85,6 +85,46 @@ type TransactionTokenDetails struct {
 	// the NFT is dead). Mutually exclusive with TransferNFTOwnership, and
 	// cannot be combined with RBT/FT/SmartContract in the same request.
 	BurnNFT bool `json:"burnNft"`
+	// SetProperties, when true, creates or edits the properties token governing
+	// the NFTs listed in NFT. Only the deployer may edit an existing one.
+	SetProperties bool `json:"setProperties"`
+	// Properties is the document to write when SetProperties is true.
+	Properties *PropertiesInfo `json:"properties,omitempty"`
+}
+
+// PropertiesInfo is the request shape for a properties document. It is a
+// request type, not part of the signed payload, so field order is not
+// hash-critical.
+type PropertiesInfo struct {
+	Transferable          bool     `json:"transferable"`
+	ValidFrom             int64    `json:"validFrom,omitempty"`
+	ValidTo               int64    `json:"validTo,omitempty"`
+	Whitelist             []string `json:"whitelist,omitempty"`
+	Admins                []string `json:"admins,omitempty"`
+	AllowedSubnets        []string `json:"allowedSubnets,omitempty"`
+	AllowedSmartContracts []string `json:"allowedSmartContracts,omitempty"`
+}
+
+// ToDocument converts the request shape into the stored document. Whitelist and
+// Admins become CIDs once uploaded, so they are filled in by the caller.
+func (p *PropertiesInfo) ToDocument() *TokenProperties {
+	doc := &TokenProperties{
+		Version: PropertiesDocVersion,
+		Policy:  PropertiesPolicy{ValidFrom: p.ValidFrom, ValidTo: p.ValidTo},
+		Restriction: PropertiesRestrict{
+			AllowedSubnets:        p.AllowedSubnets,
+			AllowedSmartContracts: p.AllowedSmartContracts,
+		},
+	}
+	if p.Transferable {
+		doc.Flags |= FlagTransferable
+	}
+	return doc
+}
+
+// IsPropertiesSet reports whether this request carries a properties write.
+func (tr *TransactionRequest) IsPropertiesSet() bool {
+	return tr.Tokens.SetProperties
 }
 
 // Gave the key names as FTInfo, NFTInfo and SmartContract info for now as these are the informations which are required to perform the transfer operation

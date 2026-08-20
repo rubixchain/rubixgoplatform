@@ -164,3 +164,20 @@ func ParsePropertiesEntries(raw []byte) ([]string, error) {
 	}
 	return doc.Entries, nil
 }
+
+// NFTPropertiesResponse is the read-API shape, flattened from the compact
+// document so callers do not have to decode the flag bitfield themselves.
+type NFTPropertiesResponse struct {
+	NFTId                 string   `json:"nftId"`
+	PropertiesTokenID     string   `json:"propertiesTokenId"`
+	PropertiesCID         string   `json:"propertiesCid"`
+	Version               int      `json:"version"`
+	Transferable          bool     `json:"transferable"`
+	ValidFrom             int64    `json:"validFrom"`
+	ValidTo               int64    `json:"validTo"`
+	Whitelist             []string `json:"whitelist"`
+	Admins                []string `json:"admins"`
+	AllowedSubnets        []string `json:"allowedSubnets"`
+	AllowedSmartContracts []string `json:"allowedSmartContracts"`
+	Deployer              string   `json:"deployer"`
+}

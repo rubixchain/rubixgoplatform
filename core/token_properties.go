@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
+	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -257,5 +259,130 @@ func (c *Core) PinPropertiesDocuments(doc *models.TokenProperties, docCID string
 			return fmt.Errorf("PinPropertiesDocuments: pinning %s: %w", cid, err)
 		}
 	}
+	return nil
+}
+
+// BuildPropertiesToken creates or updates the properties token governing
+// nftTokenID, uploading the document and the whitelist/admins lists to IPFS and
+// pinning all of them. It returns the token entry to place in the transaction.
+//
+// The deployer is bootstrapped as the first admin on creation.
+func (c *Core) BuildPropertiesToken(nftTokenID string, info *models.PropertiesInfo, initiator string) (*models.TokenInfo, error) {
+	if info == nil {
+		return nil, fmt.Errorf("BuildPropertiesToken: properties are required when setProperties is true")
+	}
+
+	propsTokenID, err := c.GetPropertiesTokenID(nftTokenID)
+	if err != nil {
+		return nil, err
+	}
+
+	doc := info.ToDocument()
+
+	// The deployer is always an admin, so an edit is always possible by
+	// someone even if the caller omits the list.
+	admins := info.Admins
+	if len(admins) == 0 {
+		admins = []string{initiator}
+	} else if !slices.Contains(admins, initiator) {
+		admins = append([]string{initiator}, admins...)
+	}
+	adminsCID, err := c.uploadPropertiesEntries(admins)
+	if err != nil {
+		return nil, fmt.Errorf("BuildPropertiesToken: uploading admins: %w", err)
+	}
+	doc.Restriction.Admins = adminsCID
+
+	if len(info.Whitelist) > 0 {
+		whitelistCID, err := c.uploadPropertiesEntries(info.Whitelist)
+		if err != nil {
+			return nil, fmt.Errorf("BuildPropertiesToken: uploading whitelist: %w", err)
+		}
+		doc.Restriction.Whitelist = whitelistCID
+	}
+
+	raw, err := doc.Serialize()
+	if err != nil {
+		return nil, fmt.Errorf("BuildPropertiesToken: %w", err)
+	}
+	docCID, err := c.ipfsOps.Add(bytes.NewReader(raw), nil)
+	if err != nil {
+		return nil, fmt.Errorf("BuildPropertiesToken: uploading properties document: %w", err)
+	}
+
+	if err := c.PinPropertiesDocuments(doc, docCID); err != nil {
+		return nil, err
+	}
+
+	// An existing chain means this is an edit, so the tip becomes the previous
+	// transaction; absent means genesis.
+	previousTxID := ""
+	if tx, _, err := c.w.GetLatestTransactionAndRoleByTokenID(propsTokenID); err == nil && tx != nil {
+		previousTxID = tx.ID
+	}
+
+	return &models.TokenInfo{
+		TokenID:               propsTokenID,
+		PreviousTransactionID: previousTxID,
+		Data:                  docCID,
+		TokenValue:            rubixmath.MinDecimalUnit(),
+	}, nil
+}
+
+// uploadPropertiesEntries stores a whitelist or admins list in IPFS.
+func (c *Core) uploadPropertiesEntries(entries []string) (string, error) {
+	raw, err := json.Marshal(models.PropertiesEntries{Entries: entries})
+	if err != nil {
+		return "", err
+	}
+	return c.ipfsOps.Add(bytes.NewReader(raw), nil)
+}
+
+// GetNFTProperties resolves the properties governing an NFT for the read API.
+func (c *Core) GetNFTProperties(nftTokenID string) (*models.ResolvedProperties, error) {
+	return c.ResolveNFTProperties(nftTokenID)
+}
+
+// validatePropertiesRequest checks a setProperties request before the build
+// locks any NFT. It cannot be combined with a burn or with value transfer, and
+// must name exactly one NFT since properties govern a single token.
+func (c *Core) validatePropertiesRequest(request *models.TransactionRequest) error {
+	if request.Tokens.Properties == nil {
+		return fmt.Errorf("setProperties requires a properties object")
+	}
+	if request.Tokens.BurnNFT {
+		return fmt.Errorf("setProperties cannot be combined with burnNft")
+	}
+	if request.Tokens.RBT > 0 || len(request.Tokens.FT) > 0 || len(request.Tokens.SmartContract) > 0 {
+		return fmt.Errorf("setProperties cannot be combined with RBT, FT or smart contract transfers")
+	}
+
+	// Multi-NFT setProperties is intended but not yet implemented: the wire
+	// format already carries an array and the validator already handles N, so
+	// lifting this means looping the build and caching resolution to avoid an
+	// O(N^2) peer-sync in validatePropertiesEdits.
+	nfts := request.GetAllNFTs()
+	if len(nfts) != 1 {
+		return fmt.Errorf("setProperties currently requires exactly one NFT, got %d", len(nfts))
+	}
+	if nfts[0].ParentNFTId != "" {
+		return fmt.Errorf("setProperties cannot be combined with child-minting")
+	}
+
+	// Reject a malformed document now rather than after the NFTs are locked.
+	if err := request.Tokens.Properties.ToDocument().Validate(); err != nil {
+		return fmt.Errorf("setProperties: %w", err)
+	}
+
+	// An edit is deployer-only, enforced again at consensus. Checking here
+	// gives the caller a clear error instead of a quorum rejection.
+	resolved, err := c.ResolveNFTProperties(nfts[0].NFTId)
+	if err != nil {
+		return fmt.Errorf("setProperties: %w", err)
+	}
+	if resolved != nil && resolved.Deployer != "" && resolved.Deployer != request.Initiator {
+		return fmt.Errorf("setProperties: only the deployer %s may edit these properties", resolved.Deployer)
+	}
+
 	return nil
 }

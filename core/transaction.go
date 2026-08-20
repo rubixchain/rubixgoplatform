@@ -136,6 +136,16 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		}
 	}
 
+	// Validated before the build for the same reason as burns: the build locks
+	// the NFTs, so a rejected request should not leave them locked.
+	if request.IsPropertiesSet() {
+		if err := c.validatePropertiesRequest(request); err != nil {
+			c.log.Error("InitiateTransaction: properties validation failed", "err", err, "did", initiatorDID)
+			resp.Message = err.Error()
+			return resp
+		}
+	}
+
 	c.log.Info("InitiateTransaction: Building transaction info", "maxRetries", 3)
 	maxRetries := 3
 	var transactionInfo *models.TransactionInfo
@@ -190,6 +200,21 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		backoff := retryWithRandomBackoff(attempt)
 		c.log.Debug("InitiateTransaction: Backing off before retry", "attempt", attempt, "backoffMs", backoff.Milliseconds())
 		time.Sleep(backoff)
+	}
+
+	// Attached after the build so the properties token rides along with the NFT
+	// execute that carries it; the quorum authorises the edit during consensus.
+	if request.IsPropertiesSet() {
+		propsToken, err := c.BuildPropertiesToken(
+			request.GetAllNFTs()[0].NFTId, request.Tokens.Properties, initiatorDID)
+		if err != nil {
+			c.log.Error("InitiateTransaction: failed to build properties token", "err", err, "did", initiatorDID)
+			resp.Message = err.Error()
+			return resp
+		}
+		transactionInfo.Tokens.Properties = append(transactionInfo.Tokens.Properties, propsToken)
+		c.log.Info("InitiateTransaction: attached properties token",
+			"propertiesToken", propsToken.TokenID, "docCID", propsToken.Data)
 	}
 
 	// An NFT burn takes a non-consensus path: it destroys value rather than
