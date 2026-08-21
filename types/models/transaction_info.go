@@ -140,8 +140,9 @@ type NFTInfo struct {
 	Data  string  `json:"data"`
 	// ParentNFTId, when non-empty, signals a child-mint instruction: this entry
 	// mints a brand-new child NFT linked to the named parent. The parent is
-	// executed in the same transaction. NFTId is ignored when ParentNFTId is set —
-	// the server derives the child NFT ID via IPFS-add of parentNFTId+uuid.
+	// executed in the same transaction. NFTId, when set, is used as the child's
+	// ID (must be CID-shaped and not already exist locally); leave it empty to
+	// have the server derive one via IPFS-add of parentNFTId+uuid.
 	ParentNFTId string `json:"parentNFTId,omitempty"`
 }
 
