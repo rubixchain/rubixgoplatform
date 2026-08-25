@@ -1365,6 +1365,15 @@ func ValidateNFTProperties(
 			continue
 		}
 
+		// A genesis NFT is created by this transaction, so nothing can govern
+		// it yet. Skipping also avoids resolving a freshly-minted child's ID,
+		// which hashes an opaque payload rather than contract metadata.
+		// NOTE: children are therefore unrestricted at birth and do not
+		// inherit the parent's properties — an open design question.
+		if nft.PreviousTransactionID == "" {
+			continue
+		}
+
 		resolved, err := resolveProperties(nft.TokenID)
 		if err != nil {
 			return fmt.Errorf("ValidateNFTProperties: NFT %s: %w", nft.TokenID, err)
