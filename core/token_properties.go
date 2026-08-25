@@ -69,30 +69,38 @@ func (c *Core) resolveNFTPropertiesInner(nftTokenID string) (*models.ResolvedPro
 		return nil, fmt.Errorf("ResolveNFTProperties: reading local chain tip for %s: %w", propsTokenID, err)
 	}
 
-	if tx == nil {
-		// Not held locally. Sync from the NFT's peer, then re-read.
-		synced, syncErr := c.syncPropertiesChain(nftTokenID, propsTokenID)
-		if !synced {
-			// No peer could be reached, so "no properties" and "could not
-			// check" are indistinguishable; guessing either way fails open.
+	// Always sync, even when a chain is already held: properties are mutable,
+	// so a cached chain may be behind and would otherwise enforce a superseded
+	// document forever. applyTokenChainFromSync appends only entries past the
+	// local prefix and rejects forks, so re-syncing a current chain is a no-op.
+	synced, syncErr := c.syncPropertiesChain(nftTokenID, propsTokenID)
+	if !synced {
+		if tx == nil {
+			// Nothing cached and no peer reachable, so "no properties" and
+			// "could not check" are indistinguishable; either guess fails open.
 			return nil, fmt.Errorf("ResolveNFTProperties: cannot determine whether NFT %s has properties: %w",
 				nftTokenID, syncErr)
 		}
+		// A cached chain is better than nothing: enforce it rather than
+		// rejecting every transaction whenever the peer is briefly unreachable.
+		// It may be stale, but it is signed and was valid when fetched.
+		c.log.Warn("ResolveNFTProperties: peer unreachable; enforcing possibly-stale cached properties",
+			"nft", nftTokenID, "propertiesToken", propsTokenID, "err", syncErr)
+	}
 
-		// Re-read locally: SyncTransactionChainsFromPeer returns nil even when
-		// the apply failed, so only the local tip proves anything. Without this
-		// a failed sync reads as "no properties" and the gate fails open.
-		tx, role, err = c.w.GetLatestTransactionAndRoleByTokenID(propsTokenID)
-		if err != nil {
-			return nil, fmt.Errorf("ResolveNFTProperties: re-reading chain tip for %s after sync: %w", propsTokenID, err)
-		}
-		if tx == nil {
-			// The peer answered and has no properties chain for this NFT —
-			// the legitimate unrestricted case.
-			c.log.Debug("ResolveNFTProperties: no properties token after sync; treating NFT as unrestricted",
-				"nft", nftTokenID, "propertiesToken", propsTokenID)
-			return nil, nil
-		}
+	// Re-read locally: SyncTransactionChainsFromPeer returns nil even when the
+	// apply failed, so only the local tip proves anything. Without this a failed
+	// sync reads as "no properties" and the gate fails open.
+	tx, role, err = c.w.GetLatestTransactionAndRoleByTokenID(propsTokenID)
+	if err != nil {
+		return nil, fmt.Errorf("ResolveNFTProperties: re-reading chain tip for %s after sync: %w", propsTokenID, err)
+	}
+	if tx == nil {
+		// The peer answered and has no properties chain for this NFT — the
+		// legitimate unrestricted case.
+		c.log.Debug("ResolveNFTProperties: no properties token after sync; treating NFT as unrestricted",
+			"nft", nftTokenID, "propertiesToken", propsTokenID)
+		return nil, nil
 	}
 
 	if role == int16(models.GetTokenRoleID(constants.TokenRole_Burn)) {
