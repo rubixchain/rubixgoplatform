@@ -94,6 +94,13 @@ class NFTEngine:
         # that still has live children MUST be refused; this records whether it
         # actually was, so a silently-permitted orphaning shows up as a FAIL.
         self._parent_burn_blocked = None  # type: Optional[dict]
+        # Outcome of the second parent-burn attempt while another child is still
+        # alive. Set only by the burn-negatives path, but read unconditionally by
+        # run_verification, so it must be initialised here too.
+        self._parent_still_blocked = None  # type: Optional[dict]
+        # Outcome of burning the parent once every child is burnt. Same reason:
+        # set only by the burn-negatives path, read unconditionally.
+        self._parent_burn_after_children = None  # type: Optional[dict]
         # Outcome of the repeat-burn test: burning an already-burnt NFT should
         # succeed idempotently rather than erroring.
         self._repeat_burn_outcome = None  # type: Optional[dict]
