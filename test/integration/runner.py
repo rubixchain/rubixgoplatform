@@ -333,6 +333,17 @@ def _build_arg_parser() -> argparse.ArgumentParser:
             "Auto-enabled by --run-all-tests."
         ),
     )
+    p.add_argument(
+        "--properties-tests",
+        action="store_true",
+        help=(
+            "Run the NFT-properties suite (permissioned execution): whitelist, "
+            "transferable, deployer-only edits, versioning, read API, and the "
+            "no-properties regression. Asserts both that permitted operations "
+            "succeed and that forbidden ones are rejected by the properties "
+            "gate specifically. Auto-enabled by --run-all-tests."
+        ),
+    )
     return p
 
 
@@ -382,6 +393,7 @@ def main() -> None:
         args.all_in_one_test = True
         args.intra_node_test = True
         args.negative_tests = True
+        args.properties_tests = True
         args.nft_only = False
         args.sc_only = False
         args.ft_only = False
@@ -540,6 +552,7 @@ def main() -> None:
             intra_node_ft_fund=args.intra_node_ft_fund,
             run_all_tests=args.run_all_tests,
             negative_tests=args.negative_tests,
+            properties_tests=args.properties_tests,
         )
     except Exception as exc:
         log.error("Integration run failed: %s", exc, exc_info=True)

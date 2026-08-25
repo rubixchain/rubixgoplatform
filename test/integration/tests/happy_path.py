@@ -895,6 +895,24 @@ FROM tokens;
         )
         return engine.run()
 
+    def run_properties(self) -> List[Dict[str, str]]:
+        """Run the NFT-properties suite (positive + negative) against A <-> B.
+
+        Returns verification results in the shared shape so they fold into
+        verification.json and the runner's exit-on-fail gate.
+        """
+        from test.integration.tests.properties import PropertiesEngine
+
+        log.info("=== PROPERTIES: running NFT permissioned-execution tests ===")
+        engine = PropertiesEngine(
+            node_a=self.node_a,
+            node_b=self.node_b,
+            did_a=self.did_a,
+            did_b=self.did_b,
+            password=self.cfg.password,
+        )
+        return engine.run()
+
     def run_db_snapshot(self) -> str:
         """Run diagnostic queries against all 3 DBs and write the results.
 
@@ -1072,6 +1090,7 @@ FROM tokens;
         intra_node_ft_fund: int = 2,
         run_all_tests: bool = False,
         negative_tests: bool = False,
+        properties_tests: bool = False,
     ) -> None:
         if skip_setup:
             self._load_state()
@@ -1386,6 +1405,12 @@ FROM tokens;
         if negative_tests:
             negative_verification = self.run_negative()
 
+        # NFT-properties suite. Runs after the negative tests and mints its own
+        # NFTs, so it neither depends on nor disturbs the happy-path state.
+        properties_verification: List[Dict[str, str]] = []
+        if properties_tests:
+            properties_verification = self.run_properties()
+
         # Deferred intra-node FT balance check — run at the very end so the
         # (slow) intra-node FT settlement to did_a2 has maximum elapsed time.
         deferred_verification: List[Dict[str, str]] = []
@@ -1414,6 +1439,7 @@ FROM tokens;
             + all_in_one_verification
             + intra_node_verification
             + negative_verification
+            + properties_verification
             + deferred_verification
             + extra_api_verification
             + tx_persist_verification
