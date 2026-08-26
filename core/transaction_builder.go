@@ -167,6 +167,102 @@ func BuildTransactionInfoFromRequest(
 		log.Info("BuildTransactionInfoFromRequest: RBT tokens collected", "tokenCount", len(rbtTokens), "amount", req.GetRBTAmount())
 	}
 
+	// --- SC deploy collateral: split before the non-RBT transaction opens ---
+	//
+	// LockTokensForSplit selects whole denominations, so backing a 0.001
+	// commitment picks a whole 1.000 token. Committing that token as-is sinks
+	// the other 0.999 — a 0.001 contract costs a full RBT. So split first and
+	// keep the change, exactly as the RBT transfer path does.
+	//
+	// This runs BEFORE the non-RBT tx begins: PersistGenesisTransaction opens
+	// its own connection and upserts the burnt parent row, which would deadlock
+	// against locks held by that outer transaction until lock_timeout fires.
+	//
+	// scCommittedTokens maps a smart contract ID to the tokens backing it.
+	scCommittedTokens := make(map[string][]*models.TokenInfo)
+	if req.HasSmartContract() {
+		for _, scInfo := range req.GetAllSmartContracts() {
+			if scInfo.Value <= 0 {
+				continue
+			}
+			// Execute-mode SCs reuse their existing value and need no collateral.
+			exists, err := w.TokenExists(ctx, nil, scInfo.SmartContractId)
+			if err != nil {
+				return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: failed to check SC existence: %w", err)
+			}
+			if exists {
+				continue
+			}
+
+			log.Info("BuildTransactionInfoFromRequest: Locking RBT tokens for SC committed value", "scID", scInfo.SmartContractId, "value", scInfo.Value)
+			ownedRBTTokens, err := w.LockTokensForSplit(ctx, req.Initiator, scInfo.Value, referenceID)
+			if err != nil {
+				log.Error("BuildTransactionInfoFromRequest: Failed to lock RBT for SC committed tokens", "err", err, "scID", scInfo.SmartContractId, "value", scInfo.Value)
+				return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: failed to lock RBT for SC committed tokens: %w", err)
+			}
+			log.Info("BuildTransactionInfoFromRequest: RBT tokens locked for SC commitment", "scID", scInfo.SmartContractId, "tokenCount", len(ownedRBTTokens))
+
+			denomMap, err := w.GetTokenDenomArray(req.Initiator)
+			if err != nil {
+				log.Error("BuildTransactionInfoFromRequest: Failed to get denom array for SC commitment", "err", err, "did", req.Initiator)
+				return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: get denom array for SC commitment: %w", err)
+			}
+
+			committedRBTTokens, childTokensKept, burntParentToken, mintTokensBeingBurnt, err := parts.CollectRBTTokens(
+				dc, w, scInfo.Value, ownedRBTTokens, denomMap, networkMode, log,
+			)
+			if err != nil {
+				log.Error("BuildTransactionInfoFromRequest: RBT collection failed for SC commitment", "err", err, "scID", scInfo.SmartContractId, "value", scInfo.Value)
+				return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: RBT collection failed for SC commitment: %w", err)
+			}
+
+			// A split happened: persist the minted change and the burnt parent.
+			var scGenTX *models.Transactions
+			if len(childTokensKept) > 0 && len(burntParentToken) > 0 {
+				scGenTX = childTokensKept[0].TxRecord
+				if scGenTX == nil {
+					return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest(SC): generated transaction record is nil")
+				}
+
+				if errPersist := w.PersistGenesisTransaction(&wallet.PersistGenesisTransactionReq{
+					DID:                  req.Initiator,
+					GenesisTokens:        childTokensKept,
+					BurnTokens:           burntParentToken,
+					GenesisTransaction:   scGenTX,
+					MintTokensBeingBurnt: mintTokensBeingBurnt,
+				}); errPersist != nil {
+					return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest(SC): failed to persist genesis transaction, err: %v", errPersist)
+				}
+
+				var genTxInfo models.TransactionInfo
+				if err := json.Unmarshal(scGenTX.Info, &genTxInfo); err != nil {
+					return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest(SC): failed to unmarshal transaction info, err: %v", err)
+				}
+
+				var genTxSignature models.Signature
+				if err := json.Unmarshal(scGenTX.Signature, &genTxSignature); err != nil {
+					return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest(SC): failed to unmarshal signature, err: %v", err)
+				}
+
+				if networkMode != constants.NetworkMode_Localnet {
+					if _, err := util.PublishTransaction(pubsub, &genTxInfo, &genTxSignature, true, ""); err != nil {
+						log.Error("BuildTransactionInfoFromRequest(SC): failed to publish transaction, err: %v", err)
+					}
+				}
+			}
+
+			// Split-derived tokens have no previous transaction yet — their
+			// genesis is the split just persisted.
+			for _, token := range committedRBTTokens {
+				if token.PreviousTransactionID == "" && scGenTX != nil {
+					token.PreviousTransactionID = scGenTX.ID
+				}
+			}
+			scCommittedTokens[scInfo.SmartContractId] = committedRBTTokens
+			log.Debug("BuildTransactionInfoFromRequest: SC collateral split", "scID", scInfo.SmartContractId, "committedCount", len(committedRBTTokens))
+		}
+	}
+
 	// --- FT/NFT/SC: single DB transaction for all non-RBT assets ---
 	hasNonRBT := req.HasFT() || req.HasNFT() || req.HasSmartContract()
 	if hasNonRBT {
@@ -330,28 +426,16 @@ func BuildTransactionInfoFromRequest(
 				} else {
 					// DEPLOYMENT MODE: Token doesn't exist, prepare for deployment
 					log.Info("BuildTransactionInfoFromRequest: SC does not exist - DEPLOYMENT MODE", "scID", scInfo.SmartContractId, "value", scInfo.Value)
-					// Collect committed tokens if SC has value > 0
-					if scInfo.Value > 0 {
-						log.Info("BuildTransactionInfoFromRequest: Locking RBT tokens for SC committed value", "scID", scInfo.SmartContractId, "value", scInfo.Value)
-						// Lock RBT tokens for the smart contract value
-						ownedRBTTokens, err := w.LockTokensForSplit(ctx, req.Initiator, scInfo.Value, referenceID)
-						if err != nil {
-							log.Error("BuildTransactionInfoFromRequest: Failed to lock RBT for SC committed tokens", "err", err, "scID", scInfo.SmartContractId, "value", scInfo.Value)
-							return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: failed to lock RBT for SC committed tokens: %w", err)
-						}
-						log.Info("BuildTransactionInfoFromRequest: RBT tokens locked for SC commitment", "scID", scInfo.SmartContractId, "tokenCount", len(ownedRBTTokens))
-
-						// Convert to TokenInfo format for CommittedTokens and add to locked list
-						for _, token := range ownedRBTTokens {
-							committedToken := &models.TokenInfo{
-								TokenID:               token.TokenID,
-								PreviousTransactionID: token.TransactionID,
-							}
-							allCommittedTokens = append(allCommittedTokens, committedToken)
+					// Collateral was locked and split in the pre-pass above, so only
+					// the tokens actually backing scInfo.Value are committed here;
+					// the change was minted back to the initiator as Free.
+					if committed, ok := scCommittedTokens[scInfo.SmartContractId]; ok {
+						for _, token := range committed {
+							allCommittedTokens = append(allCommittedTokens, token)
 							// Add to locked list so they get marked as Locked (not Committed yet - that happens during consensus)
 							allLockedIDs = append(allLockedIDs, token.TokenID)
 						}
-						log.Debug("BuildTransactionInfoFromRequest: Committed tokens prepared", "count", len(ownedRBTTokens))
+						log.Debug("BuildTransactionInfoFromRequest: Committed tokens prepared", "count", len(committed))
 					}
 
 					// Add SC to transaction tokens (will be deployed during consensus)
