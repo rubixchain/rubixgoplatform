@@ -105,6 +105,17 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="After NFT deployment, subscribe and execute NFTs from the opposite node.",
     )
+    p.add_argument(
+        "--nft-burn",
+        action="store_true",
+        help=(
+            "After all other NFT phases, burn an NFT (terminal — a burnt NFT can no "
+            "longer be executed or transferred). Also runs two negative tests: burning "
+            "a parent with live children must be refused, and re-burning must be "
+            "idempotent. NOTE: quorum collateral release cannot be verified on "
+            "localnet, where transaction publish is a no-op."
+        ),
+    )
     # ------------------------------------------------------------------
     # Smart contract flags
     # ------------------------------------------------------------------
@@ -351,13 +362,20 @@ def main() -> None:
     if args.run_all_tests:
         log.info("=== RUN-ALL-TESTS MODE ENABLED ===")
         if args.nft_count == 0:
-            args.nft_count = 2
+            # 3 rather than 2: the child-mint phase claims one NFT as a parent
+            # (parents are deliberately un-burnable), so 2 would leave the burn
+            # phase exactly one candidate and no margin.
+            args.nft_count = 3
         if args.sc_count == 0:
             args.sc_count = 2
         if args.ft_count == 0:
             args.ft_count = 2
         args.nft_self_execute = True
         args.nft_cross_execute = True
+        # Burn is terminal and runs last among the NFT phases, so it is safe
+        # here — but deliberately NOT enabled by --bundled-test or
+        # --all-in-one-test, which reuse the deployed NFTs in later rounds.
+        args.nft_burn = True
         args.sc_execute = True
         args.ft_transfer = True
         args.bundled_test = True
@@ -494,6 +512,7 @@ def main() -> None:
             nft_self_execute=args.nft_self_execute,
             nft_transfer=args.nft_transfer,
             nft_cross_execute=args.nft_cross_execute,
+            nft_burn=args.nft_burn,
             sc_count=args.sc_count,
             sc_execute=args.sc_execute,
             sc_only=args.sc_only,

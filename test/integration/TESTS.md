@@ -30,6 +30,14 @@ MINTING → SHUTTLE → NFT → SMART_CONTRACT → BUNDLED_TX → FT → ALL_IN_
         → INTRA_NODE → NEGATIVE → FINALISE
 ```
 
+Within the NFT subsystem the sub-phases are also ordered, and the burn is
+strictly last because it is terminal:
+
+```
+create → deploy → mint children → self-execute → transfer → cross-execute
+       → repeated executions → BURN → verification
+```
+
 ---
 
 ## 1. RBT — token generation & transfer
@@ -79,6 +87,103 @@ chain length on both nodes (mirrors `SC_CHAIN_SYNC`).
 | `NFT_PARENT_OF_<child>` | Each child's `nfts/{id}/parent` points back to the parent. |
 | `NFT_CHILDREN_QUERY` / `NFT_PARENT_QUERY` | The children/parent query endpoints respond for a deployed NFT. |
 | `NFT_BALANCE_NODE_A` / `NFT_BALANCE_NODE_B` | NFT ownership counts are correct. |
+
+---
+
+## 2a. NFT burn (`--nft-burn`)
+
+Permanently destroys an NFT. Enabled by `--nft-burn` (and by `--run-all-tests`,
+but deliberately **not** by `--bundled-test` / `--all-in-one-test`, which reuse
+the deployed NFTs in later rounds).
+
+**Why burning exists.** Quorum pledge release is triggered by a *later*
+transaction spending the pledged tokens. RBT keeps moving, so RBT pledges always
+eventually release; a dead NFT is never transacted again, so the quorum's
+collateral would stay pledged forever. The burn is that missing terminal
+transaction.
+
+**Burn is terminal — it runs LAST among the NFT phases.** A burnt NFT can no
+longer be executed or transferred, so running it earlier would break every phase
+after it. The parent-rejection test also depends on the child-mint phase having
+already run.
+
+**Shape.** `POST /rubix/v1/tx` with `tokens.burnNft: true`. Unlike an execute or
+transfer, a burn does **not** go through quorum consensus — it is a self-signed
+transaction, persisted locally and then published to two channels: the
+`rubix_txn` stream (so pledging quorums release collateral) and the NFT's own
+topic (so subscribers learn the NFT is dead).
+
+**Three phases run in order:** burn a childless NFT; attempt to burn a parent
+that still has live children (**must be refused**); re-burn the already-burnt
+NFT (**must succeed idempotently**).
+
+**Verification checks**
+
+| Check | Asserts |
+|-------|---------|
+| `NFT_BURN_STATUS_<id>` | The burnt NFT's chain grew to ≥ 2 entries (deploy + burn). |
+| `NFT_BURN_BALANCE_NODE_A` / `..._NODE_B` | The burnt NFT no longer appears in its owner's NFT balance (covers the `GetNFTsByDid` status filter). |
+| `NFT_BURN_CHAIN_SYNC_<id>` | The burn synced to the opposite (subscriber) node. **WARN (non-blocking) on localnet**, where publish is a no-op — see the caveat below. Becomes a real PASS on a testnet. |
+| `NFT_BURN_PARENT_BLOCKED` | Burning a parent NFT with live children was **refused**. A FAIL here means children were silently orphaned. WARN if no parent/child pair existed to test. |
+| `NFT_BURN_IDEMPOTENT` | Re-burning an already-burnt NFT succeeded instead of erroring. WARN if nothing was burnt. |
+| `NFT_BURN_RAN` | Emitted as WARN only when the burn phase found no burnable NFT (every deployed NFT was a parent or a child). Raise `--nft-count` to exercise the phase. |
+
+**Negative cases.** Because a burn is terminal and skips consensus,
+`validateNFTBurnRequest` is the only thing between a malformed request and
+permanent asset destruction. Each of these asserts the node **refuses**:
+
+| Check | Request that must be refused |
+|-------|------------------------------|
+| `NFT_BURN_REJECTS_WRONG_OWNER` | Burning an NFT the initiator does not own. |
+| `NFT_BURN_REJECTS_UNKNOWN_NFT` | Burning a non-existent NFT id. |
+| `NFT_BURN_REJECTS_BURN_PLUS_TRANSFER` | `burnNft` + `transferNftOwnership` (contradictory). |
+| `NFT_BURN_REJECTS_BURN_PLUS_RBT` | `burnNft` + an RBT transfer — the RBT side would ride the non-consensus path and silently lose quorum validation. |
+| `NFT_BURN_REJECTS_BURN_PLUS_SC` | `burnNft` + a smart contract entry. |
+| `NFT_BURN_REJECTS_EMPTY_NFT_ID` | `burnNft` with an empty `nftId`. |
+| `NFT_BURN_REJECTS_MIXED_BURNT_AND_LIVE` | A request mixing an already-burnt NFT with a live one (rejected rather than partially applied). |
+| `NFT_BURN_CHILD_ALLOWED` | **Positive:** burning a CHILD NFT *succeeds* — only parents with live children are blocked. |
+
+**Parent/child unblocking sequence.** The parent guard is only correct if it
+blocks *and* unblocks at the right boundary. A guard that simply refused every
+parent forever would pass a naive block-only test, so these four checks run as a
+chain:
+
+| Step | Check | Expected |
+|------|-------|----------|
+| 2 live children | `NFT_BURN_PARENT_BLOCKED` | parent REFUSED |
+| burn child #1 | `NFT_BURN_CHILD_ALLOWED` | child burnt |
+| 1 live child | `NFT_BURN_PARENT_STILL_BLOCKED` | parent STILL refused |
+| burn child #2 | `NFT_BURN_PARENT_AFTER_CHILDREN` | parent NOW burnable |
+
+The last step is the important one: `liveChildNFTs` filters out already-burnt
+children, so a fully-burnt subtree must not pin its root un-burnable forever.
+
+> NFTs are never `Pledged` (pledging selects RBT only, via `CollectRBTTokens`),
+> so there is no pledged-NFT burn case to test. The status guard in
+> `validateNFTBurnRequest` stays default-deny anyway, so any future status is
+> refused until someone explicitly decides it is burnable.
+
+**Sizing note.** The burn deliberately skips parents (un-burnable by design) and
+children, so it needs at least one standalone NFT. With `--nft-count 2` the
+child-mint phase claims NFT #1, leaving exactly one candidate — enough, but with
+no margin. Use `--nft-count 3` or more when you want the burn phase reliably
+exercised.
+
+> ### ⚠ Localnet caveat — what this suite cannot prove
+>
+> `util.PublishTransaction` returns immediately on localnet
+> (`util/transaction.go:63-66`), so **nothing is broadcast** and this harness is
+> localnet-only. The suite verifies the API contract, both guards, the local
+> status change, the chain entry, and balance filtering. It does **not** verify
+> the two properties the feature exists for:
+>
+> 1. quorum collateral actually being released, and
+> 2. whether receiving nodes accept a burn transaction, which by design carries
+>    **no quorum signature** (`transactionInfo.Quorums` is empty).
+>
+> Both require a manual run against a real testnet with a live quorum holding a
+> matching `unpledge_sequence_info` row. Treat a green burn suite as necessary
+> but not sufficient.
 
 ---
 

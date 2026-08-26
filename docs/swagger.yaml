@@ -98,6 +98,16 @@ definitions:
     type: object
   models.TransactionTokenDetails:
     properties:
+      burnNft:
+        description: |-
+          BurnNFT, when true, permanently destroys the NFTs listed in NFT rather
+          than executing or transferring them. A burn is a non-consensus,
+          self-signed transaction: it is persisted locally and published to both
+          the rubix_txn stream (so quorums that pledged against this NFT can
+          release their collateral) and the NFT's own topic (so subscribers learn
+          the NFT is dead). Mutually exclusive with TransferNFTOwnership, and
+          cannot be combined with RBT/FT/SmartContract in the same request.
+        type: boolean
       ft:
         items:
           $ref: '#/definitions/models.FTInfo'
@@ -973,9 +983,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: Submits a transfer request (RBT, FT, NFT or smart contract) and
-        runs it through quorum consensus. Returns a request ID that must be passed
-        to the signature API (POST /rubix/v1/signature) to sign and complete the transaction.
+      description: |-
+        Submits a transfer request (RBT, FT, NFT or smart contract) and runs it through quorum consensus. Returns a request ID that must be passed to the signature API (POST /rubix/v1/signature) to sign and complete the transaction.
+
+        Setting `tokens.burnNft` to true permanently destroys the NFTs listed in `tokens.nft` instead of transferring them. A burn skips quorum consensus (it destroys value rather than moving it) but is still published to the network so quorums that pledged against those NFTs can release their collateral. It cannot be combined with `transferNftOwnership`, or with RBT/FT/smart contract transfers, and an NFT that still has live child NFTs cannot be burnt until its children are burnt first.
       operationId: txInit
       parameters:
       - description: transaction
