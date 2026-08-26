@@ -148,6 +148,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIListFT, "GET", s.APIListFTs)
 
 	s.AddRoute(setup.APIGetDIDBalance, "GET", s.AuthHandle(s.APIGetDIDBalance, true, s.AuthError, false))
+	s.AddRoute(setup.APIGetPubKeyByDID, "GET", s.AuthHandle(s.APIGetPubKeyByDID, false, s.AuthError, false))
 }
 
 func (s *Server) ExitFunc() error {

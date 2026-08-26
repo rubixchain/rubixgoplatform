@@ -284,11 +284,14 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 	getParentBurnTx := func(parentID string) (string, bool, error) {
 		return c.getParentBurnTxID(parentID)
 	}
+	fetchGenesisTx := func(peerDID, tokenID string) (*models.Transactions, error) {
+		return c.FetchGenesisTransactionFromPeer(peerDID, tokenID)
+	}
 	// Must also be bound in core/fullnode.go, or that path goes unenforced.
 	resolveProperties := func(nftTokenID string) (*models.ResolvedProperties, error) {
 		return c.ResolveNFTProperties(nftTokenID)
 	}
-	isTransactionInfoValidated, err := consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, nil, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains, syncAuthoritative, getTxByID, getParentBurnTx, resolveProperties, consensusRequest.TransferNFTOwnership)
+	isTransactionInfoValidated, err := consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, nil, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains, syncAuthoritative, getTxByID, getParentBurnTx, fetchGenesisTx, resolveProperties, consensusRequest.TransferNFTOwnership)
 	if err != nil || !isTransactionInfoValidated {
 		c.log.Error("initiateConsensusHandler: transaction info validation failed", "err", err)
 		if err != nil {

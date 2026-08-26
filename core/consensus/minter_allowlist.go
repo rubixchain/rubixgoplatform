@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/rubixchain/rubixgoplatform/core/minterallowlist"
@@ -31,10 +32,10 @@ func ValidateMinterAllowlist(
 	isFullnode bool,
 	w *wallet.Wallet,
 	log logger.Logger,
-	syncTxChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error,
+	fetchGenesisTx func(peerDID, tokenID string) (*models.Transactions, error),
 	testnet, mainnet bool,
 ) error {
-	return validateMinterAllowlist(txnInfo, isFullnode, w, log, syncTxChains, testnet, mainnet)
+	return validateMinterAllowlist(txnInfo, isFullnode, w, log, fetchGenesisTx, testnet, mainnet)
 }
 
 // validateMinterAllowlist is the test-friendly entry that takes an interface
@@ -44,7 +45,7 @@ func validateMinterAllowlist(
 	isFullnode bool,
 	w genesisInitiatorLookup,
 	log logger.Logger,
-	syncTxChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error,
+	fetchGenesisTx func(peerDID, tokenID string) (*models.Transactions, error),
 	testnet, mainnet bool,
 ) error {
 	if txnInfo == nil {
@@ -70,20 +71,36 @@ func validateMinterAllowlist(
 		return nil
 	}
 
-	tokensToCheck := make([]*models.TokenInfo, 0)
-	if txnInfo.Tokens != nil {
-		tokensToCheck = append(tokensToCheck, txnInfo.Tokens.RBT...)
+	// mintCheckToken pairs a token with the DID that actually holds its chain
+	// history — needed because, for pledge tokens, that's the pledging quorum,
+	// not the transaction initiator (mirrors syncFromPeerDID in checks.go's
+	// TokenChainIntegrityCheck).
+	type mintCheckToken struct {
+		token       *models.TokenInfo
+		genesisPeer string
 	}
-	tokensToCheck = append(tokensToCheck, txnInfo.CommittedTokens...)
+
+	tokensToCheck := make([]mintCheckToken, 0)
+	if txnInfo.Tokens != nil {
+		for _, t := range txnInfo.Tokens.RBT {
+			tokensToCheck = append(tokensToCheck, mintCheckToken{token: t, genesisPeer: txnInfo.Initiator})
+		}
+	}
+	for _, t := range txnInfo.CommittedTokens {
+		tokensToCheck = append(tokensToCheck, mintCheckToken{token: t, genesisPeer: txnInfo.Initiator})
+	}
 	if isFullnode {
 		for _, q := range txnInfo.Quorums {
 			if q == nil {
 				continue
 			}
-			tokensToCheck = append(tokensToCheck, q.Tokens...)
+			for _, t := range q.Tokens {
+				tokensToCheck = append(tokensToCheck, mintCheckToken{token: t, genesisPeer: q.Did})
+			}
 		}
 	}
-	for _, t := range tokensToCheck {
+	for _, mc := range tokensToCheck {
+		t := mc.token
 		if t == nil || t.TokenID == "" {
 			continue
 		}
@@ -99,21 +116,27 @@ func validateMinterAllowlist(
 		wholeID := fmt.Sprintf("%d_%d", level, number)
 
 		minter, lookupErr := w.GetGenesisInitiatorDID(wholeID, isFullnode)
-		if lookupErr != nil && elems.PartIndex != 0 && syncTxChains != nil {
-			// Part-token transfer: the whole-token chain may not be local yet.
-			// Pull it from the initiator and try the lookup again.
-			log.Debug("ValidateMinterAllowlist: whole-token chain missing locally for part transfer, syncing from initiator",
-				"partTokenID", t.TokenID, "wholeID", wholeID, "peerDID", txnInfo.Initiator)
-			if syncErr := syncTxChains(
-				txnInfo.Initiator,
-				[]string{wholeID},
-				map[string]string{wholeID: ""},
-				nil,
-			); syncErr != nil {
-				return fmt.Errorf("ValidateMinterAllowlist: whole-token sync failed for %s (whole %s): %w",
-					t.TokenID, wholeID, syncErr)
+		if lookupErr != nil && elems.PartIndex != 0 && fetchGenesisTx != nil {
+			// Part-token transfer: the whole-token genesis may not be local yet.
+			// Fetch ONLY the genesis transaction from the peer — this never
+			// persists anything locally, so there's no risk of ingesting a
+			// sibling transaction that's still being validated elsewhere.
+			genesisTx, fetchErr := fetchGenesisTx(mc.genesisPeer, wholeID)
+			if fetchErr != nil {
+				return fmt.Errorf("ValidateMinterAllowlist: whole-token genesis fetch failed for %s (whole %s): %w",
+					t.TokenID, wholeID, fetchErr)
 			}
-			minter, lookupErr = w.GetGenesisInitiatorDID(wholeID, isFullnode)
+			var genesisInfo models.TransactionInfo
+			if unmarshalErr := json.Unmarshal(genesisTx.Info, &genesisInfo); unmarshalErr != nil {
+				return fmt.Errorf("ValidateMinterAllowlist: failed to unmarshal fetched genesis for %s (whole %s): %w",
+					t.TokenID, wholeID, unmarshalErr)
+			}
+			if genesisInfo.Initiator == "" {
+				lookupErr = fmt.Errorf("empty initiator in fetched genesis for whole %s", wholeID)
+			} else {
+				minter = genesisInfo.Initiator
+				lookupErr = nil
+			}
 		}
 		// Fallback: if local genesis lookup still fails and the current
 		// transaction declares itself as the mint for this whole token

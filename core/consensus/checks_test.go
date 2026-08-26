@@ -399,9 +399,10 @@ func TestValidateTransaction_FailsOnInvalidInfoFields(t *testing.T) {
 		func(string, string) error { return nil },
 		func(string, []string, map[string]string, []string) error { return nil },
 		func([]string) (map[string]string, error) { return map[string]string{}, nil }, // syncAuthoritative
-		func(string) (*models.TransactionInfo, error) { return nil, nil },             // getTxByID
-		func(string) (string, bool, error) { return "", false, nil },                  // getParentBurnTx
-		func(string) (*models.ResolvedProperties, error) { return nil, nil },          // resolveProperties
+		func(string) (*models.TransactionInfo, error) { return nil, nil },      // getTxByID
+		func(string) (string, bool, error) { return "", false, nil },           // getParentBurnTx
+		func(string, string) (*models.Transactions, error) { return nil, nil }, // fetchGenesisTx
+		func(string) (*models.ResolvedProperties, error) { return nil, nil },   // resolveProperties
 		false, // transferNFTOwnership
 	)
 	if err == nil {
@@ -431,9 +432,10 @@ func TestValidateTransaction_FailsOnTxIDMismatch(t *testing.T) {
 		func(string, string) error { return nil },
 		func(string, []string, map[string]string, []string) error { return nil },
 		func([]string) (map[string]string, error) { return map[string]string{}, nil }, // syncAuthoritative
-		func(string) (*models.TransactionInfo, error) { return nil, nil },             // getTxByID
-		func(string) (string, bool, error) { return "", false, nil },                  // getParentBurnTx
-		func(string) (*models.ResolvedProperties, error) { return nil, nil },          // resolveProperties
+		func(string) (*models.TransactionInfo, error) { return nil, nil },      // getTxByID
+		func(string) (string, bool, error) { return "", false, nil },           // getParentBurnTx
+		func(string, string) (*models.Transactions, error) { return nil, nil }, // fetchGenesisTx
+		func(string) (*models.ResolvedProperties, error) { return nil, nil },   // resolveProperties
 		false, // transferNFTOwnership
 	)
 	if err == nil || !strings.Contains(err.Error(), "transaction ID mismatch") {

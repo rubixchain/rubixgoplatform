@@ -82,6 +82,84 @@ func (c *Core) SyncTransactionChain(request *ensweb.Request) *ensweb.Result {
 	}, http.StatusOK)
 }
 
+// fetchGenesisTxnRequest is the request body for the genesis-only fetch API.
+type fetchGenesisTxnRequest struct {
+	DID     string `json:"did"`
+	TokenID string `json:"token_id"`
+}
+
+// fetchGenesisTxnResponse is the response body for the genesis-only fetch API.
+type fetchGenesisTxnResponse struct {
+	Status  bool                 `json:"status"`
+	Message string               `json:"message"`
+	Tx      *models.Transactions `json:"tx,omitempty"`
+}
+
+// FetchGenesisTransaction handles POST /rubix/v1/internal/fetch_genesis_transaction.
+// Unlike SyncTransactionChain, it returns ONLY the genesis (position 0) transaction
+// for the requested token ID from local DB — never the rest of the chain. This exists
+// for verification-only callers (IsParentTokenBurnt, ValidateMinterAllowlist) that need
+// to inspect a token's minting transaction without any risk of a caller then persisting
+// newer, not-yet-validated chain activity that happened to be included in a broader
+// chain-sync response.
+func (c *Core) FetchGenesisTransaction(request *ensweb.Request) *ensweb.Result {
+	var req fetchGenesisTxnRequest
+	if err := c.l.ParseJSON(request, &req); err != nil {
+		return c.l.RenderJSON(request, &fetchGenesisTxnResponse{
+			Status:  false,
+			Message: "failed to parse request",
+		}, http.StatusOK)
+	}
+
+	if req.TokenID == "" {
+		return c.l.RenderJSON(request, &fetchGenesisTxnResponse{
+			Status:  false,
+			Message: "token_id is required",
+		}, http.StatusOK)
+	}
+
+	tx, _, err := c.w.GetTransactionAndRoleAtHeight(req.TokenID, 0)
+	if err != nil {
+		return c.l.RenderJSON(request, &fetchGenesisTxnResponse{
+			Status:  false,
+			Message: err.Error(),
+		}, http.StatusOK)
+	}
+
+	return c.l.RenderJSON(request, &fetchGenesisTxnResponse{
+		Status:  true,
+		Message: "ok",
+		Tx:      tx,
+	}, http.StatusOK)
+}
+
+// FetchGenesisTransactionFromPeer fetches ONLY the genesis (position 0) transaction
+// for tokenID from the peer identified by peerDID. Unlike SyncTransactionChainsFromPeer,
+// it never writes anything to local storage — callers that need to verify a fact about
+// a token's minting transaction should use this instead of the full chain-sync path, so
+// there is no risk of ingesting and persisting a sibling transaction that is still being
+// validated elsewhere.
+func (c *Core) FetchGenesisTransactionFromPeer(peerDID, tokenID string) (*models.Transactions, error) {
+	req := fetchGenesisTxnRequest{DID: peerDID, TokenID: tokenID}
+
+	p, err := c.getPeer(peerDID)
+	if err != nil {
+		return nil, fmt.Errorf("FetchGenesisTransactionFromPeer: getPeer failed: %w", err)
+	}
+	defer p.Close()
+
+	var resp fetchGenesisTxnResponse
+	if err := p.SendJSONRequest("POST", APIFetchGenesisTxn, nil, &req, &resp, false, 30*time.Second); err != nil {
+		return nil, fmt.Errorf("FetchGenesisTransactionFromPeer: request failed: %w", err)
+	}
+
+	if !resp.Status || resp.Tx == nil {
+		return nil, fmt.Errorf("FetchGenesisTransactionFromPeer: peer returned error: %s", resp.Message)
+	}
+
+	return resp.Tx, nil
+}
+
 // SyncTransactionChainsFromPeer fetches transaction chains for the given token IDs
 // from the peer identified by peerDID, validates and applies them locally.
 //
@@ -97,8 +175,8 @@ func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, 
 		"peerDID", peerDID,
 		"tokenIDs", tokenIDs,
 		"tokenCount", len(tokenIDs),
-		"excludeTxIDCount", len(excludeTxIDs),
-		"prevTxIDCount", len(prevTxIDs),
+		"excludeTxIDs", excludeTxIDs,
+		"prevTxIDs", prevTxIDs,
 		"isFullnode", isFullnode,
 	)
 
@@ -124,9 +202,14 @@ func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, 
 		return fmt.Errorf("SyncTransactionChainsFromPeer: peer returned error: %s", resp.Message)
 	}
 
+	respSummary := make(map[string]int, len(resp.Data))
+	for tokenID, txs := range resp.Data {
+		respSummary[tokenID] = len(txs)
+	}
 	c.log.Debug("SyncTransactionChainsFromPeer: Received response from peer",
 		"peerDID", peerDID,
 		"tokenCount", len(resp.Data),
+		"txCountByToken", respSummary,
 		"message", resp.Message,
 	)
 
@@ -368,7 +451,6 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.Transac
 		// No local chain at all — treat as empty (receiver never held this token).
 		localChain = nil
 	}
-
 	// Step 1a: PrevTxID short-circuit — if the sender's previous transaction ID for this
 	// token already exists in our local chain, we already have the full history up to
 	// the current transaction. No sync needed.
@@ -745,7 +827,6 @@ func (c *Core) applyTokenChainFromSyncForFullNode(tokenID string, remoteTxs []ty
 	if err != nil {
 		localChain = nil
 	}
-
 	if prevTxID != "" && len(localChain) > 0 {
 		for _, lc := range localChain {
 			if lc.TransactionID == prevTxID {

@@ -41,6 +41,10 @@ const (
 	APICreateDID   string = "/rubix/v1/dids/create"
 	APIGetAllDID   string = "/rubix/v1/dids"
 	APIRegisterDID string = "/rubix/v1/dids/{did}/register"
+	// APIGetPubKeyByDID is the reverse of creating a DID from a public key
+	// (APICreateDID with a `public_key` body): given the DID it returns the
+	// public key the DID was derived from.
+	APIGetPubKeyByDID string = "/rubix/v1/dids/{did}/public_key"
 
 	// DID balances
 	APIGetDIDBalance string = "/rubix/v1/dids/{did}/balances"
