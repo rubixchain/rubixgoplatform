@@ -45,7 +45,7 @@ func validateDID(did string, label string) error {
 	return nil
 }
 
-func ValidateTransactionInfoFields(txnInfo *models.TransactionInfo) error {
+func ValidateTransactionInfoFields(txnInfo *models.TransactionInfo, configuredNetworkMode string) error {
 	if err := validateDID(txnInfo.Initiator, "initiator"); err != nil {
 		return err
 	}
@@ -66,6 +66,20 @@ func ValidateTransactionInfoFields(txnInfo *models.TransactionInfo) error {
 
 	if _, ok := validNetworks[txnInfo.Network]; !ok {
 		return fmt.Errorf("invalid network %q: must be one of the supported networks", txnInfo.Network)
+	}
+
+	//Here we are validing that, the network mode which is presented in the transaction info is valid and matches the configured network mode(validators network mode).
+	if configuredNetworkMode != "" {fmt.Println("ValidateTransactionInfoFields: transaction network mismatch", txnInfo.Network, configuredNetworkMode)
+		if _, ok := validNetworks[configuredNetworkMode]; !ok {
+			return fmt.Errorf("invalid configured network mode %q", configuredNetworkMode)
+		}
+		if txnInfo.Network != configuredNetworkMode {
+			return fmt.Errorf(
+				"transaction network mismatch: txnInfo.Network=%q, configured network_mode=%q",
+				txnInfo.Network, configuredNetworkMode,
+			)
+
+		}
 	}
 
 	if txnInfo.Tokens == nil ||
@@ -1172,7 +1186,12 @@ func ValidateTransaction(
 		return false, fmt.Errorf("ValidateTransaction: failed to unmarshal transaction info: %w", err)
 	}
 
-	if err := ValidateTransactionInfoFields(&txnInfo); err != nil {
+	configuredNetworkMode, err := util.GetNetworkMode(testnet, mainnet, localnet)
+	if err != nil {
+		return false, fmt.Errorf("ValidateTransaction: %w", err)
+	}
+
+	if err := ValidateTransactionInfoFields(&txnInfo, configuredNetworkMode); err != nil {
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
 

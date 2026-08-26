@@ -76,71 +76,77 @@ func TestValidateTransactionInfoFields(t *testing.T) {
 	now := int(time.Now().Unix())
 
 	tests := []struct {
-		name      string
-		mutate    func(*models.TransactionInfo)
-		wantErr   bool
-		wantMatch string // substring expected in the error (optional)
+		name              string
+		mutate            func(*models.TransactionInfo)
+		configuredNetwork string
+		wantErr           bool
+		wantMatch         string // substring expected in the error (optional)
 	}{
 		// ---- happy path ----
-		{name: "valid input", mutate: func(*models.TransactionInfo) {}, wantErr: false},
+		{name: "valid input", mutate: func(*models.TransactionInfo) {}, configuredNetwork: constants.NetworkMode_Mainnet, wantErr: false},
 
 		// ---- Initiator DID ----
 		{name: "initiator empty", mutate: func(tx *models.TransactionInfo) { tx.Initiator = "" },
-			wantErr: true, wantMatch: "initiator"},
+			configuredNetwork: constants.NetworkMode_Mainnet, wantErr: true, wantMatch: "initiator"},
 		{name: "initiator with non-alphanumeric", mutate: func(tx *models.TransactionInfo) { tx.Initiator = "bafybmi!!!" },
-			wantErr: true, wantMatch: "alphanumeric"},
+			configuredNetwork: constants.NetworkMode_Mainnet, wantErr: true, wantMatch: "alphanumeric"},
 		{name: "initiator wrong prefix", mutate: func(tx *models.TransactionInfo) {
 			tx.Initiator = "xxxxxxx" + strings.Repeat("a", constants.DidLength-7)
-		}, wantErr: true, wantMatch: "must start with"},
+		}, configuredNetwork: constants.NetworkMode_Mainnet, wantErr: true, wantMatch: "must start with"},
 		{name: "initiator wrong length (short)", mutate: func(tx *models.TransactionInfo) {
 			tx.Initiator = constants.DidPrefix + "a"
-		}, wantErr: true, wantMatch: "length"},
+		}, configuredNetwork: constants.NetworkMode_Mainnet, wantErr: true, wantMatch: "length"},
 		{name: "initiator wrong length (long)", mutate: func(tx *models.TransactionInfo) {
 			tx.Initiator = constants.DidPrefix + strings.Repeat("a", constants.DidLength) // too long
-		}, wantErr: true, wantMatch: "length"},
+		}, configuredNetwork: constants.NetworkMode_Mainnet, wantErr: true, wantMatch: "length"},
 
 		// ---- Owner DID ----
 		{name: "owner empty is allowed (deployment txns)", mutate: func(tx *models.TransactionInfo) { tx.Owner = "" },
-			wantErr: false},
+			configuredNetwork: constants.NetworkMode_Mainnet, wantErr: false},
 		{name: "owner has space", mutate: func(tx *models.TransactionInfo) { tx.Owner = "bafybmi abc" },
-			wantErr: true, wantMatch: "alphanumeric"},
+			configuredNetwork: constants.NetworkMode_Mainnet, wantErr: true, wantMatch: "alphanumeric"},
 
 		// ---- Epoch ----
 		{name: "epoch zero", mutate: func(tx *models.TransactionInfo) { tx.Epoch = 0 },
-			wantErr: true, wantMatch: "epoch"},
+			configuredNetwork: constants.NetworkMode_Mainnet, wantErr: true, wantMatch: "epoch"},
 		{name: "epoch negative", mutate: func(tx *models.TransactionInfo) { tx.Epoch = -1 },
-			wantErr: true, wantMatch: "epoch"},
+			configuredNetwork: constants.NetworkMode_Mainnet, wantErr: true, wantMatch: "epoch"},
 		{name: "epoch before April-1-2026", mutate: func(tx *models.TransactionInfo) {
 			tx.Epoch = constants.MinTransactionEpochUnix - 1
-		}, wantErr: true, wantMatch: "epoch"},
+		}, configuredNetwork: constants.NetworkMode_Mainnet, wantErr: true, wantMatch: "epoch"},
 		{name: "epoch in the future", mutate: func(tx *models.TransactionInfo) { tx.Epoch = now + 3600 },
-			wantErr: true, wantMatch: "epoch"},
+			configuredNetwork: constants.NetworkMode_Mainnet, wantErr: true, wantMatch: "epoch"},
 
 		// ---- Network ----
 		{name: "network empty", mutate: func(tx *models.TransactionInfo) { tx.Network = "" },
-			wantErr: true, wantMatch: "network"},
+			configuredNetwork: constants.NetworkMode_Mainnet, wantErr: true, wantMatch: "network"},
 		{name: "network unknown", mutate: func(tx *models.TransactionInfo) { tx.Network = "devnet" },
-			wantErr: true, wantMatch: "network"},
+			configuredNetwork: constants.NetworkMode_Mainnet, wantErr: true, wantMatch: "network"},
 		{name: "network wrong case", mutate: func(tx *models.TransactionInfo) { tx.Network = "MAINNET" },
-			wantErr: true, wantMatch: "network"},
+			configuredNetwork: constants.NetworkMode_Mainnet, wantErr: true, wantMatch: "network"},
 		{name: "network testnet OK", mutate: func(tx *models.TransactionInfo) {
 			tx.Network = constants.NetworkMode_Testnet
-		}, wantErr: false},
+		}, configuredNetwork: constants.NetworkMode_Testnet, wantErr: false},
 		{name: "network localnet OK", mutate: func(tx *models.TransactionInfo) {
 			tx.Network = constants.NetworkMode_Localnet
-		}, wantErr: false},
+		}, configuredNetwork: constants.NetworkMode_Localnet, wantErr: false},
+		{name: "network mismatch with configured mainnet", mutate: func(tx *models.TransactionInfo) {
+			tx.Network = constants.NetworkMode_Testnet
+		}, configuredNetwork: constants.NetworkMode_Mainnet, wantErr: true, wantMatch: "network mismatch"},
+		{name: "invalid configured network mode", mutate: func(*models.TransactionInfo) {},
+			configuredNetwork: "devnet", wantErr: true, wantMatch: "configured network mode"},
 
 		// ---- Tokens ----
 		{name: "tokens pointer is nil", mutate: func(tx *models.TransactionInfo) { tx.Tokens = nil },
-			wantErr: true, wantMatch: "transfer token"},
+			configuredNetwork: constants.NetworkMode_Mainnet, wantErr: true, wantMatch: "transfer token"},
 		{name: "tokens pointer set but all lists empty",
-			mutate:  func(tx *models.TransactionInfo) { tx.Tokens = &models.TransactionTokens{} },
-			wantErr: true, wantMatch: "transfer token"},
+			mutate:            func(tx *models.TransactionInfo) { tx.Tokens = &models.TransactionTokens{} },
+			configuredNetwork: constants.NetworkMode_Mainnet, wantErr: true, wantMatch: "transfer token"},
 		{name: "only NFT populated is OK",
 			mutate: func(tx *models.TransactionInfo) {
 				tx.Tokens = &models.TransactionTokens{NFT: []*models.TokenInfo{{TokenID: "nft1"}}}
 			},
-			wantErr: false},
+			configuredNetwork: constants.NetworkMode_Mainnet, wantErr: false},
 	}
 
 	for _, tc := range tests {
@@ -148,7 +154,7 @@ func TestValidateTransactionInfoFields(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tx := baseValidTxnInfo()
 			tc.mutate(&tx)
-			err := ValidateTransactionInfoFields(&tx)
+			err := ValidateTransactionInfoFields(&tx, tc.configuredNetwork)
 			if tc.wantErr && err == nil {
 				t.Fatalf("expected error, got nil")
 			}
@@ -363,8 +369,6 @@ func TestValidateTransactionValueAndPledge(t *testing.T) {
 // Pure helper tests (no DB needed).
 // -----------------------------------------------------------------------------
 
-
-
 // -----------------------------------------------------------------------------
 // Orchestrator-level (ValidateTransaction) sanity tests.
 //
@@ -397,7 +401,7 @@ func TestValidateTransaction_FailsOnInvalidInfoFields(t *testing.T) {
 		nil,   // logger – never touched in this failure path
 		&stubDIDCrypto{Verify: true},
 		map[string]types.DIDCrypto{},
-		false, false, false,
+		false, true, false,
 		func(string, string) error { return nil },
 		func(string, []string, map[string]string, []string) error { return nil },
 		func([]string) (map[string]string, error) { return map[string]string{}, nil }, // syncAuthoritative
@@ -429,7 +433,7 @@ func TestValidateTransaction_FailsOnTxIDMismatch(t *testing.T) {
 		storedTx, false, nil, nil,
 		&stubDIDCrypto{Verify: true},
 		map[string]types.DIDCrypto{},
-		false, false, false,
+		false, true, false,
 		func(string, string) error { return nil },
 		func(string, []string, map[string]string, []string) error { return nil },
 		func([]string) (map[string]string, error) { return map[string]string{}, nil }, // syncAuthoritative
@@ -720,9 +724,6 @@ func (f *fakeTxnStore) GetGenesisTransactionIdByTokenId(tokenID string, isFullNo
 // testLogger returns a real logger suitable for use inside tests. It writes
 // nowhere meaningful (go test captures stdout), which is fine for our needs.
 func testLogger() logger.Logger { return logger.New(nil) }
-
-
-
 
 // =============================================================================
 // Section 3 — TokenID-related checks for RBTs (ValidateNewTokenContent)
