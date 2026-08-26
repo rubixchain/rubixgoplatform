@@ -619,6 +619,18 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.Transac
 					}
 				}
 			}
+			if tokenType < 0 {
+				for _, t := range firstTxInfo.Tokens.Properties {
+					if t != nil && t.TokenID == tokenID {
+						tokenType = int16(models.GetTokenTypeID(constants.TokenType_Properties))
+						// Fixed at MinDecimalUnit rather than read from the
+						// peer-supplied payload, so every node's local row
+						// matches regardless of what the peer claimed.
+						tokenValue = rubixmath.MinDecimalUnit()
+						break
+					}
+				}
+			}
 		}
 		if tokenType < 0 {
 			return fmt.Errorf("applyTokenChainFromSync: token %s not found in any token array in txInfo — cannot determine type", tokenID)

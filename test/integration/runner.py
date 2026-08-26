@@ -105,6 +105,17 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="After NFT deployment, subscribe and execute NFTs from the opposite node.",
     )
+    p.add_argument(
+        "--nft-burn",
+        action="store_true",
+        help=(
+            "After all other NFT phases, burn an NFT (terminal — a burnt NFT can no "
+            "longer be executed or transferred). Also runs two negative tests: burning "
+            "a parent with live children must be refused, and re-burning must be "
+            "idempotent. NOTE: quorum collateral release cannot be verified on "
+            "localnet, where transaction publish is a no-op."
+        ),
+    )
     # ------------------------------------------------------------------
     # Smart contract flags
     # ------------------------------------------------------------------
@@ -322,6 +333,17 @@ def _build_arg_parser() -> argparse.ArgumentParser:
             "Auto-enabled by --run-all-tests."
         ),
     )
+    p.add_argument(
+        "--properties-tests",
+        action="store_true",
+        help=(
+            "Run the NFT-properties suite (permissioned execution): whitelist, "
+            "transferable, deployer-only edits, versioning, read API, and the "
+            "no-properties regression. Asserts both that permitted operations "
+            "succeed and that forbidden ones are rejected by the properties "
+            "gate specifically. Auto-enabled by --run-all-tests."
+        ),
+    )
     return p
 
 
@@ -351,19 +373,27 @@ def main() -> None:
     if args.run_all_tests:
         log.info("=== RUN-ALL-TESTS MODE ENABLED ===")
         if args.nft_count == 0:
-            args.nft_count = 2
+            # 3 rather than 2: the child-mint phase claims one NFT as a parent
+            # (parents are deliberately un-burnable), so 2 would leave the burn
+            # phase exactly one candidate and no margin.
+            args.nft_count = 3
         if args.sc_count == 0:
             args.sc_count = 2
         if args.ft_count == 0:
             args.ft_count = 2
         args.nft_self_execute = True
         args.nft_cross_execute = True
+        # Burn is terminal and runs last among the NFT phases, so it is safe
+        # here — but deliberately NOT enabled by --bundled-test or
+        # --all-in-one-test, which reuse the deployed NFTs in later rounds.
+        args.nft_burn = True
         args.sc_execute = True
         args.ft_transfer = True
         args.bundled_test = True
         args.all_in_one_test = True
         args.intra_node_test = True
         args.negative_tests = True
+        args.properties_tests = True
         args.nft_only = False
         args.sc_only = False
         args.ft_only = False
@@ -494,6 +524,7 @@ def main() -> None:
             nft_self_execute=args.nft_self_execute,
             nft_transfer=args.nft_transfer,
             nft_cross_execute=args.nft_cross_execute,
+            nft_burn=args.nft_burn,
             sc_count=args.sc_count,
             sc_execute=args.sc_execute,
             sc_only=args.sc_only,
@@ -521,6 +552,7 @@ def main() -> None:
             intra_node_ft_fund=args.intra_node_ft_fund,
             run_all_tests=args.run_all_tests,
             negative_tests=args.negative_tests,
+            properties_tests=args.properties_tests,
         )
     except Exception as exc:
         log.error("Integration run failed: %s", exc, exc_info=True)

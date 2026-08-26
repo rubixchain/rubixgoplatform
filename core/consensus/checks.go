@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -70,8 +71,9 @@ func ValidateTransactionInfoFields(txnInfo *models.TransactionInfo) error {
 
 	if txnInfo.Tokens == nil ||
 		(len(txnInfo.Tokens.RBT) == 0 && len(txnInfo.Tokens.NFT) == 0 &&
-			len(txnInfo.Tokens.FT) == 0 && len(txnInfo.Tokens.SmartContract) == 0) {
-		return fmt.Errorf("transaction must contain at least one transfer token (RBT, NFT, FT, or SmartContract)")
+			len(txnInfo.Tokens.FT) == 0 && len(txnInfo.Tokens.SmartContract) == 0 &&
+			len(txnInfo.Tokens.Properties) == 0) {
+		return fmt.Errorf("transaction must contain at least one transfer token (RBT, NFT, FT, SmartContract, or Properties)")
 	}
 
 	return nil
@@ -1165,6 +1167,7 @@ func ValidateTransaction(
 	getTxByID func(txID string) (*models.TransactionInfo, error),
 	getParentBurnTx func(parentID string) (burnTxID string, found bool, err error),
 	fetchGenesisTx func(peerDID, tokenID string) (*models.Transactions, error),
+	resolveProperties func(nftTokenID string) (*models.ResolvedProperties, error),
 	transferNFTOwnership bool,
 ) (bool, error) {
 	var txnInfo models.TransactionInfo
@@ -1205,6 +1208,10 @@ func ValidateTransaction(
 	}
 
 	if err := ValidateNFTTransferAuthorization(&txnInfo, transferNFTOwnership, isFullnode, w); err != nil {
+		return false, fmt.Errorf("ValidateTransaction: %w", err)
+	}
+
+	if err := ValidateNFTProperties(&txnInfo, transferNFTOwnership, log, resolveProperties); err != nil {
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
 
@@ -1316,6 +1323,7 @@ func getTransactionTokens(pledgedTxnInfo *models.TransactionInfo, unpledgeTxnInf
 			unpledgeTxnInfo.Tokens.NFT,
 			unpledgeTxnInfo.Tokens.FT,
 			unpledgeTxnInfo.Tokens.SmartContract,
+			unpledgeTxnInfo.Tokens.Properties,
 		} {
 			for _, token := range list {
 				if token != nil && token.TokenID != "" {
@@ -1347,6 +1355,7 @@ func getTransactionTokens(pledgedTxnInfo *models.TransactionInfo, unpledgeTxnInf
 		pledgedTxnInfo.Tokens.NFT,
 		pledgedTxnInfo.Tokens.FT,
 		pledgedTxnInfo.Tokens.SmartContract,
+		pledgedTxnInfo.Tokens.Properties,
 	} {
 		for _, token := range list {
 			if token == nil || token.TokenID == "" {
@@ -1359,4 +1368,141 @@ func getTransactionTokens(pledgedTxnInfo *models.TransactionInfo, unpledgeTxnInf
 	}
 
 	return false
+}
+
+// ValidateNFTProperties enforces the permission document governing each NFT.
+// resolveProperties is injected because core/consensus cannot import core; it
+// returns (nil, nil) when an NFT has none, and any error rejects.
+func ValidateNFTProperties(
+	txnInfo *models.TransactionInfo,
+	transferNFTOwnership bool,
+	log logger.Logger,
+	resolveProperties func(nftTokenID string) (*models.ResolvedProperties, error),
+) error {
+	if txnInfo == nil || txnInfo.Tokens == nil {
+		return nil
+	}
+	if resolveProperties == nil {
+		// A nil callback would silently disable enforcement everywhere.
+		return fmt.Errorf("ValidateNFTProperties: properties resolver is not wired")
+	}
+
+	for _, nft := range txnInfo.Tokens.NFT {
+		if nft == nil || nft.TokenID == "" {
+			continue
+		}
+
+		// A genesis NFT is created by this transaction, so nothing can govern
+		// it yet. Skipping also avoids resolving a freshly-minted child's ID,
+		// which hashes an opaque payload rather than contract metadata.
+		// NOTE: children are therefore unrestricted at birth and do not
+		// inherit the parent's properties — an open design question.
+		if nft.PreviousTransactionID == "" {
+			continue
+		}
+
+		resolved, err := resolveProperties(nft.TokenID)
+		if err != nil {
+			return fmt.Errorf("ValidateNFTProperties: NFT %s: %w", nft.TokenID, err)
+		}
+		if resolved == nil || resolved.Doc == nil {
+			continue // No properties: legacy behaviour, unrestricted.
+		}
+
+		if err := checkNFTPropertyRestrictions(txnInfo, nft.TokenID, transferNFTOwnership, resolved); err != nil {
+			if log != nil {
+				log.Debug("ValidateNFTProperties: rejected by properties",
+					"nft", nft.TokenID, "initiator", txnInfo.Initiator, "err", err)
+			}
+			return fmt.Errorf("ValidateNFTProperties: NFT %s: %w", nft.TokenID, err)
+		}
+	}
+
+	return validatePropertiesEdits(txnInfo, resolveProperties)
+}
+
+// checkNFTPropertyRestrictions applies every restriction in a resolved document.
+// Each is independently optional and they combine as AND.
+func checkNFTPropertyRestrictions(
+	txnInfo *models.TransactionInfo,
+	nftTokenID string,
+	transferNFTOwnership bool,
+	resolved *models.ResolvedProperties,
+) error {
+	doc := resolved.Doc
+
+	// Uses the signed Epoch, not time.Now(), so nodes with skewed clocks agree.
+	if !doc.IsWithinValidityWindow(int64(txnInfo.Epoch)) {
+		return fmt.Errorf("transaction epoch %d is outside the validity window [%d, %d]",
+			txnInfo.Epoch, doc.Policy.ValidFrom, doc.Policy.ValidTo)
+	}
+
+	// Absolute: the whitelist does not exempt a transfer.
+	if transferNFTOwnership && !doc.IsTransferable() {
+		return fmt.Errorf("NFT is marked non-transferable")
+	}
+
+	// Empty is unrestricted; populated gates the initiator, owner included.
+	if len(resolved.Whitelist) > 0 && !slices.Contains(resolved.Whitelist, txnInfo.Initiator) {
+		return fmt.Errorf("initiator %s is not in the whitelist", txnInfo.Initiator)
+	}
+
+	if len(doc.Restriction.AllowedSubnets) > 0 &&
+		!slices.Contains(doc.Restriction.AllowedSubnets, txnInfo.Network) {
+		return fmt.Errorf("network %q is not in the allowed subnets", txnInfo.Network)
+	}
+
+	if len(doc.Restriction.AllowedSmartContracts) > 0 {
+		for _, sc := range txnInfo.Tokens.SmartContract {
+			if sc == nil || sc.TokenID == "" {
+				continue
+			}
+			if !slices.Contains(doc.Restriction.AllowedSmartContracts, sc.TokenID) {
+				return fmt.Errorf("smart contract %s is not allowed to execute this NFT", sc.TokenID)
+			}
+		}
+	}
+
+	return nil
+}
+
+// validatePropertiesEdits confirms a properties token is edited by its deployer.
+// Genesis is exempt, having no prior chain to name one.
+func validatePropertiesEdits(
+	txnInfo *models.TransactionInfo,
+	resolveProperties func(nftTokenID string) (*models.ResolvedProperties, error),
+) error {
+	for _, props := range txnInfo.Tokens.Properties {
+		if props == nil || props.TokenID == "" {
+			continue
+		}
+		if props.PreviousTransactionID == "" {
+			continue // Genesis: first properties set, nothing to authorise against.
+		}
+
+		// Resolved via the NFT it governs, so an edit must name that NFT here.
+		var governed *models.ResolvedProperties
+		for _, nft := range txnInfo.Tokens.NFT {
+			if nft == nil || nft.TokenID == "" {
+				continue
+			}
+			resolved, err := resolveProperties(nft.TokenID)
+			if err != nil {
+				return fmt.Errorf("ValidateNFTProperties: resolving properties for NFT %s: %w", nft.TokenID, err)
+			}
+			if resolved != nil && resolved.PropertiesTokenID == props.TokenID {
+				governed = resolved
+				break
+			}
+		}
+		if governed == nil {
+			return fmt.Errorf("ValidateNFTProperties: properties token %s does not govern any NFT in this transaction", props.TokenID)
+		}
+
+		if txnInfo.Initiator != governed.Deployer {
+			return fmt.Errorf("ValidateNFTProperties: only the deployer %s may edit properties token %s, not %s",
+				governed.Deployer, props.TokenID, txnInfo.Initiator)
+		}
+	}
+	return nil
 }

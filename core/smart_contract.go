@@ -344,6 +344,18 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		return
 	}
 
+	// Skip self-echo (see comment at function top): if the initiator DID belongs
+	// to this node, we published this event ourselves. Syncing from ourselves
+	// would race with the ongoing transaction's persistence.
+	if isLocal, err := c.w.IsLocalDID(initiatorDID); err != nil {
+		c.log.Warn("ContractCallBack: failed to check whether initiator DID is local (continuing)",
+			"token", smartContractToken, "initiatorDID", initiatorDID, "err", err)
+	} else if isLocal {
+		c.log.Debug("ContractCallBack: ignoring self-published event",
+			"token", smartContractToken, "topic", topic, "initiatorDID", initiatorDID)
+		return
+	}
+
 	address := peerID + "." + initiatorDID
 
 	if err := c.SyncTransactionChainsFromPeer(address, []string{smartContractToken}, nil, nil, false, false); err != nil {

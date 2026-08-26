@@ -1,7 +1,24 @@
 GIT_COMMIT := $(shell git rev-parse HEAD)
 PREV_COMMIT := $(shell git rev-parse HEAD~1)
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null)
-LDFLAGS := -ldflags "-X github.com/rubixchain/rubixgoplatform/command.version=$(VERSION) -X github.com/rubixchain/rubixgoplatform/command.currentCommit=$(GIT_COMMIT) -X github.com/rubixchain/rubixgoplatform/command.previousCommit=$(PREV_COMMIT)"
+VERSION_FLAGS := -X github.com/rubixchain/rubixgoplatform/command.version=$(VERSION) -X github.com/rubixchain/rubixgoplatform/command.currentCommit=$(GIT_COMMIT) -X github.com/rubixchain/rubixgoplatform/command.previousCommit=$(PREV_COMMIT)
+LDFLAGS := -ldflags "$(VERSION_FLAGS)"
+
+# macOS needs external linking. This project has no `import "C"` of its own, but
+# net, os/user and crypto/x509 make the darwin build import system dylibs
+# (libSystem, CoreFoundation, Security — see `otool -L`). Go's *internal* linker
+# emits no LC_UUID load command, and macOS 15+/26 dyld hard-rejects a
+# dylib-importing Mach-O that lacks one:
+#
+#   dyld: missing LC_UUID load command in <binary>   → SIGABRT (exit 134)
+#
+# CGO_ENABLED=1 alone does NOT switch linkers here: with no cgo code to compile,
+# the toolchain still links internally, so the flag is a no-op for this repo and
+# the binary aborts on launch. Forcing -linkmode=external routes the final link
+# through the system `ld`, which writes LC_UUID. Newer Go (1.24+) emits it from
+# the internal linker too, so this is specifically a floor for the Go 1.22 we
+# pin in CI — keep it until that pin moves.
+MAC_LDFLAGS := -ldflags "$(VERSION_FLAGS) -linkmode=external"
 
 compile-linux:
 	echo "Compiling for Linux OS"
@@ -19,7 +36,7 @@ compile-mac:
 	go env -w GOOS=darwin
 	go env -w GOARCH=arm64
 	go env -w CGO_ENABLED=1
-	go build $(LDFLAGS) -o mac/rubixgoplatform
+	go build $(MAC_LDFLAGS) -o mac/rubixgoplatform
 
 clean:
 	rm -f linux/rubixgoplatform windows/rubixgoplatform.exe mac/rubixgoplatform

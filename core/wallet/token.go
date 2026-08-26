@@ -256,15 +256,25 @@ func (w *Wallet) GetTokensFromDenomMap(denomMap map[types.DenomValue]types.Denom
 			continue
 		}
 
-		rows, _ := w.db.Pool().Query(w.Ctx,
+		// token_type is required: a properties token is valued at
+		// MinDecimalUnit (0.001), a real RBT denomination, so without the
+		// filter it would be selected here and spent as RBT.
+		rows, err := w.db.Pool().Query(w.Ctx,
 			`SELECT token_id, parent_token_id, token_value, token_status, did, transaction_id,
 			 token_state_hash, token_type, latest_position, latest_role, created_at, updated_at
-			 FROM tokens WHERE token_value=$1 AND did=$2 AND token_status=$3 LIMIT $4`,
+			 FROM tokens WHERE token_value=$1 AND did=$2 AND token_status=$3 AND token_type=$5 LIMIT $4`,
 			denomValue,
 			did,
 			constants.TokenStatus_Free,
 			denomCount,
+			int16(models.GetTokenTypeID(constants.TokenType_RBT)),
 		)
+		// Previously discarded via `rows, _ :=`, which turned a failed query
+		// into an empty result that reads upstream as insufficient balance.
+		if err != nil {
+			return nil, fmt.Errorf("GetTokensFromDenomMap query (denomination %v): %w", denomValue, err)
+		}
+
 		for rows.Next() {
 			var rbtToken models.Token
 			if err := rows.Scan(
@@ -272,11 +282,19 @@ func (w *Wallet) GetTokensFromDenomMap(denomMap map[types.DenomValue]types.Denom
 				&rbtToken.DID, &rbtToken.TransactionID, &rbtToken.TokenStateHash, &rbtToken.TokenType,
 				&rbtToken.LatestPosition, &rbtToken.LatestRole, &rbtToken.CreatedAt, &rbtToken.UpdatedAt,
 			); err != nil {
+				rows.Close()
 				return nil, fmt.Errorf("GetTokensFromDenomMap scan: %w", err)
 			}
 
 			tokens = append(tokens, rbtToken)
 		}
+		// Catches mid-iteration failures, which rows.Next() reports only as
+		// "no more rows".
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("GetTokensFromDenomMap iterate (denomination %v): %w", denomValue, err)
+		}
+		rows.Close()
 	}
 
 	return tokens, nil

@@ -109,6 +109,43 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 			"childCount", len(mintedChildren))
 	}
 
+	// Validate burn requests before building the transaction info, which locks
+	// the NFTs. A burn is terminal and skips consensus, so these guards are the
+	// only protection against destroying an asset that should not be destroyed.
+	if request.IsNFTBurn() {
+		alreadyBurnt, err := c.validateNFTBurnRequest(request)
+		if err != nil {
+			c.log.Error("InitiateTransaction: NFT burn validation failed", "err", err, "did", initiatorDID)
+			resp.Message = err.Error()
+			return resp
+		}
+		// Every requested NFT is already burnt — succeed without re-publishing.
+		if len(alreadyBurnt) == len(request.GetAllNFTs()) {
+			c.log.Info("InitiateTransaction: all requested NFTs are already burnt — nothing to do",
+				"did", initiatorDID, "nftCount", len(alreadyBurnt))
+			txSucceeded = true
+			resp.Status = true
+			resp.Message = "NFT(s) already burnt"
+			return resp
+		}
+		if len(alreadyBurnt) > 0 {
+			c.log.Error("InitiateTransaction: burn request mixes already-burnt and live NFTs",
+				"did", initiatorDID, "alreadyBurntCount", len(alreadyBurnt))
+			resp.Message = "burnNft: request contains NFTs that are already burnt; retry with only the live NFTs"
+			return resp
+		}
+	}
+
+	// Validated before the build for the same reason as burns: the build locks
+	// the NFTs, so a rejected request should not leave them locked.
+	if request.IsPropertiesSet() {
+		if err := c.validatePropertiesRequest(request); err != nil {
+			c.log.Error("InitiateTransaction: properties validation failed", "err", err, "did", initiatorDID)
+			resp.Message = err.Error()
+			return resp
+		}
+	}
+
 	c.log.Info("InitiateTransaction: Building transaction info", "maxRetries", 3)
 	maxRetries := 3
 	var transactionInfo *models.TransactionInfo
@@ -163,6 +200,32 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		backoff := retryWithRandomBackoff(attempt)
 		c.log.Debug("InitiateTransaction: Backing off before retry", "attempt", attempt, "backoffMs", backoff.Milliseconds())
 		time.Sleep(backoff)
+	}
+
+	// Attached after the build so the properties token rides along with the NFT
+	// execute that carries it; the quorum authorises the edit during consensus.
+	if request.IsPropertiesSet() {
+		propsToken, err := c.BuildPropertiesToken(
+			request.GetAllNFTs()[0].NFTId, request.Tokens.Properties, initiatorDID)
+		if err != nil {
+			c.log.Error("InitiateTransaction: failed to build properties token", "err", err, "did", initiatorDID)
+			resp.Message = err.Error()
+			return resp
+		}
+		transactionInfo.Tokens.Properties = append(transactionInfo.Tokens.Properties, propsToken)
+		c.log.Info("InitiateTransaction: attached properties token",
+			"propertiesToken", propsToken.TokenID, "docCID", propsToken.Data)
+	}
+
+	// An NFT burn takes a non-consensus path: it destroys value rather than
+	// moving it, so there is nothing for a quorum to conserve. It diverges here
+	// — after the transaction info is built and the NFTs are locked, but before
+	// any pledge is requested. An NFT-only burn has a transaction value of 0
+	// and would otherwise be rejected as "insufficient quorum liquidity".
+	if request.IsNFTBurn() {
+		c.log.Info("InitiateTransaction: NFT burn — taking non-consensus path",
+			"reqID", reqID, "did", initiatorDID, "nftCount", len(transactionInfo.Tokens.NFT))
+		return c.finalizeNFTBurn(ctx, reqID, dc, transactionInfo, initiatorDID, &txSucceeded)
 	}
 
 	// Fetch the list of dids from quorum_manager table

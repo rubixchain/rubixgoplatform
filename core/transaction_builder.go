@@ -239,6 +239,12 @@ func BuildTransactionInfoFromRequest(
 					tok := locked[0]
 					log.Info("BuildTransactionInfoFromRequest: NFT locked for execution", "nftID", tok.TokenID, "prevTxID", tok.TransactionID)
 
+					// A properties token is never transferred or burnt on its
+					// own; it only moves as part of the NFT it governs.
+					if tok.TokenType == int16(models.GetTokenTypeID(constants.TokenType_Properties)) {
+						return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: %s is a properties token and cannot be transferred or burnt independently", tok.TokenID)
+					}
+
 					// Capture the chain owner cached in the wallet row. Used below to
 					// pin txInfo.Owner for NFT-only execute transactions so the chain
 					// payload reflects the actual on-chain owner instead of the

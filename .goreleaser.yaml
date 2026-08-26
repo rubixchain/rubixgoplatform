@@ -36,6 +36,14 @@ builds:
       - arm64
     ldflags: *ldflags
 
+  # Both darwin builds add -linkmode=external on top of the shared ldflags.
+  # The darwin binary imports system dylibs (via net, os/user, crypto/x509), and
+  # the Go 1.22 internal linker used by the goreleaser-cross image emits no
+  # LC_UUID load command. macOS 15+/26 dyld rejects such a binary outright:
+  #   dyld: missing LC_UUID load command → SIGABRT (exit 134)
+  # CGO_ENABLED alone won't switch linkers — this repo has no cgo code of its
+  # own, so the link stays internal unless linkmode is forced. Without this, the
+  # released macOS binaries do not start at all on current macOS.
   - id: darwin-amd64
     main: ./
     binary: rubixgoplatform
@@ -46,7 +54,11 @@ builds:
       - darwin
     goarch:
       - amd64
-    ldflags: *ldflags
+    ldflags: &darwin_ldflags
+      - -s -w
+      - -X github.com/rubixchain/rubixgoplatform/command.version={{ .Version }}
+      - -X github.com/rubixchain/rubixgoplatform/command.currentCommit={{ .FullCommit }}
+      - -linkmode=external
 
   - id: darwin-arm64
     main: ./
@@ -58,7 +70,7 @@ builds:
       - darwin
     goarch:
       - arm64
-    ldflags: *ldflags
+    ldflags: *darwin_ldflags
 
   - id: windows-amd64
     main: ./

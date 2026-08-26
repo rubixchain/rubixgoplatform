@@ -381,6 +381,13 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 				txInfoTokenSet[t.TokenID] = true
 			}
 		}
+		// Properties tokens are persisted like the rest, so the guard must know
+		// them or every edit past the genesis write is rejected as tampering.
+		for _, t := range req.TransactionInfo.Tokens.Properties {
+			if t != nil {
+				txInfoTokenSet[t.TokenID] = true
+			}
+		}
 	}
 	// Include CommittedTokens (used for SC/NFT deployment pledges)
 	if req.TransactionInfo != nil && req.TransactionInfo.CommittedTokens != nil {
@@ -441,7 +448,16 @@ func (pc *PostConsensusPersistenceCoordinator) validateTransferChainContinuity(c
 		// states (Burnt, Orphaned, ChainSyncIssue, BeingDoubleSpent) are explicitly rejected.
 		if req.ExecutionRole != ExecutionRoleReceiver {
 			// Initiator/Quorum: token must be Free or Locked (Locked by LockTokensForSplit before consensus).
-			if dbStatus != int16(constants.TokenStatus_Free) && dbStatus != int16(constants.TokenStatus_Locked) {
+			// A properties token is the exception: it is never Free after its
+			// genesis write, so an edit legitimately arrives as Deployed or
+			// Executed.
+			propsTypeID := int16(models.GetTokenTypeID(constants.TokenType_Properties))
+			isPropsEdit := dbTokenType == propsTypeID &&
+				(dbStatus == int16(constants.TokenStatus_Deployed) || dbStatus == int16(constants.TokenStatus_Executed))
+
+			if dbStatus != int16(constants.TokenStatus_Free) &&
+				dbStatus != int16(constants.TokenStatus_Locked) &&
+				!isPropsEdit {
 				return fmt.Errorf("transfer: token %q is not FREE or LOCKED (status=%d), cannot persist", row.TokenID, dbStatus)
 			}
 		} else {
