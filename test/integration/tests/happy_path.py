@@ -956,6 +956,23 @@ FROM tokens;
         )
         return engine.run()
 
+    def run_sc_collateral(self) -> List[Dict[str, str]]:
+        """Run the SC deploy collateral suite against node A.
+
+        Deploys at a fractional value, which the main SC suite never does, and
+        asserts the collateral is split rather than consumed whole.
+        """
+        from test.integration.tests.sc_collateral import SCCollateralEngine
+
+        log.info("=== SC COLLATERAL: running fractional-value deploy tests ===")
+        engine = SCCollateralEngine(
+            node_a=self.node_a,
+            did_a=self.did_a,
+            db_a=self.db_a,
+            password=self.cfg.password,
+        )
+        return engine.run()
+
     def run_db_snapshot(self) -> str:
         """Run diagnostic queries against all 3 DBs and write the results.
 
@@ -1132,6 +1149,7 @@ FROM tokens;
         intra_node_ft_fund: int = 2,
         run_all_tests: bool = False,
         negative_tests: bool = False,
+        sc_collateral_tests: bool = False,
     ) -> None:
         if skip_setup:
             self._load_state()
@@ -1431,6 +1449,13 @@ FROM tokens;
         if negative_tests:
             negative_verification = self.run_negative()
 
+        # SC deploy collateral. Deploys its own contracts at a fractional value
+        # and only reads balances back, so it neither depends on nor disturbs
+        # the happy-path state.
+        sc_collateral_verification: List[Dict[str, str]] = []
+        if sc_collateral_tests:
+            sc_collateral_verification = self.run_sc_collateral()
+
         # Deferred intra-node FT balance check — run at the very end so the
         # (slow) intra-node FT settlement to did_a2 has maximum elapsed time.
         deferred_verification: List[Dict[str, str]] = []
@@ -1459,6 +1484,7 @@ FROM tokens;
             + all_in_one_verification
             + intra_node_verification
             + negative_verification
+            + sc_collateral_verification
             + deferred_verification
             + extra_api_verification
             + tx_persist_verification

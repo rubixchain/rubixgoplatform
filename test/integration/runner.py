@@ -322,6 +322,18 @@ def _build_arg_parser() -> argparse.ArgumentParser:
             "Auto-enabled by --run-all-tests."
         ),
     )
+    p.add_argument(
+        "--sc-collateral-tests",
+        action="store_true",
+        help=(
+            "Run the SC deploy collateral suite: deploys contracts at a "
+            "FRACTIONAL value (0.001) and asserts the deployer's balance falls "
+            "by exactly that value, that only that value is held as Committed, "
+            "and that token_denom stays consistent with the real Free rows. "
+            "The main SC suite deploys at 1.0, where committing a whole token "
+            "is correct, so it cannot see this. Auto-enabled by --run-all-tests."
+        ),
+    )
     return p
 
 
@@ -364,6 +376,7 @@ def main() -> None:
         args.all_in_one_test = True
         args.intra_node_test = True
         args.negative_tests = True
+        args.sc_collateral_tests = True
         args.nft_only = False
         args.sc_only = False
         args.ft_only = False
@@ -521,6 +534,7 @@ def main() -> None:
             intra_node_ft_fund=args.intra_node_ft_fund,
             run_all_tests=args.run_all_tests,
             negative_tests=args.negative_tests,
+            sc_collateral_tests=args.sc_collateral_tests,
         )
     except Exception as exc:
         log.error("Integration run failed: %s", exc, exc_info=True)
