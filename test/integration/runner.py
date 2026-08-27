@@ -329,9 +329,12 @@ def _build_arg_parser() -> argparse.ArgumentParser:
             "Run the SC deploy collateral suite: deploys contracts at a "
             "FRACTIONAL value (0.001) and asserts the deployer's balance falls "
             "by exactly that value, that only that value is held as Committed, "
-            "and that token_denom stays consistent with the real Free rows. "
-            "The main SC suite deploys at 1.0, where committing a whole token "
-            "is correct, so it cannot see this. Auto-enabled by --run-all-tests."
+            "and that token_denom stays consistent with the real Free rows at "
+            "that denomination. The main SC suite deploys at 1.0, where "
+            "committing a whole token is correct, so it cannot see this. Also "
+            "reports FT-caused denom drift separately (known-failing until the "
+            "FT paths decrement token_denom). Skips itself when earlier phases "
+            "have drained node A. Auto-enabled by --run-all-tests."
         ),
     )
     return p

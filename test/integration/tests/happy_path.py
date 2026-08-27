@@ -1073,7 +1073,13 @@ FROM tokens;
         """
         passed = sum(1 for r in results if r["status"] == "PASS")
         failed = sum(1 for r in results if r["status"] == "FAIL")
-        total = len(results)
+        # SKIP records a check that could not run because its preconditions were
+        # not met (e.g. an earlier phase drained the wallet it needed). It is
+        # neither a pass nor a failure, so it stays out of the ratio — but it is
+        # logged, because a check that silently stops running is worse than one
+        # that fails.
+        skipped = sum(1 for r in results if r["status"] == "SKIP")
+        total = len(results) - skipped
 
         # Record for the entry point so a failed check becomes a non-zero exit.
         self.verification_failed = failed
@@ -1083,6 +1089,7 @@ FROM tokens;
             "total_checks": total,
             "passed": passed,
             "failed": failed,
+            "skipped": skipped,
             "results": results,
         }
 
@@ -1099,6 +1106,11 @@ FROM tokens;
             for r in results:
                 if r["status"] == "FAIL":
                     log.warning("  FAIL: %s — %s", r["check"], r["detail"])
+        # Surface SKIPs too: a check that stopped running is easy to miss and
+        # looks identical to one that never existed.
+        for r in results:
+            if r["status"] == "SKIP":
+                log.warning("  SKIP: %s — %s", r["check"], r["detail"])
 
         log.info("Verification results written to %s", out_path)
 

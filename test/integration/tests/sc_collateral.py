@@ -9,12 +9,23 @@ The bug this guards against: LockTokensForSplit selects whole denominations, so
 backing a 0.001 commitment picks a whole 1.000 token. If that token is committed
 as-is, the other 0.999 is silently destroyed — a 0.001 contract costs a full RBT.
 
-SCCOL_DENOM_CONSISTENT covers a second, independent defect: post-consensus gates
-its token_denom update on Tokens.RBT being non-empty, but an SC deploy carries
-its collateral in CommittedTokens with Tokens.RBT empty, so the committed token
-is never decremented from the counter. The counter then over-reports free tokens
-and a later selection fails with "lockSelectedTokens: no tokens provided". That
-check is expected to FAIL until the denom guard is fixed separately.
+SCCOL_DENOM_CONSISTENT covers a second, independent defect on the same flow:
+post-consensus skipped its token_denom update for an SC deploy (the collateral
+rides in CommittedTokens with Tokens.RBT empty), and when it did run, the
+isLocalTransfer credit landed back on the initiator — a deploy pins Owner to
+Initiator — cancelling the decrement. Either way the counter kept advertising
+committed tokens as spendable until a later selection failed with
+"lockSelectedTokens: no tokens provided".
+
+This is the first token_denom invariant anywhere in the repo: the table is
+written by six code paths and, before this suite, was never once checked against
+reality. That is why it has been repaired repeatedly and drifted again. Running
+it immediately surfaced two further FT-side defects, reported separately by
+SCCOL_FT_DENOM_DRIFT with their attributed cause. That check FAILS: the drift is
+a real accounting defect (the counter advertises tokens that cannot be selected)
+and stays red until the FT paths decrement token_denom the way the RBT and SC
+paths do. It is kept separate from SCCOL_DENOM_CONSISTENT so an SC regression is
+never mistaken for the known FT one.
 
 Why the existing smart_contract_engine suite cannot catch this: it deploys at
 sc_value=1.0, the single value where committing a whole 1.000 token is exactly
@@ -25,7 +36,10 @@ FRACTIONAL value.
 Cases:
   - balance delta:  deployer's free balance drops by exactly sc_value
   - committed sum:  Committed RBT totals sc_value, not a whole denomination
-  - denom drift:    token_denom agrees with the actual count of Free rows
+  - denom drift:    token_denom agrees with the real Free rows at the SC
+                    collateral denomination
+  - FT denom drift: drift at other denominations, reported separately with its
+                    cause attributed (known-failing: FT paths do not decrement)
   - repeat deploys: three fractional deploys in a row all succeed (the failure
                     mode that first exposed this — contracts 2 and 3 died once
                     the stale counter over-reported availability)
@@ -57,9 +71,16 @@ _EPSILON = 1e-9
 # Settle time after a consensus round before reading balances back.
 _SETTLE = 6
 
-# token_status values (constants/constants.go): Free=0, Committed=5.
+# The suite makes 4 deploys, each splitting a whole token to take _SC_VALUE from
+# it. One whole RBT per deploy must be selectable at the moment of the split, so
+# require a small whole-token float rather than 4 * _SC_VALUE.
+_MIN_REQUIRED_BALANCE = 4.0
+
+# token_status values (constants/constants.go): Free=0, Committed=5,
+# BurntForFT=9.
 _STATUS_FREE = 0
 _STATUS_COMMITTED = 5
+_STATUS_BURNT_FOR_FT = 9
 
 # token_type ids are lowercase names in the token_type table.
 _TYPE_RBT = "rbt"
@@ -133,7 +154,9 @@ class SCCollateralEngine:
         """Rows where token_denom disagrees with the real count of Free rows.
 
         Returns (denom, counter, actual, drift) for each mismatch; empty when
-        the counter is consistent.
+        the counter is consistent. Scoped to self.did_a: node A also hosts the
+        intra-node secondary DID (did_a2), and mixing the two makes the numbers
+        impossible to read.
         """
         return self._query(
             """
@@ -154,6 +177,29 @@ class SCCollateralEngine:
             """,
             (_TYPE_RBT, _STATUS_FREE, self.did_a),
         )
+
+    def _status_breakdown(self, denom: float) -> str:
+        """Where this denomination's non-Free tokens went, as 'status=N count'.
+
+        A drift means the counter still claims tokens that have left Free, so
+        the statuses they moved to name the path that failed to decrement.
+        """
+        rows = self._query(
+            """
+            SELECT token_status, COUNT(*)
+              FROM tokens
+             WHERE did = %s
+               AND token_value = %s
+               AND token_type = (SELECT id FROM token_type WHERE name = %s)
+               AND token_status <> %s
+             GROUP BY token_status
+             ORDER BY token_status
+            """,
+            (self.did_a, denom, _TYPE_RBT, _STATUS_FREE),
+        )
+        if not rows:
+            return "no non-Free rows"
+        return ", ".join(f"status={s} n={n}" for s, n in rows)
 
     def _deploy_fractional(self, label: str) -> Dict[str, Any]:
         """Generate and deploy one contract at _SC_VALUE. Raises on failure."""
@@ -177,6 +223,29 @@ class SCCollateralEngine:
     def run(self) -> List[Dict[str, str]]:
         """Run every collateral check. Never raises — failures become results."""
         results: List[Dict[str, str]] = []
+
+        # Inside --run-all-tests this suite runs late, after the shuttle and the
+        # asset phases have spent from the same wallet. With no funds left every
+        # deploy fails on "no tokens provided" — the very error this suite exists
+        # to detect — for a reason that has nothing to do with the code under
+        # test. Distinguish the two up front: an unfunded wallet is a harness
+        # budgeting problem (SKIP), not an SC accounting defect (FAIL).
+        balance = self._free_balance()
+        if balance < _MIN_REQUIRED_BALANCE:
+            log.warning(
+                "SC collateral: skipping — node A holds %s RBT, need >= %s",
+                balance, _MIN_REQUIRED_BALANCE,
+            )
+            return [{
+                "check": "SCCOL_PRECONDITION",
+                "status": "SKIP",
+                "detail": (
+                    f"node A holds {balance} free RBT for did={self.did_a}, "
+                    f"below the {_MIN_REQUIRED_BALANCE} this suite needs. Earlier "
+                    "phases drained the wallet; raise min_balance_buffer in the "
+                    "config rather than reading this as an SC failure."
+                ),
+            }]
 
         for phase in (
             self._check_single_deploy_accounting,
@@ -250,26 +319,94 @@ class SCCollateralEngine:
                 ),
             })
 
-        # 3. token_denom must still agree with reality. Drift here is what
-        #    later causes a spurious "no tokens provided" on the next deploy.
+        # 3. token_denom must still agree with reality for the denomination this
+        #    suite spends. Drift here is what later causes a spurious
+        #    "no tokens provided" on the next deploy.
+        #
+        #    Drift at OTHER denominations is reported separately rather than
+        #    failing this check: it comes from known FT-side defects that this
+        #    suite does not exercise and must not be blamed for. Failing on it
+        #    would leave the check permanently red and teach people to ignore it.
         drift = self._denom_drift()
-        if not drift:
+        sc_drift = [row for row in drift if abs(float(row[0]) - _SC_VALUE) < _EPSILON]
+        other_drift = [row for row in drift if row not in sc_drift]
+
+        if not sc_drift:
             out.append({
                 "check": "SCCOL_DENOM_CONSISTENT",
                 "status": "PASS",
-                "detail": "token_denom matches the actual count of Free rows",
+                "detail": (
+                    f"token_denom matches the actual count of Free rows at "
+                    f"denom={_SC_VALUE} (the denomination this suite spends)"
+                ),
             })
         else:
             detail = "; ".join(
-                f"denom={d} counter={c} actual={a} drift={dr}" for d, c, a, dr in drift
+                f"denom={d} counter={c} actual={a} drift={dr} [{self._status_breakdown(d)}]"
+                for d, c, a, dr in sc_drift
             )
             out.append({
                 "check": "SCCOL_DENOM_CONSISTENT",
                 "status": "FAIL",
-                "detail": f"token_denom drifted from actual Free rows: {detail}",
+                "detail": (
+                    f"token_denom drifted at the SC collateral denomination for "
+                    f"did={self.did_a}: {detail}"
+                ),
             })
 
+        out.append(self._report_ft_denom_drift(other_drift))
+
         return out
+
+    def _report_ft_denom_drift(self, other_drift: List[tuple]) -> Dict[str, str]:
+        """Report denom drift this suite did not cause, attributing each cause.
+
+        token_denom has never had an invariant check before this suite, and the
+        run surfaces two long-standing FT-side defects:
+
+          - FT minting flips whole RBT parents to BurntForFT
+            (core/wallet/token_chain.go, FTGenesisTxn -> UpdateTokenInfo) without
+            decrementing token_denom, so the counter keeps advertising burnt
+            tokens as spendable.
+          - PersistGenesisTokenRecord upserts token_denom keyed on
+            token.TokenValue, and an FT token carries value 0, creating a phantom
+            denom=0 row counting tokens that can never be selected.
+
+        This FAILS, deliberately. The drift is a real accounting defect: the
+        counter advertises tokens that cannot be selected, which is what produced
+        "lockSelectedTokens: no tokens provided" on the SC side. Recording it as
+        advisory would let it sit indefinitely. It stays red until the FT paths
+        decrement token_denom the way the RBT and SC paths now do.
+        """
+        if not other_drift:
+            return {
+                "check": "SCCOL_FT_DENOM_DRIFT",
+                "status": "PASS",
+                "detail": "no denom drift outside the SC collateral denomination",
+            }
+
+        parts: List[str] = []
+        for denom, counter, actual, drift in other_drift:
+            breakdown = self._status_breakdown(denom)
+            if abs(float(denom)) < _EPSILON:
+                cause = "phantom denom=0 row from FT genesis (FT tokens carry value 0)"
+            elif f"status={_STATUS_BURNT_FOR_FT}" in breakdown:
+                cause = "RBT burnt for FT minting, never decremented"
+            else:
+                cause = "unattributed — investigate"
+            parts.append(
+                f"denom={denom} counter={counter} actual={actual} drift={drift} "
+                f"[{breakdown}] -> {cause}"
+            )
+
+        return {
+            "check": "SCCOL_FT_DENOM_DRIFT",
+            "status": "FAIL",
+            "detail": (
+                f"denom drift not caused by SC deploys, did={self.did_a}: "
+                + "; ".join(parts)
+            ),
+        }
 
     def _check_repeated_fractional_deploys(self) -> List[Dict[str, str]]:
         """Three fractional deploys back to back must all succeed.
