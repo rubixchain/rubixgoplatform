@@ -195,6 +195,14 @@ func SyncTransactionChainFrom(p *ipfsport.Peer, tokenID string, tokenType int, w
 					tokenStatus = int16(constants.TokenStatus_Deployed)
 				case int16(models.GetTokenRoleID(constants.TokenRole_Execute)):
 					tokenStatus = int16(constants.TokenStatus_Executed)
+				// A consumed parent must not default to Free, or it can be re-selected
+				// by LockTokensForSplit and re-split into a duplicate genesis
+				// (double-mint). Mirror the originating node's status:
+				// Commit -> Committed, Burn -> Burnt.
+				case int16(models.GetTokenRoleID(constants.TokenRole_Commit)):
+					tokenStatus = int16(constants.TokenStatus_Committed)
+				case int16(models.GetTokenRoleID(constants.TokenRole_Burn)):
+					tokenStatus = int16(constants.TokenStatus_Burnt)
 				}
 
 				if err = w.CreateTransaction(tx); err != nil {

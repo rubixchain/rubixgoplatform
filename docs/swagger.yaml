@@ -19,6 +19,13 @@ definitions:
       status:
         type: boolean
     type: object
+  models.DIDPublicKeyResult:
+    properties:
+      did:
+        type: string
+      public_key:
+        type: string
+    type: object
   models.FTInfo:
     properties:
       creatorDID:
@@ -287,6 +294,36 @@ paths:
           schema:
             $ref: '#/definitions/models.BasicResponse'
       summary: Get RBT Balance
+      tags:
+      - DID
+  /rubix/v1/dids/{did}/public_key:
+    get:
+      consumes:
+      - application/json
+      description: Returns the hex-encoded public key a DID was derived from
+      parameters:
+      - description: DID (e.g. bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)
+        in: path
+        name: did
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.BasicResponse'
+            - properties:
+                result:
+                  $ref: '#/definitions/models.DIDPublicKeyResult'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Get Public Key by DID
       tags:
       - DID
   /rubix/v1/dids/{did}/register:
