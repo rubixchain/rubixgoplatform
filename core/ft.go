@@ -73,10 +73,7 @@ func (c *Core) createFTs(reqID string, req types.CreateFTReq) (err error) {
 
 	// Fetch Whole RBTs
 	//Get the RBT details from DB for the associated amount/ if token amount is of PArts create
-	networkMode := "mainnet"
-	if c.testnet {
-		networkMode = "testnet"
-	}
+	networkMode := c.networkMode
 
 	// Lock and fetch free RBT tokens for split/transfer.
 	lockedTokens, err := c.w.LockTokensForSplit(c.w.Ctx, req.DID, float64(req.TokenCount), reqID)
@@ -151,10 +148,8 @@ func (c *Core) createFTs(reqID string, req types.CreateFTReq) (err error) {
 			return
 		}
 
-		if networkMode != constants.NetworkMode_Localnet {
-			if _, pubErr := util.PublishTransaction(c.ps, &txInfo, &txSingature, true, ""); pubErr != nil {
-				c.log.Error("createFTs: failed to publish transaction, err: %v", pubErr)
-			}
+		if _, pubErr := util.PublishTransaction(c.ps, &txInfo, &txSingature, true, ""); pubErr != nil {
+			c.log.Error("createFTs: failed to publish transaction, err: %v", pubErr)
 		}
 	}
 

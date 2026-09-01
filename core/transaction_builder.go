@@ -123,10 +123,8 @@ func BuildTransactionInfoFromRequest(
 				return nil, 0.0, fmt.Errorf("BuildTransactionInfoFromRequest: failed to unmarshal signature, err: %v", err)
 			}
 
-			if networkMode != constants.NetworkMode_Localnet {
-				if _, err := util.PublishTransaction(pubsub, &txInfo, &txSingature, true, ""); err != nil {
-					log.Error("BuildTransactionInfoFromRequest: failed to publish transaction, err: %v", err)
-				}
+			if _, err := util.PublishTransaction(pubsub, &txInfo, &txSingature, true, ""); err != nil {
+				log.Error("BuildTransactionInfoFromRequest: failed to publish transaction, err: %v", err)
 			}
 		}
 
