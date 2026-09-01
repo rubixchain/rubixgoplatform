@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/types"
@@ -97,10 +96,8 @@ func ReqPledgeToken(
 			return models.PledgeTokenResponse{}, fmt.Errorf("reqPledgeToken: failed to unmarshal signature, err: %v", err)
 		}
 
-		if networkMode != constants.NetworkMode_Localnet {
-			if _, err := util.PublishTransaction(pubsub, &txInfo, &txSingature, true, ""); err != nil {
-				log.Error("reqPledgeToken: failed to publish transaction, err: %v", err)
-			}
+		if _, err := util.PublishTransaction(pubsub, &txInfo, &txSingature, true, ""); err != nil {
+			log.Error("reqPledgeToken: failed to publish transaction, err: %v", err)
 		}
 	}
 
