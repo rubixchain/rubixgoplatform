@@ -108,6 +108,8 @@ does not itself raise; `runner.py` reads `StressRunner.verification_failed`.)
 | `--ft-count N` / `--ft-only` / `--ft-transfer` | FT scope |
 | `--bundled-test` / `--all-in-one-test` / `--intra-node-test` | Combined flows |
 | `--skip-ft` | Disable all FT-dependent paths (composes with `--run-all-tests`) |
+| `--fullnode-test` | Start a 4th `-fullnode` node (compose profile `fullnode`) and verify the transaction → PubSub → fullnode → validation → persistence path. Docker only. |
+| `--no-fullnode-restart` | Skip the fullnode restart/idempotency check inside `--fullnode-test` |
 | `--no-docker` | Don't manage Docker; nodes already running |
 | `--config PATH` | Custom JSON config |
 

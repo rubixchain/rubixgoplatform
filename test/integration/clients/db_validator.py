@@ -701,3 +701,342 @@ def check_transactions_persisted(
         )
 
     return {"status": status, "checked": checked, "skipped": skipped, "missing": missing}
+
+
+# ---------------------------------------------------------------------------
+# Fullnode (-fullnode node) table queries
+#
+# A node started with `-fullnode` subscribes to the rubix_txn pubsub topic,
+# validates every published transaction (core/consensus/checks.go
+# ValidateTransaction) and persists the result into a SEPARATE set of tables
+# from its own wallet: fullnode_transactions / fullnode_rbt / fullnode_ft /
+# fullnode_nft / fullnode_smart_contract / fullnode_tokenchain /
+# fullnode_tokenchain_index, with validation failures dead-lettered into
+# fullnode_invalid_transactions (see core/wallet/fullnode_persistence.go).
+#
+# There is no HTTP API over these tables — the only fullnode-facing routes are
+# libp2p (/rubix/v1/fullnode/sync|recover) — so direct SQL is the intended way
+# to observe fullnode behaviour from a test.
+# ---------------------------------------------------------------------------
+
+
+class FullnodeDBValidator(DBValidator):
+    """Read-side queries against a `-fullnode` node's fullnode_* tables."""
+
+    # Tables whose row counts are snapshotted for the restart/idempotency check.
+    COUNTED_TABLES = (
+        "fullnode_transactions",
+        "fullnode_rbt",
+        "fullnode_tokenchain",
+        "fullnode_tokenchain_index",
+        "fullnode_invalid_transactions",
+    )
+
+    # ---- basic reachability ------------------------------------------- #
+
+    def wait_reachable(self, timeout: int = 120) -> bool:
+        """Poll until the fullnode's Postgres accepts a connection AND the node
+        has created its schema (fullnode_transactions exists).
+
+        Schema creation happens on node startup, so this doubles as "the node
+        process got far enough to migrate", which is a cheaper and earlier
+        signal than waiting for a transaction to arrive.
+        """
+        deadline = time.time() + timeout
+        last_exc: Optional[Exception] = None
+        while time.time() < deadline:
+            try:
+                with self._connect() as conn, conn.cursor() as cur:
+                    cur.execute("SELECT to_regclass('public.fullnode_transactions')")
+                    if cur.fetchone()[0] is not None:
+                        return True
+            except Exception as exc:  # noqa: BLE001
+                last_exc = exc
+            time.sleep(2.0)
+        log.error("[%s] fullnode schema not reachable within %ds (last error: %s)",
+                  self.name, timeout, last_exc)
+        return False
+
+    # ---- transaction receipt ------------------------------------------ #
+
+    def fullnode_transaction_exists(self, txn_id: str) -> bool:
+        sql = "SELECT 1 FROM fullnode_transactions WHERE id = %s LIMIT 1"
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(sql, (txn_id,))
+            return cur.fetchone() is not None
+
+    def wait_for_fullnode_transaction(
+        self, txn_id: str, timeout: int = 180, poll: float = 2.0
+    ) -> bool:
+        """Poll fullnode_transactions until *txn_id* lands, or *timeout* elapses.
+
+        This is the end-to-end gate for `localnet transaction -> PubSub ->
+        fullnode -> validation -> persistence`: the row is only written after
+        ValidateTransaction returns nil (core/fullnode.go
+        processSingleTransaction), so its presence proves the whole path.
+        """
+        deadline = time.time() + timeout
+        attempts = 0
+        while time.time() < deadline:
+            attempts += 1
+            try:
+                if self.fullnode_transaction_exists(txn_id):
+                    log.info("[%s] fullnode persisted txn %s after %d poll(s).",
+                             self.name, txn_id, attempts)
+                    return True
+            except Exception as exc:  # noqa: BLE001
+                log.warning("[%s] fullnode txn poll error: %s", self.name, exc)
+            time.sleep(poll)
+        log.error("[%s] fullnode did NOT persist txn %s within %ds (%d polls).",
+                  self.name, txn_id, timeout, attempts)
+        return False
+
+    def get_fullnode_transaction(self, txn_id: str) -> Optional[Dict[str, Any]]:
+        """Return {"id", "info", "signature"} for a persisted fullnode txn.
+
+        `info` and `signature` come back as already-parsed Python objects
+        (the columns are JSON / JSONB).
+        """
+        sql = "SELECT id, info, signature FROM fullnode_transactions WHERE id = %s"
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(sql, (txn_id,))
+            row = cur.fetchone()
+        if row is None:
+            return None
+        return {"id": row[0], "info": row[1], "signature": row[2]}
+
+    # ---- persisted token state ---------------------------------------- #
+
+    def get_fullnode_rbt_tokens(self, token_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        """Return {token_id: {did, transaction_id, token_status, latest_position,
+        latest_role, latest_role_name}} for the given RBT tokens."""
+        if not token_ids:
+            return {}
+        sql = """
+            SELECT t.token_id, t.did, t.transaction_id, t.token_status,
+                   t.latest_position, t.latest_role, r.name
+            FROM fullnode_rbt t
+            LEFT JOIN token_role r ON r.id = t.latest_role
+            WHERE t.token_id = ANY(%s)
+        """
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(sql, (list(token_ids),))
+            rows = cur.fetchall()
+        return {
+            row[0]: {
+                "did": row[1],
+                "transaction_id": row[2],
+                "token_status": row[3],
+                "latest_position": row[4],
+                "latest_role": row[5],
+                "latest_role_name": row[6],
+            }
+            for row in rows
+        }
+
+    def get_fullnode_chain_entries(self, txn_id: str) -> List[Dict[str, Any]]:
+        """Return every fullnode_tokenchain row written for *txn_id*, with the
+        role resolved to its name via token_role."""
+        sql = """
+            SELECT tc.token_id, tc.transaction_id, tc.previous_transaction_id,
+                   tc.position, tc.role, r.name
+            FROM fullnode_tokenchain tc
+            LEFT JOIN token_role r ON r.id = tc.role
+            WHERE tc.transaction_id = %s
+            ORDER BY tc.token_id, tc.position
+        """
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(sql, (txn_id,))
+            rows = cur.fetchall()
+        return [
+            {
+                "token_id": row[0],
+                "transaction_id": row[1],
+                "previous_transaction_id": row[2],
+                "position": row[3],
+                "role": row[4],
+                "role_name": row[5],
+            }
+            for row in rows
+        ]
+
+    # ---- integrity checks ---------------------------------------------- #
+
+    def fullnode_duplicate_chain_entries(self) -> List[Tuple[str, str, int]]:
+        """Return (token_id, transaction_id, count) appearing more than once.
+
+        Unlike `tokenchain`, `fullnode_tokenchain` has NO UNIQUE(token_id,
+        transaction_id) constraint (core/storage/schema.go) — nothing at the DB
+        layer stops the same chain entry being ingested twice. This is the
+        query that catches it.
+        """
+        sql = """
+            SELECT token_id, transaction_id, COUNT(*) AS cnt
+            FROM fullnode_tokenchain
+            GROUP BY token_id, transaction_id
+            HAVING COUNT(*) > 1
+            ORDER BY cnt DESC
+            LIMIT 50
+        """
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(sql)
+            return cur.fetchall()  # type: ignore[return-value]
+
+    def fullnode_chain_position_gaps(self) -> List[Tuple[str, int, int]]:
+        """Return (token_id, max_position, row_count) for chains that are not a
+        contiguous 0..N-1 run."""
+        sql = """
+            SELECT token_id, MAX(position), COUNT(*)
+            FROM fullnode_tokenchain
+            GROUP BY token_id
+            HAVING MAX(position) <> COUNT(*) - 1 OR MIN(position) <> 0
+            LIMIT 50
+        """
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(sql)
+            return cur.fetchall()  # type: ignore[return-value]
+
+    def fullnode_chain_link_breaks(self) -> List[Tuple[str, int, str, str]]:
+        """Return chain rows whose previous_transaction_id does not equal the
+        transaction_id of the row at position-1 (or that violate the
+        position 0 <=> empty-prev rule).
+
+        Returns (token_id, position, previous_transaction_id, expected).
+        """
+        sql = """
+            WITH linked AS (
+                SELECT token_id, position, transaction_id,
+                       COALESCE(previous_transaction_id, '') AS prev,
+                       LAG(transaction_id) OVER (
+                           PARTITION BY token_id ORDER BY position
+                       ) AS expected_prev
+                FROM fullnode_tokenchain
+            )
+            SELECT token_id, position, prev, COALESCE(expected_prev, '')
+            FROM linked
+            WHERE (position = 0 AND prev <> '')
+               OR (position > 0 AND prev <> COALESCE(expected_prev, ''))
+            LIMIT 50
+        """
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(sql)
+            return cur.fetchall()  # type: ignore[return-value]
+
+    def fullnode_dangling_chain_refs(self) -> List[Tuple[str, int, str, str]]:
+        """Return chain rows pointing at a transaction_id / previous_transaction_id
+        that is absent from fullnode_transactions.
+
+        Both FKs are DEFERRABLE INITIALLY DEFERRED, so a bad write inside a
+        transaction is only caught at COMMIT — this asserts the deferral was
+        never turned into a lie.
+        """
+        sql = """
+            SELECT tc.token_id, tc.position, tc.transaction_id,
+                   COALESCE(tc.previous_transaction_id, '')
+            FROM fullnode_tokenchain tc
+            WHERE NOT EXISTS (
+                      SELECT 1 FROM fullnode_transactions t WHERE t.id = tc.transaction_id
+                  )
+               OR (tc.previous_transaction_id IS NOT NULL
+                   AND tc.previous_transaction_id <> ''
+                   AND NOT EXISTS (
+                       SELECT 1 FROM fullnode_transactions t
+                       WHERE t.id = tc.previous_transaction_id
+                   ))
+            LIMIT 50
+        """
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(sql)
+            return cur.fetchall()  # type: ignore[return-value]
+
+    def fullnode_pledge_rows_without_prev(self) -> List[Tuple[str, str]]:
+        """Return (token_id, transaction_id) pledge-role chain rows that have an
+        empty previous_transaction_id.
+
+        A pledge can never be a token's genesis entry — the quorum must already
+        have owned the token — so a pledge row at position 0 is a real defect.
+        """
+        sql = """
+            SELECT tc.token_id, tc.transaction_id
+            FROM fullnode_tokenchain tc
+            JOIN token_role r ON r.id = tc.role
+            WHERE r.name = 'pledge'
+              AND COALESCE(tc.previous_transaction_id, '') = ''
+            LIMIT 50
+        """
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(sql)
+            return cur.fetchall()  # type: ignore[return-value]
+
+    def get_fullnode_invalid_transactions(self, limit: int = 20) -> List[Tuple[str, str]]:
+        """Return (reason, created_at) rows dead-lettered by the fullnode.
+
+        core/fullnode.go processTxnWithRetry writes here only after ALL retries
+        are exhausted on a validation failure, so any row means the fullnode
+        definitively rejected a transaction the network accepted.
+        """
+        sql = """
+            SELECT reason, created_at::text
+            FROM fullnode_invalid_transactions
+            ORDER BY created_at DESC
+            LIMIT %s
+        """
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(sql, (limit,))
+            return cur.fetchall()  # type: ignore[return-value]
+
+    def fullnode_invalid_reason_histogram(self) -> List[Tuple[str, int]]:
+        """Return (reason-class, count) for dead-lettered transactions.
+
+        Reasons are normalised before grouping: DIDs, token IDs and transaction
+        hashes are replaced with `<id>`, so 30 rejections sharing one root cause
+        report as a single line with count=30 instead of 30 near-identical
+        strings that differ only by identifier. That makes the histogram a
+        cause histogram, which is what a CI reader needs.
+        """
+        sql = """
+            SELECT regexp_replace(
+                       left(reason, 240),
+                       '(bafybmi[a-z0-9]+|[A-Za-z0-9]+_[0-9]+|[0-9a-f]{32,})',
+                       '<id>', 'g'
+                   ) AS reason_class,
+                   COUNT(*) AS cnt
+            FROM fullnode_invalid_transactions
+            GROUP BY reason_class
+            ORDER BY cnt DESC
+            LIMIT 20
+        """
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(sql)
+            return cur.fetchall()  # type: ignore[return-value]
+
+    def fullnode_transaction_rejected(self, txn_id: str) -> Optional[str]:
+        """Return the rejection reason if *txn_id* was dead-lettered, else None.
+
+        The `transaction` column holds the marshalled models.Transactions
+        struct. That struct carries only `db:` tags, so encoding/json falls back
+        to Go FIELD NAMES — the id is at `transaction->>'ID'`, not `->>'id'`.
+        """
+        sql = """
+            SELECT reason
+            FROM fullnode_invalid_transactions
+            WHERE transaction->>'ID' = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+        """
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(sql, (txn_id,))
+            row = cur.fetchone()
+        return row[0] if row else None
+
+    # ---- snapshots ------------------------------------------------------ #
+
+    def fullnode_row_counts(self) -> Dict[str, int]:
+        """Row count per fullnode table — the before/after snapshot for the
+        restart-idempotency check."""
+        counts: Dict[str, int] = {}
+        with self._connect() as conn, conn.cursor() as cur:
+            for table in self.COUNTED_TABLES:
+                cur.execute(f"SELECT COUNT(*) FROM {table}")  # noqa: S608 (fixed list)
+                counts[table] = int(cur.fetchone()[0])
+        return counts

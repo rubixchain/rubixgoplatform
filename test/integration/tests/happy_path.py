@@ -39,6 +39,7 @@ import psycopg2
 from test.integration.clients.api_client import NodeClient
 from test.integration.clients.db_validator import (
     DBValidator,
+    FullnodeDBValidator,
     check_transactions_persisted,
 )
 from test.integration.config import StressConfig
@@ -86,6 +87,23 @@ class StressRunner:
         self.db_q = DBValidator(
             host="localhost", port=config.db_q_port, dbname="rubix_q"
         )
+
+        # Optional 4th node, only reachable when the harness was started with
+        # --fullnode-test (compose profile `fullnode`). Constructed
+        # unconditionally — they are lazy: nothing connects until a check runs.
+        self.fullnode = NodeClient(
+            f"http://localhost:{config.fullnode_port}", "fullnode", config.password
+        )
+        self.db_fullnode = FullnodeDBValidator(
+            host="localhost", port=config.db_fullnode_port, dbname="rubix_f"
+        )
+        # Set by runner.py when the environment can control the fullnode
+        # container (docker exec / logs / restart). None otherwise.
+        self.fullnode_controller: Optional[Any] = None
+        # {service: ContainerController} for the transacting nodes, so the
+        # fullnode suite can confirm the gossipsub mesh from the publisher side.
+        self.publisher_controllers: Dict[str, Any] = {}
+        self.fullnode_engine = None
 
         self.reporter = StressReporter(output_dir=config.output_dir)
 
@@ -938,6 +956,56 @@ FROM tokens;
         log.info("=== INTRA-NODE TEST COMPLETE ===")
         return verification
 
+    # ------------------------------------------------------------------
+    # Fullnode (-fullnode observer node)
+    # ------------------------------------------------------------------
+
+    def setup_fullnode(self) -> None:
+        """Create the fullnode's DID and mesh it into every node's peer table.
+
+        Called from run() immediately after setup_nodes() and BEFORE any
+        transaction is published, because gossipsub delivers only to peers that
+        are already subscribed — a fullnode that joins late silently misses
+        everything published before it arrived.
+        """
+        from test.integration.engines.fullnode_engine import FullnodeEngine
+
+        self.fullnode_engine = FullnodeEngine(
+            fullnode=self.fullnode,
+            fullnode_db=self.db_fullnode,
+            node_a=self.node_a,
+            node_b=self.node_b,
+            quorum=self.quorum,
+            did_a=self.did_a,
+            did_b=self.did_b,
+            did_q=self.did_q,
+            controller=self.fullnode_controller,
+            publisher_controllers=self.publisher_controllers,
+            password=self.cfg.password,
+        )
+        self.fullnode_engine.setup()
+        # Join the transaction topic's gossipsub mesh now, not at verification
+        # time, so the fullnode observes the whole run.
+        self.fullnode_engine.ensure_gossip_mesh()
+
+    def run_fullnode(self, include_restart: bool = True) -> List[Dict[str, str]]:
+        """Run the fullnode verification suite.
+
+        Returns verification records; a FAIL here fails the CI run exactly like
+        any other check (runner.py maps verification_failed to a non-zero exit).
+        """
+        if self.fullnode_engine is None:
+            return [{
+                "check": "FULLNODE_SUITE",
+                "status": "FAIL",
+                "detail": "--fullnode-test was requested but the fullnode engine "
+                          "was never set up (setup_fullnode did not run)",
+            }]
+        log.info("=== FULLNODE VERIFICATION START ===")
+        results = self.fullnode_engine.run_verification(include_restart=include_restart)
+        log.info("=== FULLNODE VERIFICATION COMPLETE ===")
+        return results
+
     def run_negative(self) -> List[Dict[str, str]]:
         """Run the negative / failure-path suite against nodeA <-> nodeB.
 
@@ -1132,11 +1200,20 @@ FROM tokens;
         intra_node_ft_fund: int = 2,
         run_all_tests: bool = False,
         negative_tests: bool = False,
+        fullnode_test: bool = False,
+        fullnode_restart_test: bool = True,
     ) -> None:
         if skip_setup:
             self._load_state()
         else:
             self.setup_nodes()
+
+        # Register the fullnode as a peer BEFORE any transaction is published.
+        # It must already be meshed when the first rubix_txn event goes out —
+        # gossipsub has no replay, so anything published before it joins the
+        # topic is simply never delivered to it.
+        if fullnode_test:
+            self.setup_fullnode()
 
         if skip_mint:
             log.info("=== MINTING SKIPPED (--skip-mint) ===")
@@ -1441,6 +1518,18 @@ FROM tokens;
         # tx-history-by-DID and NFT children/parent.
         extra_api_verification = self._verify_extra_apis()
 
+        # Fullnode suite. Runs after every other subsystem so the fullnode has
+        # observed a full, varied stream of published transactions (RBT, FT,
+        # NFT, SC, bundled) before its chain-integrity and duplicate checks are
+        # evaluated — those assert over EVERYTHING it stored, not just its own
+        # tracked transfer. Its own tracked transfer is driven inside the
+        # engine, so the assertion never depends on another phase's timing.
+        fullnode_verification: List[Dict[str, str]] = []
+        if fullnode_test:
+            fullnode_verification = self.run_fullnode(
+                include_restart=fullnode_restart_test
+            )
+
         # Final assurance — every recorded-SUCCESS transaction must be durably
         # persisted on each participating node. Runs LAST so all subsystem and
         # deferred writes have committed across nodes.
@@ -1461,6 +1550,7 @@ FROM tokens;
             + negative_verification
             + deferred_verification
             + extra_api_verification
+            + fullnode_verification
             + tx_persist_verification
         )
         if all_verifications:

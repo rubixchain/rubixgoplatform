@@ -93,7 +93,23 @@ if [ ! -f "$DATA_DIR/initialized" ]; then
 fi
 
 # -------------------------
+# Optional role flags
+#
+# RUBIX_FULLNODE=true turns this container into a fullnode: `run -fullnode`
+# makes Core subscribe to the rubix_txn pubsub topic, spin up the transaction
+# processor pool, validate every published transaction and persist it into the
+# fullnode_* tables (core/fullnode.go SubscribeTxnSetup). Any other value —
+# including unset — leaves the node in its normal role, so the default 3-node
+# stack behaves exactly as before.
+# -------------------------
+RUN_FLAGS=()
+if [ "${RUBIX_FULLNODE:-}" = "true" ]; then
+  echo "Role: FULLNODE (-fullnode)"
+  RUN_FLAGS+=("-fullnode")
+fi
+
+# -------------------------
 # Start Rubix (triggers ipfs init + daemon internally)
 # -------------------------
-echo "Starting Rubix..."
-exec ./rubixgoplatform run -p $DATA_DIR
+echo "Starting Rubix... ${RUN_FLAGS[*]:-}"
+exec ./rubixgoplatform run -p $DATA_DIR "${RUN_FLAGS[@]}"

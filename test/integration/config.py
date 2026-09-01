@@ -58,11 +58,15 @@ class StressConfig:
     node_a_port: int = 20010
     node_b_port: int = 20011
     quorum_port: int = 20012
+    # Optional 4th node, started only under the `fullnode` compose profile
+    # (runner --fullnode-test). Unused when the fullnode suite is disabled.
+    fullnode_port: int = 20013
 
     # DB ports (host-mapped)
     db_a_port: int = 5436
     db_b_port: int = 5437
     db_q_port: int = 5438
+    db_fullnode_port: int = 5439
 
     password: str = "mypassword"
     output_dir: str = "test/docker/data/stress/logs"
@@ -152,9 +156,11 @@ class StressConfig:
             node_a_port=int(d.get("node_a_port", 20010)),
             node_b_port=int(d.get("node_b_port", 20011)),
             quorum_port=int(d.get("quorum_port", 20012)),
+            fullnode_port=int(d.get("fullnode_port", 20013)),
             db_a_port=int(d.get("db_a_port", 5436)),
             db_b_port=int(d.get("db_b_port", 5437)),
             db_q_port=int(d.get("db_q_port", 5438)),
+            db_fullnode_port=int(d.get("db_fullnode_port", 5439)),
             password=str(d.get("password", "mypassword")),
             output_dir=str(d.get("output_dir", "test/docker/data/stress/logs")),
             node_a_mint=MintConfig.from_dict(d["node_a_mint"]),
