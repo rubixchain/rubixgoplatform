@@ -6,6 +6,13 @@ type CoreConfig struct {
 	NodeIndex            int    `toml:"node_index"`
 	NetworkMode          string `toml:"network_mode"`
 	EnableTrustedNetwork bool   `toml:"enable_trusted_network"`
+	// LogRotation enables the periodic archival of the node log file. It is
+	// optional and defaults to false, which keeps the logging behaviour of
+	// the nodes which were deployed before this field existed unchanged.
+	LogRotation bool `toml:"log_rotation"`
+	// LogRotationPeriod is the rotation interval, e.g. "7d", "24h", "12h" or
+	// "30m". It is optional and defaults to "7d".
+	LogRotationPeriod string `toml:"log_rotation_period"`
 }
 
 type DBParams struct {
@@ -35,6 +42,14 @@ type UserConfig struct {
 	Core CoreConfig     `toml:"core"`
 	Db   DBConfig       `toml:"db"`
 	Ipfs IPFSUserConfig `toml:"ipfs"`
+}
+
+// LogConfig holds the validated log rotation settings of the node.
+type LogConfig struct {
+	// Rotation reports whether the node log file has to be rotated.
+	Rotation bool
+	// RotationPeriod is the parsed `log_rotation_period`.
+	RotationPeriod time.Duration
 }
 
 // IPFSRecoveryConfig defines IPFS recovery configuration
@@ -98,4 +113,5 @@ type RubixConfig struct {
 	EnableOptimizedUnpledge bool
 	AsyncFTResponse         bool
 	NodePort                int
+	LogConfig               LogConfig
 }
