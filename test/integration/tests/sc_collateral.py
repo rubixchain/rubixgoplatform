@@ -74,10 +74,11 @@ _EPSILON = 1e-9
 # Settle time after a consensus round before reading balances back.
 _SETTLE = 6
 
-# The suite makes 5 deploys, each splitting a whole token to take _SC_VALUE from
-# it. One whole RBT per deploy must be selectable at the moment of the split, so
-# require a small whole-token float rather than 5 * _SC_VALUE.
-_MIN_REQUIRED_BALANCE = 5.0
+# The suite makes 6 deploys (one of which is also executed), each splitting a
+# whole token to take _SC_VALUE from it. One whole RBT per deploy must be
+# selectable at the moment of the split, so require a small whole-token float
+# rather than 6 * _SC_VALUE.
+_MIN_REQUIRED_BALANCE = 7.0
 
 # token_status values (constants/constants.go): Free=0, Committed=5,
 # BurntForFT=9.
@@ -301,6 +302,7 @@ class SCCollateralEngine:
         for phase in (
             self._check_single_deploy_accounting,
             self._check_deploy_value_matches_pledge,
+            self._check_execute_cost_matches_value,
             self._check_repeated_fractional_deploys,
         ):
             try:
@@ -506,6 +508,77 @@ class SCCollateralEngine:
                     f"deployed SC {sc_id} carries value {stored}, expected {_SC_VALUE}; "
                     "the quorum would be asked to pledge that value instead of the "
                     "requested one (execute branch taken for what should be a deploy)"
+                ),
+            })
+
+        return out
+
+    def _check_execute_cost_matches_value(self) -> List[Dict[str, str]]:
+        """Executing a 0.001 contract must pledge 0.001, not a whole token.
+
+        On the EXECUTE branch BuildTransactionInfoFromRequest sets
+        transactionValue from the SC token's stored TokenValue, and that value
+        is what the quorum is asked to pledge. The stored value is written at
+        deploy time from scInfo.Value, so the execute pledge inherits whatever
+        the deploy recorded: deploy at 0.001 and every later execution pledges
+        0.001; deploy at 1.0 and every execution pledges a whole RBT forever.
+
+        Execution commits no new RBT — the collateral pre-pass skips tokens that
+        already exist — so there is no balance delta to measure. What matters is
+        that the token still carries its deployed value after executing, since
+        that is the number the pledge is derived from.
+        """
+        out: List[Dict[str, str]] = []
+
+        deployed = self._deploy_fractional("execute-value")
+        sc_id = deployed["sc_id"]
+        time.sleep(_SETTLE)
+
+        value_before = self._sc_token_value(sc_id)
+
+        try:
+            self.node_a.execute_smart_contract(
+                executor_did=self.did_a,
+                sc_id=sc_id,
+                data="collateral-execute",
+                password=self.password,
+            )
+        except Exception as exc:  # noqa: BLE001 - reported as a result
+            out.append({
+                "check": "SCCOL_EXECUTE_VALUE",
+                "status": "FAIL",
+                "detail": f"execute of {sc_id} (value {value_before}) failed: {exc}",
+            })
+            return out
+
+        time.sleep(_SETTLE)
+        value_after = self._sc_token_value(sc_id)
+
+        if abs(value_before - _SC_VALUE) >= _EPSILON:
+            out.append({
+                "check": "SCCOL_EXECUTE_VALUE",
+                "status": "FAIL",
+                "detail": (
+                    f"SC {sc_id} was deployed at {value_before}, expected {_SC_VALUE}; "
+                    "every execution would pledge that value"
+                ),
+            })
+        elif abs(value_after - _SC_VALUE) < _EPSILON:
+            out.append({
+                "check": "SCCOL_EXECUTE_VALUE",
+                "status": "PASS",
+                "detail": (
+                    f"SC token still carries {value_after} after execution, so the "
+                    f"quorum is asked to pledge {_SC_VALUE} — not a whole token"
+                ),
+            })
+        else:
+            out.append({
+                "check": "SCCOL_EXECUTE_VALUE",
+                "status": "FAIL",
+                "detail": (
+                    f"SC {sc_id} value changed from {value_before} to {value_after} "
+                    "on execution; the execute pledge is derived from this value"
                 ),
             })
 
