@@ -14,6 +14,7 @@ Usage (from repo root):
   python3 -m test.integration.runner --small-test --run-all-tests
   python3 -m test.integration.runner --micro-test --nft-only --nft-count 5
   python3 -m test.integration.runner --no-docker --run-all-tests     # nodes already up
+  python3 -m test.integration.runner --small-test --run-all-tests --fullnode-test
 
 Scope: this committed harness intentionally omits the scratchpad-only resume
 machinery (--no-teardown / --skip-setup / --skip-mint / --index-offset /
@@ -312,6 +313,28 @@ def _build_arg_parser() -> argparse.ArgumentParser:
             "--bundled-test / --all-in-one-test."
         ),
     )
+    # ------------------------------------------------------------------
+    # Fullnode flags
+    # ------------------------------------------------------------------
+    p.add_argument(
+        "--fullnode-test",
+        action="store_true",
+        help=(
+            "Start a 4th node with `-fullnode` (compose profile `fullnode`) and "
+            "verify the localnet transaction -> PubSub -> fullnode -> validation "
+            "-> persistence path: subscription, receipt, persisted fields, quorum "
+            "signatures, pledged tokens, chain integrity, no duplicates, and "
+            "restart recovery. Docker mode only."
+        ),
+    )
+    p.add_argument(
+        "--no-fullnode-restart",
+        action="store_true",
+        help=(
+            "Skip the fullnode restart/idempotency check within --fullnode-test "
+            "(saves ~1-2 min; the rest of the fullnode suite still runs)."
+        ),
+    )
     p.add_argument(
         "--negative-tests",
         action="store_true",
@@ -475,13 +498,39 @@ def main() -> None:
     if args.native and args.no_docker:
         log.error("--native and --no-docker are mutually exclusive.")
         sys.exit(2)
+    if args.fullnode_test and (args.native or args.no_docker):
+        # The fullnode node is a compose service; the native cluster manager
+        # runs a fixed 3-process cluster and --no-docker provides its own nodes.
+        # Failing loudly beats silently running a fullnode suite with no fullnode.
+        log.error(
+            "--fullnode-test requires the Docker environment "
+            "(it starts the `fullnode` compose profile); "
+            "it cannot be combined with --native or --no-docker."
+        )
+        sys.exit(2)
     if args.native:
         from test.integration.env.native_env import NativeEnvironment
         env = NativeEnvironment()
     elif args.no_docker:
         env = None
     else:
-        env = DockerEnvironment()
+        env = DockerEnvironment(with_fullnode=args.fullnode_test)
+
+    if args.fullnode_test:
+        log.info("=== FULLNODE TEST MODE ENABLED (compose profile: fullnode) ===")
+        # Hand the suite docker exec / logs / restart access to the fullnode
+        # container so it can assert subscription and restart behaviour, plus
+        # exec access to the publishers so the gossipsub mesh can be confirmed
+        # from the side that actually decides delivery.
+        runner.fullnode_controller = env.fullnode_controller()
+        runner.publisher_controllers = {
+            service: env.controller(service, container)
+            for service, container in (
+                ("nodeA", "rubix-stress-nodeA"),
+                ("nodeB", "rubix-stress-nodeB"),
+                ("quorum", "rubix-stress-quorum"),
+            )
+        }
 
     try:
         if env is not None:
@@ -521,6 +570,8 @@ def main() -> None:
             intra_node_ft_fund=args.intra_node_ft_fund,
             run_all_tests=args.run_all_tests,
             negative_tests=args.negative_tests,
+            fullnode_test=args.fullnode_test,
+            fullnode_restart_test=not args.no_fullnode_restart,
         )
     except Exception as exc:
         log.error("Integration run failed: %s", exc, exc_info=True)

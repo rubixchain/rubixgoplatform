@@ -5,7 +5,8 @@ subsystem coverage **and** negative / failure-path cases. It is the reference
 for what `python3 -m test.integration.runner --run-all-tests` actually verifies.
 
 - **Driver:** HTTP REST (`/rubix/v1/...`) against a 3-node Docker cluster
-  (nodeA, nodeB, quorum) backed by PostgreSQL. **Localnet only.**
+  (nodeA, nodeB, quorum) backed by PostgreSQL — plus, under `--fullnode-test`,
+  a 4th `-fullnode` observer node with its own PostgreSQL. **Localnet only.**
 - **What "verification" means:** after each subsystem runs its transactions,
   the harness reads back node + DB state and asserts the *result* is correct
   (chain length, balance, cross-node sync, callback delivery) — not just that
@@ -27,8 +28,14 @@ window between each:
 
 ```
 MINTING → SHUTTLE → NFT → SMART_CONTRACT → BUNDLED_TX → FT → ALL_IN_ONE
-        → INTRA_NODE → NEGATIVE → FINALISE
+        → INTRA_NODE → NEGATIVE → [FULLNODE] → FINALISE
 ```
+
+`FULLNODE` runs only with `--fullnode-test`. Note that the fullnode's *setup*
+(DID + peer cross-registration + gossipsub mesh) happens right after node setup,
+**before minting** — gossipsub has no replay, so a subscriber that joins late
+silently misses everything published before it arrived. Only the *verification*
+runs at the end, by which point the fullnode has observed the whole run.
 
 ---
 
@@ -226,6 +233,151 @@ transfer, bundled, and all-in-one.
   up. (The mint still creates the FT genesis transaction in the DB; the id just
   isn't returned to the client.)
 - `INTRA_NODE_SETUP` — secondary-DID creation, not a token transaction.
+
+---
+
+## 10. Fullnode (`--fullnode-test`)
+
+Starts a 4th node with `rubixgoplatform run -fullnode` (compose profile
+`fullnode`, its own PostgreSQL `rubix_f`) and asserts the whole observer path:
+
+```
+localnet transaction → rubix_txn PubSub → fullnode → validation → persistence
+```
+
+**What the fullnode actually does** (`core/fullnode.go`): subscribes to the
+`rubix_txn` gossipsub topic, drops events with `Status == false`, de-duplicates
+by transaction ID, then re-runs the *full* consensus validation
+(`consensus.ValidateTransaction` with `isFullnode=true` — transaction-ID
+integrity, initiator **and** quorum signature verification, token-chain
+integrity with peer chain-sync, replayed-split detection, token ownership by
+previous txn, pledged-token checks, the fullnode-only
+transaction-value-vs-pledge-value check, IPFS pin checks). Only on success does
+it write to `fullnode_transactions` / `fullnode_rbt` / `fullnode_tokenchain` /
+`fullnode_tokenchain_index`; a terminal validation failure is dead-lettered into
+`fullnode_invalid_transactions`.
+
+So a row in `fullnode_transactions` is *proof the entire path completed* — not
+merely that a message arrived. That is what makes these checks meaningful.
+
+**Driving transaction.** The suite drives its own tracked A→B RBT transfer
+rather than reusing one from an earlier phase, so the assertion never depends on
+another subsystem's timing. The transfer retries with **alternating direction**
+(A→B, B→A, …): this phase runs last, and a bad all-in-one / intra-node round can
+leave one node's token chain in a state the quorum rejects at consensus
+("chain mismatch after sync"), which would otherwise fail the fullnode phase for
+a reason that has nothing to do with the fullnode. Whatever transfer succeeds is
+asserted against exactly as strictly — the real participants are carried into the
+field checks, so a B→A transfer is verified as B→A.
+
+**How it is observed.** The fullnode exposes **no HTTP API** over its stored
+transactions (its only fullnode-specific routes are libp2p:
+`/rubix/v1/fullnode/sync`, `/rubix/v1/fullnode/recover`). Reading its own
+PostgreSQL tables is therefore the intended observation point — see
+`clients/db_validator.py:FullnodeDBValidator`. All waits are bounded polls
+against real conditions (container health, gossipsub peer membership, a row
+landing); there are no fixed sleeps.
+
+**Verification checks**
+
+| Check | Asserts |
+|-------|---------|
+| `FULLNODE_STARTUP` | The `-fullnode` node came up and migrated its schema (`fullnode_transactions` exists). |
+| `FULLNODE_PUBSUB_SUBSCRIBED` | The node subscribed to `rubix_txn` — via its own `ipfs pubsub ls` and/or the `Successfully subscribed to topic: rubix_txn` line in `/app/data/log.txt`. |
+| `FULLNODE_TXN_RECEIVED` | A tracked A→B RBT transfer was received, validated and persisted into `fullnode_transactions` within the timeout. |
+| `FULLNODE_TRACKED_TXN_NOT_REJECTED` | The tracked transfer is **not** in `fullnode_invalid_transactions`. It is driven in isolation by the engine, so its arrival order is deterministic and there is no legitimate reason to reject it. |
+| `FULLNODE_TXN_FIELDS` | The stored row's `id`, and its `info` `initiator` / `owner` / `network` / `tokens.rbt`, match the transfer that was made. |
+| `FULLNODE_QUORUM_SIGNATURE_PERSISTED` | The stored `signature` JSONB carries the initiator signature and ≥1 complete quorum signature (did + signature). These were verified by `SignatureVerificationCheck` before persistence. |
+| `FULLNODE_RBT_TOKEN_STATE` | Every transferred RBT token has a `fullnode_rbt` row owned by the **receiver** DID at this transaction id. |
+| `FULLNODE_PLEDGED_TOKENS` | The transaction records ≥1 quorum with pledged tokens, and each pledged token has a `pledge`-role `fullnode_tokenchain` row for this transaction. |
+| `FULLNODE_TOKENCHAIN_WRITTEN` | Per-token chain entries were written for the transaction (not just the transaction row). |
+| `FULLNODE_NO_DUPLICATE_CHAIN_ENTRIES` | No `(token_id, transaction_id)` pair appears twice. Unlike `tokenchain`, `fullnode_tokenchain` has **no** `UNIQUE(token_id, transaction_id)` constraint, so nothing at the DB layer would stop this. |
+| `FULLNODE_CHAIN_CONTIGUOUS` | Every stored chain is a contiguous `0..N-1` position run. |
+| `FULLNODE_CHAIN_LINKED` | Each row's `previous_transaction_id` equals the transaction at `position-1`; position 0 (and only position 0) has an empty previous id. |
+| `FULLNODE_CHAIN_NO_DANGLING_REFS` | No chain row references a transaction absent from `fullnode_transactions` — the two `DEFERRABLE INITIALLY DEFERRED` FKs were never deferred into a lie. |
+| `FULLNODE_PLEDGE_NEVER_GENESIS` | No `pledge`-role chain entry has an empty `previous_transaction_id` (a quorum must already have owned the token). |
+| `FULLNODE_DEAD_LETTER_REPORT` | **WARN, non-gating.** Reports the total number of dead-lettered transactions and a grouped reason histogram. See the note below. |
+| `FULLNODE_RESTART_RECOVERY` | After a container restart the fullnode re-subscribes, re-joins the gossipsub mesh and **processes** a new transaction published post-restart. PASS if it persists it; WARN if it receives it and rejects it at validation (the subscription and mesh still recovered — the rejection belongs to the dead-letter report); **FAIL only on silence** — neither persisted nor dead-lettered, i.e. the event never reached it. |
+| `FULLNODE_RESTART_IDEMPOTENT` | Re-ingestion after restart produced no duplicate chain entries and lost no rows. The dedup map (`DynamicTxnProcessor.processedTxns`) is in-memory and empty after a restart, so anything gossipsub re-delivers takes the full processing path again. (A growing dead-letter count is *not* treated as a restart regression — retries of pre-restart transactions can exhaust after it.) |
+
+The integrity checks (`NO_DUPLICATE` / `CONTIGUOUS` / `LINKED` /
+`NO_DANGLING_REFS` / `PLEDGE_NEVER_GENESIS`) and the dead-letter report assert
+over **everything the fullnode stored during the run** — every mint genesis
+transaction plus every RBT/FT/NFT/SC/bundled transaction the other subsystems
+produced — not just the one tracked transfer.
+
+### Why the dead-letter total is a WARN, not a FAIL
+
+Under the concurrent `--run-all-tests` matrix the fullnode rejects a tail of
+transactions (order of 10–30 out of ~1500 ingested in measured runs). Two
+distinct causes have been observed, **both pre-existing and neither introduced
+by this suite**:
+
+**1. FT genesis transactions are signed over the wrong bytes.**
+`Wallet.FTGenesisTxn` (`core/wallet/token_chain.go:786`) signs the *serialized
+transaction info*:
+
+```go
+txInfoBytes, _ := models.SerializeTransactionInfo(txnInfo)
+signatureBytes, _ := dc.Sign(txInfoBytes)          // <- serialized info
+```
+
+Every other signing path, and the verifier, use the *transaction ID* (the hex
+SHA3-256 of those bytes) — `util.SignTransaction` / `util.VerifySignature`
+(`util/transaction.go:31`):
+
+```go
+transactionId, _ := GetTransactionID(txInfo)
+signatureBytes, _ := dc.Sign([]byte(transactionId))  // <- transaction id
+```
+
+`core/wallet/token_chain.go:786` is the only `dc.Sign` call site in the
+transaction path that does not sign the transaction ID. The two can never
+agree, so **every** published FT genesis transaction fails the fullnode's
+`SignatureVerificationCheck` and is dead-lettered with
+`initiator signature verification failed: SignVerify: failed to verify private
+key signature`. (Base64 encodings do match — both are `StdEncoding` — so the
+mismatch is the signed payload, not the encoding.)
+
+This suite reports the defect; it deliberately does **not** fix it. Changing
+what a transaction signs is security-sensitive and has an on-chain
+compatibility dimension (FT genesis transactions already signed the old way on
+testnet/mainnet would not re-verify under a corrected scheme), so the fix and
+its migration story belong to the maintainers, not to a CI-coverage change.
+
+**2. Genesis events that arrive after an on-demand chain sync.**
+`TokenChainIntegrityCheck`'s genesis rule (`core/consensus/checks.go:727-731`):
+a token's genesis event is processed *after* a later transaction already caused
+the fullnode to sync that token's chain from a peer, so
+`latestTransactionID != currentTxID` and the now-redundant genesis event is
+rejected. The remainder are `chain mismatch` on pledge tokens from the same
+arrival-order race. Eliminating this needs the hold-and-release / bundling gate
+described in `Fullnode-Txn-Bundling-Implementation-Plan.md`, which is **not
+implemented on this branch**.
+
+In both cases the stored data is intact — every structural check above
+(`NO_DUPLICATE`, `CONTIGUOUS`, `LINKED`, `NO_DANGLING_REFS`,
+`PLEDGE_NEVER_GENESIS`) passes. It is the surplus/unverifiable event that is
+dropped, not the chain.
+
+Gating CI on the total would fail every PR for known pre-existing defects
+rather than for a regression, so the suite reports the count and a grouped
+reason histogram into `verification.json` and the CI log instead — visible and
+diffable run-to-run. **Flip `FULLNODE_DEAD_LETTER_REPORT` to a hard FAIL once
+the FT genesis signing bug and the bundling gate both land.**
+
+The hard guarantees are unaffected: the tracked transaction **must** be
+validated and persisted, **must not** be rejected, and nothing the fullnode did
+store may be duplicated, discontiguous, unlinked or dangling.
+
+**Not covered, and why: failed transactions.** `TxnCallBack` returns early on
+`!newEvent.Status` (`core/fullnode.go`), so a *failed* transaction is published
+but deliberately never stored. There is no "failed transaction persisted with
+expected state" behaviour to assert. `FULLNODE_TRACKED_TXN_NOT_REJECTED` and
+`FULLNODE_DEAD_LETTER_REPORT` cover the adjacent case — a transaction the
+fullnode receives but cannot validate.
+
+Skip the restart pair with `--no-fullnode-restart` (saves ~1–2 min locally).
 
 ---
 

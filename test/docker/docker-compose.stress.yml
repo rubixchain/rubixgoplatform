@@ -165,3 +165,67 @@ services:
       timeout: 5s
       retries: 30
       start_period: 30s
+
+  # ─── fullnode ─────────────────────────────────────────────────────────────
+  #
+  # Profile-gated: `docker compose up` WITHOUT `--profile fullnode` brings up
+  # exactly the 3-node stack this file always had. The fullnode pair is only
+  # started when the runner is invoked with --fullnode-test (which passes the
+  # profile through DockerEnvironment). That keeps the default suite's runtime
+  # and resource footprint unchanged.
+  #
+  # RUBIX_FULLNODE=true makes entrypoint.sh append `-fullnode` to `run`, which
+  # is what flips Core into SubscribeTxnSetup + DynamicTxnProcessor and makes
+  # it persist every rubix_txn event it validates into the fullnode_* tables.
+
+  fullnode-postgres:
+    image: postgres:16
+    container_name: rubix-stress-fullnode-postgres
+    profiles: ["fullnode"]
+    environment:
+      POSTGRES_USER: rubix
+      POSTGRES_PASSWORD: rubixpass
+      POSTGRES_DB: rubix_f
+    volumes:
+      - ./data/stress/fullnode/db:/var/lib/postgresql/data
+    networks:
+      - rubix-stress-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rubix -d rubix_f"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    ports:
+      - "5439:5432"
+
+  fullnode:
+    build:
+      context: ../..
+      dockerfile: test/docker/rubix/Dockerfile
+    image: rubix-node:latest
+    container_name: rubix-stress-fullnode
+    profiles: ["fullnode"]
+    depends_on:
+      fullnode-postgres:
+        condition: service_healthy
+    environment:
+      NETWORK_MODE: localnet
+      DB_HOST: fullnode-postgres
+      DB_PORT: 5432
+      DB_NAME: rubix_f
+      RUBIX_FULLNODE: "true"
+    ports:
+      - "20013:20000"
+    volumes:
+      - ./data/stress/fullnode/app:/app/data
+      - ./swarm:/swarm
+    networks:
+      - rubix-stress-net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "</dev/tcp/localhost/20000"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s

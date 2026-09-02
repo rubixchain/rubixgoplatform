@@ -2,6 +2,8 @@
 node_index = 1
 network_mode = "localnet"
 enable_trusted_network = false
+log_rotation = false
+log_rotation_period = "7d"
 
 [db]
 host = "localhost"

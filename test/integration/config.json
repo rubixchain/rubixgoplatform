@@ -4,9 +4,11 @@
   "node_a_port": 20010,
   "node_b_port": 20011,
   "quorum_port": 20012,
+  "fullnode_port": 20013,
   "db_a_port": 5436,
   "db_b_port": 5437,
   "db_q_port": 5438,
+  "db_fullnode_port": 5439,
   "password": "mypassword",
   "output_dir": "test/docker/data/stress/logs",
 

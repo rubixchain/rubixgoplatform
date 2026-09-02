@@ -5,6 +5,12 @@ name: Docker Integration Tests
 # (RBT, FT, NFT, smart contracts, bundled, all-in-one, intra-node) plus the
 # negative / failure-path checks. Localnet only.
 #
+# --fullnode-test additionally starts a 4th node under the `fullnode` compose
+# profile (`run -fullnode`) with its own Postgres, and asserts the full
+# localnet transaction -> PubSub -> fullnode -> validation -> persistence path.
+# The profile has to be repeated on every compose invocation below, otherwise
+# the fullnode services are invisible to that command.
+#
 # Docker-on-Linux only by design: GitHub's Windows/macOS runners can't run the
 # Linux node containers, and PostgreSQL is mandatory for the node — so this
 # behavioral suite runs on ubuntu. OS-compile coverage is in ci.yml.
@@ -43,9 +49,9 @@ jobs:
         # The runner also builds on bring-up (up --build), but Docker's layer
         # cache makes that a near-instant no-op. Uses the same project name the
         # runner and teardown use, for consistency.
-        run: docker compose -f test/docker/docker-compose.stress.yml -p rubix-stress build nodeA
+        run: docker compose -f test/docker/docker-compose.stress.yml -p rubix-stress --profile fullnode build nodeA
 
-      - name: Run integration suite (all subsystems + negatives)
+      - name: Run integration suite (all subsystems + negatives + fullnode)
         # Runner spins the compose stack up, drives every subsystem + negative
         # tests, tears the stack down, and exits non-zero if any verification
         # check fails. A fresh CI checkout means clean state by construction.
@@ -55,7 +61,18 @@ jobs:
         # small_test_overrides block in test/integration/config.json. Without
         # the right budget the wallet drains mid-run and later phases fail
         # silently (a half-executed run could otherwise pass green).
-        run: python3 -m test.integration.runner --small-test --run-all-tests
+        #
+        # --fullnode-test brings up the profile-gated `-fullnode` node before
+        # the first transaction is published (gossipsub has no replay, so a
+        # late subscriber misses everything) and, after the other subsystems
+        # have run, asserts that it subscribed, received a tracked transfer,
+        # validated it, persisted it with the right fields / quorum signatures
+        # / pledged tokens, wrote no duplicate chain entries, and resumed
+        # correctly across a restart. Any FAIL there is a verification failure
+        # like any other, so the job exits non-zero. The run-wide dead-letter
+        # count is reported as a non-gating WARN — see the "Why the dead-letter
+        # total is a WARN" section in test/integration/TESTS.md.
+        run: python3 -m test.integration.runner --small-test --run-all-tests --fullnode-test
 
       - name: Dump container diagnostics on failure
         if: failure()
@@ -66,9 +83,38 @@ jobs:
         run: |
           mkdir -p test/docker/data/stress/logs
           echo "=== docker compose ps ===" | tee test/docker/data/stress/logs/_ci_diagnostics.txt
-          docker compose -f test/docker/docker-compose.stress.yml -p rubix-stress ps -a 2>&1 | tee -a test/docker/data/stress/logs/_ci_diagnostics.txt || true
+          docker compose -f test/docker/docker-compose.stress.yml -p rubix-stress --profile fullnode ps -a 2>&1 | tee -a test/docker/data/stress/logs/_ci_diagnostics.txt || true
           echo "=== docker compose logs ===" | tee -a test/docker/data/stress/logs/_ci_diagnostics.txt
-          docker compose -f test/docker/docker-compose.stress.yml -p rubix-stress logs --no-color --tail=400 2>&1 | tee -a test/docker/data/stress/logs/_ci_diagnostics.txt || true
+          docker compose -f test/docker/docker-compose.stress.yml -p rubix-stress --profile fullnode logs --no-color --tail=400 2>&1 | tee -a test/docker/data/stress/logs/_ci_diagnostics.txt || true
+
+      - name: Dump fullnode diagnostics
+        if: always()
+        # The fullnode is the one node whose failure mode is silent: it can be
+        # up and healthy while never receiving a single transaction. Its log
+        # (subscribe line, per-transaction validate/persist messages) and its
+        # fullnode_* row counts are what make that diagnosable from the Actions
+        # log alone. Best-effort — the stack may already be gone.
+        run: |
+          mkdir -p test/docker/data/stress/logs
+          OUT=test/docker/data/stress/logs/_fullnode_diagnostics.txt
+          echo "=== fullnode container stdout (tail 200) ===" | tee "$OUT"
+          docker logs --tail 200 rubix-stress-fullnode 2>&1 | tee -a "$OUT" || true
+          # The node's own structured log — where "Successfully subscribed to
+          # topic: rubix_txn" and every per-transaction validate/persist line
+          # actually lands. Container stdout only carries entrypoint + IPFS output.
+          echo "=== fullnode /app/data/log.txt (tail 800) ===" | tee -a "$OUT"
+          docker exec rubix-stress-fullnode sh -c 'tail -n 800 /app/data/log.txt' 2>&1 | tee -a "$OUT" || true
+          echo "=== fullnode table row counts ===" | tee -a "$OUT"
+          docker exec rubix-stress-fullnode-postgres psql -U rubix -d rubix_f -c "
+            SELECT 'fullnode_transactions'  AS t, COUNT(*) FROM fullnode_transactions
+            UNION ALL SELECT 'fullnode_rbt', COUNT(*) FROM fullnode_rbt
+            UNION ALL SELECT 'fullnode_tokenchain', COUNT(*) FROM fullnode_tokenchain
+            UNION ALL SELECT 'fullnode_invalid_transactions', COUNT(*) FROM fullnode_invalid_transactions;
+          " 2>&1 | tee -a "$OUT" || true
+          echo "=== fullnode_invalid_transactions reasons ===" | tee -a "$OUT"
+          docker exec rubix-stress-fullnode-postgres psql -U rubix -d rubix_f -c \
+            "SELECT created_at, left(reason, 300) FROM fullnode_invalid_transactions ORDER BY created_at DESC LIMIT 20;" \
+            2>&1 | tee -a "$OUT" || true
 
       - name: Upload run artifacts
         if: always()
@@ -81,4 +127,4 @@ jobs:
 
       - name: Tear down stack
         if: always()
-        run: docker compose -f test/docker/docker-compose.stress.yml -p rubix-stress down -v
+        run: docker compose -f test/docker/docker-compose.stress.yml -p rubix-stress --profile fullnode down -v

@@ -9,7 +9,15 @@ mac/
 linux/
 windows/
 logs/
-docker/data/
+# Harness runtime state (Postgres data dirs, IPFS blocks, run logs). These are
+# BIND-MOUNTS written by the containers as root, so the build-context sender
+# cannot even read them — leaving them in the context fails the build outright
+# with "error from sender: ... permission denied" on any second bring-up.
+# NOTE the `test/` prefix: Docker ignore patterns are anchored at the context
+# root (the repo root here), so the older bare `docker/data/` never matched the
+# real path and this exclusion was silently a no-op.
+test/docker/data/
+test/native/
 
 # ---- Prebuilt binaries committed at repo root (rebuilt inside the image) ----
 /ipfs
