@@ -985,6 +985,7 @@ func (w *Wallet) UpdateTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, did, tx
 	token := &models.Token{
 		TokenID:        tokenInfo.TokenID, // assigned by PersistGenesisTokenRecord
 		DID:            did,
+		TokenValue:     tokenInfo.TokenValue,
 		TokenStatus:    int16(tokenStatus),
 		TransactionID:  txID,
 		LatestPosition: newTokenChainHeight,
@@ -1046,16 +1047,23 @@ func (w *Wallet) UpdateTokenInfo(tx pgx.Tx, tokenInfo *models.TokenInfo, did, tx
 		return fmt.Errorf("UpdateTokenInfo: update tokenchain_index: %w", err)
 	}
 
-	// Update token_denom table for RBTs
-	if tokenType == constants.TokenType_RBT {
+	// Decrement token_denom: this function moves an RBT OUT of Free (its only
+	// caller burns parent RBTs for FT minting), so the denomination it leaves
+	// behind must stop being advertised as spendable. It previously incremented
+	// instead, and keyed the write on token.TokenValue while that field was
+	// never copied from tokenInfo — so every burn added a phantom denom=0 row
+	// AND skipped the real decrement. GREATEST floors the counter at 0 so a
+	// double call can never drive it negative; token_value=0 is skipped to keep
+	// token_denom keyed on real denominations only, matching the guards in
+	// post_consensus_persistence.go and recovery.go.
+	if tokenType == constants.TokenType_RBT && token.TokenValue > 0 {
 		if _, err = tx.Exec(w.Ctx, `
-			INSERT INTO token_denom (did, denom, count, created_at, updated_at)
-			VALUES ($1, $2, $3, NOW(), NOW())
-			ON CONFLICT (did, denom) DO UPDATE SET
-			  count = token_denom.count + 1,
+			UPDATE token_denom SET
+			  count      = GREATEST(count - 1, 0),
 			  updated_at = NOW()
-		`, token.DID, token.TokenValue, 1); err != nil {
-			return fmt.Errorf("UpdateTokenInfo: upsert token_denom: %w", err)
+			WHERE did = $1 AND denom = $2
+		`, token.DID, token.TokenValue); err != nil {
+			return fmt.Errorf("UpdateTokenInfo: decrement token_denom: %w", err)
 		}
 	}
 
