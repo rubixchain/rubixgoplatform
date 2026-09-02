@@ -51,7 +51,10 @@ they fold into verification.json and the runner's exit-on-fail gate.
 from __future__ import annotations
 
 import logging
+import os
+import tempfile
 import time
+import uuid
 from typing import Any, Dict, List
 
 from test.integration.clients.api_client import NodeClient
@@ -71,10 +74,10 @@ _EPSILON = 1e-9
 # Settle time after a consensus round before reading balances back.
 _SETTLE = 6
 
-# The suite makes 4 deploys, each splitting a whole token to take _SC_VALUE from
+# The suite makes 5 deploys, each splitting a whole token to take _SC_VALUE from
 # it. One whole RBT per deploy must be selectable at the moment of the split, so
-# require a small whole-token float rather than 4 * _SC_VALUE.
-_MIN_REQUIRED_BALANCE = 4.0
+# require a small whole-token float rather than 5 * _SC_VALUE.
+_MIN_REQUIRED_BALANCE = 5.0
 
 # token_status values (constants/constants.go): Free=0, Committed=5,
 # BurntForFT=9.
@@ -100,6 +103,10 @@ class SCCollateralEngine:
         self.did_a = did_a
         self.db_a = db_a
         self.password = password
+
+        # Token IDs deployed by this suite, so a collision (which would make a
+        # deploy a silent no-op) is caught rather than mis-measured.
+        self._deployed_sc_ids: set = set()
 
     # ---------------------------------------------------------------- helpers
 
@@ -149,6 +156,18 @@ class SCCollateralEngine:
             (self.did_a, _STATUS_COMMITTED, _TYPE_RBT),
         )
         return float(rows[0][0])
+
+    def _sc_token_value(self, sc_id: str) -> float:
+        """Stored token_value of a deployed smart contract token."""
+        rows = self._query(
+            """
+            SELECT t.token_value
+              FROM tokens t JOIN token_type tt ON tt.id = t.token_type
+             WHERE t.token_id = %s AND tt.name = %s
+            """,
+            (sc_id, "smart_contract"),
+        )
+        return float(rows[0][0]) if rows else -1.0
 
     def _denom_drift(self) -> List[tuple]:
         """Rows where token_denom disagrees with the real count of Free rows.
@@ -202,12 +221,44 @@ class SCCollateralEngine:
         return ", ".join(f"status={s} n={n}" for s, n in rows)
 
     def _deploy_fractional(self, label: str) -> Dict[str, Any]:
-        """Generate and deploy one contract at _SC_VALUE. Raises on failure."""
+        """Generate and deploy one contract at _SC_VALUE. Raises on failure.
+
+        The source file is made unique per deploy. A smart contract token ID is
+        the IPFS hash of its wasm+source folder (GenerateSmartContractToken ->
+        AddDir), so two deploys of identical files produce the SAME token ID and
+        the second is a no-op: it returns success but splits no RBT and commits
+        no collateral. select_smart_contract_files() picks at random from every
+        .wasm/.rs in the tree, so that collision happened intermittently and made
+        SCCOL_REPEATED_COST flaky — 3 deploys would charge for 2. Writing a
+        unique source per deploy guarantees a distinct token ID, so each deploy
+        is a real deploy and the cost assertion is meaningful.
+        """
         wasm_path, source_path = select_smart_contract_files()
-        result = self.node_a.create_smart_contract(self.did_a, wasm_path, source_path)
+
+        unique_source = os.path.join(
+            tempfile.mkdtemp(prefix="sccol-"), os.path.basename(source_path)
+        )
+        with open(source_path, "rb") as src:
+            original = src.read()
+        with open(unique_source, "wb") as dst:
+            dst.write(original)
+            dst.write(
+                f"\n// sc-collateral unique marker: {label} {uuid.uuid4()}\n".encode()
+            )
+
+        result = self.node_a.create_smart_contract(self.did_a, wasm_path, unique_source)
         sc_id = result.get("smartContractId")
         if not sc_id:
             raise RuntimeError(f"{label}: generate returned no smartContractId")
+
+        # A repeated token ID means the uniqueness guarantee above broke; the
+        # deploy would silently no-op and the cost assertions would be wrong.
+        if sc_id in self._deployed_sc_ids:
+            raise RuntimeError(
+                f"{label}: smart contract ID {sc_id} was already deployed in this "
+                "suite — the deploy would be a no-op and charge no collateral"
+            )
+        self._deployed_sc_ids.add(sc_id)
 
         req_id = self.node_a.initiate_smart_contract_transaction(
             initiator_did=self.did_a,
@@ -249,6 +300,7 @@ class SCCollateralEngine:
 
         for phase in (
             self._check_single_deploy_accounting,
+            self._check_deploy_value_matches_pledge,
             self._check_repeated_fractional_deploys,
         ):
             try:
@@ -407,6 +459,57 @@ class SCCollateralEngine:
                 + "; ".join(parts)
             ),
         }
+
+    def _check_deploy_value_matches_pledge(self) -> List[Dict[str, str]]:
+        """A deploy must be worth exactly the value requested for it.
+
+        transactionValue is what the initiator asks the quorum to pledge
+        (InitiateTransaction -> PledgeTokenRequest.TransactionValue), and it
+        comes from BuildTransactionInfoFromRequest. On the DEPLOY branch that is
+        scInfo.Value; on the EXECUTE branch it is the SC token's stored
+        TokenValue instead. So if a "deploy" is really a re-deploy of an
+        existing contract, the quorum is asked to pledge that contract's old
+        value rather than the value requested now — observed as a quorum
+        pledging 1 RBT for a 0.001 contract.
+
+        Asserting the deployed token's recorded value equals _SC_VALUE catches
+        that: a token carrying any other value was not deployed by this request.
+        """
+        out: List[Dict[str, str]] = []
+
+        deployed = self._deploy_fractional("pledge-value")
+        time.sleep(_SETTLE)
+
+        sc_id = deployed["sc_id"]
+        stored = self._sc_token_value(sc_id)
+
+        if stored < 0:
+            out.append({
+                "check": "SCCOL_DEPLOY_VALUE",
+                "status": "FAIL",
+                "detail": f"deployed SC {sc_id} has no smart_contract token row",
+            })
+        elif abs(stored - _SC_VALUE) < _EPSILON:
+            out.append({
+                "check": "SCCOL_DEPLOY_VALUE",
+                "status": "PASS",
+                "detail": (
+                    f"deployed SC token value is exactly {stored} — the quorum is "
+                    f"asked to pledge the requested {_SC_VALUE}, not a whole token"
+                ),
+            })
+        else:
+            out.append({
+                "check": "SCCOL_DEPLOY_VALUE",
+                "status": "FAIL",
+                "detail": (
+                    f"deployed SC {sc_id} carries value {stored}, expected {_SC_VALUE}; "
+                    "the quorum would be asked to pledge that value instead of the "
+                    "requested one (execute branch taken for what should be a deploy)"
+                ),
+            })
+
+        return out
 
     def _check_repeated_fractional_deploys(self) -> List[Dict[str, str]]:
         """Three fractional deploys back to back must all succeed.
