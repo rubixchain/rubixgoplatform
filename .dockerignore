@@ -9,7 +9,7 @@ mac/
 linux/
 windows/
 logs/
-docker/data/
+test/docker/data/
 
 # ---- Prebuilt binaries committed at repo root (rebuilt inside the image) ----
 /ipfs
