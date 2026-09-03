@@ -237,6 +237,16 @@ class DBValidator:
             result = cur.fetchone()[0]
         return float(result)
 
+    def get_token_lock_state(self, token_id: str) -> Optional[Tuple[int, Optional[str]]]:
+        """Return (token_status, lock_reference_id) for *token_id*, or None if the row is absent."""
+        sql = "SELECT token_status, lock_reference_id FROM tokens WHERE token_id = %s"
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(sql, (token_id,))
+            row = cur.fetchone()
+        if row is None:
+            return None
+        return int(row[0]), row[1]
+
     def get_free_token_ids(self) -> List[str]:
         """Return token_ids with token_status = 0 (FREE) on this node."""
         sql = "SELECT token_id FROM tokens WHERE token_status = 0"

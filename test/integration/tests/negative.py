@@ -24,16 +24,24 @@ Cases (4 families):
   - FT over-transfer: transfer more FTs than the DID holds.
   - invalid inputs: unknown/malformed receiver DID; non-positive amount;
     malformed DID on the public-key lookup.
+  - locked-NFT release: a child-mint on a SUBSCRIBED parent fails at pledge
+    ("Quorum is not setup"); the parent must return to Deployed with no
+    lock reference, and the retry against the real quorum must succeed.
 """
 
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Dict, List, Optional
 
 from test.integration.clients.api_client import NodeClient
+from test.integration.clients.db_validator import DBValidator
 
 log = logging.getLogger(__name__)
+
+# tokens.token_status values (constants.TokenStatus_*) the lock-release case asserts on.
+_STATUS_DEPLOYED = 10
 
 # Node enforces constants.MaxSupportedDecimalPlaces = 3, so anything with >3
 # decimal places (and any RBT amount below 0.001) must be rejected.
@@ -47,6 +55,7 @@ _REASON_DECIMAL = ["decimal places", "fractional", "precise"]
 _REASON_FT_INSUFFICIENT = ["insufficient", "queryandlockfts", "ft lock failed", "have 0"]
 _REASON_INVALID_DID = ["did", "invalid", "not found", "peer", "unknown"]
 _REASON_BAD_AMOUNT = ["amount", "invalid", "must be", "greater than", "positive"]
+_REASON_QUORUM_NOT_SETUP = ["quorum is not setup"]
 
 
 class NegativeEngine:
@@ -56,6 +65,10 @@ class NegativeEngine:
         node_a/node_b: NodeClient for the two transacting nodes.
         did_a/did_b:   their primary DIDs.
         password:      wallet password for completing transactions.
+        did_q:         the real (set-up) quorum DID, restored after the
+                       locked-NFT case repoints nodeB at a bogus quorum.
+        db_b:          DBValidator for nodeB, used to read the parent NFT's
+                       tokens row. The locked-NFT case is skipped without it.
     """
 
     def __init__(
@@ -65,12 +78,16 @@ class NegativeEngine:
         did_a: str,
         did_b: str,
         password: str = "mypassword",
+        did_q: Optional[str] = None,
+        db_b: Optional[DBValidator] = None,
     ) -> None:
         self.node_a = node_a
         self.node_b = node_b
         self.did_a = did_a
         self.did_b = did_b
         self.password = password
+        self.did_q = did_q
+        self.db_b = db_b
 
     # ------------------------------------------------------------------
     # Assertion helpers
@@ -146,9 +163,94 @@ class NegativeEngine:
         results.extend(self._decimal_precision())
         results.extend(self._ft_over_transfer())
         results.extend(self._invalid_inputs())
+        results.extend(self._locked_nft_release_on_quorum_failure())
         passed = sum(1 for r in results if r["status"] == "PASS")
         log.info("=== NEGATIVE TESTS: %d/%d passed ===", passed, len(results))
         return results
+
+    def _locked_nft_release_on_quorum_failure(self) -> List[Dict[str, str]]:
+        """A failed child-mint on a subscribed parent must not leave it Locked.
+
+        nodeA deploys an NFT and nodeB subscribes, so nodeB's tokens row for it
+        carries nodeA's DID. nodeB then repoints its quorum at did_a (which never
+        ran setup-quorum) and child-mints: the pledge is rejected with "Quorum is
+        not setup". BuildTransactionInfoFromRequest has already locked the parent
+        by then, so the failure path must release it by lock reference — a
+        release keyed on the initiator DID misses this row and strands it. A
+        retry against the real quorum then proves the parent is usable again.
+        nodeB's quorum is restored in all cases.
+        """
+        if self.db_b is None or not self.did_q:
+            log.warning("NEG_NFT_LOCK_RELEASE: skipped (db_b / did_q not provided)")
+            return []
+
+        from test.integration.engines.file_selector import select_nft_files
+
+        check = "NEG_NFT_LOCK_RELEASED_ON_QUORUM_FAILURE"
+        out: List[Dict[str, str]] = []
+
+        # Setup: deploy on nodeA, subscribe on nodeB, wait for the row to sync.
+        try:
+            metadata_path, artifact_path = select_nft_files()
+            parent = self.node_a.create_nft(self.did_a, metadata_path, artifact_path)["nft_id"]
+            self.node_a.transfer_nft(
+                sender_did=self.did_a, receiver_did=self.did_a, nft_id=parent,
+                data="negative: parent for lock-release case", password=self.password,
+            )
+            self.node_b.subscribe_nft(parent)
+            before = None
+            deadline = time.time() + 60
+            while time.time() < deadline:
+                before = self.db_b.get_token_lock_state(parent)
+                if before is not None:
+                    break
+                time.sleep(2)
+        except Exception as exc:  # noqa: BLE001
+            return [{"check": check, "status": "FAIL", "detail": f"setup failed: {str(exc)[:160]}"}]
+
+        if before is None:
+            return [{"check": check, "status": "FAIL",
+                     "detail": "parent NFT never appeared in nodeB's tokens table after subscribe"}]
+        if before != (_STATUS_DEPLOYED, None):
+            return [{"check": check, "status": "FAIL",
+                     "detail": f"unexpected parent state on nodeB before the case: {before}"}]
+
+        # Break nodeB's quorum: did_a is a valid peer but never ran setup-quorum.
+        try:
+            self.node_b.remove_all_quorums()
+            self.node_b.add_quorum(self.did_a)
+
+            out.append(self._expect_rejection(
+                check,
+                lambda: self.node_b.mint_nft_children(
+                    initiator_did=self.did_b, parent_nft_id=parent,
+                    number_of_children=1, password=self.password,
+                ),
+                _REASON_QUORUM_NOT_SETUP,
+                unchanged={"nodeB_parent_row": (lambda: self.db_b.get_token_lock_state(parent), before)},
+            ))
+        finally:
+            self.node_b.remove_all_quorums()
+            self.node_b.add_quorum(self.did_q)
+
+        # The symptom being guarded: later attempts must work once the quorum is right.
+        retry_check = "NEG_NFT_CHILD_MINT_RETRY_AFTER_QUORUM_FIX"
+        try:
+            res = self.node_b.mint_nft_children(
+                initiator_did=self.did_b, parent_nft_id=parent,
+                number_of_children=1, password=self.password,
+            )
+            kids = self.node_b.extract_minted_children(res)
+            if len(kids) == 1:
+                out.append({"check": retry_check, "status": "PASS",
+                            "detail": f"child minted on retry: {kids[0].get('childNFTId', '')[:12]}..."})
+            else:
+                out.append({"check": retry_check, "status": "FAIL",
+                            "detail": f"retry succeeded but minted {len(kids)} children (expected 1)"})
+        except Exception as exc:  # noqa: BLE001
+            out.append({"check": retry_check, "status": "FAIL",
+                        "detail": f"retry after quorum fix was rejected: {str(exc)[:160]}"})
+        return out
 
     def _balance_violations(self) -> List[Dict[str, str]]:
         out: List[Dict[str, str]] = []
