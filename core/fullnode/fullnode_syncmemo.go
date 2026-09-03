@@ -1,4 +1,4 @@
-package core
+package fullnode
 
 import (
 	"sync"
@@ -210,11 +210,11 @@ func (m *syncedTokenMemo) len() int {
 // puts it in a component — but scoping to itself is the right answer if it ever
 // does: it still collapses the repeat syncs across its own retry attempts, and
 // it cannot reach beyond the one transaction.
-func (c *Core) bundleScope(txnID string) string {
-	if c.txnProcessor == nil || c.txnProcessor.inflight == nil {
+func (p *DynamicTxnProcessor) bundleScope(txnID string) string {
+	if p == nil || p.inflight == nil {
 		return txnID
 	}
-	if root := c.txnProcessor.inflight.componentRoot(txnID); root != "" {
+	if root := p.inflight.componentRoot(txnID); root != "" {
 		return root
 	}
 	return txnID
@@ -222,15 +222,15 @@ func (c *Core) bundleScope(txnID string) string {
 
 // filterRecentlySynced drops the tokens already fetched from this peer for this
 // bundle.
-func (c *Core) filterRecentlySynced(bundle, peerDID string, tokenIDs []string) []string {
-	if c.txnProcessor == nil || c.txnProcessor.syncMemo == nil {
+func (p *DynamicTxnProcessor) filterRecentlySynced(bundle, peerDID string, tokenIDs []string) []string {
+	if p == nil || p.syncMemo == nil {
 		return tokenIDs
 	}
 
 	kept := make([]string, 0, len(tokenIDs))
 	var skipped []string
 	for _, tokenID := range tokenIDs {
-		if c.txnProcessor.syncMemo.seen(bundle, syncKey{tokenID: tokenID, peerDID: peerDID}) {
+		if p.syncMemo.seen(bundle, syncKey{tokenID: tokenID, peerDID: peerDID}) {
 			skipped = append(skipped, tokenID)
 			continue
 		}
@@ -238,28 +238,28 @@ func (c *Core) filterRecentlySynced(bundle, peerDID string, tokenIDs []string) [
 	}
 
 	if len(skipped) > 0 {
-		atomic.AddInt64(&c.txnProcessor.syncsSkipped, int64(len(skipped)))
-		c.log.Debug("Skipping chain sync for tokens already fetched in this bundle",
+		atomic.AddInt64(&p.syncsSkipped, int64(len(skipped)))
+		p.host.Log().Debug("Skipping chain sync for tokens already fetched in this bundle",
 			"bundle", bundle, "peerDID", peerDID, "skipped", skipped, "stillNeeded", len(kept))
 	}
 	return kept
 }
 
 // markSynced records that these tokens were fetched successfully from peerDID.
-func (c *Core) markSynced(bundle, peerDID string, tokenIDs []string) {
-	if c.txnProcessor == nil {
+func (p *DynamicTxnProcessor) markSynced(bundle, peerDID string, tokenIDs []string) {
+	if p == nil {
 		return
 	}
-	c.txnProcessor.syncMemo.mark(bundle, peerDID, tokenIDs)
+	p.syncMemo.mark(bundle, peerDID, tokenIDs)
 }
 
 // invalidateSyncedTokens forgets what the memo knows about tokens this node has
 // just advanced.
-func (c *Core) invalidateSyncedTokens(tokenIDs []string) {
-	if c.txnProcessor == nil {
+func (p *DynamicTxnProcessor) invalidateSyncedTokens(tokenIDs []string) {
+	if p == nil {
 		return
 	}
-	c.txnProcessor.syncMemo.invalidate(tokenIDs)
+	p.syncMemo.invalidate(tokenIDs)
 }
 
 // syncChainsOnce fetches chains from a peer, skipping tokens this bundle has
@@ -268,15 +268,14 @@ func (c *Core) invalidateSyncedTokens(tokenIDs []string) {
 // Returning nil when everything was filtered is correct rather than a silent
 // no-op: the caller re-verifies every token against the database immediately
 // afterwards, so a skip it should not have made fails there.
-func (c *Core) syncChainsOnce(txnID, peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error {
-	p := c.txnProcessor
+func (p *DynamicTxnProcessor) syncChainsOnce(txnID, peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error {
 	if p == nil || p.syncChains == nil {
 		// Not a fullnode, so there are no bundles to scope a memo to.
-		return c.SyncTransactionChainsFromPeer(peerDID, tokenIDs, prevTxIDs, excludeTxIDs, false, c.fullNode)
+		return p.host.SyncTransactionChainsFromPeer(peerDID, tokenIDs, prevTxIDs, excludeTxIDs, false, p.host.IsFullNode())
 	}
 
-	bundle := c.bundleScope(txnID)
-	tokens := c.filterRecentlySynced(bundle, peerDID, tokenIDs)
+	bundle := p.bundleScope(txnID)
+	tokens := p.filterRecentlySynced(bundle, peerDID, tokenIDs)
 	if len(tokens) == 0 {
 		return nil
 	}
@@ -295,6 +294,6 @@ func (c *Core) syncChainsOnce(txnID, peerDID string, tokenIDs []string, prevTxID
 		return classify(errDependencyTimeout, err)
 	}
 
-	c.markSynced(bundle, peerDID, tokens)
+	p.markSynced(bundle, peerDID, tokens)
 	return nil
 }

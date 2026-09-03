@@ -1,15 +1,13 @@
-package core
+package fullnode
 
 import (
 	"context"
-	"io"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/types/models"
-	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
 // newTestProcessor builds a DynamicTxnProcessor with only the fields the
@@ -20,6 +18,7 @@ import (
 func newTestProcessor(queueCap int, enqueueTimeout time.Duration) (*DynamicTxnProcessor, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.Background())
 	p := &DynamicTxnProcessor{
+		host:           newTestHost(),
 		txnQueue:       make(chan *models.EventTransaction, queueCap),
 		ctx:            ctx,
 		cancel:         cancel,
@@ -32,17 +31,6 @@ func newTestProcessor(queueCap int, enqueueTimeout time.Duration) (*DynamicTxnPr
 		syncMemo: newSyncedTokenMemo(defaultBundleConfig().syncMemoTTL),
 	}
 	return p, cancel
-}
-
-// newTestCore builds the minimum Core that queueFullnodeTransaction needs. It
-// deliberately has no wallet: the point of splitting that method out of
-// TxnCallBack is that admission can be exercised without a database.
-func newTestCore(p *DynamicTxnProcessor) *Core {
-	return &Core{
-		fullNode:     true,
-		txnProcessor: p,
-		log:          logger.New(&logger.LoggerOptions{Output: []io.Writer{io.Discard}}),
-	}
 }
 
 func testEvent(txnID string) *models.EventTransaction {
@@ -150,10 +138,9 @@ func TestAdmitStoresTimestampForTTLSweep(t *testing.T) {
 func TestQueueFullnodeTransactionEnqueuesOnce(t *testing.T) {
 	p, cancel := newTestProcessor(10, time.Second)
 	defer cancel()
-	c := newTestCore(p)
 
-	c.queueFullnodeTransaction(testEvent("txn-1"))
-	c.queueFullnodeTransaction(testEvent("txn-1")) // duplicate delivery
+	p.QueueFullnodeTransaction(testEvent("txn-1"))
+	p.QueueFullnodeTransaction(testEvent("txn-1")) // duplicate delivery
 
 	if got := len(p.txnQueue); got != 1 {
 		t.Errorf("queue holds %d events, want 1", got)
@@ -170,7 +157,6 @@ func TestQueueFullnodeTransactionConcurrentDuplicates(t *testing.T) {
 
 	p, cancel := newTestProcessor(goroutines, time.Second)
 	defer cancel()
-	c := newTestCore(p)
 
 	var start, done sync.WaitGroup
 	start.Add(1)
@@ -180,7 +166,7 @@ func TestQueueFullnodeTransactionConcurrentDuplicates(t *testing.T) {
 		go func() {
 			defer done.Done()
 			start.Wait()
-			c.queueFullnodeTransaction(testEvent("txn-contended"))
+			p.QueueFullnodeTransaction(testEvent("txn-contended"))
 		}()
 	}
 
@@ -198,14 +184,13 @@ func TestQueueFullnodeTransactionConcurrentDuplicates(t *testing.T) {
 func TestQueueFullnodeTransactionReleasesAdmissionWhenQueueFull(t *testing.T) {
 	p, cancel := newTestProcessor(1, 20*time.Millisecond)
 	defer cancel()
-	c := newTestCore(p)
 
-	c.queueFullnodeTransaction(testEvent("txn-1")) // fills the single slot
+	p.QueueFullnodeTransaction(testEvent("txn-1")) // fills the single slot
 	if got := len(p.txnQueue); got != 1 {
 		t.Fatalf("setup: queue holds %d events, want 1", got)
 	}
 
-	c.queueFullnodeTransaction(testEvent("txn-2")) // no room, must time out
+	p.QueueFullnodeTransaction(testEvent("txn-2")) // no room, must time out
 
 	if got := len(p.txnQueue); got != 1 {
 		t.Errorf("queue holds %d events, want 1 — txn-2 should not have been queued", got)
@@ -216,7 +201,7 @@ func TestQueueFullnodeTransactionReleasesAdmissionWhenQueueFull(t *testing.T) {
 
 	// Drain and confirm the dropped transaction is genuinely retryable.
 	<-p.txnQueue
-	c.queueFullnodeTransaction(testEvent("txn-2"))
+	p.QueueFullnodeTransaction(testEvent("txn-2"))
 	if got := len(p.txnQueue); got != 1 {
 		t.Errorf("re-delivered txn-2 was not queued; queue holds %d events, want 1", got)
 	}
@@ -228,12 +213,11 @@ func TestQueueFullnodeTransactionReleasesAdmissionWhenQueueFull(t *testing.T) {
 func TestQueueFullnodeTransactionReleasesAdmissionOnShutdown(t *testing.T) {
 	p, cancel := newTestProcessor(1, time.Minute)
 	defer cancel()
-	c := newTestCore(p)
 
-	c.queueFullnodeTransaction(testEvent("txn-1")) // fills the single slot
+	p.QueueFullnodeTransaction(testEvent("txn-1")) // fills the single slot
 	cancel()
 
-	c.queueFullnodeTransaction(testEvent("txn-2"))
+	p.QueueFullnodeTransaction(testEvent("txn-2"))
 
 	if got := len(p.txnQueue); got != 1 {
 		t.Errorf("queue holds %d events, want 1 — txn-2 should not have been queued", got)

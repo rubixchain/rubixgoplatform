@@ -1,4 +1,4 @@
-package core
+package fullnode
 
 import (
 	"errors"
@@ -22,12 +22,12 @@ func awaitTestConfig() bundleConfig {
 
 // newAwaitCore wires a processor whose dependency probe is driven by resolved,
 // so the gate can be exercised with no database at all.
-func newAwaitCore(t *testing.T, cfg bundleConfig, resolve func(string) (bool, error)) (*Core, *DynamicTxnProcessor, func()) {
+func newAwaitCore(t *testing.T, cfg bundleConfig, resolve func(string) (bool, error)) (*DynamicTxnProcessor, func()) {
 	t.Helper()
 	p, cancel := newTestProcessor(10, 0)
 	p.bundle = cfg
 	p.resolveDependency = resolve
-	return newTestCore(p), p, cancel
+	return p, cancel
 }
 
 // resolvedSet returns a probe reporting the given IDs as persisted.
@@ -57,11 +57,11 @@ func TestDefaultBundleConfigIsUsable(t *testing.T) {
 }
 
 func TestAwaitDependenciesNoDepsReturnsImmediately(t *testing.T) {
-	c, _, cancel := newAwaitCore(t, awaitTestConfig(), resolvedSet())
+	p, cancel := newAwaitCore(t, awaitTestConfig(), resolvedSet())
 	defer cancel()
 
 	start := time.Now()
-	if err := c.awaitDependencies(newInflightEntry("txn-S")); err != nil {
+	if err := p.awaitDependencies(newInflightEntry("txn-S")); err != nil {
 		t.Fatalf("awaitDependencies() = %v, want nil", err)
 	}
 	if elapsed := time.Since(start); elapsed > 20*time.Millisecond {
@@ -72,11 +72,11 @@ func TestAwaitDependenciesNoDepsReturnsImmediately(t *testing.T) {
 // The common case: an ordinary transfer whose producer is long since persisted
 // must cost nothing at all.
 func TestAwaitDependenciesAlreadyResolvedReturnsImmediately(t *testing.T) {
-	c, _, cancel := newAwaitCore(t, awaitTestConfig(), resolvedSet("txn-S"))
+	p, cancel := newAwaitCore(t, awaitTestConfig(), resolvedSet("txn-S"))
 	defer cancel()
 
 	start := time.Now()
-	if err := c.awaitDependencies(newInflightEntry("txn-T", "txn-S")); err != nil {
+	if err := p.awaitDependencies(newInflightEntry("txn-T", "txn-S")); err != nil {
 		t.Fatalf("awaitDependencies() = %v, want nil", err)
 	}
 	if elapsed := time.Since(start); elapsed > 20*time.Millisecond {
@@ -88,11 +88,11 @@ func TestAwaitDependenciesAlreadyResolvedReturnsImmediately(t *testing.T) {
 // joined after network genesis has legitimately never seen most producers.
 func TestAwaitDependenciesUnknownProducerUsesShortTier(t *testing.T) {
 	cfg := awaitTestConfig()
-	c, _, cancel := newAwaitCore(t, cfg, resolvedSet())
+	p, cancel := newAwaitCore(t, cfg, resolvedSet())
 	defer cancel()
 
 	start := time.Now()
-	if err := c.awaitDependencies(newInflightEntry("txn-T", "txn-absent")); err != nil {
+	if err := p.awaitDependencies(newInflightEntry("txn-T", "txn-absent")); err != nil {
 		t.Fatalf("awaitDependencies() = %v, want nil", err)
 	}
 	elapsed := time.Since(start)
@@ -110,13 +110,13 @@ func TestAwaitDependenciesInFlightProducerUsesLongTier(t *testing.T) {
 	cfg := awaitTestConfig()
 	cfg.inflightWait = 120 * time.Millisecond
 	cfg.unknownWait = 10 * time.Millisecond
-	c, p, cancel := newAwaitCore(t, cfg, resolvedSet())
+	p, cancel := newAwaitCore(t, cfg, resolvedSet())
 	defer cancel()
 
 	p.inflight.register(newInflightEntry("txn-S"))
 
 	start := time.Now()
-	if err := c.awaitDependencies(newInflightEntry("txn-T", "txn-S")); err != nil {
+	if err := p.awaitDependencies(newInflightEntry("txn-T", "txn-S")); err != nil {
 		t.Fatalf("awaitDependencies() = %v, want nil", err)
 	}
 	if elapsed := time.Since(start); elapsed < cfg.inflightWait {
@@ -138,13 +138,13 @@ func TestAwaitDependenciesReprobesAfterParking(t *testing.T) {
 	cfg.inflightWait = time.Second
 	cfg.unknownWait = time.Second
 	var probes atomic.Int64
-	c, p, cancel := newAwaitCore(t, cfg, func(dep string) (bool, error) {
+	p, cancel := newAwaitCore(t, cfg, func(dep string) (bool, error) {
 		return probes.Add(1) > 1, nil
 	})
 	defer cancel()
 
 	start := time.Now()
-	if err := c.awaitDependencies(newInflightEntry("txn-T", "txn-S")); err != nil {
+	if err := p.awaitDependencies(newInflightEntry("txn-T", "txn-S")); err != nil {
 		t.Fatalf("awaitDependencies() = %v, want nil", err)
 	}
 	if elapsed := time.Since(start); elapsed > 50*time.Millisecond {
@@ -164,7 +164,7 @@ func TestAwaitDependenciesReleasedByReadyChannel(t *testing.T) {
 	cfg := awaitTestConfig()
 	cfg.inflightWait = time.Second
 	cfg.unknownWait = time.Second
-	c, _, cancel := newAwaitCore(t, cfg, resolvedSet())
+	p, cancel := newAwaitCore(t, cfg, resolvedSet())
 	defer cancel()
 
 	entry := newInflightEntry("txn-T", "txn-S")
@@ -174,7 +174,7 @@ func TestAwaitDependenciesReleasedByReadyChannel(t *testing.T) {
 	}()
 
 	start := time.Now()
-	if err := c.awaitDependencies(entry); err != nil {
+	if err := p.awaitDependencies(entry); err != nil {
 		t.Fatalf("awaitDependencies() = %v, want nil", err)
 	}
 	if elapsed := time.Since(start); elapsed >= time.Second {
@@ -186,10 +186,10 @@ func TestAwaitDependenciesReleasedByReadyChannel(t *testing.T) {
 // and left itself in waitingOn would be resurrected by a producer arriving much
 // later, and its list would grow for the lifetime of the process.
 func TestAwaitDependenciesUnparksOnTimeout(t *testing.T) {
-	c, p, cancel := newAwaitCore(t, awaitTestConfig(), resolvedSet())
+	p, cancel := newAwaitCore(t, awaitTestConfig(), resolvedSet())
 	defer cancel()
 
-	if err := c.awaitDependencies(newInflightEntry("txn-T", "txn-S", "txn-Q")); err != nil {
+	if err := p.awaitDependencies(newInflightEntry("txn-T", "txn-S", "txn-Q")); err != nil {
 		t.Fatalf("awaitDependencies() = %v, want nil", err)
 	}
 	if got := p.inflight.waitingLen(); got != 0 {
@@ -204,13 +204,13 @@ func TestAwaitDependenciesProceedsWhenTheProbeFails(t *testing.T) {
 	cfg := awaitTestConfig()
 	cfg.unknownWait = time.Second
 	cfg.inflightWait = time.Second
-	c, p, cancel := newAwaitCore(t, cfg, func(string) (bool, error) {
+	p, cancel := newAwaitCore(t, cfg, func(string) (bool, error) {
 		return false, errors.New("connection refused")
 	})
 	defer cancel()
 
 	start := time.Now()
-	if err := c.awaitDependencies(newInflightEntry("txn-T", "txn-S")); err != nil {
+	if err := p.awaitDependencies(newInflightEntry("txn-T", "txn-S")); err != nil {
 		t.Fatalf("awaitDependencies() = %v, want nil", err)
 	}
 	if elapsed := time.Since(start); elapsed > 50*time.Millisecond {
@@ -227,13 +227,13 @@ func TestAwaitDependenciesFailsOpenPastMaxParked(t *testing.T) {
 	cfg := awaitTestConfig()
 	cfg.maxParked = 2
 	cfg.unknownWait = time.Second
-	c, p, cancel := newAwaitCore(t, cfg, resolvedSet())
+	p, cancel := newAwaitCore(t, cfg, resolvedSet())
 	defer cancel()
 
 	atomic.StoreInt64(&p.parkedCount, int64(cfg.maxParked))
 
 	start := time.Now()
-	if err := c.awaitDependencies(newInflightEntry("txn-T", "txn-S")); err != nil {
+	if err := p.awaitDependencies(newInflightEntry("txn-T", "txn-S")); err != nil {
 		t.Fatalf("awaitDependencies() = %v, want nil", err)
 	}
 	if elapsed := time.Since(start); elapsed > 50*time.Millisecond {
@@ -247,7 +247,7 @@ func TestAwaitDependenciesFailsOpenPastMaxParked(t *testing.T) {
 func TestAwaitDependenciesReturnsErrorOnShutdown(t *testing.T) {
 	cfg := awaitTestConfig()
 	cfg.unknownWait = time.Second
-	c, p, cancel := newAwaitCore(t, cfg, resolvedSet())
+	p, cancel := newAwaitCore(t, cfg, resolvedSet())
 	defer cancel()
 
 	go func() {
@@ -255,7 +255,7 @@ func TestAwaitDependenciesReturnsErrorOnShutdown(t *testing.T) {
 		p.cancel()
 	}()
 
-	err := c.awaitDependencies(newInflightEntry("txn-T", "txn-S"))
+	err := p.awaitDependencies(newInflightEntry("txn-T", "txn-S"))
 	if !errors.Is(err, errProcessorShuttingDown) {
 		t.Errorf("awaitDependencies() = %v, want %v", err, errProcessorShuttingDown)
 	}
@@ -265,11 +265,11 @@ func TestAwaitDependenciesReturnsErrorOnShutdown(t *testing.T) {
 // the cap.
 func TestAwaitDependenciesReleasesParkedCount(t *testing.T) {
 	cfg := awaitTestConfig()
-	c, p, cancel := newAwaitCore(t, cfg, resolvedSet())
+	p, cancel := newAwaitCore(t, cfg, resolvedSet())
 	defer cancel()
 
 	for i := 0; i < 3; i++ {
-		if err := c.awaitDependencies(newInflightEntry(fmt.Sprintf("txn-%d", i), "txn-absent")); err != nil {
+		if err := p.awaitDependencies(newInflightEntry(fmt.Sprintf("txn-%d", i), "txn-absent")); err != nil {
 			t.Fatalf("awaitDependencies() = %v, want nil", err)
 		}
 	}
@@ -284,14 +284,14 @@ func TestAwaitDependenciesIgnoresResolvedMembersOfAMixedSet(t *testing.T) {
 	cfg := awaitTestConfig()
 	cfg.inflightWait = 120 * time.Millisecond
 	cfg.unknownWait = 10 * time.Millisecond
-	c, p, cancel := newAwaitCore(t, cfg, resolvedSet("txn-done"))
+	p, cancel := newAwaitCore(t, cfg, resolvedSet("txn-done"))
 	defer cancel()
 
 	p.inflight.register(newInflightEntry("txn-S"))
 
 	start := time.Now()
 	entry := newInflightEntry("txn-T", "txn-done", "txn-S")
-	if err := c.awaitDependencies(entry); err != nil {
+	if err := p.awaitDependencies(entry); err != nil {
 		t.Fatalf("awaitDependencies() = %v, want nil", err)
 	}
 	if elapsed := time.Since(start); elapsed < cfg.inflightWait {
@@ -314,11 +314,11 @@ func TestDependencyResolvedTreatsNotFoundAsUnresolved(t *testing.T) {
 }
 
 func TestDependencyResolvedEmptyIDIsResolved(t *testing.T) {
-	c, _, cancel := newAwaitCore(t, awaitTestConfig(), resolvedSet())
+	p, cancel := newAwaitCore(t, awaitTestConfig(), resolvedSet())
 	defer cancel()
 
 	// An empty PreviousTransactionID is a genesis entry: no producer to wait for.
-	resolved, err := c.dependencyResolved("")
+	resolved, err := p.dependencyResolved("")
 	if err != nil || !resolved {
 		t.Errorf("dependencyResolved(\"\") = (%v, %v), want (true, nil)", resolved, err)
 	}

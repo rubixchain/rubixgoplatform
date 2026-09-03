@@ -1,4 +1,4 @@
-package core
+package fullnode
 
 import (
 	"encoding/json"
@@ -8,7 +8,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/consensus"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/setup"
@@ -17,83 +16,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
-// Enhanced subscription setup with error handling
-func (c *Core) SubscribeTxnSetup() {
-	// Only fullnodes serve these endpoints
-	if c.fullNode {
-		c.initDynamicTxnProcessor()
-		c.l.AddRoute(setup.APISyncTransactionInfoFromFullnode, "POST", c.syncTransactionInfoFromFullnode)
-		c.registerRecoveryRoute()
-	}
-
-	topic := constants.Event_RubixTxns
-	err := c.ps.SubscribeTopic(topic, c.TxnCallBack)
-	if err != nil {
-		// If already subscribed, this is expected when SetupQuorum is called
-		// for multiple quorum DIDs on the same node. Not an error.
-		if err.Error() == "topic already subscribed" {
-			c.log.Debug("SubscribeTxnSetup: already subscribed to topic, skipping", "topic", topic)
-			return
-		}
-		c.log.Error("Unable to subscribe to topic", "topic", topic, "error", err)
-		return
-	}
-	c.log.Info("Successfully subscribed to topic: " + topic)
-}
-
-// Enhanced callback with dynamic scaling integration
-func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
-	var newEvent models.EventTransaction
-	err := json.Unmarshal(data, &newEvent)
-	if err != nil {
-		c.log.Error("Failed to parse published event", "error", err, "data", string(data))
-		return
-	}
-
-	// Ignore failed transaction IDs
-	// Valid condition for both full node and Quorum nodes
-	if !newEvent.Status {
-		return
-	}
-
-	var txInfo models.TransactionInfo
-	if err := json.Unmarshal(newEvent.Transaction.Info, &txInfo); err != nil {
-		c.log.Error(fmt.Sprintf("failed to unmarshal transaction info, err: %v", err))
-		return
-	}
-
-	// If the current node is setup as quorum, we check the records in token_state_hashes
-	// table to see if any previous transaction id from TransactionInfo is present in the
-	// current node's table. If so, then its removed
-	if len(c.qc) > 0 {
-		// Use the first quorum DID registered on this node for unpledge callback
-		var quorumDID string
-		for did := range c.qc {
-			quorumDID = did
-			break
-		}
-		if err := c.CallBackQuorumUnpledge(newEvent.Transaction, quorumDID); err != nil {
-			c.log.Error(fmt.Sprintf("failed to check token state hashes records, err: %v", err))
-		}
-	}
-
-	// add publisher to peer did table
-	publisherDetails := models.DID{
-		DID:    txInfo.Initiator,
-		PeerID: peerID,
-		Local:  peerID == c.peerID, // This was empty and was getting updated to false by default, so we set it based on the peerID comparison
-	}
-	err = c.AddPeerDetails(publisherDetails)
-	if err != nil {
-		c.log.Error("failed to add publisher info to DB", "err", err)
-	}
-
-	if c.fullNode {
-		c.queueFullnodeTransaction(&newEvent)
-	}
-}
-
-// queueFullnodeTransaction admits a transaction and hands it to the worker pool.
+// QueueFullnodeTransaction admits a transaction and hands it to the worker pool.
 //
 // Split out of TxnCallBack so the admission/enqueue interaction can be tested
 // without a database — everything above this point in TxnCallBack needs a wallet.
@@ -105,50 +28,50 @@ func (c *Core) TxnCallBack(peerID string, topic string, data []byte) {
 // Reserving first closes that window, and every path that fails to hand the event
 // to a worker releases the reservation, which preserves the original invariant
 // that a failed send must not poison the dedup map.
-func (c *Core) queueFullnodeTransaction(newEvent *models.EventTransaction) {
+func (p *DynamicTxnProcessor) QueueFullnodeTransaction(newEvent *models.EventTransaction) {
 	// Cheaply reject already-seen transactions without blocking.
-	if !c.txnProcessor.admit(newEvent.TransactionID) {
-		c.log.Info("Duplicate transaction ignored", "txnID", newEvent.TransactionID)
+	if !p.admit(newEvent.TransactionID) {
+		p.host.Log().Info("Duplicate transaction ignored", "txnID", newEvent.TransactionID)
 		return
 	}
 
 	// Update queue length metric for dynamic scaling
-	currentQueueLen := int64(len(c.txnProcessor.txnQueue))
-	atomic.StoreInt64(&c.txnProcessor.queueLength, currentQueueLen)
+	currentQueueLen := int64(len(p.txnQueue))
+	atomic.StoreInt64(&p.queueLength, currentQueueLen)
 
 	// Queue transaction for processing with enhanced timeout handling
 	select {
-	case c.txnProcessor.txnQueue <- newEvent:
-		atomic.AddInt64(&c.txnProcessor.processedTxnCount, 1)
-		c.log.Debug("Transaction queued successfully",
+	case p.txnQueue <- newEvent:
+		atomic.AddInt64(&p.processedTxnCount, 1)
+		p.host.Log().Debug("Transaction queued successfully",
 			"txnID", newEvent.TransactionID,
 			"queueLength", currentQueueLen)
 
-	case <-time.After(c.txnProcessor.enqueueTimeout):
+	case <-time.After(p.enqueueTimeout):
 		// No worker ever saw this event, so give up the reservation: a later
 		// re-delivery has to be free to try again instead of being rejected as a
 		// duplicate until dedupMapCleaner sweeps the entry.
-		c.txnProcessor.releaseAdmission(newEvent.TransactionID)
-		c.log.Error("Failed to queue transaction - queue full, will retry on next delivery",
+		p.releaseAdmission(newEvent.TransactionID)
+		p.host.Log().Error("Failed to queue transaction - queue full, will retry on next delivery",
 			"txnID", newEvent.TransactionID,
-			"queueLength", len(c.txnProcessor.txnQueue))
+			"queueLength", len(p.txnQueue))
 
-		if currentQueueLen > int64(c.txnProcessor.queueThreshold) {
-			c.log.Warn("Queue threshold exceeded - scaling may be needed",
+		if currentQueueLen > int64(p.queueThreshold) {
+			p.host.Log().Warn("Queue threshold exceeded - scaling may be needed",
 				"current", currentQueueLen,
-				"threshold", c.txnProcessor.queueThreshold)
+				"threshold", p.queueThreshold)
 		}
 
-	case <-c.txnProcessor.ctx.Done():
-		c.txnProcessor.releaseAdmission(newEvent.TransactionID)
-		c.log.Info("Transaction processor shutting down")
+	case <-p.ctx.Done():
+		p.releaseAdmission(newEvent.TransactionID)
+		p.host.Log().Info("Transaction processor shutting down")
 	}
 }
 
 // Process transaction with retry mechanism
-func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID int) {
+func (p *DynamicTxnProcessor) processTxnWithRetry(txnEvent *models.EventTransaction, workerID int) {
 	if txnEvent == nil {
-		c.log.Debug("processTxnWithRetry: txn event is nil")
+		p.host.Log().Debug("processTxnWithRetry: txn event is nil")
 		return
 	}
 
@@ -156,13 +79,13 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 	// it. The defer is what guarantees that: dynamicWorker recovers from panics
 	// (fullnode_txn_processor.go, dynamicWorker), so an early return or a panic
 	// must not leave a stale entry behind.
-	if entry := c.registerInflight(txnEvent); entry != nil {
-		defer c.unregisterInflight(entry.id)
+	if entry := p.registerInflight(txnEvent); entry != nil {
+		defer p.unregisterInflight(entry.id)
 
 		// Wait here, once, rather than inside the retry loop below: a producer
 		// that never arrives would otherwise cost the wait on every attempt.
 		// An expired wait returns nil and the transaction proceeds normally.
-		if err := c.awaitDependencies(entry); err != nil {
+		if err := p.awaitDependencies(entry); err != nil {
 			// A producer found invalid is a verdict on this transaction too,
 			// reached without validating it: it spends an output of something
 			// that never legitimately existed. Dead-letter it and stop. Its own
@@ -173,38 +96,38 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 			// and letting a re-delivery back in would only produce a second
 			// dead-letter row for the same conclusion.
 			if errors.Is(err, errProducerFailed) {
-				c.log.Info("processTxnWithRetry: not validating, a producer of this transaction failed",
+				p.host.Log().Info("processTxnWithRetry: not validating, a producer of this transaction failed",
 					"txnID", txnEvent.TransactionID, "workerID", workerID, "reason", err)
-				c.storeInvalidTransaction(txnEvent, err)
+				p.storeInvalidTransaction(txnEvent, err)
 				return
 			}
 
-			c.log.Info("processTxnWithRetry: abandoning transaction before validation",
+			p.host.Log().Info("processTxnWithRetry: abandoning transaction before validation",
 				"txnID", txnEvent.TransactionID, "reason", err)
 			return
 		}
 	}
 
 	var lastErr error
-	for attempt := 0; attempt < c.txnProcessor.maxRetries; attempt++ {
+	for attempt := 0; attempt < p.maxRetries; attempt++ {
 		if attempt > 0 {
-			c.log.Info("Retrying transaction processing",
+			p.host.Log().Info("Retrying transaction processing",
 				"txnID", txnEvent.TransactionID,
 				"attempt", attempt+1,
 				"workerID", workerID)
-			time.Sleep(c.txnProcessor.retryDelay * time.Duration(attempt))
+			time.Sleep(p.retryDelay * time.Duration(attempt))
 		}
 
-		err := c.processSingleTransaction(txnEvent)
+		err := p.processSingleTransaction(txnEvent)
 		if err == nil {
-			c.log.Info("Transaction processed successfully",
+			p.host.Log().Info("Transaction processed successfully",
 				"txnID", txnEvent.TransactionID,
 				"workerID", workerID)
 			return
 		}
 
 		lastErr = err
-		c.log.Error("Transaction processing failed",
+		p.host.Log().Error("Transaction processing failed",
 			"txnID", txnEvent.TransactionID,
 			"attempt", attempt+1,
 			"error", err,
@@ -227,8 +150,8 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 		//
 		// Admission is not released: the verdict will not change, so a
 		// re-delivery would only reach it again.
-		c.storeInvalidTransaction(txnEvent, lastErr)
-		c.failDownstream(txnEvent.TransactionID, lastErr)
+		p.storeInvalidTransaction(txnEvent, lastErr)
+		p.failDownstream(txnEvent.TransactionID, lastErr)
 		return
 	}
 
@@ -237,7 +160,7 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 	// instance a peer becoming reachable for chain sync. Nothing is
 	// dead-lettered and nothing downstream is touched: this says nothing about
 	// the transaction, and the consumers waiting on it keep their own retries.
-	c.txnProcessor.releaseAdmission(txnEvent.TransactionID)
+	p.releaseAdmission(txnEvent.TransactionID)
 }
 
 // storeInvalidTransaction records a terminal verdict in the audit table.
@@ -245,19 +168,19 @@ func (c *Core) processTxnWithRetry(txnEvent *models.EventTransaction, workerID i
 // The stored reason is the error's own message, which is why classification is
 // attached beside the message rather than wrapped into it: what lands in this
 // table reads exactly as it did before typed errors existed.
-func (c *Core) storeInvalidTransaction(txnEvent *models.EventTransaction, cause error) {
+func (p *DynamicTxnProcessor) storeInvalidTransaction(txnEvent *models.EventTransaction, cause error) {
 	if txnEvent == nil || txnEvent.Transaction == nil || cause == nil {
 		return
 	}
-	if err := c.w.StoreInvalidTransaction(txnEvent.Transaction, cause.Error()); err != nil {
-		c.log.Error("processTxnWithRetry: failed to persist invalid transaction",
+	if err := p.host.Wallet().StoreInvalidTransaction(txnEvent.Transaction, cause.Error()); err != nil {
+		p.host.Log().Error("processTxnWithRetry: failed to persist invalid transaction",
 			"txnID", txnEvent.TransactionID,
 			"error", err)
 	}
 }
 
 // processSingleTransaction validates and stores a transaction to the DB.
-func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error {
+func (p *DynamicTxnProcessor) processSingleTransaction(newEvent *models.EventTransaction) error {
 	txn := newEvent.Transaction
 	if txn == nil {
 		return fmt.Errorf("processSingleTransaction: transaction payload is nil")
@@ -274,19 +197,19 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 	transactionInfo := &models.TransactionInfo{}
 	err := json.Unmarshal(txn.Info, transactionInfo)
 	if err != nil {
-		c.log.Error("processSingleTransaction:failed to unmarshal transaction info", "error", err)
+		p.host.Log().Error("processSingleTransaction:failed to unmarshal transaction info", "error", err)
 		return fmt.Errorf("processSingleTransaction: failed to unmarshal transaction info: %w", err)
 	}
-	initiatorDIDCrypto, err := c.InitialiseDID(transactionInfo.Initiator)
+	initiatorDIDCrypto, err := p.host.InitialiseDID(transactionInfo.Initiator)
 	if err != nil {
-		c.log.Error("processSingleTransaction:failed to initialise initiator DID", "error", err)
+		p.host.Log().Error("processSingleTransaction:failed to initialise initiator DID", "error", err)
 		return fmt.Errorf("processSingleTransaction: failed to initialise initiator DID: %w", err)
 	}
 	quorumDCs := make(map[string]types.DIDCrypto, len(transactionInfo.Quorums))
 	for _, quorum := range transactionInfo.Quorums {
-		quorumDIDCrypto, err := c.InitialiseDID(quorum.Did)
+		quorumDIDCrypto, err := p.host.InitialiseDID(quorum.Did)
 		if err != nil {
-			c.log.Error("processSingleTransaction:failed to initialise quorum DID", "error", err)
+			p.host.Log().Error("processSingleTransaction:failed to initialise quorum DID", "error", err)
 			return fmt.Errorf("processSingleTransaction: failed to initialise quorum DID: %w", err)
 		}
 		quorumDCs[quorum.Did] = quorumDIDCrypto
@@ -297,29 +220,30 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 	// apply loop, and duplicating it here as a peer-side exclusion would make the
 	// peer return a chain with a hole in it rather than a shorter one.
 	syncTxChains := func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error {
-		return c.syncChainsOnce(txn.ID, peerDID, tokenIDs, prevTxIDs, excludeTxIDs)
+		return p.syncChainsOnce(txn.ID, peerDID, tokenIDs, prevTxIDs, excludeTxIDs)
 	}
 	syncAuthoritative := func(tokenIDs []string) (map[string]string, error) {
-		return c.syncTokensFromFullnode(tokenIDs)
+		return p.host.SyncTokensFromFullnode(tokenIDs)
 	}
 	getTxByID := func(txID string) (*models.TransactionInfo, error) {
-		return c.getTransactionInfoByID(txID)
+		return p.host.GetTransactionInfoByID(txID)
 	}
 	getParentBurnTx := func(parentID string) (string, bool, error) {
-		return c.getParentBurnTxID(parentID)
+		return p.host.GetParentBurnTxID(parentID)
 	}
 	fetchGenesisTx := func(peerDID, tokenID string) (*models.Transactions, error) {
 		// Tagged transient for the same reason the chain sync is: this reaches
 		// out to a peer, and a peer that cannot be reached is not a verdict on
 		// the transaction.
-		txn, err := c.FetchGenesisTransactionFromPeer(peerDID, tokenID)
+		txn, err := p.host.FetchGenesisTransactionFromPeer(peerDID, tokenID)
 		return txn, classify(errDependencyTimeout, err)
 	}
 	// Fullnode trusts the quorum's earlier transfer-auth decision; the flag
 	// is not in the EventTransaction.
-	_, err = consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, quorumDCs, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains, syncAuthoritative, getTxByID, getParentBurnTx, fetchGenesisTx, false)
+	testnet, mainnet, localnet := p.host.NetworkFlags()
+	_, err = consensus.ValidateTransaction(txn, p.host.IsFullNode(), p.host.Wallet(), p.host.Log(), initiatorDIDCrypto, quorumDCs, testnet, mainnet, localnet, p.host.CheckTokenStateHashPinned, syncTxChains, syncAuthoritative, getTxByID, getParentBurnTx, fetchGenesisTx, false)
 	if err != nil {
-		c.log.Error("processSingleTransaction:failed to validate transaction", "error", err)
+		p.host.Log().Error("processSingleTransaction:failed to validate transaction", "error", err)
 		// Storing the invalid transaction is deferred to processTxnWithRetry,
 		// which records it once instead of on every attempt.
 		//
@@ -334,11 +258,11 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 	}
 
 	//store the transaction
-	if err := c.w.PersistFullNodeTransaction(c.w.Ctx, &wallet.FullNodePersistenceRequest{
+	if err := p.host.Wallet().PersistFullNodeTransaction(p.host.Wallet().Ctx, &wallet.FullNodePersistenceRequest{
 		Transaction:     txn,
 		TransactionInfo: transactionInfo,
 	}); err != nil {
-		c.log.Error("processSingleTransaction:failed to persist fullnode transaction", "error", err, "transaction_id", txn.ID)
+		p.host.Log().Error("processSingleTransaction:failed to persist fullnode transaction", "error", err, "transaction_id", txn.ID)
 		return fmt.Errorf("processSingleTransaction: failed to persist fullnode transaction: %w", err)
 	}
 
@@ -347,7 +271,7 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 	// one entry short. Forget it before waking anybody: a released waiter starts
 	// validating immediately, and it must not be handed a reason to skip a sync
 	// it now genuinely needs.
-	c.invalidateSyncedTokens(transactionTokenIDs(transactionInfo))
+	p.invalidateSyncedTokens(transactionTokenIDs(transactionInfo))
 
 	// This transaction is now a producer that has resolved, so wake anything
 	// held behind it. The call sits here, after the persist returns, and not
@@ -358,53 +282,44 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 	// Nothing is released when the persist fails. The waiters then fall back to
 	// their timers and behave as they did before the cascade existed, which is
 	// correct: there is no row for them to have been waiting for.
-	c.releaseWaiters(txn.ID)
+	p.releaseWaiters(txn.ID)
 
 	return nil
 }
 
 // Graceful shutdown
-func (c *Core) ShutdownTxnProcessor() {
-	if c.txnProcessor != nil {
-		c.log.Info("Shutting down transaction processor")
-		c.txnProcessor.cancel()
+func (p *DynamicTxnProcessor) ShutdownTxnProcessor() {
+	if p == nil {
+		return
+	}
+	{
+		p.host.Log().Info("Shutting down transaction processor")
+		p.cancel()
 
 		// Close the queue channel to signal workers to finish current work
-		close(c.txnProcessor.txnQueue)
+		close(p.txnQueue)
 
 		// Wait for all workers to complete with timeout
 		done := make(chan struct{})
 		go func() {
-			c.txnProcessor.wg.Wait()
+			p.wg.Wait()
 			close(done)
 		}()
 
 		select {
 		case <-done:
-			c.log.Info("All transaction workers shut down gracefully")
+			p.host.Log().Info("All transaction workers shut down gracefully")
 		case <-time.After(30 * time.Second):
-			c.log.Warn("Transaction workers shutdown timeout - forcing termination")
+			p.host.Log().Warn("Transaction workers shutdown timeout - forcing termination")
 		}
 	}
 }
 
-func (c *Core) checkTokenStateHashPinned(tokenID string, previousTransactionID string) error {
-	if previousTransactionID == "" {
-		return nil
-	}
-
-	tokenStateHash := tokenID + "." + previousTransactionID
-
-	record, err := c.ipfsProviderStore.GetProviderByCID(tokenStateHash)
-	if err != nil {
-		return fmt.Errorf("failed to check pin status for %s: %w", tokenStateHash, err)
-	}
-
-	if record != nil {
-		return fmt.Errorf("token %s is already pinned", tokenStateHash)
-	}
-
-	return nil
+// RegisterRoutes publishes the endpoints only a fullnode serves. Called from
+// Core.SubscribeTxnSetup for the fullnode role.
+func (p *DynamicTxnProcessor) RegisterRoutes() {
+	p.host.Listener().AddRoute(setup.APISyncTransactionInfoFromFullnode, "POST", p.syncTransactionInfoFromFullnode)
+	p.registerRecoveryRoute()
 }
 
 // Safety limits for the sync-txn-info-chain endpoint. PageSize is a server
@@ -422,21 +337,21 @@ const (
 // is by absolute page_number — the caller can detect a missed page later
 // and re-fetch just that page by its number. Full contract is on
 // types.SyncTransactionInfoFromFullnodeRequest.
-func (c *Core) syncTransactionInfoFromFullnode(req *ensweb.Request) *ensweb.Result {
+func (p *DynamicTxnProcessor) syncTransactionInfoFromFullnode(req *ensweb.Request) *ensweb.Result {
 	if httpReq := req.GetHTTPRequest(); httpReq != nil && httpReq.Body != nil {
 		httpReq.Body = http.MaxBytesReader(req.GetHTTPWritter(), httpReq.Body, syncMaxRequestBodyBytes)
 	}
 
 	var syncReq types.SyncTransactionInfoFromFullnodeRequest
-	if err := c.l.ParseJSON(req, &syncReq); err != nil {
-		c.log.Debug("syncTransactionInfoFromFullnode: parse request body failed", "err", err)
-		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: "Invalid input"}, http.StatusOK)
+	if err := p.host.Listener().ParseJSON(req, &syncReq); err != nil {
+		p.host.Log().Debug("syncTransactionInfoFromFullnode: parse request body failed", "err", err)
+		return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: false, Message: "Invalid input"}, http.StatusOK)
 	}
 	if len(syncReq.TokenIDs) == 0 {
-		return c.l.RenderJSON(req, &models.BasicResponse{Status: true, Message: "no token_ids provided"}, http.StatusOK)
+		return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: true, Message: "no token_ids provided"}, http.StatusOK)
 	}
 	if len(syncReq.TokenIDs) > maxSyncTokensPerReq {
-		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: fmt.Sprintf("max %d token IDs per request", maxSyncTokensPerReq)}, http.StatusOK)
+		return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: false, Message: fmt.Sprintf("max %d token IDs per request", maxSyncTokensPerReq)}, http.StatusOK)
 	}
 
 	// Dedup token_ids and drop any empty entries so they don't skew the count
@@ -454,7 +369,7 @@ func (c *Core) syncTransactionInfoFromFullnode(req *ensweb.Request) *ensweb.Resu
 		tokenIDs = append(tokenIDs, t)
 	}
 	if len(tokenIDs) == 0 {
-		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: "token_ids contains no non-empty values"}, http.StatusOK)
+		return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: false, Message: "token_ids contains no non-empty values"}, http.StatusOK)
 	}
 
 	// Clamp page size; default when zero. Page size must stay constant
@@ -478,10 +393,10 @@ func (c *Core) syncTransactionInfoFromFullnode(req *ensweb.Request) *ensweb.Resu
 	// chain at that position. They're reported back in DivergentTokens and
 	// get their full chain (the count/page queries see them as having no
 	// known position).
-	divergent, err := c.w.DetectDivergentSyncTokens(syncReq.KnownPositions)
+	divergent, err := p.host.Wallet().DetectDivergentSyncTokens(syncReq.KnownPositions)
 	if err != nil {
-		c.log.Warn("syncTransactionInfoFromFullnode: divergence check failed", "err", err)
-		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: "fullnode divergence check failed"}, http.StatusOK)
+		p.host.Log().Warn("syncTransactionInfoFromFullnode: divergence check failed", "err", err)
+		return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: false, Message: "fullnode divergence check failed"}, http.StatusOK)
 	}
 	divergentSet := make(map[string]struct{}, len(divergent))
 	for _, t := range divergent {
@@ -498,10 +413,10 @@ func (c *Core) syncTransactionInfoFromFullnode(req *ensweb.Request) *ensweb.Resu
 		thresholds[tokenID] = tip.Position
 	}
 
-	totalItems, err := c.w.CountFullNodeSyncedChainEntries(tokenIDs, thresholds)
+	totalItems, err := p.host.Wallet().CountFullNodeSyncedChainEntries(tokenIDs, thresholds)
 	if err != nil {
-		c.log.Warn("syncTransactionInfoFromFullnode: count failed", "err", err)
-		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: "fullnode count failed"}, http.StatusOK)
+		p.host.Log().Warn("syncTransactionInfoFromFullnode: count failed", "err", err)
+		return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: false, Message: "fullnode count failed"}, http.StatusOK)
 	}
 	totalPages := 0
 	if totalItems > 0 {
@@ -519,25 +434,25 @@ func (c *Core) syncTransactionInfoFromFullnode(req *ensweb.Request) *ensweb.Resu
 			PageSize:        pageSize,
 			TotalItems:      0,
 		}
-		return c.l.RenderJSON(req, &models.BasicResponse{Status: true, Message: "ok", Result: result}, http.StatusOK)
+		return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: true, Message: "ok", Result: result}, http.StatusOK)
 	}
 
 	// Out-of-range page numbers are an obvious client bug — reject loudly
 	// instead of returning an empty page.
 	if pageNumber > totalPages {
-		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: fmt.Sprintf("page_number %d exceeds total_pages %d", pageNumber, totalPages)}, http.StatusOK)
+		return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: false, Message: fmt.Sprintf("page_number %d exceeds total_pages %d", pageNumber, totalPages)}, http.StatusOK)
 	}
 
 	offset := (pageNumber - 1) * pageSize
 	if offset > syncMaxOffsetRows {
-		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: fmt.Sprintf("page offset would exceed safety cap (%d rows)", syncMaxOffsetRows)}, http.StatusOK)
+		return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: false, Message: fmt.Sprintf("page offset would exceed safety cap (%d rows)", syncMaxOffsetRows)}, http.StatusOK)
 	}
 
-	keys, entries, err := c.w.GetFullNodeSyncedChainPageByOffset(tokenIDs, thresholds, offset, pageSize)
+	keys, entries, err := p.host.Wallet().GetFullNodeSyncedChainPageByOffset(tokenIDs, thresholds, offset, pageSize)
 	if err != nil {
-		c.log.Warn("syncTransactionInfoFromFullnode: page fetch failed",
+		p.host.Log().Warn("syncTransactionInfoFromFullnode: page fetch failed",
 			"page_number", pageNumber, "page_size", pageSize, "err", err)
-		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: err.Error()}, http.StatusOK)
+		return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: false, Message: err.Error()}, http.StatusOK)
 	}
 
 	// Group entries by token_id for the response. Order within each token
@@ -555,5 +470,5 @@ func (c *Core) syncTransactionInfoFromFullnode(req *ensweb.Request) *ensweb.Resu
 		PageSize:        pageSize,
 		TotalItems:      totalItems,
 	}
-	return c.l.RenderJSON(req, &models.BasicResponse{Status: true, Message: "ok", Result: result}, http.StatusOK)
+	return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: true, Message: "ok", Result: result}, http.StatusOK)
 }

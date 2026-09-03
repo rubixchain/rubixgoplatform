@@ -1,4 +1,4 @@
-package core
+package fullnode
 
 import (
 	"errors"
@@ -54,7 +54,7 @@ func (s *syncRecorder) fail(err error) {
 	s.err = err
 }
 
-func memoCore(t *testing.T, ttl time.Duration) (*Core, *DynamicTxnProcessor, *syncRecorder) {
+func memoCore(t *testing.T, ttl time.Duration) (*DynamicTxnProcessor, *syncRecorder) {
 	t.Helper()
 	p, cancel := newTestProcessor(10, 0)
 	t.Cleanup(cancel)
@@ -63,20 +63,20 @@ func memoCore(t *testing.T, ttl time.Duration) (*Core, *DynamicTxnProcessor, *sy
 
 	recorder := &syncRecorder{}
 	p.syncChains = recorder.record
-	return newTestCore(p), p, recorder
+	return p, recorder
 }
 
 // The case the gate is for: two members of one bundle both needing the same
 // token from the same peer. The second must not go to the network.
 func TestSyncOnceSkipsARepeatWithinTheBundle(t *testing.T) {
-	c, p, recorder := memoCore(t, time.Second)
+	p, recorder := memoCore(t, time.Second)
 
 	// One bundle: the transfer names the split, which is what merges them.
-	c.registerInflight(eventWithDeps("txn-S"))
-	c.registerInflight(eventWithDeps("txn-T", "txn-S"))
+	p.registerInflight(eventWithDeps("txn-S"))
+	p.registerInflight(eventWithDeps("txn-T", "txn-S"))
 
 	for _, txnID := range []string{"txn-S", "txn-T"} {
-		if err := c.syncChainsOnce(txnID, "peer-1", []string{"token-a"}, nil, nil); err != nil {
+		if err := p.syncChainsOnce(txnID, "peer-1", []string{"token-a"}, nil, nil); err != nil {
 			t.Fatalf("syncChainsOnce(%s) = %v, want nil", txnID, err)
 		}
 	}
@@ -95,13 +95,13 @@ func TestSyncOnceSkipsARepeatWithinTheBundle(t *testing.T) {
 // Only the seen tokens are dropped. A call mixing one of each must still fetch
 // the one it has not seen.
 func TestSyncOnceFiltersOnlyTheSeenTokens(t *testing.T) {
-	c, _, recorder := memoCore(t, time.Second)
-	c.registerInflight(eventWithDeps("txn-T", "txn-S"))
+	p, recorder := memoCore(t, time.Second)
+	p.registerInflight(eventWithDeps("txn-T", "txn-S"))
 
-	if err := c.syncChainsOnce("txn-T", "peer-1", []string{"token-a"}, nil, nil); err != nil {
+	if err := p.syncChainsOnce("txn-T", "peer-1", []string{"token-a"}, nil, nil); err != nil {
 		t.Fatalf("first sync = %v, want nil", err)
 	}
-	if err := c.syncChainsOnce("txn-T", "peer-1", []string{"token-a", "token-b"}, nil, nil); err != nil {
+	if err := p.syncChainsOnce("txn-T", "peer-1", []string{"token-a", "token-b"}, nil, nil); err != nil {
 		t.Fatalf("second sync = %v, want nil", err)
 	}
 
@@ -118,11 +118,11 @@ func TestSyncOnceFiltersOnlyTheSeenTokens(t *testing.T) {
 // tokens come from the initiator, pledge tokens from each quorum member. Keying
 // on the token alone would suppress a sync that would have succeeded.
 func TestSyncOnceDoesNotSuppressADifferentPeer(t *testing.T) {
-	c, _, recorder := memoCore(t, time.Second)
-	c.registerInflight(eventWithDeps("txn-T", "txn-S"))
+	p, recorder := memoCore(t, time.Second)
+	p.registerInflight(eventWithDeps("txn-T", "txn-S"))
 
-	c.syncChainsOnce("txn-T", "peer-1", []string{"token-a"}, nil, nil)
-	c.syncChainsOnce("txn-T", "peer-2", []string{"token-a"}, nil, nil)
+	p.syncChainsOnce("txn-T", "peer-1", []string{"token-a"}, nil, nil)
+	p.syncChainsOnce("txn-T", "peer-2", []string{"token-a"}, nil, nil)
 
 	calls := recorder.snapshot()
 	if len(calls) != 2 {
@@ -137,17 +137,17 @@ func TestSyncOnceDoesNotSuppressADifferentPeer(t *testing.T) {
 // would let one unreachable peer suppress, for a whole TTL, the retry that would
 // have worked.
 func TestSyncOnceDoesNotMarkAFailedSync(t *testing.T) {
-	c, _, recorder := memoCore(t, time.Second)
-	c.registerInflight(eventWithDeps("txn-T", "txn-S"))
+	p, recorder := memoCore(t, time.Second)
+	p.registerInflight(eventWithDeps("txn-T", "txn-S"))
 
 	wantErr := errors.New("peer unreachable")
 	recorder.fail(wantErr)
-	if err := c.syncChainsOnce("txn-T", "peer-1", []string{"token-a"}, nil, nil); !errors.Is(err, wantErr) {
+	if err := p.syncChainsOnce("txn-T", "peer-1", []string{"token-a"}, nil, nil); !errors.Is(err, wantErr) {
 		t.Fatalf("syncChainsOnce() = %v, want %v", err, wantErr)
 	}
 
 	recorder.fail(nil)
-	if err := c.syncChainsOnce("txn-T", "peer-1", []string{"token-a"}, nil, nil); err != nil {
+	if err := p.syncChainsOnce("txn-T", "peer-1", []string{"token-a"}, nil, nil); err != nil {
 		t.Fatalf("retry after a failed sync = %v, want nil", err)
 	}
 
@@ -159,12 +159,12 @@ func TestSyncOnceDoesNotMarkAFailedSync(t *testing.T) {
 // Two bundles are two scopes. What one of them fetched says nothing about what
 // the other is looking at.
 func TestSyncOnceScopesToTheBundle(t *testing.T) {
-	c, _, recorder := memoCore(t, time.Second)
-	c.registerInflight(eventWithDeps("txn-T1", "txn-S1"))
-	c.registerInflight(eventWithDeps("txn-T2", "txn-S2"))
+	p, recorder := memoCore(t, time.Second)
+	p.registerInflight(eventWithDeps("txn-T1", "txn-S1"))
+	p.registerInflight(eventWithDeps("txn-T2", "txn-S2"))
 
-	c.syncChainsOnce("txn-T1", "peer-1", []string{"token-a"}, nil, nil)
-	c.syncChainsOnce("txn-T2", "peer-1", []string{"token-a"}, nil, nil)
+	p.syncChainsOnce("txn-T1", "peer-1", []string{"token-a"}, nil, nil)
+	p.syncChainsOnce("txn-T2", "peer-1", []string{"token-a"}, nil, nil)
 
 	if got := recorder.snapshot(); len(got) != 2 {
 		t.Errorf("the peer was asked %d times across two bundles, want 2", len(got))
@@ -175,12 +175,12 @@ func TestSyncOnceScopesToTheBundle(t *testing.T) {
 // advanced and every record of what a peer held a moment ago is describing a
 // chain one entry short.
 func TestSyncOnceInvalidatesOnPersist(t *testing.T) {
-	c, _, recorder := memoCore(t, time.Second)
-	c.registerInflight(eventWithDeps("txn-T", "txn-S"))
+	p, recorder := memoCore(t, time.Second)
+	p.registerInflight(eventWithDeps("txn-T", "txn-S"))
 
-	c.syncChainsOnce("txn-T", "peer-1", []string{"token-a", "token-b"}, nil, nil)
-	c.invalidateSyncedTokens([]string{"token-a"})
-	c.syncChainsOnce("txn-T", "peer-1", []string{"token-a", "token-b"}, nil, nil)
+	p.syncChainsOnce("txn-T", "peer-1", []string{"token-a", "token-b"}, nil, nil)
+	p.invalidateSyncedTokens([]string{"token-a"})
+	p.syncChainsOnce("txn-T", "peer-1", []string{"token-a", "token-b"}, nil, nil)
 
 	calls := recorder.snapshot()
 	if len(calls) != 2 {
@@ -194,12 +194,12 @@ func TestSyncOnceInvalidatesOnPersist(t *testing.T) {
 // The TTL is what stops a bundle that never drains from holding an opinion about
 // a chain indefinitely.
 func TestSyncOnceRecordExpires(t *testing.T) {
-	c, _, recorder := memoCore(t, 30*time.Millisecond)
-	c.registerInflight(eventWithDeps("txn-T", "txn-S"))
+	p, recorder := memoCore(t, 30*time.Millisecond)
+	p.registerInflight(eventWithDeps("txn-T", "txn-S"))
 
-	c.syncChainsOnce("txn-T", "peer-1", []string{"token-a"}, nil, nil)
+	p.syncChainsOnce("txn-T", "peer-1", []string{"token-a"}, nil, nil)
 	time.Sleep(50 * time.Millisecond)
-	c.syncChainsOnce("txn-T", "peer-1", []string{"token-a"}, nil, nil)
+	p.syncChainsOnce("txn-T", "peer-1", []string{"token-a"}, nil, nil)
 
 	if got := recorder.snapshot(); len(got) != 2 {
 		t.Errorf("the peer was asked %d times across the TTL boundary, want 2", len(got))
@@ -269,18 +269,18 @@ func TestSyncMemoInvalidateSpansBundlesAndPeers(t *testing.T) {
 // repeat syncs across its own retry attempts, and it cannot reach past the one
 // transaction.
 func TestBundleScopeFallsBackToTheTransactionID(t *testing.T) {
-	c, p, _ := memoCore(t, time.Second)
+	p, _ := memoCore(t, time.Second)
 
-	if got := c.bundleScope("txn-unrelated"); got != "txn-unrelated" {
+	if got := p.bundleScope("txn-unrelated"); got != "txn-unrelated" {
 		t.Errorf("bundleScope() = %q for a transaction with no component, want its own ID", got)
 	}
 
-	c.registerInflight(eventWithDeps("txn-T", "txn-S"))
-	scope := c.bundleScope("txn-T")
+	p.registerInflight(eventWithDeps("txn-T", "txn-S"))
+	scope := p.bundleScope("txn-T")
 	if scope == "" {
 		t.Fatal("bundleScope() = \"\" for a transaction in a component")
 	}
-	if got := c.bundleScope("txn-S"); got != scope {
+	if got := p.bundleScope("txn-S"); got != scope {
 		t.Errorf("bundleScope(txn-S) = %q, want %q — bundle members share one scope", got, scope)
 	}
 	if got := p.inflight.componentRoot("txn-nowhere"); got != "" {
@@ -291,16 +291,16 @@ func TestBundleScopeFallsBackToTheTransactionID(t *testing.T) {
 // A Core with no transaction processor is not a fullnode, so there is nothing to
 // scope a memo to and the call must fall through rather than panic.
 func TestSyncMemoHelpersToleratesNoProcessor(t *testing.T) {
-	c := &Core{}
+	var p *DynamicTxnProcessor
 
-	if got := c.bundleScope("txn-T"); got != "txn-T" {
+	if got := p.bundleScope("txn-T"); got != "txn-T" {
 		t.Errorf("bundleScope() = %q, want the transaction ID", got)
 	}
-	if got := c.filterRecentlySynced("bundle-1", "peer-1", []string{"token-a"}); len(got) != 1 {
+	if got := p.filterRecentlySynced("bundle-1", "peer-1", []string{"token-a"}); len(got) != 1 {
 		t.Errorf("filterRecentlySynced() = %v, want the tokens unchanged", got)
 	}
-	c.markSynced("bundle-1", "peer-1", []string{"token-a"})
-	c.invalidateSyncedTokens([]string{"token-a"})
+	p.markSynced("bundle-1", "peer-1", []string{"token-a"})
+	p.invalidateSyncedTokens([]string{"token-a"})
 }
 
 // The memo is read on the validation path, which every worker is on at once, and
@@ -344,19 +344,19 @@ func TestSyncMemoIsSafeUnderConcurrency(t *testing.T) {
 // transfer that spends it, sharing a bundle, needing the same token from the
 // same peer. The second must be served from the memo.
 func TestSyncOnceThroughTheBundleCascade(t *testing.T) {
-	c, p, recorder := memoCore(t, time.Second)
+	p, recorder := memoCore(t, time.Second)
 
-	producer := c.registerInflight(eventWithDeps("txn-S"))
-	consumer := c.registerInflight(eventWithDeps("txn-T", "txn-S"))
+	producer := p.registerInflight(eventWithDeps("txn-S"))
+	consumer := p.registerInflight(eventWithDeps("txn-T", "txn-S"))
 	if producer == nil || consumer == nil {
 		t.Fatal("registerInflight() returned nil")
 	}
 
-	if err := c.syncChainsOnce("txn-S", "peer-1", []string{"token-a"}, nil, nil); err != nil {
+	if err := p.syncChainsOnce("txn-S", "peer-1", []string{"token-a"}, nil, nil); err != nil {
 		t.Fatalf("producer sync = %v, want nil", err)
 	}
-	c.releaseWaiters("txn-S")
-	if err := c.syncChainsOnce("txn-T", "peer-1", []string{"token-a"}, nil, nil); err != nil {
+	p.releaseWaiters("txn-S")
+	if err := p.syncChainsOnce("txn-T", "peer-1", []string{"token-a"}, nil, nil); err != nil {
 		t.Fatalf("consumer sync = %v, want nil", err)
 	}
 
@@ -366,8 +366,8 @@ func TestSyncOnceThroughTheBundleCascade(t *testing.T) {
 
 	// And once the node advances that token itself, the memo stops answering for
 	// it.
-	c.invalidateSyncedTokens([]string{"token-a"})
-	if err := c.syncChainsOnce("txn-T", "peer-1", []string{"token-a"}, nil, nil); err != nil {
+	p.invalidateSyncedTokens([]string{"token-a"})
+	if err := p.syncChainsOnce("txn-T", "peer-1", []string{"token-a"}, nil, nil); err != nil {
 		t.Fatalf("sync after invalidation = %v, want nil", err)
 	}
 	if got := recorder.snapshot(); len(got) != 2 {

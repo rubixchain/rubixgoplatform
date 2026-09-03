@@ -1,4 +1,4 @@
-package core
+package fullnode
 
 import (
 	"reflect"
@@ -154,12 +154,11 @@ func TestRegistryIDSetSnapshot(t *testing.T) {
 func TestGuardAgainstInflightTrimsInFlightTail(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
-	c := newTestCore(p)
 
 	// "B" is a sibling this node is still processing.
 	p.inflight.register(newInflightEntry("B"))
 
-	got := c.guardAgainstInflight("token-X", chain("A", "B", "C"))
+	got := p.GuardAgainstInflight("token-X", chain("A", "B", "C"))
 	if want := []string{"A"}; !reflect.DeepEqual(chainIDs(got), want) {
 		t.Errorf("guardAgainstInflight() = %v, want %v", chainIDs(got), want)
 	}
@@ -168,10 +167,9 @@ func TestGuardAgainstInflightTrimsInFlightTail(t *testing.T) {
 func TestGuardAgainstInflightPassesThroughWhenNothingInFlight(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
-	c := newTestCore(p)
 
 	remote := chain("A", "B", "C")
-	got := c.guardAgainstInflight("token-X", remote)
+	got := p.GuardAgainstInflight("token-X", remote)
 	if !reflect.DeepEqual(chainIDs(got), chainIDs(remote)) {
 		t.Errorf("guardAgainstInflight() = %v, want the chain unchanged", chainIDs(got))
 	}
@@ -184,11 +182,10 @@ func TestGuardAgainstInflightPassesThroughWhenNothingInFlight(t *testing.T) {
 func TestGuardAgainstInflightTrimsTheCurrentTransaction(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
-	c := newTestCore(p)
 
 	p.inflight.register(newInflightEntry("current"))
 
-	got := c.guardAgainstInflight("token-X", chain("A", "current"))
+	got := p.GuardAgainstInflight("token-X", chain("A", "current"))
 	if want := []string{"A"}; !reflect.DeepEqual(chainIDs(got), want) {
 		t.Errorf("guardAgainstInflight() = %v, want %v", chainIDs(got), want)
 	}
@@ -198,11 +195,10 @@ func TestGuardAgainstInflightTrimsTheCurrentTransaction(t *testing.T) {
 // no transaction processor at all. The guard must be inert there rather than
 // panicking.
 func TestGuardAgainstInflightIsInertWithoutAProcessor(t *testing.T) {
-	c := newTestCore(nil)
-	c.txnProcessor = nil
+	var p *DynamicTxnProcessor
 
 	remote := chain("A", "B")
-	got := c.guardAgainstInflight("token-X", remote)
+	got := p.GuardAgainstInflight("token-X", remote)
 	if !reflect.DeepEqual(chainIDs(got), chainIDs(remote)) {
 		t.Errorf("guardAgainstInflight() = %v, want the chain unchanged", chainIDs(got))
 	}

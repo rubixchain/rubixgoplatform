@@ -1,4 +1,4 @@
-package core
+package fullnode
 
 import (
 	"errors"
@@ -221,18 +221,18 @@ func TestFailWaitersIgnoresDegenerateInput(t *testing.T) {
 // reports why, rather than sitting out its timer and then validating against a
 // chain that will never exist.
 func TestAwaitDependenciesReturnsTheProducerFailure(t *testing.T) {
-	c, p, cancel := cascadeCore(t)
+	p, cancel := cascadeCore(t)
 	defer cancel()
 
 	consumer := newInflightEntry("txn-T", "txn-S")
 	cause := errors.New("processSingleTransaction: failed to validate transaction: bad signature")
 	go func() {
 		time.Sleep(20 * time.Millisecond)
-		c.failDownstream("txn-S", classify(errValidationFailed, cause))
+		p.failDownstream("txn-S", classify(errValidationFailed, cause))
 	}()
 
 	start := time.Now()
-	err := c.awaitDependencies(consumer)
+	err := p.awaitDependencies(consumer)
 	if !errors.Is(err, errProducerFailed) {
 		t.Fatalf("awaitDependencies() = %v, want it to report %v", err, errProducerFailed)
 	}
@@ -249,16 +249,16 @@ func TestAwaitDependenciesReturnsTheProducerFailure(t *testing.T) {
 
 // A producer that persists must not look like one that failed.
 func TestAwaitDependenciesReleaseIsNotAFailure(t *testing.T) {
-	c, _, cancel := cascadeCore(t)
+	p, cancel := cascadeCore(t)
 	defer cancel()
 
 	consumer := newInflightEntry("txn-T", "txn-S")
 	go func() {
 		time.Sleep(20 * time.Millisecond)
-		c.releaseWaiters("txn-S")
+		p.releaseWaiters("txn-S")
 	}()
 
-	if err := c.awaitDependencies(consumer); err != nil {
+	if err := p.awaitDependencies(consumer); err != nil {
 		t.Errorf("awaitDependencies() = %v, want nil for a producer that persisted", err)
 	}
 }
@@ -266,7 +266,7 @@ func TestAwaitDependenciesReleaseIsNotAFailure(t *testing.T) {
 // The whole point of Q6: a transient failure must not propagate. Nothing is
 // recorded against the consumers, and they keep their own retries.
 func TestFailDownstreamIsNotCalledForATransientFailure(t *testing.T) {
-	c, p, cancel := cascadeCore(t)
+	p, cancel := cascadeCore(t)
 	defer cancel()
 
 	consumer := newInflightEntry("txn-T", "txn-S")
@@ -278,7 +278,7 @@ func TestFailDownstreamIsNotCalledForATransientFailure(t *testing.T) {
 	// failure exactly as processTxnWithRetry applies it.
 	transient := classify(errDependencyTimeout, errors.New("peer unreachable"))
 	if errors.Is(transient, errValidationFailed) {
-		c.failDownstream("txn-S", transient)
+		p.failDownstream("txn-S", transient)
 		t.Error("a transient failure matched the verdict class and propagated")
 	}
 
@@ -291,17 +291,17 @@ func TestFailDownstreamIsNotCalledForATransientFailure(t *testing.T) {
 }
 
 func TestFailDownstreamToleratesNoProcessor(t *testing.T) {
-	(&Core{}).failDownstream("txn-S", errors.New("boom"))
+	(*DynamicTxnProcessor)(nil).failDownstream("txn-S", errors.New("boom"))
 }
 
 // Fig. 3b in miniature, through the real entry points: the quorum split is found
 // invalid, the transfer inherits that and never reaches validation, and the
 // initiator's split — which produced nothing that failed — is untouched.
 func TestPropagationReachesOnlyDownstream(t *testing.T) {
-	c, p, cancel := cascadeCore(t)
+	p, cancel := cascadeCore(t)
 	defer cancel()
 
-	initiatorSplit := c.registerInflight(eventWithDeps("txn-S1"))
+	initiatorSplit := p.registerInflight(eventWithDeps("txn-S1"))
 	transfer := newInflightEntry("txn-T", "txn-S2")
 	if initiatorSplit == nil {
 		t.Fatal("registerInflight() returned nil")
@@ -312,7 +312,7 @@ func TestPropagationReachesOnlyDownstream(t *testing.T) {
 
 	verdict := classify(errValidationFailed,
 		errors.New("processSingleTransaction: failed to validate transaction: quorum split invalid"))
-	c.failDownstream("txn-S2", verdict)
+	p.failDownstream("txn-S2", verdict)
 
 	if got := p.inflight.failureOf(transfer); !errors.Is(got, errValidationFailed) {
 		t.Errorf("the transfer was not failed: %v", got)
@@ -333,7 +333,7 @@ func TestPropagationReachesOnlyDownstream(t *testing.T) {
 func TestPropagationIsSafeUnderConcurrency(t *testing.T) {
 	const pairs = 50
 
-	c, p, cancel := cascadeCore(t)
+	p, cancel := cascadeCore(t)
 	defer cancel()
 	p.bundle.maxParked = pairs * 2
 	p.bundle.unknownWait = 500 * time.Millisecond
@@ -350,7 +350,7 @@ func TestPropagationIsSafeUnderConcurrency(t *testing.T) {
 		go func() {
 			defer done.Done()
 			start.Wait()
-			err := c.awaitDependencies(newInflightEntry(consumerID, producerID))
+			err := p.awaitDependencies(newInflightEntry(consumerID, producerID))
 			if err != nil && !errors.Is(err, errProducerFailed) {
 				t.Errorf("awaitDependencies(%s) = %v, want nil or a producer failure", consumerID, err)
 			}
@@ -358,7 +358,7 @@ func TestPropagationIsSafeUnderConcurrency(t *testing.T) {
 		go func() {
 			defer done.Done()
 			start.Wait()
-			c.failDownstream(producerID, classify(errValidationFailed, errors.New("invalid")))
+			p.failDownstream(producerID, classify(errValidationFailed, errors.New("invalid")))
 		}()
 	}
 

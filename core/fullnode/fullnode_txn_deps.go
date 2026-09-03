@@ -1,4 +1,4 @@
-package core
+package fullnode
 
 import (
 	"github.com/rubixchain/rubixgoplatform/types/models"

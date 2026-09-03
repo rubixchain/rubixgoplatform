@@ -1,4 +1,4 @@
-package core
+package fullnode
 
 import (
 	"sync"
@@ -18,7 +18,7 @@ import (
 // cascadeCore wires a Core whose dependency probe reports only the given IDs as
 // persisted, with tiers long enough that a test failing to release shows up as a
 // timeout rather than as a pass.
-func cascadeCore(t *testing.T, resolved ...string) (*Core, *DynamicTxnProcessor, func()) {
+func cascadeCore(t *testing.T, resolved ...string) (*DynamicTxnProcessor, func()) {
 	t.Helper()
 	cfg := awaitTestConfig()
 	cfg.inflightWait = 2 * time.Second
@@ -283,11 +283,11 @@ func TestUnparkRemovesOnlyItsOwnEdge(t *testing.T) {
 // Producer first: the ordinary case. The consumer's probe finds the row, so it
 // never parks and never waits.
 func TestAwaitDependenciesProducerAlreadyPersistedDoesNotPark(t *testing.T) {
-	c, p, cancel := cascadeCore(t, "txn-S")
+	p, cancel := cascadeCore(t, "txn-S")
 	defer cancel()
 
 	start := time.Now()
-	if err := c.awaitDependencies(newInflightEntry("txn-T", "txn-S")); err != nil {
+	if err := p.awaitDependencies(newInflightEntry("txn-T", "txn-S")); err != nil {
 		t.Fatalf("awaitDependencies() = %v, want nil", err)
 	}
 	if elapsed := time.Since(start); elapsed > 50*time.Millisecond {
@@ -302,7 +302,7 @@ func TestAwaitDependenciesProducerAlreadyPersistedDoesNotPark(t *testing.T) {
 // spends, parks, and is woken by the split's persist rather than by its own
 // timer. Without the cascade this costs the full wait and then a peer sync.
 func TestAwaitDependenciesWokenByProducerPersist(t *testing.T) {
-	c, p, cancel := cascadeCore(t)
+	p, cancel := cascadeCore(t)
 	defer cancel()
 
 	consumer := newInflightEntry("txn-T", "txn-S")
@@ -310,11 +310,11 @@ func TestAwaitDependenciesWokenByProducerPersist(t *testing.T) {
 		// Long enough that the wait is genuinely under way, short enough that a
 		// missed release shows up as the 2s timeout instead of a pass.
 		time.Sleep(30 * time.Millisecond)
-		c.releaseWaiters("txn-S")
+		p.releaseWaiters("txn-S")
 	}()
 
 	start := time.Now()
-	if err := c.awaitDependencies(consumer); err != nil {
+	if err := p.awaitDependencies(consumer); err != nil {
 		t.Fatalf("awaitDependencies() = %v, want nil", err)
 	}
 	elapsed := time.Since(start)
@@ -335,20 +335,20 @@ func TestAwaitDependenciesWokenByProducerPersist(t *testing.T) {
 // The reverse edge has to survive the producer being registered in between: the
 // split arrives, is seen to have a waiter, and only wakes it once it persists.
 func TestAwaitDependenciesReverseEdgeSurvivesProducerRegistration(t *testing.T) {
-	c, p, cancel := cascadeCore(t)
+	p, cancel := cascadeCore(t)
 	defer cancel()
 
 	consumer := newInflightEntry("txn-T", "txn-S")
 	go func() {
 		time.Sleep(20 * time.Millisecond)
-		if entry := c.registerInflight(eventWithDeps("txn-S")); entry == nil {
+		if entry := p.registerInflight(eventWithDeps("txn-S")); entry == nil {
 			return
 		}
 		time.Sleep(20 * time.Millisecond)
-		c.releaseWaiters("txn-S")
+		p.releaseWaiters("txn-S")
 	}()
 
-	if err := c.awaitDependencies(consumer); err != nil {
+	if err := p.awaitDependencies(consumer); err != nil {
 		t.Fatalf("awaitDependencies() = %v, want nil", err)
 	}
 	if got := atomic.LoadInt64(&p.revEdges); got != 1 {
@@ -359,19 +359,19 @@ func TestAwaitDependenciesReverseEdgeSurvivesProducerRegistration(t *testing.T) 
 // A consumer waiting on two producers resumes on the second persist, not the
 // first.
 func TestAwaitDependenciesWaitsForEveryProducer(t *testing.T) {
-	c, p, cancel := cascadeCore(t)
+	p, cancel := cascadeCore(t)
 	defer cancel()
 
 	var firstReleased atomic.Int64
 	go func() {
 		time.Sleep(20 * time.Millisecond)
-		c.releaseWaiters("txn-S1")
+		p.releaseWaiters("txn-S1")
 		firstReleased.Store(time.Now().UnixNano())
 		time.Sleep(30 * time.Millisecond)
-		c.releaseWaiters("txn-S2")
+		p.releaseWaiters("txn-S2")
 	}()
 
-	if err := c.awaitDependencies(newInflightEntry("txn-T", "txn-S1", "txn-S2")); err != nil {
+	if err := p.awaitDependencies(newInflightEntry("txn-T", "txn-S1", "txn-S2")); err != nil {
 		t.Fatalf("awaitDependencies() = %v, want nil", err)
 	}
 	returned := time.Now().UnixNano()
@@ -386,11 +386,11 @@ func TestAwaitDependenciesWaitsForEveryProducer(t *testing.T) {
 // A producer that never arrives leaves the waiter to its timer, which is exactly
 // the pre-cascade behaviour, and the edge must not outlive the wait.
 func TestAwaitDependenciesTimesOutWhenProducerNeverArrives(t *testing.T) {
-	c, p, cancel := newAwaitCore(t, awaitTestConfig(), resolvedSet())
+	p, cancel := newAwaitCore(t, awaitTestConfig(), resolvedSet())
 	defer cancel()
 
 	start := time.Now()
-	if err := c.awaitDependencies(newInflightEntry("txn-T", "txn-S")); err != nil {
+	if err := p.awaitDependencies(newInflightEntry("txn-T", "txn-S")); err != nil {
 		t.Fatalf("awaitDependencies() = %v, want nil", err)
 	}
 	if elapsed := time.Since(start); elapsed < p.bundle.unknownWait {
@@ -408,7 +408,7 @@ func TestAwaitDependenciesTimesOutWhenProducerNeverArrives(t *testing.T) {
 // the closing one is refused, and the refused transaction proceeds without
 // waiting at all.
 func TestAwaitDependenciesProceedsRatherThanClosingACycle(t *testing.T) {
-	c, p, cancel := cascadeCore(t)
+	p, cancel := cascadeCore(t)
 	defer cancel()
 
 	a := newInflightEntry("txn-A", "txn-B")
@@ -417,7 +417,7 @@ func TestAwaitDependenciesProceedsRatherThanClosingACycle(t *testing.T) {
 	}
 
 	start := time.Now()
-	if err := c.awaitDependencies(newInflightEntry("txn-B", "txn-A")); err != nil {
+	if err := p.awaitDependencies(newInflightEntry("txn-B", "txn-A")); err != nil {
 		t.Fatalf("awaitDependencies() = %v, want nil", err)
 	}
 	if elapsed := time.Since(start); elapsed > 50*time.Millisecond {
@@ -428,7 +428,7 @@ func TestAwaitDependenciesProceedsRatherThanClosingACycle(t *testing.T) {
 // releaseWaiters is called from processSingleTransaction on a Core that may have
 // no processor at all in a non-fullnode configuration.
 func TestReleaseWaitersToleratesNoProcessor(t *testing.T) {
-	(&Core{}).releaseWaiters("txn-S")
+	(*DynamicTxnProcessor)(nil).releaseWaiters("txn-S")
 }
 
 // Fifty pairs racing, each consumer parking while its own producer releases. Run
@@ -437,7 +437,7 @@ func TestReleaseWaitersToleratesNoProcessor(t *testing.T) {
 func TestCascadeIsSafeUnderConcurrency(t *testing.T) {
 	const pairs = 50
 
-	c, p, cancel := cascadeCore(t)
+	p, cancel := cascadeCore(t)
 	defer cancel()
 	p.bundle.maxParked = pairs * 2
 	p.bundle.unknownWait = 500 * time.Millisecond
@@ -454,14 +454,14 @@ func TestCascadeIsSafeUnderConcurrency(t *testing.T) {
 		go func() { // consumer: park and wait
 			defer done.Done()
 			start.Wait()
-			if err := c.awaitDependencies(newInflightEntry(consumerID, producerID)); err != nil {
+			if err := p.awaitDependencies(newInflightEntry(consumerID, producerID)); err != nil {
 				t.Errorf("awaitDependencies(%s) = %v, want nil", consumerID, err)
 			}
 		}()
 		go func() { // producer: persist and release, racing the park above
 			defer done.Done()
 			start.Wait()
-			c.releaseWaiters(producerID)
+			p.releaseWaiters(producerID)
 		}()
 	}
 

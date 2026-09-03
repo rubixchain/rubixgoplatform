@@ -1,4 +1,4 @@
-package core
+package fullnode
 
 import (
 	"errors"
@@ -40,11 +40,11 @@ var errProcessorShuttingDown = errors.New("transaction processor is shutting dow
 // The error return exists to keep a database problem distinguishable from an
 // absent producer. Both used to look the same from here, and conflating them
 // would park every transaction during an outage.
-func (c *Core) dependencyResolved(depID string) (bool, error) {
+func (p *DynamicTxnProcessor) dependencyResolved(depID string) (bool, error) {
 	if depID == "" {
 		return true, nil
 	}
-	if _, err := c.w.GetTransactionByID(depID, true); err != nil {
+	if _, err := p.host.Wallet().GetTransactionByID(depID, true); err != nil {
 		if errors.Is(err, wallet.ErrTransactionNotFound) {
 			return false, nil
 		}
@@ -64,11 +64,11 @@ func (c *Core) dependencyResolved(depID string) (bool, error) {
 // Both halves are returned because the caller needs both: the resolved half to
 // give back the edges it has just parked on, the unresolved half to pick how
 // long to wait.
-func (c *Core) partitionDependencies(deps []string) (resolved, unresolved []string) {
+func (p *DynamicTxnProcessor) partitionDependencies(deps []string) (resolved, unresolved []string) {
 	for _, dep := range deps {
-		ok, err := c.txnProcessor.resolveDependency(dep)
+		ok, err := p.resolveDependency(dep)
 		if err != nil {
-			c.log.Warn("awaitDependencies: could not check a dependency, treating it as resolved",
+			p.host.Log().Warn("awaitDependencies: could not check a dependency, treating it as resolved",
 				"dependsOn", dep, "err", err)
 			resolved = append(resolved, dep)
 			continue
@@ -88,12 +88,12 @@ func (c *Core) partitionDependencies(deps []string) (resolved, unresolved []stri
 // going to resolve. A producer that is simply absent may never arrive — this
 // node may have joined the network after it was published — and gets a much
 // shorter grace period.
-func (c *Core) dependencyWait(unresolved []string) time.Duration {
-	cfg := c.txnProcessor.bundle
+func (p *DynamicTxnProcessor) dependencyWait(unresolved []string) time.Duration {
+	cfg := p.bundle
 	var wait time.Duration
 	for _, dep := range unresolved {
 		tier := cfg.unknownWait
-		if c.txnProcessor.inflight.has(dep) {
+		if p.inflight.has(dep) {
 			tier = cfg.inflightWait
 		}
 		if tier > wait {
@@ -114,13 +114,12 @@ func (c *Core) dependencyWait(unresolved []string) time.Duration {
 // Called once, before the retry loop rather than inside it. Waiting per attempt
 // would multiply the hold by maxRetries for a transaction whose producer never
 // shows up.
-func (c *Core) awaitDependencies(t *inflightTxn) error {
-	p := c.txnProcessor
+func (p *DynamicTxnProcessor) awaitDependencies(t *inflightTxn) error {
 	if t == nil || len(t.deps) == 0 {
 		return nil
 	}
 
-	_, unresolved := c.partitionDependencies(t.deps)
+	_, unresolved := p.partitionDependencies(t.deps)
 	if len(unresolved) == 0 {
 		return nil
 	}
@@ -131,7 +130,7 @@ func (c *Core) awaitDependencies(t *inflightTxn) error {
 	parked := atomic.AddInt64(&p.parkedCount, 1)
 	if p.bundle.maxParked > 0 && parked > int64(p.bundle.maxParked) {
 		atomic.AddInt64(&p.parkedCount, -1)
-		c.log.Warn("awaitDependencies: too many transactions already waiting, proceeding without holding",
+		p.host.Log().Warn("awaitDependencies: too many transactions already waiting, proceeding without holding",
 			"txnID", t.id, "parked", parked-1, "maxParked", p.bundle.maxParked)
 		return nil
 	}
@@ -146,7 +145,7 @@ func (c *Core) awaitDependencies(t *inflightTxn) error {
 			parkedOn = append(parkedOn, dep)
 			continue
 		}
-		c.log.Debug("awaitDependencies: declined to park on a producer, this dependency can only time out",
+		p.host.Log().Debug("awaitDependencies: declined to park on a producer, this dependency can only time out",
 			"txnID", t.id, "dependsOn", dep)
 	}
 	if len(parkedOn) == 0 {
@@ -165,10 +164,10 @@ func (c *Core) awaitDependencies(t *inflightTxn) error {
 	// strictly follows the commit, so a producer that committed either shows up
 	// in this probe or finds the edge already recorded.
 	started := time.Now()
-	resolved, waitingFor := c.partitionDependencies(parkedOn)
+	resolved, waitingFor := p.partitionDependencies(parkedOn)
 	if len(resolved) > 0 {
 		if remaining := p.inflight.unpark(t, resolved); remaining == 0 {
-			c.log.Debug("awaitDependencies: producers resolved while the edges were being recorded",
+			p.host.Log().Debug("awaitDependencies: producers resolved while the edges were being recorded",
 				"txnID", t.id)
 			return nil
 		}
@@ -177,8 +176,8 @@ func (c *Core) awaitDependencies(t *inflightTxn) error {
 		return nil
 	}
 
-	wait := c.dependencyWait(waitingFor)
-	c.log.Debug("awaitDependencies: holding transaction until its producers resolve",
+	wait := p.dependencyWait(waitingFor)
+	p.host.Log().Debug("awaitDependencies: holding transaction until its producers resolve",
 		"txnID", t.id, "unresolved", waitingFor, "wait", wait)
 
 	timer := time.NewTimer(wait)
@@ -193,12 +192,12 @@ func (c *Core) awaitDependencies(t *inflightTxn) error {
 		// existed, so validating it would only reach the same conclusion more
 		// slowly, after a peer sync that cannot help.
 		if failure := p.inflight.failureOf(t); failure != nil {
-			c.log.Info("awaitDependencies: a producer failed validation",
+			p.host.Log().Info("awaitDependencies: a producer failed validation",
 				"txnID", t.id, "waited", time.Since(started), "cause", failure)
 			return fmt.Errorf("awaitDependencies: %w: %w", errProducerFailed, failure)
 		}
 
-		c.log.Debug("awaitDependencies: released by its producers",
+		p.host.Log().Debug("awaitDependencies: released by its producers",
 			"txnID", t.id, "waited", time.Since(started))
 		return nil
 
@@ -206,7 +205,7 @@ func (c *Core) awaitDependencies(t *inflightTxn) error {
 		// Not a failure. The transaction proceeds and the integrity check syncs
 		// what is missing, which is what would have happened immediately without
 		// this gate.
-		c.log.Info("awaitDependencies: wait expired, proceeding to validation",
+		p.host.Log().Info("awaitDependencies: wait expired, proceeding to validation",
 			"txnID", t.id, "unresolved", waitingFor, "waited", time.Since(started))
 		return nil
 

@@ -1,4 +1,4 @@
-package core
+package fullnode
 
 import (
 	"encoding/json"
@@ -188,9 +188,8 @@ func TestRegistrySingleOwnerUnderContention(t *testing.T) {
 func TestRegisterInflightExtractsDependencies(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
-	c := newTestCore(p)
 
-	entry := c.registerInflight(eventWithDeps("txn-T", "txn-S", "txn-Q"))
+	entry := p.registerInflight(eventWithDeps("txn-T", "txn-S", "txn-Q"))
 	if entry == nil {
 		t.Fatal("registerInflight() returned nil for a new transaction")
 	}
@@ -210,9 +209,8 @@ func TestRegisterInflightExtractsDependencies(t *testing.T) {
 func TestRegisterInflightGenesisHasNoDependencies(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
-	c := newTestCore(p)
 
-	entry := c.registerInflight(eventWithDeps("txn-S", "", ""))
+	entry := p.registerInflight(eventWithDeps("txn-S", "", ""))
 	if entry == nil {
 		t.Fatal("registerInflight() returned nil")
 	}
@@ -230,9 +228,8 @@ func TestRegisterInflightGenesisHasNoDependencies(t *testing.T) {
 func TestRegisterInflightRegistersUnparseablePayload(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
-	c := newTestCore(p)
 
-	entry := c.registerInflight(&models.EventTransaction{
+	entry := p.registerInflight(&models.EventTransaction{
 		TransactionID: "txn-bad",
 		Transaction:   &models.Transactions{ID: "txn-bad", Info: json.RawMessage(`{not json`)},
 	})
@@ -250,9 +247,8 @@ func TestRegisterInflightRegistersUnparseablePayload(t *testing.T) {
 func TestRegisterInflightNilTransaction(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
-	c := newTestCore(p)
 
-	entry := c.registerInflight(&models.EventTransaction{TransactionID: "txn-nil"})
+	entry := p.registerInflight(&models.EventTransaction{TransactionID: "txn-nil"})
 	if entry == nil {
 		t.Fatal("registerInflight() returned nil")
 	}
@@ -266,12 +262,11 @@ func TestRegisterInflightNilTransaction(t *testing.T) {
 func TestRegisterInflightReturnsNilForDuplicate(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
-	c := newTestCore(p)
 
-	if entry := c.registerInflight(eventWithDeps("txn-1")); entry == nil {
+	if entry := p.registerInflight(eventWithDeps("txn-1")); entry == nil {
 		t.Fatal("first registerInflight() returned nil")
 	}
-	if entry := c.registerInflight(eventWithDeps("txn-1")); entry != nil {
+	if entry := p.registerInflight(eventWithDeps("txn-1")); entry != nil {
 		t.Error("duplicate registerInflight() returned an entry, want nil")
 	}
 	if got := p.inflight.len(); got != 1 {
@@ -292,9 +287,8 @@ func TestProcessTxnWithRetryReleasesInflightEntry(t *testing.T) {
 	defer cancel()
 	p.maxRetries = 2
 	p.retryDelay = 0
-	c := newTestCore(p)
 
-	c.processTxnWithRetry(&models.EventTransaction{TransactionID: "txn-1"}, 0)
+	p.processTxnWithRetry(&models.EventTransaction{TransactionID: "txn-1"}, 0)
 
 	if p.inflight.has("txn-1") {
 		t.Error("in-flight entry survived processTxnWithRetry")
@@ -308,9 +302,8 @@ func TestProcessTxnWithRetryReleasesInflightEntry(t *testing.T) {
 func TestProcessTxnWithRetryNilEventRegistersNothing(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
-	c := newTestCore(p)
 
-	c.processTxnWithRetry(nil, 0)
+	p.processTxnWithRetry(nil, 0)
 
 	if got := p.inflight.len(); got != 0 {
 		t.Errorf("len() = %d, want 0", got)
@@ -322,14 +315,13 @@ func TestProcessTxnWithRetryNilEventRegistersNothing(t *testing.T) {
 func TestRegisterInflightCountsDependencyEdges(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
-	c := newTestCore(p)
 
 	// The producer is registered and still in flight.
-	if entry := c.registerInflight(eventWithDeps("txn-S")); entry == nil {
+	if entry := p.registerInflight(eventWithDeps("txn-S")); entry == nil {
 		t.Fatal("registering the producer returned nil")
 	}
 	// The consumer names it, plus one producer that is not in flight.
-	if entry := c.registerInflight(eventWithDeps("txn-T", "txn-S", "txn-absent")); entry == nil {
+	if entry := p.registerInflight(eventWithDeps("txn-T", "txn-S", "txn-absent")); entry == nil {
 		t.Fatal("registering the consumer returned nil")
 	}
 

@@ -226,7 +226,7 @@ func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, 
 			// what that transaction itself expects, and it then fails its own
 			// integrity check because of a sync run for a different
 			// transaction. Trim to the prefix that predates anything in flight.
-			txs = c.guardAgainstInflight(tokenID, txs)
+			txs = c.txnProcessor.GuardAgainstInflight(tokenID, txs)
 			if err := c.applyTokenChainFromSyncForFullNode(tokenID, txs, prevTxID); err != nil {
 				c.log.Warn("SyncTransactionChainsFromPeer: fullnode apply failed (non-fatal)", "tokenID", tokenID, "err", err)
 			} else {

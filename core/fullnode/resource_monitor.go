@@ -1,4 +1,4 @@
-package core
+package fullnode
 
 import (
 	"runtime"
@@ -11,11 +11,11 @@ type ResourceMonitor struct{}
 func (rm *ResourceMonitor) GetMemoryStats() (totalMB, availableMB uint64) {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
-	
+
 	// Use runtime memory stats as a cross-platform solution
 	// This gives us Go's view of memory usage
 	totalMB = memStats.Sys / (1024 * 1024) // Total memory obtained from OS
-	
+
 	// Available memory is roughly: system memory - allocated memory
 	allocatedMB := memStats.Alloc / (1024 * 1024)
 	if totalMB > allocatedMB {
@@ -23,7 +23,7 @@ func (rm *ResourceMonitor) GetMemoryStats() (totalMB, availableMB uint64) {
 	} else {
 		availableMB = 1024 // Default 1GB available
 	}
-	
+
 	// For Linux systems, try to get more accurate system memory
 	if runtime.GOOS == "linux" {
 		if sysTotal, sysAvail := getLinuxMemoryInfo(); sysTotal > 0 {
@@ -31,7 +31,7 @@ func (rm *ResourceMonitor) GetMemoryStats() (totalMB, availableMB uint64) {
 			availableMB = sysAvail
 		}
 	}
-	
+
 	return totalMB, availableMB
 }
 
@@ -41,7 +41,7 @@ func (rm *ResourceMonitor) GetMemoryStats() (totalMB, availableMB uint64) {
 // - Estimated memory per operation
 func (rm *ResourceMonitor) CalculateDynamicWorkers(tokenCount int) int {
 	totalMB, availableMB := rm.GetMemoryStats()
-	
+
 	// Reserve memory for system stability (keep at least 25% free for large operations)
 	var reservePercent float64
 	if tokenCount > 500 {
@@ -51,12 +51,12 @@ func (rm *ResourceMonitor) CalculateDynamicWorkers(tokenCount int) int {
 	}
 	reserveMB := uint64(float64(totalMB) * reservePercent)
 	usableMB := availableMB - reserveMB
-	
+
 	// Ensure we have at least 2GB usable
 	if usableMB < 2048 {
 		return 1 // Minimal workers when memory is critically low
 	}
-	
+
 	// Dynamic memory per worker based on token count
 	// For pinning operations, we need less memory per worker
 	// More workers with less memory each is better for IPFS stability
@@ -73,17 +73,17 @@ func (rm *ResourceMonitor) CalculateDynamicWorkers(tokenCount int) int {
 	default:
 		memoryPerWorkerMB = 2048 // 2GB per worker for very large batches
 	}
-	
+
 	// Calculate workers based on available memory
 	memoryBasedWorkers := int(usableMB / memoryPerWorkerMB)
 	if memoryBasedWorkers < 1 {
 		memoryBasedWorkers = 1
 	}
-	
+
 	// Optimal workers based on token count for balance of speed and stability
 	var optimalWorkers int
 	cpuCount := runtime.NumCPU()
-	
+
 	// For pinning operations, more workers with smaller batches is better
 	switch {
 	case tokenCount <= 10:
@@ -101,15 +101,15 @@ func (rm *ResourceMonitor) CalculateDynamicWorkers(tokenCount int) int {
 	default:
 		optimalWorkers = min(8, cpuCount/2) // Up to 8 workers for very large
 	}
-	
+
 	// Use the smaller of memory-based and optimal calculations
 	workers := min(memoryBasedWorkers, optimalWorkers)
-	
+
 	// Ensure at least 1 worker
 	if workers < 1 {
 		workers = 1
 	}
-	
+
 	return workers
 }
 
@@ -133,7 +133,7 @@ func (rm *ResourceMonitor) GetResourceStats() map[string]interface{} {
 	totalMB, availableMB := rm.GetMemoryStats()
 	usedMB := totalMB - availableMB
 	usagePercent := float64(usedMB) / float64(totalMB) * 100
-	
+
 	return map[string]interface{}{
 		"memory_total_mb":     totalMB,
 		"memory_available_mb": availableMB,

@@ -1,4 +1,4 @@
-package core
+package fullnode
 
 import (
 	"encoding/json"
@@ -567,17 +567,17 @@ func truncateAtInflight(txs []types.TransactionWithRole, inflight map[string]boo
 	return txs
 }
 
-// guardAgainstInflight trims a peer's chain response so it cannot carry an
+// GuardAgainstInflight trims a peer's chain response so it cannot carry an
 // entry belonging to a transaction this node is still processing.
 //
 // Returns txs unchanged when there is nothing to trim, including on a node with
 // no transaction processor, so the non-fullnode sync path is unaffected.
-func (c *Core) guardAgainstInflight(tokenID string, txs []types.TransactionWithRole) []types.TransactionWithRole {
-	if c.txnProcessor == nil || c.txnProcessor.inflight == nil {
+func (p *DynamicTxnProcessor) GuardAgainstInflight(tokenID string, txs []types.TransactionWithRole) []types.TransactionWithRole {
+	if p == nil || p.inflight == nil {
 		return txs
 	}
 
-	guarded := truncateAtInflight(txs, c.txnProcessor.inflight.idSet())
+	guarded := truncateAtInflight(txs, p.inflight.idSet())
 	if len(guarded) == len(txs) {
 		return txs
 	}
@@ -589,7 +589,7 @@ func (c *Core) guardAgainstInflight(tokenID string, txs []types.TransactionWithR
 	if len(guarded) < len(txs) {
 		firstDropped = txs[len(guarded)].Tx.ID
 	}
-	c.log.Info("Chain sync truncated at an in-flight transaction",
+	p.host.Log().Info("Chain sync truncated at an in-flight transaction",
 		"tokenID", tokenID,
 		"remoteCount", len(txs),
 		"appliedCount", len(guarded),
@@ -609,7 +609,7 @@ func (c *Core) guardAgainstInflight(tokenID string, txs []types.TransactionWithR
 // cannot be unmarshalled still occupies the pipeline and still has to be visible
 // as in flight. It is registered with no dependencies and will fail validation
 // shortly afterwards on its own merits.
-func (c *Core) registerInflight(txnEvent *models.EventTransaction) *inflightTxn {
+func (p *DynamicTxnProcessor) registerInflight(txnEvent *models.EventTransaction) *inflightTxn {
 	entry := &inflightTxn{
 		id:    txnEvent.TransactionID,
 		event: txnEvent,
@@ -619,18 +619,18 @@ func (c *Core) registerInflight(txnEvent *models.EventTransaction) *inflightTxn 
 	if txnEvent.Transaction != nil && len(txnEvent.Transaction.Info) > 0 {
 		var info models.TransactionInfo
 		if err := json.Unmarshal(txnEvent.Transaction.Info, &info); err != nil {
-			c.log.Debug("registerInflight: transaction info did not unmarshal, registering with no dependencies",
+			p.host.Log().Debug("registerInflight: transaction info did not unmarshal, registering with no dependencies",
 				"txnID", txnEvent.TransactionID, "err", err)
 		} else {
 			entry.deps = transactionDependencies(&info)
 		}
 	}
 
-	switch c.txnProcessor.inflight.register(entry) {
+	switch p.inflight.register(entry) {
 	case alreadyInFlight:
 		// Admission is single-winner, so one transaction reaches one worker and
 		// this should be unreachable. Log rather than assume.
-		c.log.Warn("registerInflight: transaction is already in flight, leaving the existing entry alone",
+		p.host.Log().Warn("registerInflight: transaction is already in flight, leaving the existing entry alone",
 			"txnID", txnEvent.TransactionID)
 		return nil
 
@@ -641,21 +641,21 @@ func (c *Core) registerInflight(txnEvent *models.EventTransaction) *inflightTxn 
 		// this existed. Degrading to that is the point: the alternative under a
 		// flood of fabricated dependencies is a registry that never stops
 		// growing.
-		atomic.AddInt64(&c.txnProcessor.registryFullEvents, 1)
-		c.log.Warn("registerInflight: in-flight registry is full, processing this transaction untracked",
+		atomic.AddInt64(&p.registryFullEvents, 1)
+		p.host.Log().Warn("registerInflight: in-flight registry is full, processing this transaction untracked",
 			"txnID", txnEvent.TransactionID,
-			"inflight", c.txnProcessor.inflight.len())
+			"inflight", p.inflight.len())
 		return nil
 	}
 
 	// How often a transaction arrives while a producer it declares is still
 	// being processed is the number that sizes the readiness gate.
 	if len(entry.deps) > 0 {
-		atomic.AddInt64(&c.txnProcessor.depsObserved, int64(len(entry.deps)))
+		atomic.AddInt64(&p.depsObserved, int64(len(entry.deps)))
 		for _, dep := range entry.deps {
-			if c.txnProcessor.inflight.has(dep) {
-				atomic.AddInt64(&c.txnProcessor.depsInFlight, 1)
-				c.log.Debug("registerInflight: declared dependency is still in flight",
+			if p.inflight.has(dep) {
+				atomic.AddInt64(&p.depsInFlight, 1)
+				p.host.Log().Debug("registerInflight: declared dependency is still in flight",
 					"txnID", entry.id, "dependsOn", dep)
 			}
 		}
@@ -664,7 +664,7 @@ func (c *Core) registerInflight(txnEvent *models.EventTransaction) *inflightTxn 
 		// bundle. Every declared producer, not merely the unresolved ones — a
 		// bundle is who relates to whom, which does not change because one
 		// member happened to be persisted before another arrived.
-		c.txnProcessor.inflight.linkComponent(entry.id, entry.deps)
+		p.inflight.linkComponent(entry.id, entry.deps)
 	}
 
 	// The reverse edge. This transaction may be the producer that others have
@@ -675,9 +675,9 @@ func (c *Core) registerInflight(txnEvent *models.EventTransaction) *inflightTxn 
 	// Nothing has to be done here to release them — the edges were recorded when
 	// they parked — but this is the only point at which the out-of-order case is
 	// visible, and its frequency is what justifies the machinery.
-	waiters := c.txnProcessor.inflight.waitersOf(entry.id)
+	waiters := p.inflight.waitersOf(entry.id)
 	if len(waiters) > 0 {
-		atomic.AddInt64(&c.txnProcessor.revEdges, int64(len(waiters)))
+		atomic.AddInt64(&p.revEdges, int64(len(waiters)))
 
 		// Reverse linkage. Redundant as things stand, because a transaction only
 		// ever parks on a producer it declared and its own registration already
@@ -685,17 +685,17 @@ func (c *Core) registerInflight(txnEvent *models.EventTransaction) *inflightTxn 
 		// the parking rule rather than of the forest: if parking ever extends
 		// beyond the declared dependency set, this is the direction that would
 		// otherwise be silently lost.
-		c.txnProcessor.inflight.linkComponent(entry.id, waiters)
+		p.inflight.linkComponent(entry.id, waiters)
 
-		c.log.Debug("registerInflight: transactions are already waiting on this one",
+		p.host.Log().Debug("registerInflight: transactions are already waiting on this one",
 			"txnID", entry.id, "waiters", waiters)
 	}
 
 	// Observation only at this commit. The consumer is the per-bundle sync memo,
 	// which cannot be scoped until this identity exists.
 	if len(entry.deps) > 0 || len(waiters) > 0 {
-		if members := c.txnProcessor.inflight.componentMembers(entry.id); len(members) > 1 {
-			c.log.Debug("registerInflight: transaction belongs to a bundle",
+		if members := p.inflight.componentMembers(entry.id); len(members) > 1 {
+			p.host.Log().Debug("registerInflight: transaction belongs to a bundle",
 				"txnID", entry.id, "bundleSize", len(members), "members", members)
 		}
 	}
@@ -715,18 +715,18 @@ func (c *Core) registerInflight(txnEvent *models.EventTransaction) *inflightTxn 
 // nodes, but nothing in the pipeline consumes it, and computing one costs work
 // on every drained bundle whether or not the line is ever emitted. The sorted
 // member list already identifies the bundle; it is simply longer.
-func (c *Core) unregisterInflight(id string) {
-	if c.txnProcessor == nil || c.txnProcessor.inflight == nil {
+func (p *DynamicTxnProcessor) unregisterInflight(id string) {
+	if p == nil || p.inflight == nil {
 		return
 	}
 
-	drained := c.txnProcessor.inflight.unregister(id)
+	drained := p.inflight.unregister(id)
 	if len(drained) == 0 {
 		return
 	}
 
-	atomic.AddInt64(&c.txnProcessor.bundlesDrained, 1)
-	c.log.Debug("Bundle drained", "size", len(drained), "members", drained)
+	atomic.AddInt64(&p.bundlesDrained, 1)
+	p.host.Log().Debug("Bundle drained", "size", len(drained), "members", drained)
 }
 
 // releaseWaiters wakes every transaction parked on producerID.
@@ -739,12 +739,12 @@ func (c *Core) unregisterInflight(id string) {
 // close, but keeping every wake-up outside the lock is what makes the rule
 // "never hold the registry mutex across a database call or a channel operation"
 // simple enough to enforce by inspection.
-func (c *Core) releaseWaiters(producerID string) {
-	if c.txnProcessor == nil || c.txnProcessor.inflight == nil {
+func (p *DynamicTxnProcessor) releaseWaiters(producerID string) {
+	if p == nil || p.inflight == nil {
 		return
 	}
 
-	freed := c.txnProcessor.inflight.release(producerID)
+	freed := p.inflight.release(producerID)
 	if len(freed) == 0 {
 		return
 	}
@@ -754,8 +754,8 @@ func (c *Core) releaseWaiters(producerID string) {
 		waiter.markReady()
 		ids = append(ids, waiter.id)
 	}
-	atomic.AddInt64(&c.txnProcessor.cascadeReleases, int64(len(freed)))
-	c.log.Debug("Released transactions waiting on a now-persisted producer",
+	atomic.AddInt64(&p.cascadeReleases, int64(len(freed)))
+	p.host.Log().Debug("Released transactions waiting on a now-persisted producer",
 		"producerID", producerID, "released", ids)
 }
 
@@ -771,12 +771,12 @@ func (c *Core) releaseWaiters(producerID string) {
 // Forward only. Nothing that produced this transaction, and nothing that merely
 // shares a bundle with it, is affected, and no transaction already committed is
 // ever reconsidered — a persisted row is final.
-func (c *Core) failDownstream(producerID string, cause error) {
-	if c.txnProcessor == nil || c.txnProcessor.inflight == nil {
+func (p *DynamicTxnProcessor) failDownstream(producerID string, cause error) {
+	if p == nil || p.inflight == nil {
 		return
 	}
 
-	failed := c.txnProcessor.inflight.failWaiters(producerID, cause)
+	failed := p.inflight.failWaiters(producerID, cause)
 	if len(failed) == 0 {
 		return
 	}
@@ -786,7 +786,7 @@ func (c *Core) failDownstream(producerID string, cause error) {
 		waiter.markReady()
 		ids = append(ids, waiter.id)
 	}
-	atomic.AddInt64(&c.txnProcessor.failuresPropagated, int64(len(failed)))
-	c.log.Info("Failing transactions that depend on an invalid producer",
+	atomic.AddInt64(&p.failuresPropagated, int64(len(failed)))
+	p.host.Log().Info("Failing transactions that depend on an invalid producer",
 		"producerID", producerID, "failed", ids, "cause", cause)
 }

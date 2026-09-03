@@ -1,4 +1,4 @@
-package core
+package fullnode
 
 import (
 	"fmt"
@@ -23,9 +23,8 @@ import (
 func TestDrainReportsTheWholeMembershipSorted(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
-	c := newTestCore(p)
 
-	c.registerInflight(eventWithDeps("txn-T", "txn-S", "txn-Q"))
+	p.registerInflight(eventWithDeps("txn-T", "txn-S", "txn-Q"))
 	want := p.inflight.componentMembers("txn-T")
 
 	drained := p.inflight.unregister("txn-T")
@@ -43,10 +42,9 @@ func TestDrainReportsTheWholeMembershipSorted(t *testing.T) {
 func TestUnregisterReportsTheDrainOnlyOnce(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
-	c := newTestCore(p)
 
-	c.registerInflight(eventWithDeps("txn-S"))
-	c.registerInflight(eventWithDeps("txn-T", "txn-S"))
+	p.registerInflight(eventWithDeps("txn-S"))
+	p.registerInflight(eventWithDeps("txn-T", "txn-S"))
 
 	if got := p.inflight.unregister("txn-S"); got != nil {
 		t.Errorf("unregister(txn-S) reported a drain of %v while txn-T was still in flight", got)
@@ -123,12 +121,11 @@ func TestRegisterInflightFailsOpenWhenFull(t *testing.T) {
 	p.inflight.maxEntries = 1
 	p.maxRetries = 1
 	p.retryDelay = 0
-	c := newTestCore(p)
 
-	if entry := c.registerInflight(eventWithDeps("txn-first", "txn-S")); entry == nil {
+	if entry := p.registerInflight(eventWithDeps("txn-first", "txn-S")); entry == nil {
 		t.Fatal("the first transaction was not registered")
 	}
-	if entry := c.registerInflight(eventWithDeps("txn-second", "txn-S")); entry != nil {
+	if entry := p.registerInflight(eventWithDeps("txn-second", "txn-S")); entry != nil {
 		t.Error("registerInflight() returned an entry past the cap; the caller would unregister someone else's")
 	}
 	if got := p.registryFullEvents; got != 1 {
@@ -138,7 +135,7 @@ func TestRegisterInflightFailsOpenWhenFull(t *testing.T) {
 	// The untracked transaction still runs. A nil payload fails inside
 	// processSingleTransaction before it reaches the wallet, so the whole path
 	// runs with no database.
-	c.processTxnWithRetry(&models.EventTransaction{TransactionID: "txn-untracked"}, 0)
+	p.processTxnWithRetry(&models.EventTransaction{TransactionID: "txn-untracked"}, 0)
 	if p.inflight.has("txn-untracked") {
 		t.Error("an untracked transaction left an entry behind")
 	}
@@ -194,10 +191,9 @@ func TestSweepStaleRemovesLeakedEntries(t *testing.T) {
 func TestSweepStaleClearsWaitersAndComponents(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
-	c := newTestCore(p)
 
-	producer := c.registerInflight(eventWithDeps("txn-S"))
-	consumer := c.registerInflight(eventWithDeps("txn-T", "txn-S"))
+	producer := p.registerInflight(eventWithDeps("txn-S"))
+	consumer := p.registerInflight(eventWithDeps("txn-T", "txn-S"))
 	if producer == nil || consumer == nil {
 		t.Fatal("registerInflight() returned nil")
 	}

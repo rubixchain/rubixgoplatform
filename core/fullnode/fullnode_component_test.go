@@ -1,4 +1,4 @@
-package core
+package fullnode
 
 import (
 	"fmt"
@@ -24,11 +24,10 @@ func bundleEvents() []string {
 
 // registerBundle registers the three members in the given order and returns the
 // core so the caller can inspect the forest.
-func registerBundle(t *testing.T, order []string) (*Core, *DynamicTxnProcessor) {
+func registerBundle(t *testing.T, order []string) *DynamicTxnProcessor {
 	t.Helper()
 	p, cancel := newTestProcessor(10, 0)
 	t.Cleanup(cancel)
-	c := newTestCore(p)
 
 	for _, id := range order {
 		event := eventWithDeps(id)
@@ -36,11 +35,11 @@ func registerBundle(t *testing.T, order []string) (*Core, *DynamicTxnProcessor) 
 			// Only the transfer declares edges; the splits are genesis legs.
 			event = eventWithDeps("txn-T", "txn-S", "txn-Q")
 		}
-		if entry := c.registerInflight(event); entry == nil {
+		if entry := p.registerInflight(event); entry == nil {
 			t.Fatalf("registerInflight(%s) returned nil", id)
 		}
 	}
-	return c, p
+	return p
 }
 
 // permutations returns every ordering of ids.
@@ -69,7 +68,7 @@ func TestComponentIsIndependentOfArrivalOrder(t *testing.T) {
 
 	for _, order := range permutations(bundleEvents()) {
 		t.Run(fmt.Sprint(order), func(t *testing.T) {
-			_, p := registerBundle(t, order)
+			p := registerBundle(t, order)
 
 			for _, member := range bundleEvents() {
 				got := p.inflight.componentMembers(member)
@@ -85,7 +84,7 @@ func TestComponentIsIndependentOfArrivalOrder(t *testing.T) {
 // did not: the map is not consulted on any hot path and its growth would show up
 // only as memory.
 func TestComponentPrunedWhenBundleDrains(t *testing.T) {
-	_, p := registerBundle(t, bundleEvents())
+	p := registerBundle(t, bundleEvents())
 
 	if got := p.inflight.componentLen(); got != 3 {
 		t.Fatalf("componentLen() = %d after registering a 3-member bundle, want 3", got)
@@ -107,7 +106,7 @@ func TestComponentPrunedWhenBundleDrains(t *testing.T) {
 // while a member is still working would lose the identity that member's own
 // bundle-scoped work depends on.
 func TestComponentSurvivesWhileAnyMemberIsInFlight(t *testing.T) {
-	_, p := registerBundle(t, bundleEvents())
+	p := registerBundle(t, bundleEvents())
 
 	p.inflight.unregister("txn-S")
 	p.inflight.unregister("txn-Q")
@@ -132,9 +131,8 @@ func TestComponentSurvivesWhileAnyMemberIsInFlight(t *testing.T) {
 func TestComponentPrunedWhenNamedProducerNeverArrives(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
-	c := newTestCore(p)
 
-	if entry := c.registerInflight(eventWithDeps("txn-T", "txn-never")); entry == nil {
+	if entry := p.registerInflight(eventWithDeps("txn-T", "txn-never")); entry == nil {
 		t.Fatal("registerInflight() returned nil")
 	}
 	if got := p.inflight.componentLen(); got != 2 {
@@ -153,9 +151,8 @@ func TestComponentPrunedWhenNamedProducerNeverArrives(t *testing.T) {
 func TestComponentNotCreatedForUnrelatedTransaction(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
-	c := newTestCore(p)
 
-	if entry := c.registerInflight(eventWithDeps("txn-alone")); entry == nil {
+	if entry := p.registerInflight(eventWithDeps("txn-alone")); entry == nil {
 		t.Fatal("registerInflight() returned nil")
 	}
 
@@ -172,10 +169,9 @@ func TestComponentNotCreatedForUnrelatedTransaction(t *testing.T) {
 func TestComponentsStaySeparate(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
-	c := newTestCore(p)
 
-	c.registerInflight(eventWithDeps("txn-T1", "txn-S1"))
-	c.registerInflight(eventWithDeps("txn-T2", "txn-S2"))
+	p.registerInflight(eventWithDeps("txn-T1", "txn-S1"))
+	p.registerInflight(eventWithDeps("txn-T2", "txn-S2"))
 
 	first := p.inflight.componentMembers("txn-T1")
 	second := p.inflight.componentMembers("txn-T2")
@@ -193,10 +189,9 @@ func TestComponentsStaySeparate(t *testing.T) {
 func TestComponentsMergeThroughASharedProducer(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
-	c := newTestCore(p)
 
-	c.registerInflight(eventWithDeps("txn-T1", "txn-S"))
-	c.registerInflight(eventWithDeps("txn-T2", "txn-S"))
+	p.registerInflight(eventWithDeps("txn-T1", "txn-S"))
+	p.registerInflight(eventWithDeps("txn-T2", "txn-S"))
 
 	want := []string{"txn-S", "txn-T1", "txn-T2"}
 	if got := p.inflight.componentMembers("txn-T1"); !reflect.DeepEqual(got, want) {
@@ -308,21 +303,21 @@ func TestComponentsAreSafeUnderConcurrency(t *testing.T) {
 // The whole pipeline: a bundle registers, parks, cascades and drains, and leaves
 // nothing behind in any of the four maps.
 func TestComponentDrainsAfterAFullCascade(t *testing.T) {
-	c, p, cancel := cascadeCore(t)
+	p, cancel := cascadeCore(t)
 	defer cancel()
 
-	producer := c.registerInflight(eventWithDeps("txn-S"))
-	consumer := c.registerInflight(eventWithDeps("txn-T", "txn-S"))
+	producer := p.registerInflight(eventWithDeps("txn-S"))
+	consumer := p.registerInflight(eventWithDeps("txn-T", "txn-S"))
 	if producer == nil || consumer == nil {
 		t.Fatal("registerInflight() returned nil")
 	}
 
 	go func() {
-		c.releaseWaiters("txn-S")
+		p.releaseWaiters("txn-S")
 		p.inflight.unregister("txn-S")
 	}()
 
-	if err := c.awaitDependencies(consumer); err != nil {
+	if err := p.awaitDependencies(consumer); err != nil {
 		t.Fatalf("awaitDependencies() = %v, want nil", err)
 	}
 	p.inflight.unregister("txn-T")
