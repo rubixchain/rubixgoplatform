@@ -79,16 +79,12 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 			} else {
 				c.log.Info("InitiateTransaction: released locked FTs after failed transaction", "did", initiatorDID)
 			}
-			// Also release any locked NFT/SC tokens. These are locked by
-			// BuildTransactionInfoFromRequest via QueryAndLockForExecution + batch
-			// status UPDATE, but ReleaseAllLockedRBTTokensForDID only handles RBT.
-			// Without this, NFT/SC tokens remain permanently stuck in Locked status
-			// after a failed transaction (e.g. consensus rejection, insufficient
-			// quorum liquidity).
-			if released, releaseErr := c.w.ReleaseAllLockedNFTAndSCTokensForDID(ctx, initiatorDID); releaseErr != nil {
-				c.log.Error("InitiateTransaction: failed to release locked NFT/SC tokens after failure", "err", releaseErr, "did", initiatorDID)
-			} else if released > 0 {
-				c.log.Info("InitiateTransaction: released locked NFT/SC tokens after failed transaction", "did", initiatorDID, "count", released)
+			// Release NFT/SC tokens locked by BuildTransactionInfoFromRequest, which ReleaseAllLockedRBTTokensForDID does not cover.
+			// Keyed on reqID, not initiatorDID: an NFT held by subscription has a remote tokens.did and would otherwise stay Locked forever.
+			if released, releaseErr := c.w.ReleaseLockedNFTAndSCTokensByReference(ctx, reqID); releaseErr != nil {
+				c.log.Error("InitiateTransaction: failed to release locked NFT/SC tokens after failure", "err", releaseErr, "did", initiatorDID, "referenceID", reqID)
+			} else {
+				c.log.Info("InitiateTransaction: released locked NFT/SC tokens after failed transaction", "did", initiatorDID, "referenceID", reqID, "count", released)
 			}
 		} else {
 			c.log.Debug("InitiateTransaction: Transaction succeeded, tokens will be transferred", "did", initiatorDID)

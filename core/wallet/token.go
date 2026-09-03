@@ -434,17 +434,14 @@ func (w *Wallet) ReleaseAllLockedFTTokensForDID(ctx context.Context, ownerDID st
 	return err
 }
 
-// ReleaseAllLockedNFTAndSCTokensForDID resets all Locked NFT and SmartContract tokens for a DID
-// back to their correct executable status. Unlike RBT tokens (which return to Free), NFT/SC
-// tokens must return to Deployed or Executed depending on their latest role:
-//   - latest_role = Deploy (4) → Deployed
-//   - anything else (Execute, etc.) → Executed
-//
-// Called on transaction failure after BuildTransactionInfoFromRequest to prevent NFT/SC tokens
-// from staying permanently locked when the transaction does not complete.
-// Note: NFT/SC tokens are locked via a batch UPDATE in BuildTransactionInfoFromRequest without
-// setting lock_reference_id, so we match by DID + Locked status + token type only.
-func (w *Wallet) ReleaseAllLockedNFTAndSCTokensForDID(ctx context.Context, ownerDID string) (int64, error) {
+// ReleaseLockedNFTAndSCTokensByReference resets the Locked NFT/SC tokens locked under referenceID back to Deployed or Executed.
+// Matches by lock_reference_id, not owner DID: the lock in BuildTransactionInfoFromRequest has no ownership filter, so tokens.did may be a remote owner.
+// Restores Deployed when latest_role is Deploy, otherwise Executed, and clears lock_reference_id so no stale reference is left on the row.
+// Refuses an empty referenceID so it can never become an unscoped release.
+func (w *Wallet) ReleaseLockedNFTAndSCTokensByReference(ctx context.Context, referenceID string) (int64, error) {
+	if referenceID == "" {
+		return 0, fmt.Errorf("ReleaseLockedNFTAndSCTokensByReference: empty referenceID; refusing unscoped release")
+	}
 	deployRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Deploy))
 	result, err := w.db.Pool().Exec(ctx,
 		`UPDATE tokens SET
@@ -452,15 +449,16 @@ func (w *Wallet) ReleaseAllLockedNFTAndSCTokensForDID(ctx context.Context, owner
 		     WHEN latest_role = $1 THEN $2::smallint
 		     ELSE $3::smallint
 		   END,
+		   lock_reference_id = NULL,
 		   updated_at = $4
-		 WHERE did = $5
+		 WHERE lock_reference_id = $5
 		   AND token_status = $6
 		   AND token_type IN (
 		     (SELECT id FROM token_type WHERE name = $7),
 		     (SELECT id FROM token_type WHERE name = $8)
 		   )`,
 		deployRoleID, int16(constants.TokenStatus_Deployed), int16(constants.TokenStatus_Executed),
-		time.Now(), ownerDID, int16(constants.TokenStatus_Locked),
+		time.Now(), referenceID, int16(constants.TokenStatus_Locked),
 		constants.TokenType_NFT, constants.TokenType_SmartContract,
 	)
 	if err != nil {

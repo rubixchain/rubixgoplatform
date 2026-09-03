@@ -953,6 +953,8 @@ FROM tokens;
             did_a=self.did_a,
             did_b=self.did_b,
             password=self.cfg.password,
+            did_q=self.did_q,
+            db_b=self.db_b,
         )
         return engine.run()
 
