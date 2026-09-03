@@ -13,6 +13,7 @@ Usage (from repo root):
   python3 -m test.integration.runner --micro-test --run-all-tests   # fast smoke
   python3 -m test.integration.runner --small-test --run-all-tests
   python3 -m test.integration.runner --micro-test --nft-only --nft-count 5
+  python3 -m test.integration.runner --small-test --ft-parts-only   # FT-from-parts alone
   python3 -m test.integration.runner --no-docker --run-all-tests     # nodes already up
 
 Scope: this committed harness intentionally omits the scratchpad-only resume
@@ -337,6 +338,33 @@ def _build_arg_parser() -> argparse.ArgumentParser:
             "have drained node A. Auto-enabled by --run-all-tests."
         ),
     )
+    p.add_argument(
+        "--ft-parts-tests",
+        action="store_true",
+        help=(
+            "Run the FT-from-parts suite: funds a DID of its own with "
+            "sub-1.0 RBT transfers (so it holds PART tokens and no whole "
+            "token), mints FTs out of those parts, and asserts the burn is "
+            "accounted for — balance falls by exactly the RBT minted, the same "
+            "value is recorded as BurntForFT, token_denom still matches the "
+            "real Free rows with no phantom denom=0 row, a second mint "
+            "succeeds, and the leftover parts stay spendable. The main FT "
+            "suite mints from did_a, where whole 1.000 tokens are selected "
+            "first, so it never burns parts. Skips itself when earlier phases "
+            "have drained node A. Auto-enabled by --run-all-tests, disabled by "
+            "--skip-ft."
+        ),
+    )
+    p.add_argument(
+        "--ft-parts-only",
+        action="store_true",
+        help=(
+            "Skip the RBT shuttle and every other subsystem and run ONLY the "
+            "FT-from-parts suite (implies --ft-parts-tests). Used by CI to run "
+            "it against a freshly minted wallet, where it can never skip itself "
+            "for lack of funds."
+        ),
+    )
     return p
 
 
@@ -380,6 +408,7 @@ def main() -> None:
         args.intra_node_test = True
         args.negative_tests = True
         args.sc_collateral_tests = True
+        args.ft_parts_tests = True
         args.nft_only = False
         args.sc_only = False
         args.ft_only = False
@@ -396,6 +425,13 @@ def main() -> None:
         if args.exec_rounds == 0:
             args.exec_rounds = 10
         args.nft_only = True
+
+    # --ft-parts-only: scope the run down to that suite alone. Everything else
+    # is left at its default (off), so this composes only with the global flags
+    # (--small-test / --native / --config).
+    if args.ft_parts_only:
+        log.info("=== FT-PARTS-ONLY MODE ENABLED ===")
+        args.ft_parts_tests = True
 
     # Validate *-only requirements
     if args.nft_only and args.nft_count == 0:
@@ -453,6 +489,8 @@ def main() -> None:
         args.ft_transfer_rounds = 0
         args.all_in_one_test = False
         args.intra_node_ft_rounds = 0
+        args.ft_parts_tests = False
+        args.ft_parts_only = False
 
     # Build NFT phases
     nft_phases = None
@@ -538,6 +576,8 @@ def main() -> None:
             run_all_tests=args.run_all_tests,
             negative_tests=args.negative_tests,
             sc_collateral_tests=args.sc_collateral_tests,
+            ft_parts_tests=args.ft_parts_tests,
+            ft_parts_only=args.ft_parts_only,
         )
     except Exception as exc:
         log.error("Integration run failed: %s", exc, exc_info=True)

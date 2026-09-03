@@ -3,7 +3,8 @@ name: Docker Integration Tests
 # Behavioral end-to-end suite: spins up the 3-node Postgres-backed cluster via
 # Docker Compose and drives it through the HTTP API across every subsystem
 # (RBT, FT, NFT, smart contracts, bundled, all-in-one, intra-node) plus the
-# negative / failure-path checks. Localnet only.
+# negative / failure-path checks and the accounting suites (SC deploy
+# collateral, FT-from-parts). Localnet only.
 #
 # Docker-on-Linux only by design: GitHub's Windows/macOS runners can't run the
 # Linux node containers, and PostgreSQL is mandatory for the node — so this
@@ -75,6 +76,73 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: integration-logs
+          path: |
+            test/docker/data/stress/logs/**
+          if-no-files-found: warn
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose -f test/docker/docker-compose.stress.yml -p rubix-stress down -v
+
+  # ------------------------------------------------------------------------ #
+  # FT minted out of PART RBTs, on a wallet that holds nothing else.
+  #
+  # Runs as its own job rather than only inside the matrix above because the
+  # suite needs funds: it creates a DID of its own and pays sub-1.0 tranches
+  # into it, and under --run-all-tests it runs last, after every other phase
+  # has spent from node A. If the wallet is short it SKIPs — green, and the
+  # regression it guards goes unnoticed. On a fresh stack of its own, with the
+  # shuttle and every other subsystem off, it always has the balance to run.
+  #
+  # What it guards: minting an FT burns whole RBT, and the parents burnt may be
+  # part tokens. FTGenesisTxn -> UpdateTokenInfo must DECREMENT token_denom for
+  # each burnt part (it used to increment, keyed on an uncopied TokenValue, so
+  # it both added a phantom denom=0 row and missed the real denomination).
+  # token_denom is what lockTokensForSplitOnce selects denominations from, so a
+  # counter that over-reports makes a later spend fail with "no tokens
+  # provided" — attributed to whatever ran next, not to the mint that broke it.
+  # The main FT suite mints from did_a, whose whole 1.000 tokens are picked
+  # first, so it never burns parts and cannot see any of this.
+  ft-parts:
+    name: FT from part RBTs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install test dependencies
+        run: pip install -r test/integration/requirements.txt
+
+      - name: Build node image
+        run: docker compose -f test/docker/docker-compose.stress.yml -p rubix-stress build nodeA
+
+      - name: Run FT-from-parts suite
+        # --ft-parts-only skips the shuttle and every other subsystem, so the
+        # freshly minted node A wallet is spent only by this suite.
+        run: python3 -m test.integration.runner --small-test --ft-parts-only
+
+      - name: Dump container diagnostics on failure
+        if: failure()
+        run: |
+          mkdir -p test/docker/data/stress/logs
+          echo "=== docker compose ps ===" | tee test/docker/data/stress/logs/_ci_diagnostics.txt
+          docker compose -f test/docker/docker-compose.stress.yml -p rubix-stress ps -a 2>&1 | tee -a test/docker/data/stress/logs/_ci_diagnostics.txt || true
+          echo "=== docker compose logs ===" | tee -a test/docker/data/stress/logs/_ci_diagnostics.txt
+          docker compose -f test/docker/docker-compose.stress.yml -p rubix-stress logs --no-color --tail=400 2>&1 | tee -a test/docker/data/stress/logs/_ci_diagnostics.txt || true
+
+      - name: Upload run artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ft-parts-logs
           path: |
             test/docker/data/stress/logs/**
           if-no-files-found: warn
