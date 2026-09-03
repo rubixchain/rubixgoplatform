@@ -106,6 +106,7 @@ does not itself raise; `runner.py` reads `StressRunner.verification_failed`.)
 | `--nft-count N` / `--nft-only` / `--nft-self-execute` / `--nft-transfer` / `--nft-cross-execute` | NFT scope |
 | `--sc-count N` / `--sc-execute` / `--sc-only` | Smart contract scope |
 | `--ft-count N` / `--ft-only` / `--ft-transfer` | FT scope |
+| `--ft-parts-tests` / `--ft-parts-only` | FT minted out of PART RBTs + token_denom accounting (auto-enabled by `--run-all-tests`; `--ft-parts-only` runs it alone against a fresh wallet) |
 | `--bundled-test` / `--all-in-one-test` / `--intra-node-test` | Combined flows |
 | `--skip-ft` | Disable all FT-dependent paths (composes with `--run-all-tests`) |
 | `--no-docker` | Don't manage Docker; nodes already running |
