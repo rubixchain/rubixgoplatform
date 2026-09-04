@@ -63,3 +63,5 @@ func (h *testHost) CheckTokenStateHashPinned(string, string) error {
 func (h *testHost) CPUUsage(map[string]uint64) (float64, map[string]uint64) {
 	return 0, nil
 }
+
+func (h *testHost) MemoryUsagePercent() float64 { return 0 }

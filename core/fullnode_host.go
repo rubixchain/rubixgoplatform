@@ -157,5 +157,11 @@ func (c *Core) CPUUsage(lastStats map[string]uint64) (float64, map[string]uint64
 	return c.getCPUUsageLinux(lastStats)
 }
 
+// ResourceMonitor is stateless, so this allocates nothing worth caching on Core.
+func (c *Core) MemoryUsagePercent() float64 {
+	var rm ResourceMonitor
+	return rm.MemoryUsagePercent()
+}
+
 // InitialiseDID, SyncTransactionChainsFromPeer and FetchGenesisTransactionFromPeer
 // already match the Host signatures, so they need no adapter here.

@@ -1,7 +1,7 @@
 //go:build !linux
 // +build !linux
 
-package fullnode
+package core
 
 // getLinuxMemoryInfo is a stub for non-Linux platforms
 func getLinuxMemoryInfo() (totalMB, availableMB uint64) {

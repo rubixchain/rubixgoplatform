@@ -115,9 +115,6 @@ type DynamicTxnProcessor struct {
 	// queue-full path is testable without a ten-second test.
 	enqueueTimeout time.Duration
 
-	// Resource monitor
-	resourceMonitor *ResourceMonitor
-
 	// recoverySessions holds the single-use nonces issued to nodes rebuilding
 	// their wallet from this fullnode. Moved off Core with the endpoint that
 	// uses it; only a fullnode serves it.
@@ -152,7 +149,6 @@ func NewTxnProcessor(host Host) *DynamicTxnProcessor {
 		inflight:        newInflightRegistry(),
 		bundle:          bundleCfg,
 		syncMemo:        newSyncedTokenMemo(bundleCfg.syncMemoTTL),
-		resourceMonitor: &ResourceMonitor{}, // INITIALIZE YOUR MONITOR
 	}
 	p.resolveDependency = p.dependencyResolved
 	p.syncChains = func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error {
@@ -202,9 +198,8 @@ func (p *DynamicTxnProcessor) systemMonitor() {
 
 // Evaluate system conditions and decide on scaling
 func (p *DynamicTxnProcessor) evaluateAndScale(lastCPUStats map[string]uint64) {
-	// Get memory stats using your ResourceMonitor
-	resourceStats := p.resourceMonitor.GetResourceStats()
-	memoryUsagePercent := resourceStats["memory_usage_pct"].(float64)
+	// Get memory stats from the node's resource monitor
+	memoryUsagePercent := p.host.MemoryUsagePercent()
 
 	// Get CPU usage using /proc/stat calculation
 	cpuUsagePercent, newCPUStats := p.host.CPUUsage(lastCPUStats)

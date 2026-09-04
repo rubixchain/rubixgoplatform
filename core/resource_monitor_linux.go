@@ -1,7 +1,7 @@
 //go:build linux
 // +build linux
 
-package fullnode
+package core
 
 import (
 	"bufio"

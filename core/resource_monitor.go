@@ -1,4 +1,4 @@
-package fullnode
+package core
 
 import (
 	"runtime"
@@ -113,32 +113,37 @@ func (rm *ResourceMonitor) CalculateDynamicWorkers(tokenCount int) int {
 	return workers
 }
 
-// Helper functions
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
+// MemoryUsagePercent reports how much of total memory is in use, 0-100.
+//
+// Callers that want the single number should use this rather than reaching into
+// the GetResourceStats map, which is untyped and panics on a missing key.
+func (rm *ResourceMonitor) MemoryUsagePercent() float64 {
+	totalMB, availableMB := rm.GetMemoryStats()
+	return memoryUsagePercent(totalMB, availableMB)
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
+// memoryUsagePercent works off an already-taken sample, so a caller that needs
+// both the percentage and the raw numbers pays for only one GetMemoryStats.
+// GetMemoryStats calls runtime.ReadMemStats, which stops the world.
+func memoryUsagePercent(totalMB, availableMB uint64) float64 {
+	// availableMB can exceed totalMB when GetMemoryStats falls back to its 1GB
+	// default; report 0 rather than underflowing the subtraction below.
+	if totalMB == 0 || availableMB >= totalMB {
+		return 0
 	}
-	return b
+	return float64(totalMB-availableMB) / float64(totalMB) * 100
 }
 
 // GetResourceStats returns current resource utilization
 func (rm *ResourceMonitor) GetResourceStats() map[string]interface{} {
 	totalMB, availableMB := rm.GetMemoryStats()
 	usedMB := totalMB - availableMB
-	usagePercent := float64(usedMB) / float64(totalMB) * 100
 
 	return map[string]interface{}{
 		"memory_total_mb":     totalMB,
 		"memory_available_mb": availableMB,
 		"memory_used_mb":      usedMB,
-		"memory_usage_pct":    usagePercent,
+		"memory_usage_pct":    memoryUsagePercent(totalMB, availableMB),
 		"cpu_count":           runtime.NumCPU(),
 		"goroutines":          runtime.NumGoroutine(),
 	}

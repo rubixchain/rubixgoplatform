@@ -42,4 +42,10 @@ type Host interface {
 	// CPUUsage reports utilisation since the previous sample and returns the new
 	// sample to pass back. The worker pool scales on it.
 	CPUUsage(lastStats map[string]uint64) (float64, map[string]uint64)
+
+	// MemoryUsagePercent reports memory utilisation, 0-100. The worker pool
+	// scales on it alongside CPUUsage. Backed by core.ResourceMonitor, which
+	// stays on the node because it is a general node utility rather than
+	// pipeline logic.
+	MemoryUsagePercent() float64
 }
