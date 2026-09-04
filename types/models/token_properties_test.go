@@ -17,7 +17,7 @@ func TestTokenPropertiesRoundTrip(t *testing.T) {
 	in := &models.TokenProperties{
 		Version: models.PropertiesDocVersion,
 		Flags:   models.FlagTransferable,
-		NFTID:   validQmCID,
+		TokenID: validQmCID,
 		Policy:  models.PropertiesPolicy{ValidFrom: 1775001700, ValidTo: 1775002000},
 		Restriction: models.PropertiesRestrict{
 			Whitelist:             validQmCID,
@@ -46,8 +46,8 @@ func TestTokenPropertiesRoundTrip(t *testing.T) {
 		out.Restriction.Admins != in.Restriction.Admins {
 		t.Errorf("restriction CIDs not preserved: got %+v", out.Restriction)
 	}
-	if out.NFTID != in.NFTID {
-		t.Errorf("governed NFT ID not preserved: got %q want %q", out.NFTID, in.NFTID)
+	if out.TokenID != in.TokenID {
+		t.Errorf("governed token ID not preserved: got %q want %q", out.TokenID, in.TokenID)
 	}
 	if !out.IsTransferable() {
 		t.Error("transferable flag lost in round trip")
@@ -56,12 +56,12 @@ func TestTokenPropertiesRoundTrip(t *testing.T) {
 
 // Pins the compact wire keys so a field rename breaks visibly.
 func TestTokenPropertiesWireKeys(t *testing.T) {
-	doc := &models.TokenProperties{Version: models.PropertiesDocVersion, NFTID: validQmCID}
+	doc := &models.TokenProperties{Version: models.PropertiesDocVersion, TokenID: validQmCID}
 	raw, err := doc.Serialize()
 	if err != nil {
 		t.Fatalf("Serialize: %v", err)
 	}
-	const want = `{"v":1,"f":0,"n":"` + validQmCID + `","p":{"valid_from":0,"valid_to":0},"r":{"whitelist":"","admins":"","allowed_subnets":null,"allowed_smart_contracts":null}}`
+	const want = `{"v":1,"f":0,"t":"` + validQmCID + `","p":{"valid_from":0,"valid_to":0},"r":{"whitelist":"","admins":"","allowed_subnets":null,"allowed_smart_contracts":null}}`
 	if string(raw) != want {
 		t.Errorf("properties wire shape changed.\n want: %s\n  got: %s", want, string(raw))
 	}
@@ -106,7 +106,7 @@ func TestParseTokenPropertiesFailsClosed(t *testing.T) {
 
 // The minimal document: everything absent means unrestricted, and must parse.
 func TestParseTokenPropertiesMinimalIsUnrestricted(t *testing.T) {
-	doc, err := models.ParseTokenProperties([]byte(`{"v":1,"f":0,"n":"` + validQmCID + `","p":{},"r":{}}`))
+	doc, err := models.ParseTokenProperties([]byte(`{"v":1,"f":0,"t":"` + validQmCID + `","p":{},"r":{}}`))
 	if err != nil {
 		t.Fatalf("minimal document should parse: %v", err)
 	}

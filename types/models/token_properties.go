@@ -15,10 +15,10 @@ import (
 type TokenProperties struct {
 	Version int    `json:"v"`
 	Flags   uint32 `json:"f"`
-	// NFTID is the NFT this document governs. It is the witness that lets a
+	// TokenID is the token this document governs. It is the witness that lets a
 	// validator re-derive the properties token ID and confirm the binding,
 	// since that derivation is one-way and cannot be inverted.
-	NFTID       string             `json:"n"`
+	TokenID     string             `json:"t"`
 	Policy      PropertiesPolicy   `json:"p"`
 	Restriction PropertiesRestrict `json:"r"`
 }
@@ -124,8 +124,8 @@ func (p *TokenProperties) Validate() error {
 			p.Version, PropertiesDocVersion)
 	}
 
-	if p.NFTID == "" {
-		return fmt.Errorf("properties document does not name the NFT it governs")
+	if p.TokenID == "" {
+		return fmt.Errorf("properties document does not name the token it governs")
 	}
 
 	if unknown := p.Flags &^ KnownFlagsV1; unknown != 0 {

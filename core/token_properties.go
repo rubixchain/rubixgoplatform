@@ -288,13 +288,13 @@ func (c *Core) IsPropertiesEdit(nftTokenID string) (bool, error) {
 
 // ResolvePropertiesByTokenID resolves a properties token from its own ID and
 // the document CID carried in the transaction, for validators that receive the
-// token without the NFT it governs and may hold no chain for it locally.
+// token without the token it governs and may hold no chain for it locally.
 //
-// The document names the NFT, and re-deriving the token ID from that name
-// proves the binding: a document cannot claim to govern an NFT whose ID does
-// not hash back to the token ID being edited. Resolution then runs through the
-// NFT so the peer sync, whitelist/admins hops and deployer lookup all use the
-// single existing path.
+// The document names the governed token, and re-deriving the properties token
+// ID from that name proves the binding: a document cannot claim to govern a
+// token whose ID does not hash back to the token ID being edited. Resolution
+// then runs through that token so the peer sync, whitelist/admins hops and
+// deployer lookup all use the single existing path.
 func (c *Core) ResolvePropertiesByTokenID(propsTokenID, docCID string) (*models.ResolvedProperties, error) {
 	if docCID == "" {
 		return nil, fmt.Errorf("ResolvePropertiesByTokenID: properties token %s carries no document CID", propsTokenID)
@@ -310,22 +310,22 @@ func (c *Core) ResolvePropertiesByTokenID(propsTokenID, docCID string) (*models.
 		return nil, fmt.Errorf("ResolvePropertiesByTokenID: %w", err)
 	}
 
-	derived, err := c.GetPropertiesTokenID(doc.NFTID)
+	derived, err := c.GetPropertiesTokenID(doc.TokenID)
 	if err != nil {
 		return nil, fmt.Errorf("ResolvePropertiesByTokenID: %w", err)
 	}
 	if derived != propsTokenID {
-		return nil, fmt.Errorf("ResolvePropertiesByTokenID: properties token %s does not govern the NFT %s named in its document (derives to %s)",
-			propsTokenID, doc.NFTID, derived)
+		return nil, fmt.Errorf("ResolvePropertiesByTokenID: properties token %s does not govern the token %s named in its document (derives to %s)",
+			propsTokenID, doc.TokenID, derived)
 	}
 
-	resolved, err := c.ResolveNFTProperties(doc.NFTID)
+	resolved, err := c.ResolveNFTProperties(doc.TokenID)
 	if err != nil {
 		return nil, err
 	}
 	if resolved == nil {
-		return nil, fmt.Errorf("ResolvePropertiesByTokenID: no properties resolved for NFT %s named by token %s",
-			doc.NFTID, propsTokenID)
+		return nil, fmt.Errorf("ResolvePropertiesByTokenID: no properties resolved for token %s named by properties token %s",
+			doc.TokenID, propsTokenID)
 	}
 	return resolved, nil
 }
@@ -346,9 +346,9 @@ func (c *Core) BuildPropertiesToken(nftTokenID string, info *models.PropertiesIn
 	}
 
 	doc := info.ToDocument()
-	// Names the governed NFT so a validator can re-derive the properties token
-	// ID from it rather than having to invert the hash.
-	doc.NFTID = nftTokenID
+	// Names the governed token so a validator can re-derive the properties
+	// token ID from it rather than having to invert the hash.
+	doc.TokenID = nftTokenID
 
 	// The deployer is always an admin, so an edit is always possible by
 	// someone even if the caller omits the list.
@@ -447,9 +447,9 @@ func (c *Core) validatePropertiesRequest(request *models.TransactionRequest) err
 	}
 
 	// Reject a malformed document now rather than after the NFTs are locked.
-	// The governed NFT is stamped on by the builder, so it is supplied here too.
+	// The governed token is stamped on by the builder, so it is supplied here too.
 	preflightDoc := request.Tokens.Properties.ToDocument()
-	preflightDoc.NFTID = nfts[0].NFTId
+	preflightDoc.TokenID = nfts[0].NFTId
 	if err := preflightDoc.Validate(); err != nil {
 		return fmt.Errorf("setProperties: %w", err)
 	}

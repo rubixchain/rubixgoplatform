@@ -26,8 +26,8 @@ func TestPropertiesInfoToDocument(t *testing.T) {
 	if doc.Policy.ValidFrom != 1775001700 || doc.Policy.ValidTo != 1775002000 {
 		t.Errorf("policy not carried over: %+v", doc.Policy)
 	}
-	// The governed NFT is supplied by the caller, not the request shape.
-	doc.NFTID = "QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco"
+	// The governed token is supplied by the caller, not the request shape.
+	doc.TokenID = "QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco"
 	if err := doc.Validate(); err != nil {
 		t.Errorf("a document built from a valid request should validate: %v", err)
 	}
