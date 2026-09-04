@@ -237,9 +237,12 @@ func (c *Core) processSingleTransaction(newEvent *models.EventTransaction) error
 	resolveProperties := func(nftTokenID string) (*models.ResolvedProperties, error) {
 		return c.ResolveNFTProperties(nftTokenID)
 	}
+	resolvePropertiesByTokenID := func(propsTokenID, docCID string) (*models.ResolvedProperties, error) {
+		return c.ResolvePropertiesByTokenID(propsTokenID, docCID)
+	}
 	// Fullnode trusts the quorum's earlier transfer-auth decision; the flag
 	// is not in the EventTransaction.
-	_, err = consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, quorumDCs, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains, syncAuthoritative, getTxByID, getParentBurnTx, fetchGenesisTx, resolveProperties, false)
+	_, err = consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, quorumDCs, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains, syncAuthoritative, getTxByID, getParentBurnTx, fetchGenesisTx, resolveProperties, resolvePropertiesByTokenID, false)
 	if err != nil {
 		c.log.Error("processSingleTransaction:failed to validate transaction", "error", err)
 		// Storing the invalid transaction is deferred to processTxnWithRetry,

@@ -270,6 +270,66 @@ func (c *Core) PinPropertiesDocuments(doc *models.TokenProperties, docCID string
 	return nil
 }
 
+// IsPropertiesEdit reports whether nftTokenID already has a properties chain,
+// making a properties write an edit rather than the first set. A lookup failure
+// is an error, not a "no": reading it as genesis would write a second genesis
+// over a live chain and skip the deployer check that guards edits.
+func (c *Core) IsPropertiesEdit(nftTokenID string) (bool, error) {
+	propsTokenID, err := c.GetPropertiesTokenID(nftTokenID)
+	if err != nil {
+		return false, err
+	}
+	tx, _, err := c.w.GetLatestTransactionAndRoleByTokenID(propsTokenID)
+	if err != nil {
+		return false, fmt.Errorf("IsPropertiesEdit: reading chain tip for properties token %s: %w", propsTokenID, err)
+	}
+	return tx != nil, nil
+}
+
+// ResolvePropertiesByTokenID resolves a properties token from its own ID and
+// the document CID carried in the transaction, for validators that receive the
+// token without the NFT it governs and may hold no chain for it locally.
+//
+// The document names the NFT, and re-deriving the token ID from that name
+// proves the binding: a document cannot claim to govern an NFT whose ID does
+// not hash back to the token ID being edited. Resolution then runs through the
+// NFT so the peer sync, whitelist/admins hops and deployer lookup all use the
+// single existing path.
+func (c *Core) ResolvePropertiesByTokenID(propsTokenID, docCID string) (*models.ResolvedProperties, error) {
+	if docCID == "" {
+		return nil, fmt.Errorf("ResolvePropertiesByTokenID: properties token %s carries no document CID", propsTokenID)
+	}
+	if err := util.ValidateCIDFormat(docCID); err != nil {
+		return nil, fmt.Errorf("ResolvePropertiesByTokenID: properties token %s: %w", propsTokenID, err)
+	}
+
+	// Fetched from IPFS by CID, so no local chain is needed — the quorum has
+	// usually never seen this token before.
+	doc, err := c.fetchPropertiesDocument(docCID)
+	if err != nil {
+		return nil, fmt.Errorf("ResolvePropertiesByTokenID: %w", err)
+	}
+
+	derived, err := c.GetPropertiesTokenID(doc.NFTID)
+	if err != nil {
+		return nil, fmt.Errorf("ResolvePropertiesByTokenID: %w", err)
+	}
+	if derived != propsTokenID {
+		return nil, fmt.Errorf("ResolvePropertiesByTokenID: properties token %s does not govern the NFT %s named in its document (derives to %s)",
+			propsTokenID, doc.NFTID, derived)
+	}
+
+	resolved, err := c.ResolveNFTProperties(doc.NFTID)
+	if err != nil {
+		return nil, err
+	}
+	if resolved == nil {
+		return nil, fmt.Errorf("ResolvePropertiesByTokenID: no properties resolved for NFT %s named by token %s",
+			doc.NFTID, propsTokenID)
+	}
+	return resolved, nil
+}
+
 // BuildPropertiesToken creates or updates the properties token governing
 // nftTokenID, uploading the document and the whitelist/admins lists to IPFS and
 // pinning all of them. It returns the token entry to place in the transaction.
@@ -286,6 +346,9 @@ func (c *Core) BuildPropertiesToken(nftTokenID string, info *models.PropertiesIn
 	}
 
 	doc := info.ToDocument()
+	// Names the governed NFT so a validator can re-derive the properties token
+	// ID from it rather than having to invert the hash.
+	doc.NFTID = nftTokenID
 
 	// The deployer is always an admin, so an edit is always possible by
 	// someone even if the caller omits the list.
@@ -323,9 +386,15 @@ func (c *Core) BuildPropertiesToken(nftTokenID string, info *models.PropertiesIn
 	}
 
 	// An existing chain means this is an edit, so the tip becomes the previous
-	// transaction; absent means genesis.
+	// transaction; absent means genesis. A lookup failure must not be read as
+	// absent: the token would look like a genesis to the quorum too, bypassing
+	// the deployer check and overwriting a live properties chain.
 	previousTxID := ""
-	if tx, _, err := c.w.GetLatestTransactionAndRoleByTokenID(propsTokenID); err == nil && tx != nil {
+	tx, _, err := c.w.GetLatestTransactionAndRoleByTokenID(propsTokenID)
+	if err != nil {
+		return nil, fmt.Errorf("BuildPropertiesToken: reading chain tip for properties token %s: %w", propsTokenID, err)
+	}
+	if tx != nil {
 		previousTxID = tx.ID
 	}
 
@@ -378,7 +447,10 @@ func (c *Core) validatePropertiesRequest(request *models.TransactionRequest) err
 	}
 
 	// Reject a malformed document now rather than after the NFTs are locked.
-	if err := request.Tokens.Properties.ToDocument().Validate(); err != nil {
+	// The governed NFT is stamped on by the builder, so it is supplied here too.
+	preflightDoc := request.Tokens.Properties.ToDocument()
+	preflightDoc.NFTID = nfts[0].NFTId
+	if err := preflightDoc.Validate(); err != nil {
 		return fmt.Errorf("setProperties: %w", err)
 	}
 

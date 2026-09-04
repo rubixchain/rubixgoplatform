@@ -163,6 +163,13 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 			c.log,
 			c.ps,
 			reqID,
+			func() (bool, error) {
+				nfts := request.GetAllNFTs()
+				if len(nfts) == 0 {
+					return false, nil
+				}
+				return c.IsPropertiesEdit(nfts[0].NFTId)
+			},
 		)
 
 		if err == nil {

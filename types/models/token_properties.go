@@ -13,8 +13,12 @@ import (
 // Parsing is fail-closed: bad input errors rather than reading as unrestricted,
 // because a gate that degrades to permissive on malformed input is not a gate.
 type TokenProperties struct {
-	Version     int                `json:"v"`
-	Flags       uint32             `json:"f"`
+	Version int    `json:"v"`
+	Flags   uint32 `json:"f"`
+	// NFTID is the NFT this document governs. It is the witness that lets a
+	// validator re-derive the properties token ID and confirm the binding,
+	// since that derivation is one-way and cannot be inverted.
+	NFTID       string             `json:"n"`
 	Policy      PropertiesPolicy   `json:"p"`
 	Restriction PropertiesRestrict `json:"r"`
 }
@@ -118,6 +122,10 @@ func (p *TokenProperties) Validate() error {
 	if p.Version != PropertiesDocVersion {
 		return fmt.Errorf("unsupported properties document version %d (this build understands %d)",
 			p.Version, PropertiesDocVersion)
+	}
+
+	if p.NFTID == "" {
+		return fmt.Errorf("properties document does not name the NFT it governs")
 	}
 
 	if unknown := p.Flags &^ KnownFlagsV1; unknown != 0 {

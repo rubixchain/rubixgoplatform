@@ -94,11 +94,12 @@ class PropertiesEngine:
         transfer: bool = False,
         props: Optional[Dict[str, Any]] = None,
         data: str = "properties-test",
+        value: float = 1.0,
     ) -> Dict[str, Any]:
         tokens: Dict[str, Any] = {
             "rbt": 0,
             "ft": [],
-            "nft": [{"nftId": nft_id, "value": 1.0, "data": data}],
+            "nft": [{"nftId": nft_id, "value": value, "data": data}],
             "smartContract": [],
             "transferNftOwnership": transfer,
         }
@@ -145,6 +146,18 @@ class PropertiesEngine:
     def _read_props(self, nft_id: str) -> Dict[str, Any]:
         resp = self.node_a._get(f"/rubix/v1/nfts/{nft_id}/properties")
         return resp.get("result") or {}
+
+    def _nft_chain_len(self, nft_id: str) -> int:
+        """Number of entries on the NFT's own chain."""
+        return len(self.node_a.get_nft_chain(nft_id) or [])
+
+    def _nft_value(self, nft_id: str, did: str) -> Optional[float]:
+        """The NFT's recorded value from the DID's NFT balance, else None."""
+        for entry in self.node_a.get_nft_balance(did) or []:
+            if entry.get("nft_id") == nft_id:
+                v = entry.get("value")
+                return None if v is None else float(v)
+        return None
 
     # ------------------------------------------------------------------
     # Assertion helpers
@@ -214,6 +227,7 @@ class PropertiesEngine:
             self._whitelist,
             self._transferable,
             self._edit_authorization,
+            self._edit_is_independent_of_nft,
             self._versioning,
             self._spend_path,
         ):
@@ -422,6 +436,61 @@ class PropertiesEngine:
                 "detail": (f"correctly rejected ({err[:90]})" if ok
                            else f"rejected, but wrong reason: {err[:200]}"),
             })
+        return out
+
+    def _edit_is_independent_of_nft(self) -> List[Dict[str, str]]:
+        """A properties EDIT must not touch the NFT: no chain entry, no revalue.
+
+        The NFT is named in the request so the quorum can derive and authorise
+        the properties token; it is not being executed. The edit deliberately
+        passes a different value to prove the request value is ignored.
+        """
+        out: List[Dict[str, str]] = []
+        nft = self._new_nft("independent")
+
+        # Genesis set: the NFT IS executed here, so a chain entry is expected.
+        self._run_tx(self.node_a, self._payload(
+            self.did_a, self.did_a, nft,
+            props={"transferable": True, "whitelist": [self.did_a]}, data="set"))
+        time.sleep(_SETTLE)
+
+        chain_before = self._nft_chain_len(nft)
+        value_before = self._nft_value(nft, self.did_a)
+
+        # Edit, passing a deliberately different NFT value.
+        self._run_tx(self.node_a, self._payload(
+            self.did_a, self.did_a, nft, value=7.5,
+            props={"transferable": True, "whitelist": [self.did_a, self.did_b]},
+            data="edit"))
+        time.sleep(_SETTLE)
+
+        chain_after = self._nft_chain_len(nft)
+        value_after = self._nft_value(nft, self.did_a)
+
+        out.append({
+            "check": "PROPS_EDIT_LEAVES_NFT_CHAIN_UNCHANGED",
+            "status": "PASS" if chain_after == chain_before else "FAIL",
+            "detail": f"NFT chain entries before={chain_before} after={chain_before if chain_after == chain_before else chain_after}"
+                      f" (an edit must add none)",
+        })
+        out.append({
+            "check": "PROPS_EDIT_DOES_NOT_REVALUE_NFT",
+            "status": "PASS" if value_after == value_before else "FAIL",
+            "detail": f"NFT value before={value_before} after={value_after} (request passed 7.5)",
+        })
+
+        # The edit must still have taken effect.
+        try:
+            res = self._read_props(nft)
+            wl = sorted(res.get("whitelist") or [])
+            out.append({
+                "check": "PROPS_EDIT_STILL_APPLIED",
+                "status": "PASS" if wl == sorted([self.did_a, self.did_b]) else "FAIL",
+                "detail": f"whitelist={res.get('whitelist')}",
+            })
+        except Exception as exc:  # noqa: BLE001
+            out.append({"check": "PROPS_EDIT_STILL_APPLIED", "status": "FAIL",
+                        "detail": f"read raised: {str(exc)[:200]}"})
         return out
 
     def _versioning(self) -> List[Dict[str, str]]:

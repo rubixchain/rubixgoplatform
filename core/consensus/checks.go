@@ -527,6 +527,12 @@ func ValidateTransactionValueAndPledge(txnInfo *models.TransactionInfo) error {
 		transactionValue = rubixmath.AddFloat(transactionValue, tokenValue)
 	}
 
+	// A properties token's value is intrinsic, not read from the payload and
+	// not derived from the NFT, so it is counted as the fixed minimum.
+	for range txnInfo.Tokens.Properties {
+		transactionValue = rubixmath.AddFloat(transactionValue, rubixmath.MinDecimalUnit())
+	}
+
 	totalPledgeValue := rubixmath.ZeroFloat()
 	for _, quorum := range txnInfo.Quorums {
 		for _, t := range quorum.Tokens {
@@ -1168,6 +1174,7 @@ func ValidateTransaction(
 	getParentBurnTx func(parentID string) (burnTxID string, found bool, err error),
 	fetchGenesisTx func(peerDID, tokenID string) (*models.Transactions, error),
 	resolveProperties func(nftTokenID string) (*models.ResolvedProperties, error),
+	resolvePropertiesByTokenID func(propsTokenID, docCID string) (*models.ResolvedProperties, error),
 	transferNFTOwnership bool,
 ) (bool, error) {
 	var txnInfo models.TransactionInfo
@@ -1211,7 +1218,7 @@ func ValidateTransaction(
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
 
-	if err := ValidateNFTProperties(&txnInfo, transferNFTOwnership, log, resolveProperties); err != nil {
+	if err := ValidateNFTProperties(&txnInfo, transferNFTOwnership, log, resolveProperties, resolvePropertiesByTokenID); err != nil {
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
 
@@ -1378,6 +1385,7 @@ func ValidateNFTProperties(
 	transferNFTOwnership bool,
 	log logger.Logger,
 	resolveProperties func(nftTokenID string) (*models.ResolvedProperties, error),
+	resolvePropertiesByTokenID func(propsTokenID, docCID string) (*models.ResolvedProperties, error),
 ) error {
 	if txnInfo == nil || txnInfo.Tokens == nil {
 		return nil
@@ -1418,7 +1426,7 @@ func ValidateNFTProperties(
 		}
 	}
 
-	return validatePropertiesEdits(txnInfo, resolveProperties)
+	return validatePropertiesEdits(txnInfo, resolvePropertiesByTokenID)
 }
 
 // checkNFTPropertyRestrictions applies every restriction in a resolved document.
@@ -1468,9 +1476,13 @@ func checkNFTPropertyRestrictions(
 
 // validatePropertiesEdits confirms a properties token is edited by its deployer.
 // Genesis is exempt, having no prior chain to name one.
+//
+// An edit does not carry its NFT, so the token is resolved from its own ID;
+// the resolver proves the binding by re-deriving that ID from the NFT the
+// document names.
 func validatePropertiesEdits(
 	txnInfo *models.TransactionInfo,
-	resolveProperties func(nftTokenID string) (*models.ResolvedProperties, error),
+	resolvePropertiesByTokenID func(propsTokenID, docCID string) (*models.ResolvedProperties, error),
 ) error {
 	for _, props := range txnInfo.Tokens.Properties {
 		if props == nil || props.TokenID == "" {
@@ -1480,23 +1492,15 @@ func validatePropertiesEdits(
 			continue // Genesis: first properties set, nothing to authorise against.
 		}
 
-		// Resolved via the NFT it governs, so an edit must name that NFT here.
-		var governed *models.ResolvedProperties
-		for _, nft := range txnInfo.Tokens.NFT {
-			if nft == nil || nft.TokenID == "" {
-				continue
-			}
-			resolved, err := resolveProperties(nft.TokenID)
-			if err != nil {
-				return fmt.Errorf("ValidateNFTProperties: resolving properties for NFT %s: %w", nft.TokenID, err)
-			}
-			if resolved != nil && resolved.PropertiesTokenID == props.TokenID {
-				governed = resolved
-				break
-			}
+		if resolvePropertiesByTokenID == nil {
+			return fmt.Errorf("ValidateNFTProperties: properties token resolver is not wired")
+		}
+		governed, err := resolvePropertiesByTokenID(props.TokenID, props.Data)
+		if err != nil {
+			return fmt.Errorf("ValidateNFTProperties: resolving properties token %s: %w", props.TokenID, err)
 		}
 		if governed == nil {
-			return fmt.Errorf("ValidateNFTProperties: properties token %s does not govern any NFT in this transaction", props.TokenID)
+			return fmt.Errorf("ValidateNFTProperties: properties token %s could not be resolved", props.TokenID)
 		}
 
 		if txnInfo.Initiator != governed.Deployer {
