@@ -1,6 +1,7 @@
 package wallet
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -8,6 +9,14 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
+
+// ErrTransactionNotFound reports that a transaction is genuinely absent, as
+// opposed to unreadable. Callers that treat "no such transaction" as a normal
+// outcome must distinguish the two: a database that is merely unreachable
+// otherwise looks identical to one that has never seen the transaction, and
+// acting on that confusion turns an outage into wrong behaviour rather than a
+// visible error. Match with errors.Is.
+var ErrTransactionNotFound = errors.New("transaction not found")
 
 // CreateTransaction inserts a new transaction into the transactions table.
 func (w *Wallet) CreateTransaction(tx *models.Transactions) error {
@@ -56,7 +65,7 @@ func (w *Wallet) GetTransactionByID(id string, isFullNode bool) (*models.Transac
 	}
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("transaction ID: %v is not present", id)
+			return nil, fmt.Errorf("transaction ID: %v is not present: %w", id, ErrTransactionNotFound)
 		}
 		return nil, fmt.Errorf("failed to get transaction: %w", err)
 	}
