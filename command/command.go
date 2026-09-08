@@ -26,7 +26,7 @@ import (
 )
 
 var (
-	version        string = "1.0.0"
+	version        string = "1.0.5SC5"
 	currentCommit  string = "unknown"
 	previousCommit string = "unknown"
 )
