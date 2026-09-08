@@ -467,6 +467,37 @@ func (w *Wallet) ReleaseLockedNFTAndSCTokensByReference(ctx context.Context, ref
 	return result.RowsAffected(), nil
 }
 
+// ReleaseStaleNFTAndSCLocksOnStartup resets every Locked NFT/SC token back to Deployed or Executed and clears its lock_reference_id.
+// Safe only at process start: no transaction survives a restart, so any Locked NFT/SC row at boot was orphaned by a crash or shutdown mid-transaction.
+// Deliberately unscoped by DID or reference so it also repairs rows left behind by builds that released by owner DID.
+func (w *Wallet) ReleaseStaleNFTAndSCLocksOnStartup(ctx context.Context) (int64, error) {
+	w.log.Info("STARTUP_LOCK_SWEEP: releasing stale NFT/SC locks")
+	deployRoleID := int16(models.GetTokenRoleID(constants.TokenRole_Deploy))
+	result, err := w.db.Pool().Exec(ctx,
+		`UPDATE tokens SET
+		   token_status = CASE
+		     WHEN latest_role = $1 THEN $2::smallint
+		     ELSE $3::smallint
+		   END,
+		   lock_reference_id = NULL,
+		   updated_at = $4
+		 WHERE token_status = $5
+		   AND token_type IN (
+		     (SELECT id FROM token_type WHERE name = $6),
+		     (SELECT id FROM token_type WHERE name = $7)
+		   )`,
+		deployRoleID, int16(constants.TokenStatus_Deployed), int16(constants.TokenStatus_Executed),
+		time.Now(), int16(constants.TokenStatus_Locked),
+		constants.TokenType_NFT, constants.TokenType_SmartContract,
+	)
+	if err != nil {
+		w.log.Error("STARTUP_LOCK_SWEEP: failed", "err", err)
+		return 0, fmt.Errorf("ReleaseStaleNFTAndSCLocksOnStartup: %w", err)
+	}
+	w.log.Info("STARTUP_LOCK_SWEEP: done", "released", result.RowsAffected())
+	return result.RowsAffected(), nil
+}
+
 // ReleaseNonSelectedLockedRBTTokensForDID resets all Locked RBT tokens for a DID back to Free,
 // EXCLUDING the specified selectedTokenIDs, scoped to the given referenceID so that concurrent
 // pledge requests for the same DID cannot accidentally free each other's locked tokens.
