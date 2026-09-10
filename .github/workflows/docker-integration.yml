@@ -12,7 +12,8 @@ name: Docker Integration Tests
 on:
   pull_request:
     branches:
-      - release-v1
+      - development
+      - main
   workflow_dispatch:        # allow manual runs from the Actions tab
 
 concurrency:
