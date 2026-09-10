@@ -51,6 +51,22 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	}
 	c.log.Debug("InitiateTransaction: DID setup complete", "did", initiatorDID)
 
+	// Fetch the list of dids from quorum_manager table
+	//  We then loop over that list and queried from did table and pfetch the peerid
+	c.log.Debug("InitiateTransaction: Fetching quorum addresses")
+	quorumAddresses, err := c.GetAllQuorum()
+	if err != nil {
+		c.log.Error("InitiateTransaction: Failed to get quorum address", "err", err)
+		resp.Message = "InitiateTransaction: Failed to get quorum address: " + err.Error()
+		return resp
+	}
+	if len(quorumAddresses) == 0 {
+		c.log.Error("InitiateTransaction: No quorums available")
+		resp.Message = "InitiateTransaction: No quorums available for transaction"
+		return resp
+	}
+	c.log.Info("InitiateTransaction: Quorums found", "count", len(quorumAddresses), "primaryQuorum", quorumAddresses[0])
+
 	networkMode := c.networkMode
 	c.log.Debug("InitiateTransaction: Network mode", "mode", networkMode)
 	// Build transaction info
@@ -164,22 +180,6 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		c.log.Debug("InitiateTransaction: Backing off before retry", "attempt", attempt, "backoffMs", backoff.Milliseconds())
 		time.Sleep(backoff)
 	}
-
-	// Fetch the list of dids from quorum_manager table
-	//  We then loop over that list and queried from did table and pfetch the peerid
-	c.log.Debug("InitiateTransaction: Fetching quorum addresses")
-	quorumAddresses, err := c.GetAllQuorum()
-	if err != nil {
-		c.log.Error("InitiateTransaction: Failed to get quorum address", "err", err)
-		resp.Message = "InitiateTransaction: Failed to get quorum address: " + err.Error()
-		return resp
-	}
-	if len(quorumAddresses) == 0 {
-		c.log.Error("InitiateTransaction: No quorums available")
-		resp.Message = "InitiateTransaction: No quorums available for transaction"
-		return resp
-	}
-	c.log.Info("InitiateTransaction: Quorums found", "count", len(quorumAddresses), "primaryQuorum", quorumAddresses[0])
 
 	// this will be a list of *ipfsport.Peer since we can have multiple quorums, we need to loop over them
 	c.log.Debug("InitiateTransaction: Opening peer connection to quorum", "quorumDID", quorumAddresses[0])
