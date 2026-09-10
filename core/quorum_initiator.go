@@ -92,6 +92,13 @@ func (c *Core) requestPledgeTokenHandler(request *ensweb.Request) *ensweb.Result
 	}
 	dc := c.pqc[did]
 
+	// Reject self-pledge before locking anything: the initiator's lock reference equals this request's, so the non-selected release below would free the transfer tokens.
+	if pledgeTokenRequest.InitiatorPeerInfo != nil && pledgeTokenRequest.InitiatorPeerInfo.DID == did {
+		c.log.Error("requestPledgeTokenHandler : initiator DID cannot pledge for its own transaction", "did", did)
+		response.Message = "requestPledgeTokenHandler : initiator DID cannot act as its own quorum"
+		return c.l.RenderJSON(request, &response, http.StatusBadRequest)
+	}
+
 	// add initiator peer details to dids table, if it is not already present
 	if isExist := c.IsDIDExist(pledgeTokenRequest.InitiatorPeerInfo.DID); !isExist {
 		if pledgeTokenRequest.InitiatorPeerInfo.PeerID != c.peerID {

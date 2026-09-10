@@ -141,6 +141,14 @@ func TestValidateTransactionInfoFields(t *testing.T) {
 				tx.Tokens = &models.TransactionTokens{NFT: []*models.TokenInfo{{TokenID: "nft1"}}}
 			},
 			wantErr: false},
+
+		// ---- Quorums ----
+		{name: "quorum equals initiator", mutate: func(tx *models.TransactionInfo) {
+			tx.Quorums = []*models.QuorumInfo{{Did: tx.Initiator}}
+		}, wantErr: true, wantMatch: "own quorum"},
+		{name: "distinct quorum OK", mutate: func(tx *models.TransactionInfo) {
+			tx.Quorums = []*models.QuorumInfo{{Did: constants.DidPrefix + strings.Repeat("z", constants.DidLength-len(constants.DidPrefix))}}
+		}, wantErr: false},
 	}
 
 	for _, tc := range tests {

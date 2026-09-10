@@ -74,6 +74,13 @@ func ValidateTransactionInfoFields(txnInfo *models.TransactionInfo) error {
 		return fmt.Errorf("transaction must contain at least one transfer token (RBT, NFT, FT, or SmartContract)")
 	}
 
+	// A quorum signing for its own initiator is self-attestation, not consensus.
+	for _, q := range txnInfo.Quorums {
+		if q != nil && q.Did == txnInfo.Initiator {
+			return fmt.Errorf("initiator %s cannot act as its own quorum", txnInfo.Initiator)
+		}
+	}
+
 	return nil
 }
 
