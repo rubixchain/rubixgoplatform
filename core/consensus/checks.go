@@ -74,6 +74,105 @@ func ValidateTransactionInfoFields(txnInfo *models.TransactionInfo) error {
 		return fmt.Errorf("transaction must contain at least one transfer token (RBT, NFT, FT, or SmartContract)")
 	}
 
+	// A quorum signing for its own initiator is self-attestation, not consensus.
+	for _, q := range txnInfo.Quorums {
+		if q != nil && q.Did == txnInfo.Initiator {
+			return fmt.Errorf("initiator %s cannot act as its own quorum", txnInfo.Initiator)
+		}
+	}
+
+	return nil
+}
+
+// ValidatePledgeTransferDisjoint rejects a transaction in which a quorum pledges
+// a token that the transaction itself moves.
+//
+// A pledge is independent collateral standing behind the transfer. When the same
+// token appears on both sides it is not collateral at all: it leaves the quorum's
+// control as part of the very transfer it is meant to back, and
+// ValidateTransactionValueAndPledge is satisfied by counting that one token on
+// both sides of its own comparison — so the transaction clears the pledge
+// requirement with nothing actually backing it.
+//
+// Committed tokens count as consumed. A burnt parent is spent by the transaction
+// just as a transferred token is, so pledging one is the same defect.
+//
+// Stateless — a pure function of the payload — so both roles can run it before
+// doing any database or peer work. The initiator runs it before signing, so a
+// builder bug fails locally instead of going out on the wire. The quorum runs it
+// before signing and pledging, because the initiator authors this payload and a
+// quorum must not take the initiator's word for what it is being asked to pledge.
+//
+// Shape problems (nil entries, empty token IDs) are not this function's business;
+// they belong to ValidateTransactionInfoFields. Such entries are skipped rather
+// than reported here so that a single defect produces one clear error.
+func ValidatePledgeTransferDisjoint(txnInfo *models.TransactionInfo) error {
+	if txnInfo == nil {
+		return fmt.Errorf("ValidatePledgeTransferDisjoint: transaction info is nil")
+	}
+
+	// Every token this transaction consumes, mapped to the role that named it, so
+	// a collision reports which side it came from rather than only that it
+	// happened. First writer wins: a duplicate inside the transfer set is a
+	// different defect and must not change the role reported here.
+	consumed := make(map[string]string)
+	record := func(tokens []*models.TokenInfo, role string) {
+		for _, t := range tokens {
+			if t == nil || t.TokenID == "" {
+				continue
+			}
+			if _, exists := consumed[t.TokenID]; !exists {
+				consumed[t.TokenID] = role
+			}
+		}
+	}
+
+	if txnInfo.Tokens != nil {
+		record(txnInfo.Tokens.RBT, "transferred RBT")
+		record(txnInfo.Tokens.FT, "transferred FT")
+		record(txnInfo.Tokens.NFT, "transferred NFT")
+		record(txnInfo.Tokens.SmartContract, "transferred smart contract")
+	}
+	record(txnInfo.CommittedTokens, "committed")
+
+	if len(consumed) == 0 {
+		return nil
+	}
+
+	for _, quorum := range txnInfo.Quorums {
+		if quorum == nil {
+			continue
+		}
+		for _, t := range quorum.Tokens {
+			if t == nil || t.TokenID == "" {
+				continue
+			}
+			if role, clash := consumed[t.TokenID]; clash {
+				return fmt.Errorf(
+					"ValidatePledgeTransferDisjoint: quorum %s pledges token %s, which this transaction also carries as a %s token",
+					quorum.Did, t.TokenID, role)
+			}
+		}
+	}
+
+	return nil
+}
+
+// ValidateQuorumIsNotReceiver rejects a quorum that would receive value from the transaction it validates.
+// Owner names a receiver only when ownership moves; on an NFT execute it is the NFT's current owner, so that case is exempt.
+func ValidateQuorumIsNotReceiver(txnInfo *models.TransactionInfo, transferNFTOwnership bool) error {
+	if txnInfo == nil || txnInfo.Tokens == nil || txnInfo.Owner == "" || txnInfo.Owner == txnInfo.Initiator {
+		return nil
+	}
+	movesOwnership := len(txnInfo.Tokens.RBT) > 0 || len(txnInfo.Tokens.FT) > 0 || (transferNFTOwnership && len(txnInfo.Tokens.NFT) > 0)
+	if !movesOwnership {
+		return nil
+	}
+	for _, q := range txnInfo.Quorums {
+		if q != nil && q.Did == txnInfo.Owner {
+			return fmt.Errorf("ValidateQuorumIsNotReceiver: quorum %s cannot be the receiver of the transaction", q.Did)
+		}
+	}
 	return nil
 }
 
@@ -1173,6 +1272,10 @@ func ValidateTransaction(
 	}
 
 	if err := ValidateTransactionInfoFields(&txnInfo); err != nil {
+		return false, fmt.Errorf("ValidateTransaction: %w", err)
+	}
+
+	if err := ValidateQuorumIsNotReceiver(&txnInfo, transferNFTOwnership); err != nil {
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
 
