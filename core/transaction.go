@@ -303,6 +303,16 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		resp.Message = "insufficient quorum liquidity"
 		return resp
 	}
+	// A quorum must never pledge a token this transaction is itself moving: the
+	// collateral would leave with the transfer it is meant to back. Checked here,
+	// after the quorum assignment above and before the transaction ID is computed,
+	// so a bad payload never gets signed or published. The quorum repeats this
+	// check on receipt — it cannot trust the initiator to have run it.
+	if err := consensus.ValidatePledgeTransferDisjoint(transactionInfo); err != nil {
+		c.log.Error("InitiateTransaction: pledge token collides with a transferred token", "err", err)
+		resp.Message = "InitiateTransaction: " + err.Error()
+		return resp
+	}
 	c.log.Debug("InitiateTransaction: Calculating transaction ID")
 	transactionId, err := util.GetTransactionID(transactionInfo)
 	if err != nil {
