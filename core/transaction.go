@@ -72,6 +72,14 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		resp.Message = "InitiateTransaction: initiator DID cannot act as its own quorum"
 		return resp
 	}
+
+	// The quorum must not be the receiver either; only ownership-moving requests name a receiver, so NFT execute is exempt.
+	movesOwnership := request.Tokens.RBT > 0 || len(request.Tokens.FT) > 0 || request.Tokens.TransferNFTOwnership
+	if _, quorumDID, _ := util.ParseAddress(quorumAddresses[0]); movesOwnership && nextOwnerDID != "" && nextOwnerDID != initiatorDID && quorumDID == nextOwnerDID {
+		c.log.Error("InitiateTransaction: receiver DID is configured as the quorum", "did", nextOwnerDID)
+		resp.Message = "InitiateTransaction: quorum DID cannot be the receiver of a transaction"
+		return resp
+	}
 	networkMode := c.networkMode
 	c.log.Debug("InitiateTransaction: Network mode", "mode", networkMode)
 	// Build transaction info

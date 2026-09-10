@@ -171,6 +171,62 @@ func TestValidateTransactionInfoFields(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
+// ValidateQuorumIsNotReceiver:
+// Covers: quorum named as receiver, with the NFT-execute exemption.
+// -----------------------------------------------------------------------------
+
+func TestValidateQuorumIsNotReceiver(t *testing.T) {
+	tests := []struct {
+		name                 string
+		mutate               func(*models.TransactionInfo)
+		transferNFTOwnership bool
+		wantErr              bool
+	}{
+		{name: "distinct quorum on RBT transfer", mutate: func(tx *models.TransactionInfo) {
+			tx.Quorums = []*models.QuorumInfo{{Did: validDID('c')}}
+		}, wantErr: false},
+		{name: "quorum is receiver on RBT transfer", mutate: func(tx *models.TransactionInfo) {
+			tx.Quorums = []*models.QuorumInfo{{Did: tx.Owner}}
+		}, wantErr: true},
+		{name: "quorum is receiver on FT transfer", mutate: func(tx *models.TransactionInfo) {
+			tx.Tokens = &models.TransactionTokens{FT: []*models.TokenInfo{{TokenID: "ft_" + validDID('a') + "_1"}}}
+			tx.Quorums = []*models.QuorumInfo{{Did: tx.Owner}}
+		}, wantErr: true},
+		{name: "quorum is receiver on NFT transfer", mutate: func(tx *models.TransactionInfo) {
+			tx.Tokens = &models.TransactionTokens{NFT: []*models.TokenInfo{{TokenID: "nft1"}}}
+			tx.Quorums = []*models.QuorumInfo{{Did: tx.Owner}}
+		}, transferNFTOwnership: true, wantErr: true},
+		{name: "quorum owns NFT being executed by non-owner", mutate: func(tx *models.TransactionInfo) {
+			tx.Tokens = &models.TransactionTokens{NFT: []*models.TokenInfo{{TokenID: "nft1"}}}
+			tx.Quorums = []*models.QuorumInfo{{Did: tx.Owner}}
+		}, transferNFTOwnership: false, wantErr: false},
+		{name: "owner equals initiator is left to the initiator check", mutate: func(tx *models.TransactionInfo) {
+			tx.Owner = tx.Initiator
+			tx.Quorums = []*models.QuorumInfo{{Did: tx.Owner}}
+		}, wantErr: false},
+		{name: "empty owner", mutate: func(tx *models.TransactionInfo) {
+			tx.Owner = ""
+			tx.Quorums = []*models.QuorumInfo{{Did: validDID('b')}}
+		}, wantErr: false},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			tx := baseValidTxnInfo()
+			tc.mutate(&tx)
+			err := ValidateQuorumIsNotReceiver(&tx, tc.transferNFTOwnership)
+			if tc.wantErr && err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// -----------------------------------------------------------------------------
 // TransactionIDIntegrityCheck:
 // Covers: any tampering of txInfo after the ID was computed.
 // -----------------------------------------------------------------------------

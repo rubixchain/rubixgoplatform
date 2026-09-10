@@ -158,6 +158,24 @@ func ValidatePledgeTransferDisjoint(txnInfo *models.TransactionInfo) error {
 	return nil
 }
 
+// ValidateQuorumIsNotReceiver rejects a quorum that would receive value from the transaction it validates.
+// Owner names a receiver only when ownership moves; on an NFT execute it is the NFT's current owner, so that case is exempt.
+func ValidateQuorumIsNotReceiver(txnInfo *models.TransactionInfo, transferNFTOwnership bool) error {
+	if txnInfo == nil || txnInfo.Tokens == nil || txnInfo.Owner == "" || txnInfo.Owner == txnInfo.Initiator {
+		return nil
+	}
+	movesOwnership := len(txnInfo.Tokens.RBT) > 0 || len(txnInfo.Tokens.FT) > 0 || (transferNFTOwnership && len(txnInfo.Tokens.NFT) > 0)
+	if !movesOwnership {
+		return nil
+	}
+	for _, q := range txnInfo.Quorums {
+		if q != nil && q.Did == txnInfo.Owner {
+			return fmt.Errorf("ValidateQuorumIsNotReceiver: quorum %s cannot be the receiver of the transaction", q.Did)
+		}
+	}
+	return nil
+}
+
 func TransactionIDIntegrityCheck(transactionID string, transactionInfo *models.TransactionInfo) error {
 	computedTransactionID, err := util.GetTransactionID(transactionInfo)
 	if err != nil {
@@ -1254,6 +1272,10 @@ func ValidateTransaction(
 	}
 
 	if err := ValidateTransactionInfoFields(&txnInfo); err != nil {
+		return false, fmt.Errorf("ValidateTransaction: %w", err)
+	}
+
+	if err := ValidateQuorumIsNotReceiver(&txnInfo, transferNFTOwnership); err != nil {
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
 
