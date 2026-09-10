@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -9,7 +10,9 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/consensus"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/did"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
+	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
 )
 
@@ -266,6 +269,20 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 		response.Message = "initiateConsensusHandler: failed to build transaction record"
 		return c.l.RenderJSON(request, response, http.StatusBadRequest)
 	}
+	// Idempotent replay: same txID means the initiator lost our reply and retried; re-validating would reject it as a chain-tip conflict and fork the chain.
+	if storedSig, ok := c.storedQuorumSignature(txn.ID, quorumDid, quorumDc, txnInfo); ok {
+		c.log.Info("initiateConsensusHandler: duplicate consensus request for already-committed transaction, replying with stored signature",
+			"txID", txn.ID, "quorumDID", quorumDid, "referenceID", consensusRequest.ReferenceId)
+		// Tokens are already Pledged; keep the abort guard from touching them.
+		pledgeCommitted = true
+		return c.l.RenderJSON(request, &models.ConsensusResponse{
+			ReferenceId:     consensusRequest.ReferenceId,
+			QuorumSignature: storedSig,
+			Message:         "Transaction already committed by this quorum. Returning stored consensus signature.",
+			Status:          true,
+		}, http.StatusOK)
+	}
+
 	syncTxChains := func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error {
 		return c.SyncTransactionChainsFromPeer(peerDID, tokenIDs, prevTxIDs, excludeTxIDs, false, c.fullNode)
 	}
@@ -459,6 +476,30 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 	pledgeCommitted = true
 
 	return c.l.RenderJSON(request, &consensusResponse, http.StatusOK)
+}
+
+// storedQuorumSignature returns this quorum's stored, verified signature for txID; ok=false on any miss so the caller falls through to full validation.
+func (c *Core) storedQuorumSignature(txID, quorumDID string, quorumDc types.DIDCrypto, txnInfo *models.TransactionInfo) (string, bool) {
+	stored, err := c.w.GetTransactionByID(txID, false)
+	if err != nil || stored == nil {
+		return "", false
+	}
+	var sig models.Signature
+	if err := json.Unmarshal(stored.Signature, &sig); err != nil {
+		c.log.Warn("storedQuorumSignature: failed to unmarshal stored signature", "txID", txID, "err", err)
+		return "", false
+	}
+	for _, q := range sig.Quorums {
+		if q.Did != quorumDID || q.Signature == "" {
+			continue
+		}
+		if err := util.VerifySignature(quorumDc, txnInfo, q.Signature); err != nil {
+			c.log.Warn("storedQuorumSignature: stored signature does not verify against incoming transaction info", "txID", txID, "err", err)
+			return "", false
+		}
+		return q.Signature, true
+	}
+	return "", false
 }
 
 func (c *Core) SetupQuorum(didStr string, pwd string, pvtKeyPwd string) error {

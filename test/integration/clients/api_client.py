@@ -186,6 +186,11 @@ class NodeClient:
         log.info("[%s] Adding quorum DID: %s", self.name, quorum_did)
         return self._post("/rubix/v1/quorums/add", {"did": quorum_did})
 
+    def remove_all_quorums(self) -> Dict[str, Any]:
+        """Clear this node's quorum list (quorum_manager). Pair with add_quorum to repoint."""
+        log.info("[%s] Removing all quorum DIDs", self.name)
+        return self._get("/rubix/v1/quorums/remove_all")
+
     def setup_quorum(self, did: str, password: str = "mypassword") -> Dict[str, Any]:
         """Set up this node AS a quorum member using *did*."""
         log.info("[%s] Setting up quorum for DID: %s", self.name, did)

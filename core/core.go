@@ -269,6 +269,10 @@ func (c *Core) SetupCore() error {
 	if c.ipfsOps != nil {
 		c.w.SetIPFSOperations(NewWalletIPFSAdapter(c.ipfsOps))
 	}
+	// Release NFT/SC tokens left Locked by a crash or restart mid-transaction; the deferred cleanup in initiateTransaction never ran for them.
+	if _, err := c.w.ReleaseStaleNFTAndSCLocksOnStartup(c.Ctx); err != nil {
+		c.log.Error("Failed to release stale NFT/SC locks on startup", "err", err)
+	}
 	c.PingSetup()
 	c.CheckQuorumStatusSetup()
 	c.peerSetup()
