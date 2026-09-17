@@ -3,6 +3,7 @@ package consensus
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/rubixchain/rubixgoplatform/core/minterallowlist"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -11,10 +12,56 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
-// genesisInitiatorLookup is the wallet method this gate uses. An interface so
-// tests can swap in a fake.
+// genesisInitiatorLookup is the set of wallet reads this gate uses. An interface
+// so tests can swap in a fake.
+//
+// The height-0 reads back resolveSplitInitiator: for a part token, position 0 is
+// the split transaction that created it, and its initiator is the DID to ask for
+// the whole-token genesis.
 type genesisInitiatorLookup interface {
 	GetGenesisInitiatorDID(tokenID string, isFullNode bool) (string, error)
+	GetTransactionAndRoleAtHeight(tokenID string, height int64) (*models.Transactions, int16, error)
+	GetFullNodeTransactionAndRoleAtHeight(tokenID string, height int64) (*models.Transactions, int16, error)
+}
+
+// resolveSplitInitiator returns the DID that performed the split which created
+// partTokenID, read from the part token's OWN position-0 chain entry.
+//
+// A split writes one transaction that both burns the parent (role Burn, appended
+// to the parent's chain) and creates each child (role Mint, position 0 of the
+// child's chain) — see wallet.PersistGenesisTransaction. So the part token's
+// genesis IS the parent's burn, and its initiator is a DID that demonstrably
+// held the whole token's chain at that moment.
+//
+// This read is local: TokenChainIntegrityCheck runs before this gate and syncs
+// the transaction's tokens from position 0, and tokenchain rows carry a foreign
+// key to transactions, so the row is present whenever the chain is. An error
+// here is not fatal — the caller falls back to the peer it was given.
+func resolveSplitInitiator(w genesisInitiatorLookup, partTokenID string, isFullnode bool) (string, error) {
+	var (
+		tx  *models.Transactions
+		err error
+	)
+	if isFullnode {
+		tx, _, err = w.GetFullNodeTransactionAndRoleAtHeight(partTokenID, 0)
+	} else {
+		tx, _, err = w.GetTransactionAndRoleAtHeight(partTokenID, 0)
+	}
+	if err != nil {
+		return "", fmt.Errorf("split genesis unavailable locally for %s: %w", partTokenID, err)
+	}
+	if tx == nil {
+		return "", fmt.Errorf("split genesis is nil for %s", partTokenID)
+	}
+
+	var info models.TransactionInfo
+	if err := json.Unmarshal(tx.Info, &info); err != nil {
+		return "", fmt.Errorf("unmarshal split genesis for %s: %w", partTokenID, err)
+	}
+	if info.Initiator == "" {
+		return "", fmt.Errorf("split genesis for %s has empty initiator", partTokenID)
+	}
+	return info.Initiator, nil
 }
 
 // ValidateMinterAllowlist checks that every RBT in the transaction — both
@@ -117,25 +164,64 @@ func validateMinterAllowlist(
 
 		minter, lookupErr := w.GetGenesisInitiatorDID(wholeID, isFullnode)
 		if lookupErr != nil && elems.PartIndex != 0 && fetchGenesisTx != nil {
-			// Part-token transfer: the whole-token genesis may not be local yet.
-			// Fetch ONLY the genesis transaction from the peer — this never
-			// persists anything locally, so there's no risk of ingesting a
-			// sibling transaction that's still being validated elsewhere.
-			genesisTx, fetchErr := fetchGenesisTx(mc.genesisPeer, wholeID)
-			if fetchErr != nil {
-				return fmt.Errorf("ValidateMinterAllowlist: whole-token genesis fetch failed for %s (whole %s): %w",
-					t.TokenID, wholeID, fetchErr)
-			}
-			var genesisInfo models.TransactionInfo
-			if unmarshalErr := json.Unmarshal(genesisTx.Info, &genesisInfo); unmarshalErr != nil {
-				return fmt.Errorf("ValidateMinterAllowlist: failed to unmarshal fetched genesis for %s (whole %s): %w",
-					t.TokenID, wholeID, unmarshalErr)
-			}
-			if genesisInfo.Initiator == "" {
-				lookupErr = fmt.Errorf("empty initiator in fetched genesis for whole %s", wholeID)
+			// Part-token transfer: the whole-token genesis is not local, and for
+			// a received part token it never will be — the parent is burnt at
+			// split time and its chain is not propagated to part holders. Fetch
+			// ONLY the genesis transaction from a peer; this never persists
+			// anything locally, so there's no risk of ingesting a sibling
+			// transaction that's still being validated elsewhere.
+			//
+			// Peer order matters. The split that created this part token burnt
+			// the whole token, so whoever performed that split demonstrably held
+			// the whole-token chain — ask them first. mc.genesisPeer (the current
+			// transaction's initiator, or the pledging quorum) is merely the
+			// latest holder; it has the whole-token chain only when it is itself
+			// the splitter, i.e. on the first hop after a split, which is why
+			// asking it alone fails on every later hop.
+			var (
+				peers     []string
+				fetchErrs []string
+			)
+			splitter, splitErr := resolveSplitInitiator(w, t.TokenID, isFullnode)
+			if splitErr != nil {
+				log.Debug("ValidateMinterAllowlist: could not resolve split initiator, falling back to declared peer",
+					"tokenID", t.TokenID, "wholeID", wholeID, "err", splitErr)
 			} else {
+				peers = append(peers, splitter)
+			}
+			if mc.genesisPeer != "" && mc.genesisPeer != splitter {
+				peers = append(peers, mc.genesisPeer)
+			}
+
+			for _, peerDID := range peers {
+				genesisTx, fetchErr := fetchGenesisTx(peerDID, wholeID)
+				if fetchErr != nil {
+					fetchErrs = append(fetchErrs, fmt.Sprintf("%s: %v", peerDID, fetchErr))
+					continue
+				}
+				if genesisTx == nil {
+					fetchErrs = append(fetchErrs, fmt.Sprintf("%s: peer returned no genesis transaction", peerDID))
+					continue
+				}
+				var genesisInfo models.TransactionInfo
+				if unmarshalErr := json.Unmarshal(genesisTx.Info, &genesisInfo); unmarshalErr != nil {
+					fetchErrs = append(fetchErrs, fmt.Sprintf("%s: unmarshal fetched genesis: %v", peerDID, unmarshalErr))
+					continue
+				}
+				if genesisInfo.Initiator == "" {
+					fetchErrs = append(fetchErrs, fmt.Sprintf("%s: empty initiator in fetched genesis", peerDID))
+					continue
+				}
+				log.Debug("ValidateMinterAllowlist: resolved whole-token genesis from peer",
+					"tokenID", t.TokenID, "wholeID", wholeID, "peerDID", peerDID)
 				minter = genesisInfo.Initiator
 				lookupErr = nil
+				break
+			}
+
+			if lookupErr != nil && len(fetchErrs) > 0 {
+				lookupErr = fmt.Errorf("whole-token genesis fetch failed from %d peer(s) [%s]",
+					len(fetchErrs), strings.Join(fetchErrs, "; "))
 			}
 		}
 		// Fallback: if local genesis lookup still fails and the current
