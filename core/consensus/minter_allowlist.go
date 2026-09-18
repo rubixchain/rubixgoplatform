@@ -80,9 +80,10 @@ func ValidateMinterAllowlist(
 	w *wallet.Wallet,
 	log logger.Logger,
 	fetchGenesisTx func(peerDID, tokenID string) (*models.Transactions, error),
+	syncBurntChain func(peerDID, tokenID string) error,
 	testnet, mainnet bool,
 ) error {
-	return validateMinterAllowlist(txnInfo, isFullnode, w, log, fetchGenesisTx, testnet, mainnet)
+	return validateMinterAllowlist(txnInfo, isFullnode, w, log, fetchGenesisTx, syncBurntChain, testnet, mainnet)
 }
 
 // validateMinterAllowlist is the test-friendly entry that takes an interface
@@ -93,6 +94,7 @@ func validateMinterAllowlist(
 	w genesisInitiatorLookup,
 	log logger.Logger,
 	fetchGenesisTx func(peerDID, tokenID string) (*models.Transactions, error),
+	syncBurntChain func(peerDID, tokenID string) error,
 	testnet, mainnet bool,
 ) error {
 	if txnInfo == nil {
@@ -179,8 +181,9 @@ func validateMinterAllowlist(
 			// the splitter, i.e. on the first hop after a split, which is why
 			// asking it alone fails on every later hop.
 			var (
-				peers     []string
-				fetchErrs []string
+				peers      []string
+				fetchErrs  []string
+				servedPeer string
 			)
 			splitter, splitErr := resolveSplitInitiator(w, t.TokenID, isFullnode)
 			if splitErr != nil {
@@ -215,11 +218,24 @@ func validateMinterAllowlist(
 				log.Debug("ValidateMinterAllowlist: resolved whole-token genesis from peer",
 					"tokenID", t.TokenID, "wholeID", wholeID, "peerDID", peerDID)
 				minter = genesisInfo.Initiator
+				servedPeer = peerDID
 				lookupErr = nil
 				break
 			}
 
-			if lookupErr != nil && len(fetchErrs) > 0 {
+			switch {
+			case lookupErr == nil && syncBurntChain != nil:
+				// Take the whole token's chain from the peer that just answered,
+				// so the next part of the same token resolves from the local
+				// chain above and needs no network at all. Only a burnt chain is
+				// accepted — see Core.SyncBurntTokenChainFromPeer. A failure here
+				// is not fatal: this transaction is already validated, and the
+				// next one simply re-fetches.
+				if syncErr := syncBurntChain(servedPeer, wholeID); syncErr != nil {
+					log.Debug("ValidateMinterAllowlist: could not persist whole-token chain",
+						"wholeID", wholeID, "peerDID", servedPeer, "err", syncErr)
+				}
+			case lookupErr != nil && len(fetchErrs) > 0:
 				lookupErr = fmt.Errorf("whole-token genesis fetch failed from %d peer(s) [%s]",
 					len(fetchErrs), strings.Join(fetchErrs, "; "))
 			}

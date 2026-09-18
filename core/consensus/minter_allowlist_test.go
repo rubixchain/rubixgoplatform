@@ -83,6 +83,18 @@ func (f *fetchRecorder) fetch(peerDID, tokenID string) (*models.Transactions, er
 	return nil, fmt.Errorf("peer returned error: transaction not found at height 0 for token %s", tokenID)
 }
 
+// syncRecorder fakes Core.SyncBurntTokenChainFromPeer, recording which
+// (peer, token) pairs the gate asked to persist.
+type syncRecorder struct {
+	err   error // forced failure
+	calls [][2]string
+}
+
+func (s *syncRecorder) sync(peerDID, tokenID string) error {
+	s.calls = append(s.calls, [2]string{peerDID, tokenID})
+	return s.err
+}
+
 // txnWithInitiator builds a stored transaction whose Info carries only the
 // initiator — the single field both resolveSplitInitiator and the minter
 // resolution read.
@@ -129,7 +141,7 @@ func TestValidateMinterAllowlistPartTokenAsksSplitterFirst(t *testing.T) {
 		splitter: txnWithInitiator(t, "whole-genesis", minter),
 	}}
 
-	if err := validateMinterAllowlist(partTransfer(sender), false, w, testLogger(), f.fetch, true, false); err != nil {
+	if err := validateMinterAllowlist(partTransfer(sender), false, w, testLogger(), f.fetch, nil, true, false); err != nil {
 		t.Fatalf("expected the split initiator to resolve the minter, got: %v", err)
 	}
 	if len(f.calls) != 1 || f.calls[0] != splitter {
@@ -153,7 +165,7 @@ func TestValidateMinterAllowlistPartTokenFallsBackToDeclaredPeer(t *testing.T) {
 		sender: txnWithInitiator(t, "whole-genesis", minter), // splitter unreachable
 	}}
 
-	if err := validateMinterAllowlist(partTransfer(sender), false, w, testLogger(), f.fetch, true, false); err != nil {
+	if err := validateMinterAllowlist(partTransfer(sender), false, w, testLogger(), f.fetch, nil, true, false); err != nil {
 		t.Fatalf("expected fallback to the declared peer to succeed, got: %v", err)
 	}
 	want := []string{splitter, sender}
@@ -173,7 +185,7 @@ func TestValidateMinterAllowlistPartTokenNoLocalSplitGenesis(t *testing.T) {
 		sender: txnWithInitiator(t, "whole-genesis", minter),
 	}}
 
-	if err := validateMinterAllowlist(partTransfer(sender), false, w, testLogger(), f.fetch, true, false); err != nil {
+	if err := validateMinterAllowlist(partTransfer(sender), false, w, testLogger(), f.fetch, nil, true, false); err != nil {
 		t.Fatalf("expected the declared peer to be used when the splitter is unknown, got: %v", err)
 	}
 	if len(f.calls) != 1 || f.calls[0] != sender {
@@ -197,7 +209,7 @@ func TestValidateMinterAllowlistPartTokenSplitterIsSenderNoDuplicateFetch(t *tes
 		splitter: txnWithInitiator(t, "whole-genesis", minter),
 	}}
 
-	if err := validateMinterAllowlist(partTransfer(splitter), false, w, testLogger(), f.fetch, true, false); err != nil {
+	if err := validateMinterAllowlist(partTransfer(splitter), false, w, testLogger(), f.fetch, nil, true, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(f.calls) != 1 {
@@ -219,7 +231,7 @@ func TestValidateMinterAllowlistPartTokenAllPeersFail(t *testing.T) {
 	}
 	f := &fetchRecorder{responses: map[string]*models.Transactions{}} // nobody has it
 
-	err := validateMinterAllowlist(partTransfer(sender), false, w, testLogger(), f.fetch, true, false)
+	err := validateMinterAllowlist(partTransfer(sender), false, w, testLogger(), f.fetch, nil, true, false)
 	if err == nil {
 		t.Fatal("expected an error when no peer can serve the whole-token genesis")
 	}
@@ -237,7 +249,7 @@ func TestValidateMinterAllowlistLocalGenesisSkipsFetch(t *testing.T) {
 	w := &fakeGenesisLookup{genesisInitiator: map[string]string{wholeTokenID: minter}}
 	f := &fetchRecorder{responses: map[string]*models.Transactions{}}
 
-	if err := validateMinterAllowlist(partTransfer(validDID('n')), false, w, testLogger(), f.fetch, true, false); err != nil {
+	if err := validateMinterAllowlist(partTransfer(validDID('n')), false, w, testLogger(), f.fetch, nil, true, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(f.calls) != 0 {
@@ -261,7 +273,7 @@ func TestValidateMinterAllowlistUnauthorisedMinterRejected(t *testing.T) {
 		splitter: txnWithInitiator(t, "whole-genesis", rogue),
 	}}
 
-	err := validateMinterAllowlist(partTransfer(sender), false, w, testLogger(), f.fetch, true, false)
+	err := validateMinterAllowlist(partTransfer(sender), false, w, testLogger(), f.fetch, nil, true, false)
 	if err == nil {
 		t.Fatal("expected rejection for a minter outside the allowlist")
 	}
@@ -287,11 +299,129 @@ func TestValidateMinterAllowlistFullnodeReadsFullnodeChain(t *testing.T) {
 		splitter: txnWithInitiator(t, "whole-genesis", minter),
 	}}
 
-	if err := validateMinterAllowlist(partTransfer(sender), true, w, testLogger(), f.fetch, true, false); err != nil {
+	if err := validateMinterAllowlist(partTransfer(sender), true, w, testLogger(), f.fetch, nil, true, false); err != nil {
 		t.Fatalf("expected the fullnode chain to yield the splitter, got: %v", err)
 	}
 	if len(f.calls) != 1 || f.calls[0] != splitter {
 		t.Errorf("expected one fetch from the splitter %s; got %v", splitter, f.calls)
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Persisting the burnt ancestor's chain
+// -----------------------------------------------------------------------------
+
+// After resolving the minter from a peer, the whole token's chain is pulled from
+// that same peer — keyed by the WHOLE token id, so every sibling part benefits.
+func TestValidateMinterAllowlistPersistsBurntAncestorChain(t *testing.T) {
+	minter := allowedTestnetMinter(t)
+	splitter, sender := validDID('s'), validDID('n')
+
+	w := &fakeGenesisLookup{
+		genesisInitiator: map[string]string{},
+		heightZero: map[string]*models.Transactions{
+			partTokenID: txnWithInitiator(t, "split-tx", splitter),
+		},
+	}
+	f := &fetchRecorder{responses: map[string]*models.Transactions{
+		splitter: txnWithInitiator(t, "whole-genesis", minter),
+	}}
+	sr := &syncRecorder{}
+
+	if err := validateMinterAllowlist(partTransfer(sender), false, w, testLogger(), f.fetch, sr.sync, true, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(sr.calls) != 1 {
+		t.Fatalf("expected one chain-persist call; got %v", sr.calls)
+	}
+	if sr.calls[0] != [2]string{splitter, wholeTokenID} {
+		t.Errorf("expected the chain to be pulled from %s for %s; got %v", splitter, wholeTokenID, sr.calls[0])
+	}
+}
+
+// The chain is requested from whichever peer actually answered, not blindly from
+// the first candidate.
+func TestValidateMinterAllowlistPersistsFromServingPeer(t *testing.T) {
+	minter := allowedTestnetMinter(t)
+	splitter, sender := validDID('s'), validDID('n')
+
+	w := &fakeGenesisLookup{
+		genesisInitiator: map[string]string{},
+		heightZero: map[string]*models.Transactions{
+			partTokenID: txnWithInitiator(t, "split-tx", splitter),
+		},
+	}
+	f := &fetchRecorder{responses: map[string]*models.Transactions{
+		sender: txnWithInitiator(t, "whole-genesis", minter), // splitter unreachable
+	}}
+	sr := &syncRecorder{}
+
+	if err := validateMinterAllowlist(partTransfer(sender), false, w, testLogger(), f.fetch, sr.sync, true, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(sr.calls) != 1 || sr.calls[0][0] != sender {
+		t.Errorf("expected the chain to be pulled from the peer that served the genesis (%s); got %v", sender, sr.calls)
+	}
+}
+
+// Persistence is an optimisation only — a failure must not fail the transaction
+// that has already been validated.
+func TestValidateMinterAllowlistChainPersistFailureNonFatal(t *testing.T) {
+	minter := allowedTestnetMinter(t)
+	splitter, sender := validDID('s'), validDID('n')
+
+	w := &fakeGenesisLookup{
+		genesisInitiator: map[string]string{},
+		heightZero: map[string]*models.Transactions{
+			partTokenID: txnWithInitiator(t, "split-tx", splitter),
+		},
+	}
+	f := &fetchRecorder{responses: map[string]*models.Transactions{
+		splitter: txnWithInitiator(t, "whole-genesis", minter),
+	}}
+	sr := &syncRecorder{err: fmt.Errorf("peer went away")}
+
+	if err := validateMinterAllowlist(partTransfer(sender), false, w, testLogger(), f.fetch, sr.sync, true, false); err != nil {
+		t.Fatalf("a failed chain persist must not fail validation, got: %v", err)
+	}
+}
+
+// Nothing is persisted when no peer could serve the genesis — there is no
+// verified chain to take.
+func TestValidateMinterAllowlistNoPersistWhenUnresolved(t *testing.T) {
+	allowedTestnetMinter(t)
+	splitter, sender := validDID('s'), validDID('n')
+
+	w := &fakeGenesisLookup{
+		genesisInitiator: map[string]string{},
+		heightZero: map[string]*models.Transactions{
+			partTokenID: txnWithInitiator(t, "split-tx", splitter),
+		},
+	}
+	f := &fetchRecorder{responses: map[string]*models.Transactions{}}
+	sr := &syncRecorder{}
+
+	if err := validateMinterAllowlist(partTransfer(sender), false, w, testLogger(), f.fetch, sr.sync, true, false); err == nil {
+		t.Fatal("expected an error when no peer can serve the genesis")
+	}
+	if len(sr.calls) != 0 {
+		t.Errorf("nothing should be persisted when resolution failed; got %v", sr.calls)
+	}
+}
+
+// A locally-resolvable minter means no fetch and nothing to persist.
+func TestValidateMinterAllowlistNoPersistWhenLocal(t *testing.T) {
+	minter := allowedTestnetMinter(t)
+
+	w := &fakeGenesisLookup{genesisInitiator: map[string]string{wholeTokenID: minter}}
+	f := &fetchRecorder{responses: map[string]*models.Transactions{}}
+	sr := &syncRecorder{}
+
+	if err := validateMinterAllowlist(partTransfer(validDID('n')), false, w, testLogger(), f.fetch, sr.sync, true, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(sr.calls) != 0 {
+		t.Errorf("a local hit must not trigger a chain pull; got %v", sr.calls)
 	}
 }
 
@@ -310,7 +440,7 @@ func TestValidateMinterAllowlistWholeTokenGenesisUnchanged(t *testing.T) {
 	w := &fakeGenesisLookup{genesisInitiator: map[string]string{}}
 	f := &fetchRecorder{responses: map[string]*models.Transactions{}}
 
-	if err := validateMinterAllowlist(txnInfo, false, w, testLogger(), f.fetch, true, false); err != nil {
+	if err := validateMinterAllowlist(txnInfo, false, w, testLogger(), f.fetch, nil, true, false); err != nil {
 		t.Fatalf("unexpected error for a whole-token mint: %v", err)
 	}
 	if len(f.calls) != 0 {
