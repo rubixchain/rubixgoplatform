@@ -160,6 +160,26 @@ func (c *Core) FetchGenesisTransactionFromPeer(peerDID, tokenID string) (*models
 	return resp.Tx, nil
 }
 
+// verifyGenesisSignature reports whether signerDID actually produced signature
+// over info.
+//
+// Used by ValidateMinterAllowlist on a whole-token genesis fetched from a peer:
+// that genesis names its own minter, so without checking the signature the gate
+// trusts an unauthenticated assertion. A whole-token mint sets Initiator ==
+// Owner == the minting DID and signs via util.SignTransaction (see
+// Wallet.PersistGenesisTokenRecord), which is exactly what util.VerifySignature
+// validates.
+//
+// InitialiseDID resolves DIDs this node has never held, fetching the DID
+// document if needed and caching it under c.didDir.
+func (c *Core) verifyGenesisSignature(signerDID string, info *models.TransactionInfo, signature string) error {
+	dc, err := c.InitialiseDID(signerDID)
+	if err != nil {
+		return fmt.Errorf("verifyGenesisSignature: initialise minter DID %s: %w", signerDID, err)
+	}
+	return util.VerifySignature(dc, info, signature)
+}
+
 // SyncBurntTokenChainFromPeer fetches tokenID's chain from peerDID and applies it
 // locally ONLY if that chain is terminal — that is, its last entry is a burn.
 //

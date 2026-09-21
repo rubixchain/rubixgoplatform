@@ -1166,6 +1166,7 @@ func ValidateTransaction(
 	getParentBurnTx func(parentID string) (burnTxID string, found bool, err error),
 	fetchGenesisTx func(peerDID, tokenID string) (*models.Transactions, error),
 	syncBurntChain func(peerDID, tokenID string) error,
+	verifyGenesisSig func(signerDID string, info *models.TransactionInfo, signature string) error,
 	transferNFTOwnership bool,
 ) (bool, error) {
 	var txnInfo models.TransactionInfo
@@ -1210,7 +1211,7 @@ func ValidateTransaction(
 	}
 
 	//If transaction is a genesis transaction fullnode should do the below check addordingly
-	if err := ValidateMinterAllowlist(&txnInfo, isFullnode, w, log, fetchGenesisTx, syncBurntChain, testnet, mainnet); err != nil {
+	if err := ValidateMinterAllowlist(&txnInfo, isFullnode, w, log, fetchGenesisTx, syncBurntChain, verifyGenesisSig, testnet, mainnet); err != nil {
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
 

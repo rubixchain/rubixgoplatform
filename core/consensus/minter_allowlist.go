@@ -81,9 +81,68 @@ func ValidateMinterAllowlist(
 	log logger.Logger,
 	fetchGenesisTx func(peerDID, tokenID string) (*models.Transactions, error),
 	syncBurntChain func(peerDID, tokenID string) error,
+	verifyGenesisSig func(signerDID string, info *models.TransactionInfo, signature string) error,
 	testnet, mainnet bool,
 ) error {
-	return validateMinterAllowlist(txnInfo, isFullnode, w, log, fetchGenesisTx, syncBurntChain, testnet, mainnet)
+	return validateMinterAllowlist(txnInfo, isFullnode, w, log, fetchGenesisTx, syncBurntChain, verifyGenesisSig, testnet, mainnet)
+}
+
+// enforceGenesisSignature gates whether a whole-token genesis whose signature
+// fails to verify is REJECTED (true) or merely logged (false).
+//
+// Staged rollout, deliberately off. Verification needs the claimed minter's DID
+// document, which Core.InitialiseDID may have to fetch over the network, so a
+// benign resolution failure would reject an otherwise-valid mainnet transfer.
+// Run log-only until telemetry shows no benign failures, then flip to true.
+// The binding check (genesisMintsToken) is NOT gated — it is pure local
+// computation and enforced unconditionally.
+const enforceGenesisSignature = true
+
+// genesisMintsToken reports whether info is genuinely the genesis of wholeID —
+// that is, it mints that exact token with no predecessor.
+//
+// This binds a peer's answer to the question it was asked. Without it, the gate
+// accepts any genesis naming an allowlisted minter, so a single genuine
+// allowlisted mint replays as a universal pass for every part token on the
+// network.
+func genesisMintsToken(info *models.TransactionInfo, wholeID string) bool {
+	if info == nil || info.Tokens == nil {
+		return false
+	}
+	for _, gt := range info.Tokens.RBT {
+		// PreviousTransactionID == "" is the genesis marker written by
+		// Wallet.PersistGenesisTokenRecord.
+		if gt != nil && gt.TokenID == wholeID && gt.PreviousTransactionID == "" {
+			return true
+		}
+	}
+	return false
+}
+
+// verifyFetchedGenesisSignature checks that the genesis carries the claimed
+// minter's own signature over it.
+//
+// A whole-token mint sets Initiator == Owner == the minting DID and signs with
+// util.SignTransaction (Wallet.PersistGenesisTokenRecord), so the initiator
+// signature is exactly what util.VerifySignature validates. Passing this means
+// the attacker must hold an allowlisted minter's private key, not merely name
+// its DID.
+func verifyFetchedGenesisSignature(
+	tx *models.Transactions,
+	info *models.TransactionInfo,
+	verify func(signerDID string, info *models.TransactionInfo, signature string) error,
+) error {
+	if tx == nil || len(tx.Signature) == 0 {
+		return fmt.Errorf("genesis transaction carries no signature")
+	}
+	var sig models.Signature
+	if err := json.Unmarshal(tx.Signature, &sig); err != nil {
+		return fmt.Errorf("unmarshal genesis signature: %w", err)
+	}
+	if sig.InitiatorSignature == "" {
+		return fmt.Errorf("genesis has no initiator signature")
+	}
+	return verify(info.Initiator, info, sig.InitiatorSignature)
 }
 
 // validateMinterAllowlist is the test-friendly entry that takes an interface
@@ -95,6 +154,7 @@ func validateMinterAllowlist(
 	log logger.Logger,
 	fetchGenesisTx func(peerDID, tokenID string) (*models.Transactions, error),
 	syncBurntChain func(peerDID, tokenID string) error,
+	verifyGenesisSig func(signerDID string, info *models.TransactionInfo, signature string) error,
 	testnet, mainnet bool,
 ) error {
 	if txnInfo == nil {
@@ -214,6 +274,29 @@ func validateMinterAllowlist(
 				if genesisInfo.Initiator == "" {
 					fetchErrs = append(fetchErrs, fmt.Sprintf("%s: empty initiator in fetched genesis", peerDID))
 					continue
+				}
+				// Guard 1 — the peer was asked for wholeID's genesis; make it
+				// prove that is what it served. Enforced unconditionally.
+				if !genesisMintsToken(&genesisInfo, wholeID) {
+					log.Error("ValidateMinterAllowlist: peer served a genesis for a different token",
+						"tokenID", t.TokenID, "wholeID", wholeID, "peerDID", peerDID,
+						"claimedMinter", genesisInfo.Initiator)
+					fetchErrs = append(fetchErrs, fmt.Sprintf("%s: returned genesis does not mint %s", peerDID, wholeID))
+					continue
+				}
+				// Guard 2 — the claimed minter must have signed it. Log-only
+				// until enforceGenesisSignature is flipped; see that constant.
+				if verifyGenesisSig != nil {
+					if sigErr := verifyFetchedGenesisSignature(genesisTx, &genesisInfo, verifyGenesisSig); sigErr != nil {
+						log.Error("ValidateMinterAllowlist: whole-token genesis signature did not verify",
+							"tokenID", t.TokenID, "wholeID", wholeID, "peerDID", peerDID,
+							"claimedMinter", genesisInfo.Initiator, "enforcing", enforceGenesisSignature,
+							"err", sigErr)
+						if enforceGenesisSignature {
+							fetchErrs = append(fetchErrs, fmt.Sprintf("%s: genesis signature invalid: %v", peerDID, sigErr))
+							continue
+						}
+					}
 				}
 				log.Debug("ValidateMinterAllowlist: resolved whole-token genesis from peer",
 					"tokenID", t.TokenID, "wholeID", wholeID, "peerDID", peerDID)
