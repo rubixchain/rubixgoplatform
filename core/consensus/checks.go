@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -508,24 +507,23 @@ func ValidateNFTTransferAuthorization(txnInfo *models.TransactionInfo, transferN
 }
 
 func ValidateNewTokenContent(tokenID string, isQuorum bool, testnet bool, mainnet bool, localnet bool, log logger.Logger) error {
-	devidedParts := strings.Split(tokenID, "_")
+	// GetRbtIDElements rejects any ID that is not in canonical "%d_%d[_%d]"
+	// form (e.g. "01_7" or "1_0007"), so a padded spelling of an existing
+	// token can never be treated as a fresh mint.
+	elems, err := util.GetRbtIDElements(tokenID)
+	if err != nil {
+		return fmt.Errorf("invalid token id in token content: %w", err)
+	}
 
 	tokenTypeString := RBTString
-	if len(devidedParts) == 3 {
+	if elems.PartIndex != 0 {
 		tokenTypeString = PartString
 	}
 
 	// level is the token-mapping level (e.g. 10000 + mapLevel for localnet tokens).
 	// This is NOT the denom-tree level (0-6). Here we subtract the network offset to get the TokenMap lookup key.
-	level, err := strconv.Atoi(strings.TrimLeft(devidedParts[0], "0"))
-	if err != nil {
-		return fmt.Errorf("invalid token level in token content: %s", tokenID)
-	}
-
-	tokenNo, err := strconv.Atoi(devidedParts[1])
-	if err != nil {
-		return fmt.Errorf("invalid token number in token content: %s", tokenID)
-	}
+	level := elems.TokenLevel
+	tokenNo := elems.TokenNumber
 
 	shouldValidate := testnet || mainnet || localnet
 
@@ -571,10 +569,7 @@ func ValidateNewTokenContent(tokenID string, isQuorum bool, testnet bool, mainne
 
 	MaxPossiblePartTokenNumber := parts.MaxPossiblePartsIndexByMaxDecimalPlaces(uint(constants.MaxSupportedDecimalPlaces))
 	if tokenTypeString == PartString {
-		partTokenNumber, err := strconv.Atoi(devidedParts[2])
-		if err != nil {
-			return fmt.Errorf("invalid part number in token content: %s", tokenID)
-		}
+		partTokenNumber := elems.PartIndex
 		if partTokenNumber > MaxPossiblePartTokenNumber {
 			return fmt.Errorf(
 				"Parttoken number %d exceeds max allowed %d ",
@@ -721,15 +716,15 @@ func IsParentTokenBurnt(
 }
 
 func ValidateGenuineTokenCreator(tokenID string, isFullNode bool, w *wallet.Wallet) error {
-	devidedParts := strings.Split(tokenID, "_")
+	elems, err := util.GetRbtIDElements(tokenID)
+	if err != nil {
+		return fmt.Errorf("invalid token id in token content: %w", err)
+	}
 
 	// level is the token-mapping level (e.g. 10001 for localnet), NOT the denom-tree level (0-6).
 	// NOTE: The check below (level == 1) appears to be a legacy guard for an older token format
 	// that predates the 10000-offset scheme. It is dead code for tokens with level >= 10001.
-	level, err := strconv.Atoi(strings.TrimLeft(devidedParts[0], "0"))
-	if err != nil {
-		return fmt.Errorf("invalid token level in token content: %s", tokenID)
-	}
+	level := elems.TokenLevel
 	if level == 1 {
 		genesisTx, err := w.GetGenesisTransactionIdByTokenId(tokenID, isFullNode)
 		if err != nil {
@@ -768,8 +763,12 @@ func ValidateTokenIDRelatedChecks(
 	}
 	//call IsParentTokenBurnt
 	//First check whether the token is a part token or not. If it is a part token, then check whether the parent token is burnt.
-	devidedParts := strings.Split(tokenID, "_")
-	if len(devidedParts) == 3 {
+	// ValidateNewTokenContent above already guaranteed the ID is canonical, so this parse cannot fail.
+	elems, err := util.GetRbtIDElements(tokenID)
+	if err != nil {
+		return fmt.Errorf("failed to parse token id: %w", err)
+	}
+	if elems.PartIndex != 0 {
 		err, isParentTokenBurnt := IsParentTokenBurnt(isFullNode, tokenID, currentTokenOwner, currentTxID, previousTransactionID, currentTxnInfo, w, log, fetchGenesisTx)
 		if err != nil {
 			return fmt.Errorf("failed to validate parent token burnt: %w", err)

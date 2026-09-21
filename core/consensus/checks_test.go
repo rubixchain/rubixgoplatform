@@ -819,18 +819,18 @@ func TestValidateNewTokenContent_RBT(t *testing.T) {
 		{name: "mainnet valid part token", tokenID: "1_1_1", mainnet: true, wantErr: false},
 
 		// ---- 3.a  Token level being wrong ----
-		{name: "non-numeric level", tokenID: "abc_1", mainnet: true, wantErr: true, errMatch: "invalid token level"},
+		{name: "non-numeric level", tokenID: "abc_1", mainnet: true, wantErr: true, errMatch: "failed to convert level into int"},
 		{name: "mainnet level out of TokenMap", tokenID: "99999_1", mainnet: true, wantErr: true, errMatch: "not present in TokenMap"},
 		{name: "testnet level below offset (50000)", tokenID: "100_1", testnet: true, wantErr: true, errMatch: "testnet level must be >="},
 		{name: "localnet level below offset (10000)", tokenID: "500_1", localnet: true, wantErr: true, errMatch: "localnet level must be >"},
 
 		// ---- 3.b  Token number being wrong ----
-		{name: "non-numeric token number", tokenID: "1_abc", mainnet: true, wantErr: true, errMatch: "invalid token number"},
+		{name: "non-numeric token number", tokenID: "1_abc", mainnet: true, wantErr: true, errMatch: "failed to convert token number into int"},
 		{name: "token number exceeds max for level 1 (4,300,000)", tokenID: "1_4300001", mainnet: true, wantErr: true, errMatch: "exceeds max allowed"},
-		{name: "negative token number", tokenID: "1_-5", mainnet: true, wantErr: true, errMatch: "exceeds max allowed"}, // negative passes strconv but fails maxAllowed guard (tokenNo<0)
+		{name: "negative token number", tokenID: "1_-5", mainnet: true, wantErr: true, errMatch: "must be positive"}, // rejected by the canonical-form parser before any TokenMap check
 
 		// ---- 3.c  Part token index being wrong ----
-		{name: "non-numeric part index", tokenID: "1_1_abc", mainnet: true, wantErr: true, errMatch: "invalid part number"},
+		{name: "non-numeric part index", tokenID: "1_1_abc", mainnet: true, wantErr: true, errMatch: "failed to convert part index into int"},
 		{name: "part index above max (1332)", tokenID: "1_1_" + outOfRangePartIndex, mainnet: true, wantErr: true, errMatch: "exceeds max allowed"},
 	}
 
