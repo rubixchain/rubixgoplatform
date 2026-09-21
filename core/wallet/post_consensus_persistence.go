@@ -145,8 +145,28 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 	if err := pc.upsertTokenStates(ctx, tx, req.TokenStates); err != nil {
 		return err
 	}
-	if len(req.TransactionInfo.Tokens.RBT) != 0 {
-		if err := pc.upsertTokenDenomDeltas(ctx, tx, req.DID, req.TokenStates, req.ExecutionRole, isLocalTransfer, req.TransactionInfo.Owner); err != nil {
+	// An SC deploy moves RBT collateral from Free to Committed while carrying
+	// Tokens.RBT empty — the collateral rides in CommittedTokens instead. Gating
+	// only on Tokens.RBT skipped the decrement, so token_denom kept counting
+	// those tokens as spendable and a later selection failed with
+	// "lockSelectedTokens: no tokens provided".
+	//
+	// hasSCDeploy is deliberately the same predicate isSCDeployCommit uses to
+	// flip that status (see post_consensus_payload_builder.go), so the counter
+	// update and the status change cannot diverge. Testing CommittedTokens
+	// directly would be wrong: a split genesis also carries burnt parents there,
+	// and those are already accounted for by PersistGenesisTransaction.
+	//
+	// The isLocalTransfer credit is suppressed for a deploy. That block exists
+	// for a same-node RBT transfer, where sender and receiver are different DIDs
+	// on one node: decrement the sender, credit the receiver. A deploy pins Owner
+	// to Initiator, so isLocalTransfer is always true and the credit lands on the
+	// very DID just decremented — cancelling it out and leaving the collateral
+	// counted as spendable. There is no receiver: the collateral is terminally
+	// Committed, so nothing should be credited back.
+	scDeploy := hasSCDeploy(req.TransactionInfo)
+	if len(req.TransactionInfo.Tokens.RBT) != 0 || scDeploy {
+		if err := pc.upsertTokenDenomDeltas(ctx, tx, req.DID, req.TokenStates, req.ExecutionRole, isLocalTransfer && !scDeploy, req.TransactionInfo.Owner); err != nil {
 			return err
 		}
 	}

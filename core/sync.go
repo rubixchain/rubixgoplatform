@@ -545,6 +545,11 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.Transac
 	}
 
 	// Step 4: Hole filling — only the entries after our local prefix are new.
+	if len(localChain) >= len(enriched) {
+		c.log.Debug("applyTokenChainFromSync: local chain is at or ahead of remote, nothing to apply",
+			"tokenID", tokenID, "local", len(localChain), "remote", len(enriched))
+		return nil
+	}
 	newTxs := enriched[len(localChain):]
 	if len(newTxs) == 0 {
 		return nil // Already fully synced for this token.
