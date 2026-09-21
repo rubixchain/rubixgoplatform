@@ -50,7 +50,36 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		return resp
 	}
 	c.log.Debug("InitiateTransaction: DID setup complete", "did", initiatorDID)
+	// Fetch the list of dids from quorum_manager table
+	//  We then loop over that list and queried from did table and pfetch the peerid
+	c.log.Debug("InitiateTransaction: Fetching quorum addresses")
+	quorumAddresses, err := c.GetAllQuorum()
+	if err != nil {
+		c.log.Error("InitiateTransaction: Failed to get quorum address", "err", err)
+		resp.Message = "InitiateTransaction: Failed to get quorum address: " + err.Error()
+		return resp
+	}
+	if len(quorumAddresses) == 0 {
+		c.log.Error("InitiateTransaction: No quorums available")
+		resp.Message = "InitiateTransaction: No quorums available for transaction"
+		return resp
+	}
+	c.log.Info("InitiateTransaction: Quorums found", "count", len(quorumAddresses), "primaryQuorum", quorumAddresses[0])
 
+	// A DID must not pledge for its own transaction: both roles would lock under one reference ID and the pledge handler would free the transfer tokens.
+	if _, quorumDID, _ := util.ParseAddress(quorumAddresses[0]); quorumDID == initiatorDID {
+		c.log.Error("InitiateTransaction: initiator DID is configured as its own quorum", "did", initiatorDID)
+		resp.Message = "InitiateTransaction: initiator DID cannot act as its own quorum"
+		return resp
+	}
+
+	// The quorum must not be the receiver either; only ownership-moving requests name a receiver, so NFT execute is exempt.
+	movesOwnership := request.Tokens.RBT > 0 || len(request.Tokens.FT) > 0 || request.Tokens.TransferNFTOwnership
+	if _, quorumDID, _ := util.ParseAddress(quorumAddresses[0]); movesOwnership && nextOwnerDID != "" && quorumDID == nextOwnerDID {
+		c.log.Error("InitiateTransaction: receiver DID is configured as the quorum", "did", nextOwnerDID)
+		resp.Message = "InitiateTransaction: quorum DID cannot be the receiver of a transaction"
+		return resp
+	}
 	networkMode := c.networkMode
 	c.log.Debug("InitiateTransaction: Network mode", "mode", networkMode)
 	// Build transaction info
@@ -165,22 +194,6 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		time.Sleep(backoff)
 	}
 
-	// Fetch the list of dids from quorum_manager table
-	//  We then loop over that list and queried from did table and pfetch the peerid
-	c.log.Debug("InitiateTransaction: Fetching quorum addresses")
-	quorumAddresses, err := c.GetAllQuorum()
-	if err != nil {
-		c.log.Error("InitiateTransaction: Failed to get quorum address", "err", err)
-		resp.Message = "InitiateTransaction: Failed to get quorum address: " + err.Error()
-		return resp
-	}
-	if len(quorumAddresses) == 0 {
-		c.log.Error("InitiateTransaction: No quorums available")
-		resp.Message = "InitiateTransaction: No quorums available for transaction"
-		return resp
-	}
-	c.log.Info("InitiateTransaction: Quorums found", "count", len(quorumAddresses), "primaryQuorum", quorumAddresses[0])
-
 	// this will be a list of *ipfsport.Peer since we can have multiple quorums, we need to loop over them
 	c.log.Debug("InitiateTransaction: Opening peer connection to quorum", "quorumDID", quorumAddresses[0])
 	p, err := c.getPeer(quorumAddresses[0])
@@ -294,6 +307,16 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		transactionInfo.Quorums = []*models.QuorumInfo{pledegTokenInfo}
 	} else {
 		resp.Message = "insufficient quorum liquidity"
+		return resp
+	}
+	// A quorum must never pledge a token this transaction is itself moving: the
+	// collateral would leave with the transfer it is meant to back. Checked here,
+	// after the quorum assignment above and before the transaction ID is computed,
+	// so a bad payload never gets signed or published. The quorum repeats this
+	// check on receipt — it cannot trust the initiator to have run it.
+	if err := consensus.ValidatePledgeTransferDisjoint(transactionInfo); err != nil {
+		c.log.Error("InitiateTransaction: pledge token collides with a transferred token", "err", err)
+		resp.Message = "InitiateTransaction: " + err.Error()
 		return resp
 	}
 	c.log.Debug("InitiateTransaction: Calculating transaction ID")

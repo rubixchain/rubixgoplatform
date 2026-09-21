@@ -141,6 +141,14 @@ func TestValidateTransactionInfoFields(t *testing.T) {
 				tx.Tokens = &models.TransactionTokens{NFT: []*models.TokenInfo{{TokenID: "nft1"}}}
 			},
 			wantErr: false},
+
+		// ---- Quorums ----
+		{name: "quorum equals initiator", mutate: func(tx *models.TransactionInfo) {
+			tx.Quorums = []*models.QuorumInfo{{Did: tx.Initiator}}
+		}, wantErr: true, wantMatch: "own quorum"},
+		{name: "distinct quorum OK", mutate: func(tx *models.TransactionInfo) {
+			tx.Quorums = []*models.QuorumInfo{{Did: constants.DidPrefix + strings.Repeat("z", constants.DidLength-len(constants.DidPrefix))}}
+		}, wantErr: false},
 	}
 
 	for _, tc := range tests {
@@ -157,6 +165,62 @@ func TestValidateTransactionInfoFields(t *testing.T) {
 			}
 			if tc.wantErr && tc.wantMatch != "" && !strings.Contains(err.Error(), tc.wantMatch) {
 				t.Fatalf("error %q does not contain %q", err.Error(), tc.wantMatch)
+			}
+		})
+	}
+}
+
+// -----------------------------------------------------------------------------
+// ValidateQuorumIsNotReceiver:
+// Covers: quorum named as receiver, with the NFT-execute exemption.
+// -----------------------------------------------------------------------------
+
+func TestValidateQuorumIsNotReceiver(t *testing.T) {
+	tests := []struct {
+		name                 string
+		mutate               func(*models.TransactionInfo)
+		transferNFTOwnership bool
+		wantErr              bool
+	}{
+		{name: "distinct quorum on RBT transfer", mutate: func(tx *models.TransactionInfo) {
+			tx.Quorums = []*models.QuorumInfo{{Did: validDID('c')}}
+		}, wantErr: false},
+		{name: "quorum is receiver on RBT transfer", mutate: func(tx *models.TransactionInfo) {
+			tx.Quorums = []*models.QuorumInfo{{Did: tx.Owner}}
+		}, wantErr: true},
+		{name: "quorum is receiver on FT transfer", mutate: func(tx *models.TransactionInfo) {
+			tx.Tokens = &models.TransactionTokens{FT: []*models.TokenInfo{{TokenID: "ft_" + validDID('a') + "_1"}}}
+			tx.Quorums = []*models.QuorumInfo{{Did: tx.Owner}}
+		}, wantErr: true},
+		{name: "quorum is receiver on NFT transfer", mutate: func(tx *models.TransactionInfo) {
+			tx.Tokens = &models.TransactionTokens{NFT: []*models.TokenInfo{{TokenID: "nft1"}}}
+			tx.Quorums = []*models.QuorumInfo{{Did: tx.Owner}}
+		}, transferNFTOwnership: true, wantErr: true},
+		{name: "quorum owns NFT being executed by non-owner", mutate: func(tx *models.TransactionInfo) {
+			tx.Tokens = &models.TransactionTokens{NFT: []*models.TokenInfo{{TokenID: "nft1"}}}
+			tx.Quorums = []*models.QuorumInfo{{Did: tx.Owner}}
+		}, transferNFTOwnership: false, wantErr: false},
+		{name: "owner equals initiator is left to the initiator check", mutate: func(tx *models.TransactionInfo) {
+			tx.Owner = tx.Initiator
+			tx.Quorums = []*models.QuorumInfo{{Did: tx.Owner}}
+		}, wantErr: false},
+		{name: "empty owner", mutate: func(tx *models.TransactionInfo) {
+			tx.Owner = ""
+			tx.Quorums = []*models.QuorumInfo{{Did: validDID('b')}}
+		}, wantErr: false},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			tx := baseValidTxnInfo()
+			tc.mutate(&tx)
+			err := ValidateQuorumIsNotReceiver(&tx, tc.transferNFTOwnership)
+			if tc.wantErr && err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
 			}
 		})
 	}
@@ -363,8 +427,6 @@ func TestValidateTransactionValueAndPledge(t *testing.T) {
 // Pure helper tests (no DB needed).
 // -----------------------------------------------------------------------------
 
-
-
 // -----------------------------------------------------------------------------
 // Orchestrator-level (ValidateTransaction) sanity tests.
 //
@@ -401,8 +463,8 @@ func TestValidateTransaction_FailsOnInvalidInfoFields(t *testing.T) {
 		func(string, string) error { return nil },
 		func(string, []string, map[string]string, []string) error { return nil },
 		func([]string) (map[string]string, error) { return map[string]string{}, nil }, // syncAuthoritative
-		func(string) (*models.TransactionInfo, error) { return nil, nil }, // getTxByID
-		func(string) (string, bool, error) { return "", false, nil },      // getParentBurnTx
+		func(string) (*models.TransactionInfo, error) { return nil, nil },             // getTxByID
+		func(string) (string, bool, error) { return "", false, nil },                  // getParentBurnTx
 		func(string, string) (*models.Transactions, error) { return nil, nil },
 		false, // transferNFTOwnership
 	)
@@ -433,8 +495,8 @@ func TestValidateTransaction_FailsOnTxIDMismatch(t *testing.T) {
 		func(string, string) error { return nil },
 		func(string, []string, map[string]string, []string) error { return nil },
 		func([]string) (map[string]string, error) { return map[string]string{}, nil }, // syncAuthoritative
-		func(string) (*models.TransactionInfo, error) { return nil, nil }, // getTxByID
-		func(string) (string, bool, error) { return "", false, nil },      // getParentBurnTx
+		func(string) (*models.TransactionInfo, error) { return nil, nil },             // getTxByID
+		func(string) (string, bool, error) { return "", false, nil },                  // getParentBurnTx
 		func(string, string) (*models.Transactions, error) { return nil, nil },
 		false, // transferNFTOwnership
 	)
@@ -721,9 +783,6 @@ func (f *fakeTxnStore) GetGenesisTransactionIdByTokenId(tokenID string, isFullNo
 // nowhere meaningful (go test captures stdout), which is fine for our needs.
 func testLogger() logger.Logger { return logger.New(nil) }
 
-
-
-
 // =============================================================================
 // Section 3 — TokenID-related checks for RBTs (ValidateNewTokenContent)
 //
@@ -790,4 +849,172 @@ func TestValidateNewTokenContent_RBT(t *testing.T) {
 			}
 		})
 	}
+}
+
+// -----------------------------------------------------------------------------
+// ValidatePledgeTransferDisjoint:
+// A quorum must never pledge a token the transaction itself moves.
+// Run by the initiator before signing and by the quorum before pledging.
+// -----------------------------------------------------------------------------
+
+// tokenList builds a TokenInfo slice from bare token IDs.
+func tokenList(ids ...string) []*models.TokenInfo {
+	out := make([]*models.TokenInfo, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, &models.TokenInfo{TokenID: id})
+	}
+	return out
+}
+
+func TestValidatePledgeTransferDisjoint(t *testing.T) {
+	quorumA, quorumB := validDID('q'), validDID('r')
+
+	t.Run("nil transaction info errors", func(t *testing.T) {
+		if err := ValidatePledgeTransferDisjoint(nil); err == nil {
+			t.Fatal("expected error for nil transaction info")
+		}
+	})
+
+	// The shape a real split-then-transfer produces: the parent is burnt as a
+	// committed token, the child is transferred, and the quorum pledges tokens
+	// of its own. Nothing overlaps. This is the case that must never regress.
+	t.Run("legitimate split then transfer passes", func(t *testing.T) {
+		tx := baseValidTxnInfo()
+		tx.Tokens.RBT = tokenList("child-0.005")
+		tx.CommittedTokens = tokenList("parent-1")
+		tx.Quorums = []*models.QuorumInfo{
+			{Did: quorumA, Tokens: tokenList("q-pledge-1", "q-pledge-2")},
+		}
+		if err := ValidatePledgeTransferDisjoint(&tx); err != nil {
+			t.Fatalf("unexpected error on a legitimate payload: %v", err)
+		}
+	})
+
+	t.Run("no quorums passes", func(t *testing.T) {
+		tx := baseValidTxnInfo()
+		tx.Quorums = nil
+		if err := ValidatePledgeTransferDisjoint(&tx); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("quorum with no pledge tokens passes", func(t *testing.T) {
+		tx := baseValidTxnInfo()
+		tx.Quorums = []*models.QuorumInfo{{Did: quorumA}}
+		if err := ValidatePledgeTransferDisjoint(&tx); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	// The attack: pledging the very token being transferred satisfies
+	// ValidateTransactionValueAndPledge by counting one token on both sides.
+	t.Run("pledge equals transferred RBT is rejected", func(t *testing.T) {
+		tx := baseValidTxnInfo()
+		tx.Tokens.RBT = tokenList("tok-1")
+		tx.Quorums = []*models.QuorumInfo{{Did: quorumA, Tokens: tokenList("tok-1")}}
+
+		err := ValidatePledgeTransferDisjoint(&tx)
+		if err == nil {
+			t.Fatal("expected rejection when the pledged token is the transferred token")
+		}
+		for _, want := range []string{"tok-1", quorumA, "transferred RBT"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error %q does not mention %q", err, want)
+			}
+		}
+	})
+
+	t.Run("each transfer token type is covered", func(t *testing.T) {
+		cases := []struct {
+			name string
+			set  func(*models.TransactionInfo)
+			role string
+		}{
+			{"RBT", func(x *models.TransactionInfo) { x.Tokens.RBT = tokenList("dup") }, "transferred RBT"},
+			{"FT", func(x *models.TransactionInfo) { x.Tokens.FT = tokenList("dup") }, "transferred FT"},
+			{"NFT", func(x *models.TransactionInfo) { x.Tokens.NFT = tokenList("dup") }, "transferred NFT"},
+			{"SmartContract", func(x *models.TransactionInfo) {
+				x.Tokens.SmartContract = tokenList("dup")
+			}, "transferred smart contract"},
+			{"committed", func(x *models.TransactionInfo) { x.CommittedTokens = tokenList("dup") }, "committed"},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				tx := baseValidTxnInfo()
+				tx.Tokens = &models.TransactionTokens{RBT: tokenList("other")}
+				tc.set(&tx)
+				tx.Quorums = []*models.QuorumInfo{{Did: quorumA, Tokens: tokenList("dup")}}
+
+				err := ValidatePledgeTransferDisjoint(&tx)
+				if err == nil {
+					t.Fatalf("expected rejection for %s overlap", tc.name)
+				}
+				if !strings.Contains(err.Error(), tc.role) {
+					t.Errorf("error %q does not name the role %q", err, tc.role)
+				}
+			})
+		}
+	})
+
+	// The offending quorum need not be the first one listed.
+	t.Run("collision on a later quorum is found", func(t *testing.T) {
+		tx := baseValidTxnInfo()
+		tx.Tokens.RBT = tokenList("tok-1")
+		tx.Quorums = []*models.QuorumInfo{
+			{Did: quorumA, Tokens: tokenList("clean-1")},
+			{Did: quorumB, Tokens: tokenList("clean-2", "tok-1")},
+		}
+
+		err := ValidatePledgeTransferDisjoint(&tx)
+		if err == nil {
+			t.Fatal("expected rejection for a collision on the second quorum")
+		}
+		if !strings.Contains(err.Error(), quorumB) {
+			t.Errorf("error %q does not name the offending quorum", err)
+		}
+	})
+
+	// Shape defects belong to ValidateTransactionInfoFields; this check skips
+	// them rather than reporting a second, confusing error for one defect.
+	t.Run("nil and empty entries are skipped not reported", func(t *testing.T) {
+		tx := baseValidTxnInfo()
+		tx.Tokens = &models.TransactionTokens{
+			RBT: []*models.TokenInfo{nil, {TokenID: ""}, {TokenID: "real"}},
+		}
+		tx.Quorums = []*models.QuorumInfo{
+			nil,
+			{Did: quorumA, Tokens: []*models.TokenInfo{nil, {TokenID: ""}}},
+		}
+		if err := ValidatePledgeTransferDisjoint(&tx); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("nil Tokens with a committed collision is still caught", func(t *testing.T) {
+		tx := baseValidTxnInfo()
+		tx.Tokens = nil
+		tx.CommittedTokens = tokenList("parent-1")
+		tx.Quorums = []*models.QuorumInfo{{Did: quorumA, Tokens: tokenList("parent-1")}}
+		if err := ValidatePledgeTransferDisjoint(&tx); err == nil {
+			t.Fatal("expected rejection: committed tokens are walked even when Tokens is nil")
+		}
+	})
+
+	t.Run("does not mutate its input", func(t *testing.T) {
+		tx := baseValidTxnInfo()
+		tx.Tokens.RBT = tokenList("tok-1")
+		tx.Quorums = []*models.QuorumInfo{{Did: quorumA, Tokens: tokenList("tok-1")}}
+		before, err := json.Marshal(&tx)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		_ = ValidatePledgeTransferDisjoint(&tx)
+		after, err := json.Marshal(&tx)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		if string(before) != string(after) {
+			t.Fatal("ValidatePledgeTransferDisjoint mutated its input")
+		}
+	})
 }

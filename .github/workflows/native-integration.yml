@@ -12,7 +12,8 @@ name: Native Integration Tests
 on:
   pull_request:
     branches:
-      - release-v1
+      - development
+      - main
   workflow_dispatch:
 
 concurrency:
