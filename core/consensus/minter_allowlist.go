@@ -115,6 +115,25 @@ func validateMinterAllowlist(
 		}
 		wholeID := fmt.Sprintf("%d_%d", level, number)
 
+		// A whole-token genesis (no previous transaction) declares its own
+		// minter: the transaction initiator. Never resolve it from a genesis
+		// already in storage — that would let a transaction borrow the
+		// authority of whoever legitimately minted the same whole token.
+		// (TokenChainIntegrityCheck separately rejects a second genesis for an
+		// ID that already has a chain.)
+		if elems.PartIndex == 0 && t.PreviousTransactionID == "" {
+			if txnInfo.Initiator == "" {
+				return fmt.Errorf("ValidateMinterAllowlist: genesis transaction for token %s has empty initiator", t.TokenID)
+			}
+			if !minterallowlist.ValidateMinterAuthorization(table, txnInfo.Initiator, level, number) {
+				log.Error("ValidateMinterAllowlist: genesis rejection",
+					"tokenID", t.TokenID, "initiator", txnInfo.Initiator, "level", level, "tokenNumber", number)
+				return fmt.Errorf("ValidateMinterAllowlist: token %s minter %s not authorised for level %d number %d",
+					t.TokenID, txnInfo.Initiator, level, number)
+			}
+			continue
+		}
+
 		minter, lookupErr := w.GetGenesisInitiatorDID(wholeID, isFullnode)
 		if lookupErr != nil && elems.PartIndex != 0 && fetchGenesisTx != nil {
 			// Part-token transfer: the whole-token genesis may not be local yet.
