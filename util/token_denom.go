@@ -160,10 +160,35 @@ func GetRbtIDElements(tokenID string) (types.RbtIDElements, error) {
 		if err != nil {
 			return types.RbtIDElements{}, fmt.Errorf("failed to convert part index into int for rbt: %s, error: %v", tokenID, err)
 		}
+		if rbtElems.PartIndex <= 0 {
+			return types.RbtIDElements{}, fmt.Errorf("invalid token id format for rbt: %s, part index must be positive", tokenID)
+		}
 	default:
 		return types.RbtIDElements{}, fmt.Errorf("invalid token id format for rbt: %s, id elements should be 2 (whole) or 3 (part)", tokenID)
 	}
+	if rbtElems.TokenLevel <= 0 || rbtElems.TokenNumber <= 0 {
+		return types.RbtIDElements{}, fmt.Errorf("invalid token id format for rbt: %s, level and token number must be positive", tokenID)
+	}
+
+	// Canonical-form check. strconv.Atoi accepts leading zeros and a leading
+	// '+', so "01_7", "1_0007" and "+1_7" all parse to the same elements as
+	// "1_7". Storage keys on the raw string, so every such spelling would be a
+	// distinct (and freshly mintable) token unless rejected here. The only
+	// valid spelling of an ID is the one the minter emits: %d_%d[_%d].
+	if canonical := CanonicalRbtID(rbtElems); canonical != tokenID {
+		return types.RbtIDElements{}, fmt.Errorf("invalid token id format for rbt: %s is not canonical, expected %s", tokenID, canonical)
+	}
 	return rbtElems, nil
+}
+
+// CanonicalRbtID renders RBT ID elements in the single accepted spelling:
+// "<level>_<number>" for a whole token, "<level>_<number>_<partIndex>" for a
+// part token, with no zero padding or sign characters.
+func CanonicalRbtID(elems types.RbtIDElements) string {
+	if elems.PartIndex == 0 {
+		return fmt.Sprintf("%d_%d", elems.TokenLevel, elems.TokenNumber)
+	}
+	return fmt.Sprintf("%d_%d_%d", elems.TokenLevel, elems.TokenNumber, elems.PartIndex)
 }
 
 // GetTokenValueFromTokenID fetches the token value by
