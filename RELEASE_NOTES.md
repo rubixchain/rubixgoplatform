@@ -1,124 +1,54 @@
-When we started working on this release, we kept running into the same wall: the old transaction model wasn't designed for what Rubix was becoming. Per-token chain blocks, CBOR serialization, LevelDB — it all made sense early on, but it wasn't going to hold up at scale, and it made cross-asset transactions unnecessarily complex. So we rebuilt the foundation.
-
-v1.0.0 is that rebuild.
+v1.0.5 is a hardening release. Most of the work sits in consensus and chain sync — closing a double-spend path, making quorum collateral return reliably, and fixing a DID record that could quietly go wrong. There is one new API and additional logging.
 
 ---
 
-## The Transaction Model is Different Now
+## Double-Spend Hardening
 
-The biggest change is one you won't see in an API response, but you'll feel in every transaction.
+Two independent bugs together allowed a replayed RBT split to mint its child tokens twice. Both are fixed.
 
-We've moved from a model where each token maintained its own independent chain of blocks to a DAG-structured transaction graph where every transaction — regardless of asset type — is a single, unified object called `TransactionInfo`. RBT transfers, NFT executions, FT movements, smart contract calls: they all flow through the same structure, get hashed the same way, and get signed the same way.
+**A consumed parent could come back as spendable.** Applying a synced token chain derived `token_status` from the chain's role but only handled Deploy and Execute, so a consumed parent was written back as `Free` — and since split selection only picks Free RBT, it became re-selectable and could be split a second time into a duplicate genesis. Commit and Burn are now mapped correctly in both status-derivation paths.
 
-```json
-{
-  "initiator": "<DID>",
-  "owner": "<DID>",
-  "epoch": 1748956231,
-  "network": "mainnet",
-  "tokens": {
-    "rbt": [{ "tokenId": "...", "previousTransactionID": "..." }],
-    "nft": [{ "tokenId": "...", "previousTransactionID": "..." }]
-  },
-  "committedTokens": ["tokenID.prevTransactionID"],
-  "quorums": { "<quorum DID>": ["tokenID.prevTransactionID"] },
-  "memo": "...",
-  "data": "..."
-}
+**Consensus now verifies split ancestry against a full node.** A child's ancestors are derived from the token-ID hierarchy — deterministic and not initiator-controlled — and intersected with the genesis transaction's declared committed tokens. Each ancestor must have been burnt by this genesis or not at all; one burnt by an earlier transaction means the split is re-consuming an already-spent token, and it is rejected. The check reads local burn records first, then syncs unconfirmed ancestors from an authoritative full node. Where no full node is reachable it accepts with a warning, so transactions keep flowing.
+
+---
+
+## Quorum Liquidity Fix
+
+Rejected transactions no longer strand a quorum's pledge tokens in `Locked`.
+
+Pledge tokens are locked early but only promoted to `Pledged` — and recorded for later release — once `PledgeV2` succeeds. Any abort before that point returned without releasing them, so they were never picked up by the unpledge callback. A release guard now runs on every abort path, scoped by lock reference ID, and is disarmed as soon as `PledgeV2` commits. Successful transactions pledge exactly as before.
+
+---
+
+## DID Locality Fix
+
+A quorum node's own DID could silently stop being marked local.
+
+The transaction callback built the publisher's DID record without setting the local flag, and the upsert overwrites that column unconditionally — so a node's own DID was flipped to non-local the first time it initiated a transaction after quorum setup. The flag is now set from the publisher identity, so self-initiated transactions re-affirm the node's own DID as local while remote initiators stay non-local. Existing incorrect records repair themselves on the node's next self-initiated transaction.
+
+---
+
+## Consensus Check Corrections
+
+- `IsParentTokenBurnt` no longer syncs the genesis transaction when the transaction under validation *is* the genesis.
+- A genesis-only peer fetch API backs `IsParentTokenBurnt` and the minter allowlist check. It persists nothing.
+- The minter allowlist now syncs the genesis transaction from the token owner rather than the initiator.
+- Pledge tokens arriving with an empty previous transaction ID are backfilled in the transaction info.
+
+---
+
+## New API: Public Key by DID
+
+```
+GET /rubix/v1/dids/{did}/public_key
 ```
 
-The transaction ID is a deterministic hash of this struct. Signatures are over the ID, not over per-token data. Every party in a transaction — initiator, quorums, receiver — is working from the same canonical record.
-
-Each token's history is now an ordered list of `(transactionID, role)` pairs in PostgreSQL. Traversing the chain is a table lookup, not a block walk.
-
-The old CBOR block package and LevelDB storage are gone.
+Returns the hex-encoded public key a DID was derived from, resolved from the local DID directory or fetched from IPFS. This is the reverse of creating a DID from a public key, and takes the same encoding. Documented in Swagger.
 
 ---
 
-## Token Roles That Actually Mean Something
+## Logging and Tests
 
-Tokens now carry an explicit role in each transaction entry:
+Debug logging across chain sync, database reads and writes, and pubsub, aimed at the full-node and sender paths where sync issues have been hardest to trace.
 
-Mint → Transfer → Execute → Deploy → Burn → Commit → Uncommit → Pledge → Unpledge
-
-This sounds simple, but it eliminates an entire class of heuristics that the old code relied on to figure out what a token was doing in a given transaction. Chain traversal, validation logic, and explorer queries are all cleaner because of it.
-
----
-
-## Verification That Holds Up Under Scrutiny
-
-The consensus verification pipeline is now multi-layered and consistent across quorum and full-node:
-
-**Step 1 — Transaction integrity.** Recompute the hash from `TransactionInfo`. If it doesn't match the provided transaction ID, reject immediately. Signature verification runs over the ID, not the raw payload.
-
-**Step 2 — Ownership.** For each token, confirm the initiator was the owner in the referenced previous transaction. Cross-check the latest transaction ID in tokenchain against `previousTransactionID` in the payload. Confirm the token's current role makes it eligible to move.
-
-**Step 3 — Token ID validity.** Tokens are checked against the hardcoded token map — level, number, and network. Mainnet tokens follow the token map levels strictly. Testnet token levels start from 50000. Part token index must land within the supported decimal-place range (1–1332 for 3 decimal places).
-
-**Step 4 — Genesis provenance.** For Level-1 (premint) tokens, we walk back to the genesis transaction in tokenchain, pull the owner from transactions, and validate it against the hardcoded DID → token-range map. This is how we enforce that only the 11 designated DIDs — managing 4.3 million RBTs across defined ranges — could have minted genesis-level tokens. No exceptions.
-
-**Step 5 — IPFS pinning.** The tokens attribute values are IPFS-added and pinned on arrival. Token state is anchored to content, not block IDs.
-
-**Step 6 — Field validation.** DID strings validated as IPFS CIDv0 (`bafyb…`), epoch validated against current time, network validated, token structs validated for shape conformance.
-
----
-
-## How Transactions Flow Now
-
-The consensus dance has been restructured to build `TransactionInfo` incrementally, which matters for latency:
-
-1. Stateless validation first — balance check, decimal place limits — before anything hits the network.
-2. `TransactionInfo` is formed without the `quorums` field.
-3. Quorums are asked only for the value they should pledge, not a token list. They return pledge token details.
-4. Initiator fills the `quorums` field. `TransactionInfo` is now complete.
-5. Hash it, sign it, send it to quorums for consensus.
-6. Success or failure is published to `rubix_txn`. Post-consensus routing: empty owner → publish to token topic (SC/NFT self-exec); NFT → publish to token topic; everything else → direct transfer.
-
-The round-trip payload is smaller. Quorums do less speculative work. Token selection is pre-filtered by `token_denom` rather than scanning and retrying. The async receiver sync path is now the only path — the dead synchronous branch that was sitting behind `asyncMode := false` is gone. Background token chain sync runs concurrently with transaction completion rather than blocking it.
-
----
-
-## NFT Gets a Proper Transfer Flow
-
-NFT ownership transfer previously relied on PubSub, which worked but introduced timing dependencies and made the flow hard to reason about. It now follows the same RBT/FT flow: quorum-authorized, consensus-verified, deterministic.
-
-On top of that:
-
-- Parent-child lineage is a first-class concept. `GET /rubix/v1/nfts/{id}/parent` and `/children` let you traverse the NFT family tree. Minting a child NFT from a parent is now explicit in the API response — `initiateTransaction` returns `MintedNFTChildren`.
-- NFT content JSON now includes the RBT value of the asset, so value is recoverable from IPFS without needing the token ID as a side channel.
-- Multi-file upload for NFT deploy via OpenAPI spec 3.
-- Subscribers can execute NFTs without taking ownership. Value updates are restricted to the owner. Minimum pledge is `MinTransferAmount`.
-
----
-
-## Minter Governance on Mainnet
-
-The minter allowlist is now enforced at two levels — quorum and full-node — for mainnet transactions. Every token entering consensus is checked against the network-approved minter list before a single pledge is committed. The check extends to committed tokens, and the initiator gets a descriptive error rather than a silent rejection when it fails.
-
-New swarm keys for mainnet and testnet ship with this release, along with refreshed bootstrap nodes.
-
----
-
-## New Schema
-
-Three tables now own the entire transaction layer:
-
-| Table | What it holds |
-|-------|---------------|
-| `transactions` | Transaction ID, base64-encoded `TransactionInfo`, combined initiator + quorum signatures |
-| `tokenchain` | Per-token ordered list of `(transactionID, role)` |
-| `requests` | In-flight transaction lifecycle: request ID, transaction ID, status, role |
-
----
-
-## Wallet Synchronization Improvements
-
-Improved wallet synchronization, available through the `sync` command and the `POST /rubix/v1/sync` API.
-
-**Enhancements**
-
-- Added support for synchronizing local wallet state using a DID.
-- DID ownership is verified before synchronization begins.
-- Synchronizes only the token chain data that is not already available locally, improving efficiency.
-- Automatically updates any token chain whose local state is not up to date.
-- Synchronization is resumable, allowing it to continue seamlessly if interrupted.
+New coverage for the split-ancestor verification, DID public-key resolution, and the public-key API both locally and across nodes.

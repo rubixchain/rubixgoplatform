@@ -30,7 +30,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'      # matches go.mod and docker/rubix/Dockerfile
+          go-version: '1.24'      # go.mod stays at 1.22 (floor); 1.24's linker emits LC_UUID so darwin binaries load
 
       - name: Build
         run: go build ./...
@@ -76,7 +76,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.24'
 
       - name: Build
         run: go build ./...

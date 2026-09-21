@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -74,6 +73,105 @@ func ValidateTransactionInfoFields(txnInfo *models.TransactionInfo) error {
 		return fmt.Errorf("transaction must contain at least one transfer token (RBT, NFT, FT, or SmartContract)")
 	}
 
+	// A quorum signing for its own initiator is self-attestation, not consensus.
+	for _, q := range txnInfo.Quorums {
+		if q != nil && q.Did == txnInfo.Initiator {
+			return fmt.Errorf("initiator %s cannot act as its own quorum", txnInfo.Initiator)
+		}
+	}
+
+	return nil
+}
+
+// ValidatePledgeTransferDisjoint rejects a transaction in which a quorum pledges
+// a token that the transaction itself moves.
+//
+// A pledge is independent collateral standing behind the transfer. When the same
+// token appears on both sides it is not collateral at all: it leaves the quorum's
+// control as part of the very transfer it is meant to back, and
+// ValidateTransactionValueAndPledge is satisfied by counting that one token on
+// both sides of its own comparison — so the transaction clears the pledge
+// requirement with nothing actually backing it.
+//
+// Committed tokens count as consumed. A burnt parent is spent by the transaction
+// just as a transferred token is, so pledging one is the same defect.
+//
+// Stateless — a pure function of the payload — so both roles can run it before
+// doing any database or peer work. The initiator runs it before signing, so a
+// builder bug fails locally instead of going out on the wire. The quorum runs it
+// before signing and pledging, because the initiator authors this payload and a
+// quorum must not take the initiator's word for what it is being asked to pledge.
+//
+// Shape problems (nil entries, empty token IDs) are not this function's business;
+// they belong to ValidateTransactionInfoFields. Such entries are skipped rather
+// than reported here so that a single defect produces one clear error.
+func ValidatePledgeTransferDisjoint(txnInfo *models.TransactionInfo) error {
+	if txnInfo == nil {
+		return fmt.Errorf("ValidatePledgeTransferDisjoint: transaction info is nil")
+	}
+
+	// Every token this transaction consumes, mapped to the role that named it, so
+	// a collision reports which side it came from rather than only that it
+	// happened. First writer wins: a duplicate inside the transfer set is a
+	// different defect and must not change the role reported here.
+	consumed := make(map[string]string)
+	record := func(tokens []*models.TokenInfo, role string) {
+		for _, t := range tokens {
+			if t == nil || t.TokenID == "" {
+				continue
+			}
+			if _, exists := consumed[t.TokenID]; !exists {
+				consumed[t.TokenID] = role
+			}
+		}
+	}
+
+	if txnInfo.Tokens != nil {
+		record(txnInfo.Tokens.RBT, "transferred RBT")
+		record(txnInfo.Tokens.FT, "transferred FT")
+		record(txnInfo.Tokens.NFT, "transferred NFT")
+		record(txnInfo.Tokens.SmartContract, "transferred smart contract")
+	}
+	record(txnInfo.CommittedTokens, "committed")
+
+	if len(consumed) == 0 {
+		return nil
+	}
+
+	for _, quorum := range txnInfo.Quorums {
+		if quorum == nil {
+			continue
+		}
+		for _, t := range quorum.Tokens {
+			if t == nil || t.TokenID == "" {
+				continue
+			}
+			if role, clash := consumed[t.TokenID]; clash {
+				return fmt.Errorf(
+					"ValidatePledgeTransferDisjoint: quorum %s pledges token %s, which this transaction also carries as a %s token",
+					quorum.Did, t.TokenID, role)
+			}
+		}
+	}
+
+	return nil
+}
+
+// ValidateQuorumIsNotReceiver rejects a quorum that would receive value from the transaction it validates.
+// Owner names a receiver only when ownership moves; on an NFT execute it is the NFT's current owner, so that case is exempt.
+func ValidateQuorumIsNotReceiver(txnInfo *models.TransactionInfo, transferNFTOwnership bool) error {
+	if txnInfo == nil || txnInfo.Tokens == nil || txnInfo.Owner == "" || txnInfo.Owner == txnInfo.Initiator {
+		return nil
+	}
+	movesOwnership := len(txnInfo.Tokens.RBT) > 0 || len(txnInfo.Tokens.FT) > 0 || (transferNFTOwnership && len(txnInfo.Tokens.NFT) > 0)
+	if !movesOwnership {
+		return nil
+	}
+	for _, q := range txnInfo.Quorums {
+		if q != nil && q.Did == txnInfo.Owner {
+			return fmt.Errorf("ValidateQuorumIsNotReceiver: quorum %s cannot be the receiver of the transaction", q.Did)
+		}
+	}
 	return nil
 }
 
@@ -409,24 +507,23 @@ func ValidateNFTTransferAuthorization(txnInfo *models.TransactionInfo, transferN
 }
 
 func ValidateNewTokenContent(tokenID string, isQuorum bool, testnet bool, mainnet bool, localnet bool, log logger.Logger) error {
-	devidedParts := strings.Split(tokenID, "_")
+	// GetRbtIDElements rejects any ID that is not in canonical "%d_%d[_%d]"
+	// form (e.g. "01_7" or "1_0007"), so a padded spelling of an existing
+	// token can never be treated as a fresh mint.
+	elems, err := util.GetRbtIDElements(tokenID)
+	if err != nil {
+		return fmt.Errorf("invalid token id in token content: %w", err)
+	}
 
 	tokenTypeString := RBTString
-	if len(devidedParts) == 3 {
+	if elems.PartIndex != 0 {
 		tokenTypeString = PartString
 	}
 
 	// level is the token-mapping level (e.g. 10000 + mapLevel for localnet tokens).
 	// This is NOT the denom-tree level (0-6). Here we subtract the network offset to get the TokenMap lookup key.
-	level, err := strconv.Atoi(strings.TrimLeft(devidedParts[0], "0"))
-	if err != nil {
-		return fmt.Errorf("invalid token level in token content: %s", tokenID)
-	}
-
-	tokenNo, err := strconv.Atoi(devidedParts[1])
-	if err != nil {
-		return fmt.Errorf("invalid token number in token content: %s", tokenID)
-	}
+	level := elems.TokenLevel
+	tokenNo := elems.TokenNumber
 
 	shouldValidate := testnet || mainnet || localnet
 
@@ -472,10 +569,7 @@ func ValidateNewTokenContent(tokenID string, isQuorum bool, testnet bool, mainne
 
 	MaxPossiblePartTokenNumber := parts.MaxPossiblePartsIndexByMaxDecimalPlaces(uint(constants.MaxSupportedDecimalPlaces))
 	if tokenTypeString == PartString {
-		partTokenNumber, err := strconv.Atoi(devidedParts[2])
-		if err != nil {
-			return fmt.Errorf("invalid part number in token content: %s", tokenID)
-		}
+		partTokenNumber := elems.PartIndex
 		if partTokenNumber > MaxPossiblePartTokenNumber {
 			return fmt.Errorf(
 				"Parttoken number %d exceeds max allowed %d ",
@@ -550,8 +644,12 @@ func IsParentTokenBurnt(
 	isFullNode bool,
 	tokenID string,
 	currentTokenOwner string,
+	currentTxID string,
+	previousTransactionID string,
+	currentTxnInfo *models.TransactionInfo,
 	w *wallet.Wallet,
-	syncTxChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error,
+	log logger.Logger,
+	fetchGenesisTx func(peerDID, tokenID string) (*models.Transactions, error),
 ) (error, bool) {
 	var parentTokenID string
 	var err error
@@ -565,6 +663,28 @@ func IsParentTokenBurnt(
 		return fmt.Errorf("IsParentTokenBurnt: failed to compute parent id of token %s: %w", partTokenID, err), false
 	}
 
+	// Self-referential shortcut: an empty PreviousTransactionID means this
+	// token's genesis IS the transaction currently being validated — its
+	// CommittedTokens are already in memory as currentTxnInfo. No local DB
+	// lookup or peer sync is needed (or safe): the peer sync path fetches the
+	// token's CURRENT full chain with no exclusion, so if another transaction
+	// spending this token is concurrently mid-validation elsewhere, that sync
+	// can pull its entry in and persist it before this fullnode has actually
+	// validated it — corrupting the concurrent transaction's own chain-tip
+	// expectations. See TokenChainIntigrityCheck for the exclusion-based
+	// pattern used when checking chain state that isn't self-referential.
+	if previousTransactionID == "" {
+		if currentTxnInfo == nil {
+			return fmt.Errorf("IsParentTokenBurnt: token %s has empty PreviousTransactionID but currentTxnInfo is nil", tokenID), false
+		}
+		for _, committedToken := range currentTxnInfo.CommittedTokens {
+			if committedToken.TokenID == parentTokenID {
+				return nil, true
+			}
+		}
+		return nil, false
+	}
+
 	var genesisTx *models.Transactions
 	if isFullNode {
 		genesisTx, _, err = w.GetFullNodeTransactionAndRoleAtHeight(tokenID, 0)
@@ -572,16 +692,9 @@ func IsParentTokenBurnt(
 		genesisTx, _, err = w.GetTransactionAndRoleAtHeight(tokenID, 0)
 	}
 	if err != nil {
-		// sync token chain from initiator
-		err = syncTxChains(currentTokenOwner, []string{tokenID}, map[string]string{tokenID: ""}, []string{})
+		genesisTx, err = fetchGenesisTx(currentTokenOwner, tokenID)
 		if err != nil {
 			return fmt.Errorf("failed to get genesis transaction for token %s: %w", tokenID, err), false
-		} else {
-			if isFullNode {
-				genesisTx, _, err = w.GetFullNodeTransactionAndRoleAtHeight(tokenID, 0)
-			} else {
-				genesisTx, _, err = w.GetTransactionAndRoleAtHeight(tokenID, 0)
-			}
 		}
 	}
 	if genesisTx == nil {
@@ -603,15 +716,15 @@ func IsParentTokenBurnt(
 }
 
 func ValidateGenuineTokenCreator(tokenID string, isFullNode bool, w *wallet.Wallet) error {
-	devidedParts := strings.Split(tokenID, "_")
+	elems, err := util.GetRbtIDElements(tokenID)
+	if err != nil {
+		return fmt.Errorf("invalid token id in token content: %w", err)
+	}
 
 	// level is the token-mapping level (e.g. 10001 for localnet), NOT the denom-tree level (0-6).
 	// NOTE: The check below (level == 1) appears to be a legacy guard for an older token format
 	// that predates the 10000-offset scheme. It is dead code for tokens with level >= 10001.
-	level, err := strconv.Atoi(strings.TrimLeft(devidedParts[0], "0"))
-	if err != nil {
-		return fmt.Errorf("invalid token level in token content: %s", tokenID)
-	}
+	level := elems.TokenLevel
 	if level == 1 {
 		genesisTx, err := w.GetGenesisTransactionIdByTokenId(tokenID, isFullNode)
 		if err != nil {
@@ -633,13 +746,16 @@ func ValidateGenuineTokenCreator(tokenID string, isFullNode bool, w *wallet.Wall
 func ValidateTokenIDRelatedChecks(
 	tokenID string,
 	currentTokenOwner string,
+	currentTxID string,
+	previousTransactionID string,
+	currentTxnInfo *models.TransactionInfo,
 	isFullNode bool,
 	w *wallet.Wallet,
 	testnet bool,
 	mainnet bool,
 	localnet bool,
 	log logger.Logger,
-	syncTxChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error,
+	fetchGenesisTx func(peerDID, tokenID string) (*models.Transactions, error),
 ) error {
 	err := ValidateNewTokenContent(tokenID, isFullNode, testnet, mainnet, localnet, log)
 	if err != nil {
@@ -647,9 +763,13 @@ func ValidateTokenIDRelatedChecks(
 	}
 	//call IsParentTokenBurnt
 	//First check whether the token is a part token or not. If it is a part token, then check whether the parent token is burnt.
-	devidedParts := strings.Split(tokenID, "_")
-	if len(devidedParts) == 3 {
-		err, isParentTokenBurnt := IsParentTokenBurnt(isFullNode, tokenID, currentTokenOwner, w, syncTxChains)
+	// ValidateNewTokenContent above already guaranteed the ID is canonical, so this parse cannot fail.
+	elems, err := util.GetRbtIDElements(tokenID)
+	if err != nil {
+		return fmt.Errorf("failed to parse token id: %w", err)
+	}
+	if elems.PartIndex != 0 {
+		err, isParentTokenBurnt := IsParentTokenBurnt(isFullNode, tokenID, currentTokenOwner, currentTxID, previousTransactionID, currentTxnInfo, w, log, fetchGenesisTx)
 		if err != nil {
 			return fmt.Errorf("failed to validate parent token burnt: %w", err)
 		}
@@ -1122,6 +1242,10 @@ func ValidateIPFSPinChecks(txnInfo *models.TransactionInfo, isFullnode bool, che
 //   - checkPinned: function to check IPFS pin status (tokenID, prevTxnID) → error
 //   - syncTxChains: callback to sync transaction chains from peer (injected from core to avoid cyclic import)
 //   - syncAuthoritative: callback to sync tokens from an authoritative full node (for committed parent verification)
+//   - fetchGenesisTx: callback to fetch ONLY a token's genesis (position 0) transaction from
+//     a peer, without persisting anything locally (injected from core to avoid cyclic import).
+//     Used by verification-only checks (IsParentTokenBurnt, ValidateMinterAllowlist) that must
+//     not risk ingesting a sibling transaction still being validated elsewhere.
 //   - transferNFTOwnership: from ConsensusRequest envelope. Fullnode passes false.
 func ValidateTransaction(
 	tx *models.Transactions,
@@ -1138,6 +1262,7 @@ func ValidateTransaction(
 	syncAuthoritative func(tokenIDs []string) (map[string]string, error),
 	getTxByID func(txID string) (*models.TransactionInfo, error),
 	getParentBurnTx func(parentID string) (burnTxID string, found bool, err error),
+	fetchGenesisTx func(peerDID, tokenID string) (*models.Transactions, error),
 	transferNFTOwnership bool,
 ) (bool, error) {
 	var txnInfo models.TransactionInfo
@@ -1146,6 +1271,10 @@ func ValidateTransaction(
 	}
 
 	if err := ValidateTransactionInfoFields(&txnInfo); err != nil {
+		return false, fmt.Errorf("ValidateTransaction: %w", err)
+	}
+
+	if err := ValidateQuorumIsNotReceiver(&txnInfo, transferNFTOwnership); err != nil {
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
 
@@ -1182,14 +1311,14 @@ func ValidateTransaction(
 	}
 
 	//If transaction is a genesis transaction fullnode should do the below check addordingly
-	if err := ValidateMinterAllowlist(&txnInfo, isFullnode, w, log, syncTxChains, testnet, mainnet); err != nil {
+	if err := ValidateMinterAllowlist(&txnInfo, isFullnode, w, log, fetchGenesisTx, testnet, mainnet); err != nil {
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
 
 	// 7. ValidateTokenIDRelatedChecks for each RBT token in Tokens and CommittedTokens and pledged tokens
 	if txnInfo.Tokens.RBT != nil {
 		for _, token := range txnInfo.Tokens.RBT {
-			if err := ValidateTokenIDRelatedChecks(token.TokenID, txnInfo.Initiator, isFullnode, w, testnet, mainnet, localnet, log, syncTxChains); err != nil {
+			if err := ValidateTokenIDRelatedChecks(token.TokenID, txnInfo.Initiator, tx.ID, token.PreviousTransactionID, &txnInfo, isFullnode, w, testnet, mainnet, localnet, log, fetchGenesisTx); err != nil {
 				return false, fmt.Errorf("ValidateTransaction: token %s: %w", token.TokenID, err)
 
 			}
@@ -1197,7 +1326,7 @@ func ValidateTransaction(
 	}
 
 	for _, t := range txnInfo.CommittedTokens {
-		if err := ValidateTokenIDRelatedChecks(t.TokenID, txnInfo.Initiator, isFullnode, w, testnet, mainnet, localnet, log, syncTxChains); err != nil {
+		if err := ValidateTokenIDRelatedChecks(t.TokenID, txnInfo.Initiator, tx.ID, t.PreviousTransactionID, &txnInfo, isFullnode, w, testnet, mainnet, localnet, log, fetchGenesisTx); err != nil {
 			return false, fmt.Errorf("ValidateTransaction: committed token %s: %w", t.TokenID, err)
 		}
 	}
@@ -1206,7 +1335,7 @@ func ValidateTransaction(
 
 	for _, quorum := range txnInfo.Quorums {
 		for _, t := range quorum.Tokens {
-			if err := ValidateTokenIDRelatedChecks(t.TokenID, quorum.Did, isFullnode, w, testnet, mainnet, localnet, log, syncTxChains); err != nil {
+			if err := ValidateTokenIDRelatedChecks(t.TokenID, quorum.Did, tx.ID, t.PreviousTransactionID, &txnInfo, isFullnode, w, testnet, mainnet, localnet, log, fetchGenesisTx); err != nil {
 				return false, fmt.Errorf("ValidateTransaction: quorum %s token %s: %w", quorum.Did, t.TokenID, err)
 
 			}

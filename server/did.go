@@ -122,6 +122,33 @@ func (s *Server) APIRegisterDID(req *ensweb.Request) *ensweb.Result {
 	return s.didResponse(req, req.ID)
 }
 
+// GetPubKeyByDID godoc
+// @Summary      Get Public Key by DID
+// @Description  Returns the hex-encoded public key a DID was derived from
+// @Tags         DID
+// @Accept       json
+// @Produce      json
+// @Param        did  path      string  true  "DID (e.g. bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)"
+// @Success      200  {object}  models.BasicResponse{result=models.DIDPublicKeyResult}
+// @Failure      400  {object}  models.BasicResponse
+// @Router       /rubix/v1/dids/{did}/public_key [get]
+func (s *Server) APIGetPubKeyByDID(req *ensweb.Request) *ensweb.Result {
+	didStr := s.GetRouteVar(req, "did")
+
+	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(didStr)
+	if !strings.HasPrefix(didStr, "bafybmi") || len(didStr) != 59 || !is_alphanumeric {
+		s.log.Error("Invalid DID:", didStr)
+		return s.BasicResponse(req, false, "Invalid DID", nil)
+	}
+
+	pubKeyResult, err := s.c.GetPubKeyByDID(didStr)
+	if err != nil {
+		s.log.Error("failed to get public key for did", "did", didStr, "err", err)
+		return s.BasicResponse(req, false, err.Error(), nil)
+	}
+	return s.BasicResponse(req, true, "Got public key successfully", pubKeyResult)
+}
+
 func (s *Server) APISetupDID(req *ensweb.Request) *ensweb.Result {
 	folderName, err := s.c.CreateTempFolder()
 	if err != nil {

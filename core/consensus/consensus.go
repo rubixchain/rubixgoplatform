@@ -58,6 +58,22 @@ func ReqPledgeToken(
 
 	if len(childTokensKept) > 0 && len(burntParentToken) > 0 {
 		genTX := childTokensKept[0].TxRecord
+
+		// pledgeTokenDetails entries produced by a split have an empty
+		// PreviousTransactionID — CollectRBTTokens builds them before it knows
+		// the split's own txID. Left empty, downstream validation treats the
+		// pledge/consensus transaction itself as this token's genesis instead
+		// of the split transaction that actually minted it (IsParentTokenBurnt's
+		// self-referential check would then look for the burnt parent in the
+		// wrong transaction's CommittedTokens and fail a legitimate pledge).
+		// Backfill it with genTX.ID, mirroring the same fixup
+		// BuildTransactionInfoFromRequest already does for transfer tokens.
+		for _, t := range pledgeTokenDetails {
+			if t.PreviousTransactionID == "" {
+				t.PreviousTransactionID = genTX.ID
+			}
+		}
+
 		if errPersist := w.PersistGenesisTransaction(&wallet.PersistGenesisTransactionReq{
 			DID:                  dc.GetDID(),
 			GenesisTokens:        childTokensKept,
@@ -115,7 +131,15 @@ func ReqPledgeToken(
 		PledgeTokens: pledgeTokenDetails,
 	}
 
-	log.Info("ReqPledgeToken: Returning pledge response", "referenceId", referenceId, "tokenCount", len(pledgeTokenDetails))
+	pledgeTokenPrevTxIDs := make(map[string]string, len(pledgeTokenDetails))
+	for _, t := range pledgeTokenDetails {
+		pledgeTokenPrevTxIDs[t.TokenID] = t.PreviousTransactionID
+	}
+	log.Info("ReqPledgeToken: Returning pledge response",
+		"referenceId", referenceId,
+		"tokenCount", len(pledgeTokenDetails),
+		"pledgeTokenPrevTxIDs", pledgeTokenPrevTxIDs,
+	)
 	return pledgeResponse, nil
 }
 

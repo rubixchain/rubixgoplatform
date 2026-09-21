@@ -236,6 +236,56 @@ const docTemplate = `{
                 }
             }
         },
+        "/rubix/v1/dids/{did}/public_key": {
+            "get": {
+                "description": "Returns the hex-encoded public key a DID was derived from",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "DID"
+                ],
+                "summary": "Get Public Key by DID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "DID (e.g. bafybmih3l2emb4s7wbsgakwv4voaqngdirpg5f3kqlheqqsgdg7jthuwaq)",
+                        "name": "did",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.BasicResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "result": {
+                                            "$ref": "#/definitions/models.DIDPublicKeyResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/rubix/v1/dids/{did}/register": {
             "post": {
                 "description": "Registers a DID on the network.",
@@ -1324,6 +1374,17 @@ const docTemplate = `{
                 "result": {},
                 "status": {
                     "type": "boolean"
+                }
+            }
+        },
+        "models.DIDPublicKeyResult": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "public_key": {
+                    "type": "string"
                 }
             }
         },

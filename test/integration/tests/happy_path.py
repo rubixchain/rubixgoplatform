@@ -417,6 +417,7 @@ class StressRunner:
           - GET /rubix/v1/tx/{did}/{token_type}  (tx history by DID + type)
           - GET /rubix/v1/nfts/{nft_id}/children
           - GET /rubix/v1/nfts/{nft_id}/parent
+          - GET /rubix/v1/dids/{did}/public_key
 
         tx-history: assert nodeA reports >=1 rbt transaction (the shuttle moved
         RBT from did_a), proving the endpoint returns the history we created.
@@ -424,8 +425,15 @@ class StressRunner:
         deployed NFT (our test NFTs have no hierarchy, so an empty-but-OK
         response is the expected, correct result — this is an endpoint smoke
         test, not a hierarchy assertion).
+        public_key: assert both the owning node and a remote node resolve the
+        SAME key for did_a. Because a DID is the IPFS hash of its public key,
+        agreement across nodes is the real correctness property — whether the
+        remote answered from its local cache or from IPFS.
         """
         results: List[Dict[str, str]] = []
+
+        # --- public key by DID (local + cross-node agreement) ---
+        results.extend(self._verify_public_key_api())
 
         # --- tx history by DID + token_type ---
         if self.did_a:
@@ -482,6 +490,59 @@ class StressRunner:
                     "detail": f"get_nft_parent error: {exc}",
                 })
 
+        return results
+
+    def _verify_public_key_api(self) -> List[Dict[str, str]]:
+        """Assert GET /rubix/v1/dids/{did}/public_key resolves did_a on both the
+        owning node (local pubKey.pem) and a remote node (local cache or IPFS),
+        and that the two agree byte-for-byte."""
+        results: List[Dict[str, str]] = []
+        if not self.did_a:
+            return results
+
+        try:
+            own = self.node_a.get_public_key(self.did_a)
+        except Exception as exc:  # noqa: BLE001
+            return [{
+                "check": "DID_PUBLIC_KEY_LOCAL",
+                "status": "FAIL",
+                "detail": f"nodeA get_public_key error: {exc}",
+            }]
+
+        own_key = own.get("public_key") or ""
+        # 65-byte uncompressed secp256k1 point, hex-encoded.
+        local_ok = len(own_key) == 130
+        results.append({
+            "check": "DID_PUBLIC_KEY_LOCAL",
+            "status": "PASS" if local_ok else "FAIL",
+            "detail": (
+                f"nodeA resolved did_a key, len(hex)={len(own_key)}"
+                + ("" if local_ok else " (expected 130 hex chars)")
+            ),
+        })
+
+        # A remote node must resolve the SAME key — from its cached copy of the
+        # DID directory, or straight from IPFS if it never fetched did_a.
+        try:
+            remote = self.node_b.get_public_key(self.did_a)
+        except Exception as exc:  # noqa: BLE001
+            results.append({
+                "check": "DID_PUBLIC_KEY_CROSS_NODE",
+                "status": "FAIL",
+                "detail": f"nodeB get_public_key error: {exc}",
+            })
+            return results
+
+        remote_key = remote.get("public_key") or ""
+        match = bool(own_key) and own_key == remote_key
+        results.append({
+            "check": "DID_PUBLIC_KEY_CROSS_NODE",
+            "status": "PASS" if match else "FAIL",
+            "detail": (
+                "nodeB resolved did_a key; "
+                + ("matches nodeA" if match else "DIFFERS from nodeA's key")
+            ),
+        })
         return results
 
     # ------------------------------------------------------------------
@@ -892,6 +953,46 @@ FROM tokens;
             did_a=self.did_a,
             did_b=self.did_b,
             password=self.cfg.password,
+            did_q=self.did_q,
+            db_b=self.db_b,
+        )
+        return engine.run()
+
+    def run_sc_collateral(self) -> List[Dict[str, str]]:
+        """Run the SC deploy collateral suite against node A.
+
+        Deploys at a fractional value, which the main SC suite never does, and
+        asserts the collateral is split rather than consumed whole.
+        """
+        from test.integration.tests.sc_collateral import SCCollateralEngine
+
+        log.info("=== SC COLLATERAL: running fractional-value deploy tests ===")
+        engine = SCCollateralEngine(
+            node_a=self.node_a,
+            did_a=self.did_a,
+            db_a=self.db_a,
+            password=self.cfg.password,
+        )
+        return engine.run()
+
+    def run_ft_parts(self) -> List[Dict[str, str]]:
+        """Run the FT-from-parts suite against node A.
+
+        Mints FTs out of a wallet holding only fractional RBT, which the main FT
+        suite never does (it mints from did_a, whose whole 1.000 tokens are
+        picked first), and audits the token_denom counter the burns must
+        decrement.
+        """
+        from test.integration.tests.ft_parts import FTPartsEngine
+
+        log.info("=== FT PARTS: running FT-mint-from-part-RBT tests ===")
+        engine = FTPartsEngine(
+            node_a=self.node_a,
+            node_b=self.node_b,
+            quorum=self.quorum,
+            did_a=self.did_a,
+            db_a=self.db_a,
+            password=self.cfg.password,
         )
         return engine.run()
 
@@ -995,7 +1096,13 @@ FROM tokens;
         """
         passed = sum(1 for r in results if r["status"] == "PASS")
         failed = sum(1 for r in results if r["status"] == "FAIL")
-        total = len(results)
+        # SKIP records a check that could not run because its preconditions were
+        # not met (e.g. an earlier phase drained the wallet it needed). It is
+        # neither a pass nor a failure, so it stays out of the ratio — but it is
+        # logged, because a check that silently stops running is worse than one
+        # that fails.
+        skipped = sum(1 for r in results if r["status"] == "SKIP")
+        total = len(results) - skipped
 
         # Record for the entry point so a failed check becomes a non-zero exit.
         self.verification_failed = failed
@@ -1005,6 +1112,7 @@ FROM tokens;
             "total_checks": total,
             "passed": passed,
             "failed": failed,
+            "skipped": skipped,
             "results": results,
         }
 
@@ -1021,6 +1129,11 @@ FROM tokens;
             for r in results:
                 if r["status"] == "FAIL":
                     log.warning("  FAIL: %s — %s", r["check"], r["detail"])
+        # Surface SKIPs too: a check that stopped running is easy to miss and
+        # looks identical to one that never existed.
+        for r in results:
+            if r["status"] == "SKIP":
+                log.warning("  SKIP: %s — %s", r["check"], r["detail"])
 
         log.info("Verification results written to %s", out_path)
 
@@ -1072,6 +1185,9 @@ FROM tokens;
         intra_node_ft_fund: int = 2,
         run_all_tests: bool = False,
         negative_tests: bool = False,
+        sc_collateral_tests: bool = False,
+        ft_parts_tests: bool = False,
+        ft_parts_only: bool = False,
     ) -> None:
         if skip_setup:
             self._load_state()
@@ -1106,7 +1222,7 @@ FROM tokens;
 
         # Skip RBT shuttle if any *-only mode is active
         shuttle_verification: List[Dict[str, str]] = []
-        if not nft_only and not sc_only and not ft_only:
+        if not nft_only and not sc_only and not ft_only and not ft_parts_only:
             shuttle_verification = self.run_shuttle(decimal_transfers=decimal_transfers)
             if run_all_tests:
                 self._settle_between_phases("SHUTTLE", "NFT")
@@ -1117,6 +1233,8 @@ FROM tokens;
                 log.info("=== SHUTTLE SKIPPED (--sc-only mode) ===")
             if ft_only:
                 log.info("=== SHUTTLE SKIPPED (--ft-only mode) ===")
+            if ft_parts_only:
+                log.info("=== SHUTTLE SKIPPED (--ft-parts-only mode) ===")
 
         if nft_phases:
             self.run_nft(nft_phases)
@@ -1386,6 +1504,20 @@ FROM tokens;
         if negative_tests:
             negative_verification = self.run_negative()
 
+        # SC deploy collateral. Deploys its own contracts at a fractional value
+        # and only reads balances back, so it neither depends on nor disturbs
+        # the happy-path state.
+        sc_collateral_verification: List[Dict[str, str]] = []
+        if sc_collateral_tests:
+            sc_collateral_verification = self.run_sc_collateral()
+
+        # FT minting from part RBTs. Funds a DID of its own with fractional
+        # transfers, so like the SC collateral suite it neither depends on nor
+        # disturbs the happy-path state — it only spends from did_a's balance.
+        ft_parts_verification: List[Dict[str, str]] = []
+        if ft_parts_tests:
+            ft_parts_verification = self.run_ft_parts()
+
         # Deferred intra-node FT balance check — run at the very end so the
         # (slow) intra-node FT settlement to did_a2 has maximum elapsed time.
         deferred_verification: List[Dict[str, str]] = []
@@ -1414,6 +1546,8 @@ FROM tokens;
             + all_in_one_verification
             + intra_node_verification
             + negative_verification
+            + sc_collateral_verification
+            + ft_parts_verification
             + deferred_verification
             + extra_api_verification
             + tx_persist_verification

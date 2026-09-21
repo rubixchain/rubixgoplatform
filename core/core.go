@@ -28,6 +28,7 @@ const (
 	APIPingPath              string = "/rubix/v1/internal/ping"
 	APIPeerStatus            string = "/rubix/v1/internal/peer_status"
 	APISyncTransactionChain  string = "/rubix/v1/internal/sync_transaction_chain"
+	APIFetchGenesisTxn       string = "/rubix/v1/internal/fetch_genesis_transaction"
 	APICheckQuorumStatusPath string = "/rubix/v1/internal/quorum_status"
 	APIGetPeerInfoPath       string = "/rubix/v1/internal/peer_info"
 	APIInitiateConsensus     string = "/rubix/v1/internal/initiate_consensus"
@@ -267,6 +268,10 @@ func (c *Core) SetupCore() error {
 	// Set health-managed IPFS operations for the wallet
 	if c.ipfsOps != nil {
 		c.w.SetIPFSOperations(NewWalletIPFSAdapter(c.ipfsOps))
+	}
+	// Release NFT/SC tokens left Locked by a crash or restart mid-transaction; the deferred cleanup in initiateTransaction never ran for them.
+	if _, err := c.w.ReleaseStaleNFTAndSCLocksOnStartup(c.Ctx); err != nil {
+		c.log.Error("Failed to release stale NFT/SC locks on startup", "err", err)
 	}
 	c.PingSetup()
 	c.CheckQuorumStatusSetup()
