@@ -90,10 +90,10 @@ func ValidateMinterAllowlist(
 // enforceGenesisSignature gates whether a whole-token genesis whose signature
 // fails to verify is REJECTED (true) or merely logged (false).
 //
-// Staged rollout, deliberately off. Verification needs the claimed minter's DID
-// document, which Core.InitialiseDID may have to fetch over the network, so a
-// benign resolution failure would reject an otherwise-valid mainnet transfer.
-// Run log-only until telemetry shows no benign failures, then flip to true.
+// Enforced. Verification needs the claimed minter's DID document, which
+// Core.InitialiseDID may have to fetch over the network, so a benign resolution
+// failure also rejects the transfer. Set to false to fall back to log-only if
+// such failures show up in practice.
 // The binding check (genesisMintsToken) is NOT gated — it is pure local
 // computation and enforced unconditionally.
 const enforceGenesisSignature = true
@@ -284,8 +284,8 @@ func validateMinterAllowlist(
 					fetchErrs = append(fetchErrs, fmt.Sprintf("%s: returned genesis does not mint %s", peerDID, wholeID))
 					continue
 				}
-				// Guard 2 — the claimed minter must have signed it. Log-only
-				// until enforceGenesisSignature is flipped; see that constant.
+				// Guard 2 — the claimed minter must have signed it. Enforced
+				// while enforceGenesisSignature is true; see that constant.
 				if verifyGenesisSig != nil {
 					if sigErr := verifyFetchedGenesisSignature(genesisTx, &genesisInfo, verifyGenesisSig); sigErr != nil {
 						log.Error("ValidateMinterAllowlist: whole-token genesis signature did not verify",
