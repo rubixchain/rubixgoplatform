@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -9,6 +10,9 @@ import (
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
+
+// ErrNoPersistenceInputs means the transaction carries no token rows for the requested role.
+var ErrNoPersistenceInputs = errors.New("post-consensus persistence: no transaction tokens available to derive payload")
 
 type persistenceTokenInput struct {
 	TokenID               string
@@ -62,7 +66,7 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 		return nil, nil, nil, err
 	}
 	if len(inputs) == 0 {
-		return nil, nil, nil, fmt.Errorf("post-consensus persistence: no transaction tokens available to derive payload")
+		return nil, nil, nil, ErrNoPersistenceInputs
 	}
 
 	currentTokens, err := w.readTokensByIDs(ctx, affectedTokens)

@@ -430,6 +430,14 @@ func (c *Core) getParentBurnTxID(parentID string) (string, bool, error) {
 	return burnTxID, burnTxID != "", nil
 }
 
+// entriesAfterLocalPrefix returns the remote entries past the local prefix, or nil when remote is not ahead.
+func entriesAfterLocalPrefix[T any](enriched []T, localLen int) []T {
+	if localLen < 0 || localLen >= len(enriched) {
+		return nil
+	}
+	return enriched[localLen:]
+}
+
 // applyTokenChainFromSync validates and applies synced transactions for a single token.
 // It enforces: canonical order validation -> local prefix match -> hole filling -> atomic batch insert.
 //
@@ -545,14 +553,11 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.Transac
 	}
 
 	// Step 4: Hole filling — only the entries after our local prefix are new.
-	if len(localChain) >= len(enriched) {
+	newTxs := entriesAfterLocalPrefix(enriched, len(localChain))
+	if len(newTxs) == 0 {
 		c.log.Debug("applyTokenChainFromSync: local chain is at or ahead of remote, nothing to apply",
 			"tokenID", tokenID, "local", len(localChain), "remote", len(enriched))
 		return nil
-	}
-	newTxs := enriched[len(localChain):]
-	if len(newTxs) == 0 {
-		return nil // Already fully synced for this token.
 	}
 
 	// Determine the starting position for new entries.
@@ -890,8 +895,10 @@ func (c *Core) applyTokenChainFromSyncForFullNode(tokenID string, remoteTxs []ty
 		}
 	}
 
-	newTxs := enriched[len(localChain):]
+	newTxs := entriesAfterLocalPrefix(enriched, len(localChain))
 	if len(newTxs) == 0 {
+		c.log.Debug("applyTokenChainFromSyncForFullNode: local chain is at or ahead of remote, nothing to apply",
+			"tokenID", tokenID, "local", len(localChain), "remote", len(enriched))
 		return nil
 	}
 
