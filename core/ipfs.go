@@ -437,6 +437,10 @@ func (c *Core) RunIPFS() error {
 		return err
 	}
 
+	// The key is in place, so the node can now tell which network it is on and
+	// which minter allowlist applies.
+	c.resolveNetworkIdentity(ipfsDir)
+
 	if err := c.ensureLibp2pStreamMounting(ipfsDir); err != nil {
 		c.log.Error("failed to enable Libp2pStreamMounting in IPFS config", "err", err)
 		return err

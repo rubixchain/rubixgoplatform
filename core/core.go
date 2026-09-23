@@ -84,6 +84,7 @@ type Core struct {
 	ipfsApp              string
 	testnet              bool
 	networkMode          string
+	customNetwork        bool
 	version              string
 	webReq               map[string]*did.DIDChan
 	w                    *wallet.Wallet

@@ -467,6 +467,7 @@ func TestValidateTransaction_FailsOnInvalidInfoFields(t *testing.T) {
 		func(string) (string, bool, error) { return "", false, nil },                  // getParentBurnTx
 		func(string, string) (*models.Transactions, error) { return nil, nil },
 		false, // transferNFTOwnership
+		false, // customNetwork, false for a Rubix network
 	)
 	if err == nil {
 		t.Fatal("expected error because of invalid epoch, got nil")
@@ -499,6 +500,7 @@ func TestValidateTransaction_FailsOnTxIDMismatch(t *testing.T) {
 		func(string) (string, bool, error) { return "", false, nil },                  // getParentBurnTx
 		func(string, string) (*models.Transactions, error) { return nil, nil },
 		false, // transferNFTOwnership
+		false, // customNetwork, false for a Rubix network
 	)
 	if err == nil || !strings.Contains(err.Error(), "transaction ID mismatch") {
 		t.Fatalf("expected tx ID mismatch error, got: %v", err)
