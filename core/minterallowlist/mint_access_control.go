@@ -42,7 +42,10 @@ var TestnetAllowedMinters = []MintAccessRange{
 //
 // An empty list means the node processes every token whoever minted it, and it
 // warns about that at startup.
-var CustomNetAllowedMinters = []MintAccessRange{}
+var CustomNetAllowedMinters = []MintAccessRange{
+	{DID: "bafybmib5743qlxfoho35dmnk4b4nvte6e2yqrejhgtgzkwnh5woozlpdum", Level: 60001, StartTokenNumber: 1, EndTokenNumber: 2150000},
+	{DID: "bafybmidrq3arfhz5eigcnodusamddztsdbfln375bnw4adfvddwio4coyi", Level: 60001, StartTokenNumber: 2150001, EndTokenNumber: 4300000},
+}
 
 // ValidateMinterAuthorization returns true if (did, level, number) is in the
 // list.
