@@ -506,7 +506,10 @@ func ValidateNFTTransferAuthorization(txnInfo *models.TransactionInfo, transferN
 	return nil
 }
 
-func ValidateNewTokenContent(tokenID string, isQuorum bool, testnet bool, mainnet bool, localnet bool, log logger.Logger) error {
+// customNetwork marks a testnet whose swarm key is not one Rubix operates. Its
+// tokens carry CustomNetRBT_Level_Offset instead of the testnet offset, so the
+// custom case is tested before the testnet case: c.testnet is true on both.
+func ValidateNewTokenContent(tokenID string, isQuorum bool, testnet bool, mainnet bool, localnet bool, customNetwork bool, log logger.Logger) error {
 	// GetRbtIDElements rejects any ID that is not in canonical "%d_%d[_%d]"
 	// form (e.g. "01_7" or "1_0007"), so a padded spelling of an existing
 	// token can never be treated as a fresh mint.
@@ -531,7 +534,16 @@ func ValidateNewTokenContent(tokenID string, isQuorum bool, testnet bool, mainne
 		mapLevel := level
 		network := constants.NetworkMode_Mainnet
 
-		if testnet {
+		if customNetwork {
+			network = constants.NetworkMode_Testnet
+			if level < constants.CustomNetRBT_Level_Offset {
+				return fmt.Errorf(
+					"invalid custom network token level %d: custom network level must be >= %d",
+					level, constants.CustomNetRBT_Level_Offset,
+				)
+			}
+			mapLevel = level - constants.CustomNetRBT_Level_Offset
+		} else if testnet {
 			network = constants.NetworkMode_Testnet
 			if level < constants.TestnetRBT_Level_Offset {
 				return fmt.Errorf(
@@ -754,10 +766,11 @@ func ValidateTokenIDRelatedChecks(
 	testnet bool,
 	mainnet bool,
 	localnet bool,
+	customNetwork bool,
 	log logger.Logger,
 	fetchGenesisTx func(peerDID, tokenID string) (*models.Transactions, error),
 ) error {
-	err := ValidateNewTokenContent(tokenID, isFullNode, testnet, mainnet, localnet, log)
+	err := ValidateNewTokenContent(tokenID, isFullNode, testnet, mainnet, localnet, customNetwork, log)
 	if err != nil {
 		return fmt.Errorf("failed to validate token content: %w", err)
 	}
@@ -1319,7 +1332,7 @@ func ValidateTransaction(
 	// 7. ValidateTokenIDRelatedChecks for each RBT token in Tokens and CommittedTokens and pledged tokens
 	if txnInfo.Tokens.RBT != nil {
 		for _, token := range txnInfo.Tokens.RBT {
-			if err := ValidateTokenIDRelatedChecks(token.TokenID, txnInfo.Initiator, tx.ID, token.PreviousTransactionID, &txnInfo, isFullnode, w, testnet, mainnet, localnet, log, fetchGenesisTx); err != nil {
+			if err := ValidateTokenIDRelatedChecks(token.TokenID, txnInfo.Initiator, tx.ID, token.PreviousTransactionID, &txnInfo, isFullnode, w, testnet, mainnet, localnet, customNetwork, log, fetchGenesisTx); err != nil {
 				return false, fmt.Errorf("ValidateTransaction: token %s: %w", token.TokenID, err)
 
 			}
@@ -1327,7 +1340,7 @@ func ValidateTransaction(
 	}
 
 	for _, t := range txnInfo.CommittedTokens {
-		if err := ValidateTokenIDRelatedChecks(t.TokenID, txnInfo.Initiator, tx.ID, t.PreviousTransactionID, &txnInfo, isFullnode, w, testnet, mainnet, localnet, log, fetchGenesisTx); err != nil {
+		if err := ValidateTokenIDRelatedChecks(t.TokenID, txnInfo.Initiator, tx.ID, t.PreviousTransactionID, &txnInfo, isFullnode, w, testnet, mainnet, localnet, customNetwork, log, fetchGenesisTx); err != nil {
 			return false, fmt.Errorf("ValidateTransaction: committed token %s: %w", t.TokenID, err)
 		}
 	}
@@ -1336,7 +1349,7 @@ func ValidateTransaction(
 
 	for _, quorum := range txnInfo.Quorums {
 		for _, t := range quorum.Tokens {
-			if err := ValidateTokenIDRelatedChecks(t.TokenID, quorum.Did, tx.ID, t.PreviousTransactionID, &txnInfo, isFullnode, w, testnet, mainnet, localnet, log, fetchGenesisTx); err != nil {
+			if err := ValidateTokenIDRelatedChecks(t.TokenID, quorum.Did, tx.ID, t.PreviousTransactionID, &txnInfo, isFullnode, w, testnet, mainnet, localnet, customNetwork, log, fetchGenesisTx); err != nil {
 				return false, fmt.Errorf("ValidateTransaction: quorum %s token %s: %w", quorum.Did, t.TokenID, err)
 
 			}

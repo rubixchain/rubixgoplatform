@@ -224,11 +224,38 @@ func (c *Core) GetpinnedTokens(did string) ([]models.Token, error) {
 	return requiredTokens, nil
 }
 
-func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string) {
+func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string, startIndex int) {
 
 	br := models.BasicResponse{
 		Status:  true,
 		Message: "",
+	}
+
+	// Every exit path has to answer the caller, otherwise the request blocks
+	// until the reqID times out.
+	defer func() {
+		dc := c.GetWebReq(reqID)
+		if dc == nil {
+			c.log.Error("Failed to get did channels")
+			return
+		}
+		dc.OutChan <- &br
+	}()
+
+	// A custom network runs no faucet server, so it numbers tokens from a
+	// caller supplied index and has nothing to report the numbering back to.
+	if c.customNetwork {
+		if c.faucetURL != "" {
+			c.log.Warn("faucetURL is ignored on a custom network, tokens are numbered from startIndex")
+		}
+		if err := c.generateCustomNetRBT(reqID, tokenCount, did, startIndex); err != nil {
+			c.log.Error("Failed to generate custom network tokens", "err", err)
+			br.Status = false
+			br.Message = br.Message + ",  " + err.Error()
+			return
+		}
+		br.Message = br.Message + ",  " + "Successfully generated tokens."
+		return
 	}
 
 	tokenDetails, err := c.generateTestRBT(reqID, tokenCount, did)
@@ -276,17 +303,54 @@ func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string
 		br.Status = false
 		br.Message = br.Message + ",  " + "Failed to update token details. Status code:" + strconv.Itoa(resp.StatusCode)
 	}
-	dc := c.GetWebReq(reqID)
-	if dc == nil {
-		c.log.Error("Failed to get did channels")
-		return
-	}
-	dc.OutChan <- &br
 }
 
 func (c *Core) getTestTokensID(tokenLevel int, tokenNumber int) (string, error) {
 	idStrVal := fmt.Sprintf("%d_%d", tokenLevel, tokenNumber)
 	return idStrVal, nil
+}
+
+// generateCustomNetRBT mints tokens on a custom network, where there is no
+// faucet server to hold the counter. Ids come from startIndex and run to
+// startIndex+num-1, carrying the custom network level offset so they cannot be
+// mistaken for a mainnet, testnet or localnet token.
+//
+// The caller owns the numbering. Two DIDs minting from the same index produce
+// the same ids, which breaks chain integrity once a shared quorum sees both, so
+// each minter needs its own range. startIndex is required for that reason: the
+// node's own counter would restart at 1 on every node.
+func (c *Core) generateCustomNetRBT(reqID string, num int, did string, startIndex int) error {
+	if startIndex < 1 {
+		return fmt.Errorf("startIndex is required on a custom network and must be 1 or more, got %d", startIndex)
+	}
+
+	dc, err := c.SetupDID(reqID, did)
+	if err != nil {
+		return fmt.Errorf("DID does not exist")
+	}
+
+	for globalIndex := startIndex; globalIndex < startIndex+num; globalIndex++ {
+		currentTime := int(time.Now().Unix())
+
+		tx, err := c.w.BeginTx(c.w.Ctx)
+		if err != nil {
+			return fmt.Errorf("PersistGenesisTokenRecord: begin tx: %w", err)
+		}
+		defer tx.Rollback(c.w.Ctx) //nolint:errcheck
+
+		mapLevel, numInLevel, err := tokenmap.GetMainnetTokenLevelAndNumber(globalIndex)
+		if err != nil {
+			return fmt.Errorf("GetMainnetTokenLevelAndNumber(%d): %w", globalIndex, err)
+		}
+		tokenID := fmt.Sprintf("%d_%d", constants.CustomNetRBT_Level_Offset+mapLevel, numInLevel)
+
+		if _, err = c.w.PersistGenesisTokenRecord(tx, dc, c.ps, tokenID, did, constants.NetworkMode_Testnet, currentTime); err != nil {
+			c.log.Error("Failed to persist genesis token record", "err", err)
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (c *Core) generateTestRBT(reqID string, numTokens int, did string) (*token.FaucetToken, error) {
@@ -313,10 +377,18 @@ func (c *Core) generateTestRBT(reqID string, numTokens int, did string) (*token.
 	var tokendetail token.FaucetToken
 
 	body, err := io.ReadAll(resp.Body)
-	//Populating the tokendetail with current token number and current token level received from Faucet.
-	json.Unmarshal(body, &tokendetail)
 	if err != nil {
 		return nil, err
+	}
+	//Populating the tokendetail with current token number and current token level received from Faucet.
+	// An unreadable reply leaves the struct at zero, which rolls the level over
+	// to 1 and mints ids that collide with mainnet, so it has to fail here.
+	if err := json.Unmarshal(body, &tokendetail); err != nil {
+		return nil, fmt.Errorf("failed to read token details from faucet: %w", err)
+	}
+	if tokendetail.TokenLevel < constants.TestnetRBT_Level_Offset {
+		return nil, fmt.Errorf("faucet returned token level %d, expected %d or more",
+			tokendetail.TokenLevel, constants.TestnetRBT_Level_Offset)
 	}
 	//Updating the Faucet token details with each new token
 	for i := 0; i < numTokens; i++ {

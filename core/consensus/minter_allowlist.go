@@ -75,7 +75,7 @@ func validateMinterAllowlist(
 			return nil
 		}
 		table = minterallowlist.CustomNetAllowedMinters
-		expectedLevel = constants.TestnetRBT_Level_Offset + 1
+		expectedLevel = constants.CustomNetRBT_Level_Offset + 1
 	// Testnet enforcement is currently disabled. Re-enable by uncommenting
 	// the case below; TestnetAllowedMinters is still defined and tested.
 	case testnet:

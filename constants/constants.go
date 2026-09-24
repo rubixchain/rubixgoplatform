@@ -12,6 +12,12 @@ const (
 const (
 	TestnetRBT_Level_Offset int = 50000
 	LocalRBT_Level_Offset   int = 10000
+	// CustomNetRBT_Level_Offset separates the token ids of a custom testnet, one
+	// running on a swarm key Rubix does not operate, from every Rubix series.
+	// TokenMap has 78 levels, so a series spans offset+1 to offset+78: mainnet
+	// 1 to 78, localnet 10001 to 10078, testnet 50001 to 50078, custom 60001 to
+	// 60078.
+	CustomNetRBT_Level_Offset int = 60000
 )
 
 // DB types

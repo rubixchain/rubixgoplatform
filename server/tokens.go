@@ -139,6 +139,6 @@ func (s *Server) APIGenerateFaucetTestToken(req *ensweb.Request) *ensweb.Result 
 		return s.BasicResponse(req, false, "DID does not have an access", nil)
 	}
 	s.c.AddWebReq(req)
-	go s.c.GenerateFaucetTestTokens(req.ID, tr.TokenCount, tr.DID)
+	go s.c.GenerateFaucetTestTokens(req.ID, tr.TokenCount, tr.DID, tr.StartIndex)
 	return s.didResponse(req, req.ID)
 }

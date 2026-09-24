@@ -31,10 +31,11 @@ func (c *Client) GetAllTokens(didStr string, tokenType string) (*models.TokenRes
 	return &tr, nil
 }
 
-func (c *Client) GenerateFaucetTestRBT(numTokens int, didStr string) (*models.BasicResponse, error) {
+func (c *Client) GenerateFaucetTestRBT(numTokens int, didStr string, startIndex int) (*models.BasicResponse, error) {
 	m := models.FaucetRBTGenerateRequest{
 		TokenCount: numTokens,
 		DID:        didStr,
+		StartIndex: startIndex,
 	}
 	var rm models.BasicResponse
 	err := c.sendJSONRequest("POST", setup.APIGenerateFaucetTestToken, nil, &m, &rm)

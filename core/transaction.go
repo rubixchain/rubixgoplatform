@@ -287,7 +287,7 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	// ------------------------------------------------------------
 
 	for _, token := range pledgeTokens {
-		err = consensus.ValidateNewTokenContent(token.TokenID, true, c.testnet, c.mainnet, c.localnet, c.log)
+		err = consensus.ValidateNewTokenContent(token.TokenID, true, c.testnet, c.mainnet, c.localnet, c.customNetwork, c.log)
 		if err != nil {
 			c.log.Error("InitiateTransaction: Failed to validate token content", "err", err)
 			resp.Message = "InitiateTransaction: Failed to validate token content"

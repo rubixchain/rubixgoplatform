@@ -806,18 +806,23 @@ func TestValidateNewTokenContent_RBT(t *testing.T) {
 	const outOfRangePartIndex = "2000"
 
 	tests := []struct {
-		name     string
-		tokenID  string
-		testnet  bool
-		mainnet  bool
-		localnet bool
-		wantErr  bool
-		errMatch string
+		name          string
+		tokenID       string
+		testnet       bool
+		mainnet       bool
+		localnet      bool
+		customNetwork bool
+		wantErr       bool
+		errMatch      string
 	}{
 		// ---- HAPPY PATHS ----
 		{name: "mainnet valid whole token", tokenID: "1_1", mainnet: true, wantErr: false},
 		{name: "testnet valid whole token", tokenID: "50001_1", testnet: true, wantErr: false},
 		{name: "localnet valid whole token", tokenID: "10001_1", localnet: true, wantErr: false},
+		// A custom network runs in testnet mode, so testnet is set alongside it.
+		{name: "custom network valid whole token", tokenID: "60001_1", testnet: true, customNetwork: true, wantErr: false},
+		{name: "custom network rejects a testnet level", tokenID: "50001_1", testnet: true, customNetwork: true, wantErr: true, errMatch: "custom network level must be >="},
+		{name: "testnet rejects a custom network level", tokenID: "60001_1", testnet: true, wantErr: true, errMatch: "not present in TokenMap"},
 		{name: "mainnet valid part token", tokenID: "1_1_1", mainnet: true, wantErr: false},
 
 		// ---- 3.a  Token level being wrong ----
@@ -839,7 +844,7 @@ func TestValidateNewTokenContent_RBT(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			err := ValidateNewTokenContent(tc.tokenID, false, tc.testnet, tc.mainnet, tc.localnet, log)
+			err := ValidateNewTokenContent(tc.tokenID, false, tc.testnet, tc.mainnet, tc.localnet, tc.customNetwork, log)
 			if tc.wantErr && err == nil {
 				t.Fatalf("expected error, got nil")
 			}
