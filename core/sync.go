@@ -160,6 +160,90 @@ func (c *Core) FetchGenesisTransactionFromPeer(peerDID, tokenID string) (*models
 	return resp.Tx, nil
 }
 
+// verifyGenesisSignature reports whether signerDID actually produced signature
+// over info.
+//
+// Used by ValidateMinterAllowlist on a whole-token genesis fetched from a peer:
+// that genesis names its own minter, so without checking the signature the gate
+// trusts an unauthenticated assertion. A whole-token mint sets Initiator ==
+// Owner == the minting DID and signs via util.SignTransaction (see
+// Wallet.PersistGenesisTokenRecord), which is exactly what util.VerifySignature
+// validates.
+//
+// InitialiseDID resolves DIDs this node has never held, fetching the DID
+// document if needed and caching it under c.didDir.
+func (c *Core) verifyGenesisSignature(signerDID string, info *models.TransactionInfo, signature string) error {
+	dc, err := c.InitialiseDID(signerDID)
+	if err != nil {
+		return fmt.Errorf("verifyGenesisSignature: initialise minter DID %s: %w", signerDID, err)
+	}
+	return util.VerifySignature(dc, info, signature)
+}
+
+// SyncBurntTokenChainFromPeer fetches tokenID's chain from peerDID and applies it
+// locally ONLY if that chain is terminal — that is, its last entry is a burn.
+//
+// This is the narrow, safe half of the chain sync that ValidateMinterAllowlist
+// relied on before v1.0.5. The hazard that removed the general path — a sibling
+// transaction still being validated elsewhere gets pulled in and persisted before
+// it is actually valid — cannot arise here: a burnt token can never be spent
+// again (every token picker filters for Free), so no further entry can ever be
+// appended to its chain and there is nothing in flight to race with.
+//
+// A non-terminal chain is left unapplied and is NOT an error. The caller has
+// already resolved what it needed from the genesis-only fetch; persisting the
+// chain is purely an optimisation so the next validation reads it locally.
+func (c *Core) SyncBurntTokenChainFromPeer(peerDID, tokenID string) error {
+	if peerDID == "" || tokenID == "" {
+		return fmt.Errorf("SyncBurntTokenChainFromPeer: peer DID and token ID are both required")
+	}
+
+	req := syncTxChainRequest{DID: peerDID, TokenIDs: []string{tokenID}}
+
+	p, err := c.getPeer(peerDID)
+	if err != nil {
+		return fmt.Errorf("SyncBurntTokenChainFromPeer: getPeer failed: %w", err)
+	}
+	defer p.Close()
+
+	var resp syncTxChainResponse
+	if err := p.SendJSONRequest("POST", APISyncTransactionChain, nil, &req, &resp, false, 30*time.Second); err != nil {
+		return fmt.Errorf("SyncBurntTokenChainFromPeer: request failed: %w", err)
+	}
+	if !resp.Status {
+		return fmt.Errorf("SyncBurntTokenChainFromPeer: peer returned error: %s", resp.Message)
+	}
+
+	txs, ok := resp.Data[tokenID]
+	if !ok || len(txs) == 0 {
+		return fmt.Errorf("SyncBurntTokenChainFromPeer: peer served no chain for token %s", tokenID)
+	}
+
+	// The guard. Entries come back position-ordered, so the burn — if the token
+	// really is spent — is the final one. Anything else means the token is still
+	// live on this peer's view and must not be ingested.
+	burnRole := int16(models.GetTokenRoleID(constants.TokenRole_Burn))
+	if lastRole := txs[len(txs)-1].Role; lastRole != burnRole {
+		c.log.Debug("SyncBurntTokenChainFromPeer: chain is not terminal, not persisting",
+			"tokenID", tokenID, "peerDID", peerDID, "lastRole", lastRole, "entries", len(txs))
+		return nil
+	}
+
+	if c.fullNode {
+		if err := c.applyTokenChainFromSyncForFullNode(tokenID, txs, ""); err != nil {
+			return fmt.Errorf("SyncBurntTokenChainFromPeer: fullnode apply failed for %s: %w", tokenID, err)
+		}
+	} else {
+		if err := c.applyTokenChainFromSync(tokenID, txs, "", false); err != nil {
+			return fmt.Errorf("SyncBurntTokenChainFromPeer: apply failed for %s: %w", tokenID, err)
+		}
+	}
+
+	c.log.Info("SyncBurntTokenChainFromPeer: burnt token chain persisted",
+		"tokenID", tokenID, "peerDID", peerDID, "entries", len(txs))
+	return nil
+}
+
 // SyncTransactionChainsFromPeer fetches transaction chains for the given token IDs
 // from the peer identified by peerDID, validates and applies them locally.
 //
