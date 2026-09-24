@@ -784,6 +784,49 @@ func ValidateTokenIDRelatedChecks(
 	return nil
 }
 
+// validateSingleGenesis enforces the "a token is minted exactly once" rule for
+// an incoming genesis transaction, independently of the order in which
+// transactions happen to arrive.
+//
+// It deliberately does NOT consult the chain tip. Fullnode ingests transactions
+// from pubsub in arbitrary order, so the tip can legitimately have moved past
+// the mint by the time the mint itself is validated: a split S mints child X1
+// and a transfer T spends X1, and if T is processed first then tip(X1) == T
+// while S is still perfectly valid. The same applies to a re-delivery of S
+// after dedupTTL, long after its own descendants landed. A tip-based check
+// rejects both, dead-letters a legitimate transaction and fails its dependents.
+//
+// Instead it mirrors what PersistFullNodeTransaction already does: a row for
+// this exact (tokenID, txID) pair means the transaction is already recorded, at
+// any position, so there is nothing left to validate. Only a genesis row owned
+// by a DIFFERENT transaction is a real double-mint. This keeps every rejection
+// the tip-based check made and drops only its false positives.
+func validateSingleGenesis(tokenID string, currentTxID string, isFullnode bool, w *wallet.Wallet, log logger.Logger) error {
+	alreadyRecorded, err := w.HasTokenChainRow(tokenID, currentTxID, isFullnode)
+	if err != nil {
+		// Fail open on a lookup failure, as the previous tip-based check did:
+		// a flaky read must not turn into a permanent validation verdict.
+		log.Warn("TokenChainIntigrityCheck: genesis row lookup failed, skipping single-genesis check",
+			"tokenID", tokenID, "currentTxID", currentTxID, "err", err)
+		return nil
+	}
+	if alreadyRecorded {
+		return nil
+	}
+
+	existingGenesisTxID, err := w.GetGenesisRowTransactionIdByTokenId(tokenID, isFullnode)
+	if err != nil {
+		log.Warn("TokenChainIntigrityCheck: genesis lookup failed, skipping single-genesis check",
+			"tokenID", tokenID, "currentTxID", currentTxID, "err", err)
+		return nil
+	}
+	if existingGenesisTxID != "" && existingGenesisTxID != currentTxID {
+		return fmt.Errorf("TokenChainIntigrityCheck: token %s was already minted by transaction %s, so once again genesis transaction is not allowed: currentTxID %s",
+			tokenID, existingGenesisTxID, currentTxID)
+	}
+	return nil
+}
+
 // TokenChainIntegrityCheck verifies that every token's local chain tip matches
 // the incoming transaction's PreviousTransactionID. When a mismatch or missing
 // token is found, it triggers a sync via syncTxChains (injected from core to
@@ -819,16 +862,12 @@ func TokenChainIntegrityCheck(
 	for tokenType, tokens := range tokenLists {
 		for _, t := range tokens {
 			//If the previous transaction id is empty, then it is the genesis transaction.
-			//In that case, first check whether the same token details are present in the tokenchain table or not,
-			//If it is present, then check whether its transactionId is same as the current transactionID or not.
-			//If it is not same, it should through an error, it it is same,just continue.
+			//A token may only ever be minted once, so reject it if some other
+			//transaction already holds this token's genesis row.
 			if t.PreviousTransactionID == "" {
-				//get the token details from the tokenchain table
-				latestTransactionID, err := w.GetLatestTransactionIdByTokenId(t.TokenID, isFullnode)
-				if err == nil && latestTransactionID != currentTxID {
-					return fmt.Errorf("TokenChainIntigrityCheck: token details already exist in the tokenchain table, so once again genesis transaction is not allowed, for token %s: latestTransactionID %s != currentTxID %s", t.TokenID, latestTransactionID, currentTxID)
+				if err := validateSingleGenesis(t.TokenID, currentTxID, isFullnode, w, log); err != nil {
+					return err
 				}
-				//If there is no token with the same tokenID, then it is the first transaction of the token, so skip the check.
 				continue
 			}
 			allTokens = append(allTokens, tokenCheck{

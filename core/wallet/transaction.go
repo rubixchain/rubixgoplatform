@@ -152,6 +152,60 @@ func (w *Wallet) GetGenesisTransactionIdByTokenId(tokenID string, isFullNode boo
 	return genesisTxnId, nil
 }
 
+// HasTokenChainRow reports whether a chain row already exists for the
+// (tokenID, transactionID) pair, at any position. It is the read-only twin of
+// findFullNodeTokenChainRowByTokenIDTx, which PersistFullNodeTransaction uses
+// to stay idempotent across duplicate pubsub deliveries.
+func (w *Wallet) HasTokenChainRow(tokenID string, transactionID string, isFullNode bool) (bool, error) {
+	query := `SELECT EXISTS (
+		SELECT 1 FROM tokenchain WHERE token_id = $1 AND transaction_id = $2
+	)`
+	if isFullNode {
+		query = `SELECT EXISTS (
+			SELECT 1 FROM fullnode_tokenchain WHERE token_id = $1 AND transaction_id = $2
+		)`
+	}
+	var exists bool
+	if err := w.db.Pool().QueryRow(w.Ctx, query, tokenID, transactionID).Scan(&exists); err != nil {
+		return false, fmt.Errorf("HasTokenChainRow scan for token %s tx %s: %w", tokenID, transactionID, err)
+	}
+	return exists, nil
+}
+
+// GetGenesisRowTransactionIdByTokenId returns the transaction id of the token's
+// genesis chain row, or an empty string when the token has no genesis row
+// locally. Unlike GetGenesisTransactionIdByTokenId it does not error when the
+// token is absent, and it does not go through the index table.
+//
+// Genesis is identified by the absence of a previous_transaction_id rather than
+// by position 0: applyTokenChainFromSyncForFullNode numbers rows relative to the
+// local chain, so a chain synced from a peer that did not start at the mint can
+// hold a non-genesis row at position 0.
+func (w *Wallet) GetGenesisRowTransactionIdByTokenId(tokenID string, isFullNode bool) (string, error) {
+	query := `SELECT transaction_id
+		FROM tokenchain
+		WHERE token_id = $1
+		  AND (previous_transaction_id IS NULL OR previous_transaction_id = '')
+		ORDER BY position ASC
+		LIMIT 1`
+	if isFullNode {
+		query = `SELECT transaction_id
+			FROM fullnode_tokenchain
+			WHERE token_id = $1
+			  AND (previous_transaction_id IS NULL OR previous_transaction_id = '')
+			ORDER BY position ASC
+			LIMIT 1`
+	}
+	var genesisTxnId string
+	if err := w.db.Pool().QueryRow(w.Ctx, query, tokenID).Scan(&genesisTxnId); err != nil {
+		if err == pgx.ErrNoRows {
+			return "", nil
+		}
+		return "", fmt.Errorf("GetGenesisRowTransactionIdByTokenId scan for token %s: %w", tokenID, err)
+	}
+	return genesisTxnId, nil
+}
+
 // ReturnLatestTransactionIdByTokenId is similar to GetLatestTransactionIdByTokenId
 // It just returns empty string if no transaction is found for the given token id instead of returning an error
 func (w *Wallet) ReturnLatestTransactionIdByTokenId(tokenID string) (string, error) {
