@@ -6,13 +6,19 @@ name: Native Integration Tests
 # the same suite passes on macOS and Windows, where GitHub-hosted runners can't
 # run the Linux node containers.
 #
+# --run-all-tests covers every subsystem plus the negative and accounting
+# suites (SC deploy collateral, FT-from-parts). The FT-from-parts suite skips
+# itself if the earlier phases have drained node A; docker-integration.yml runs
+# it standalone in a job of its own so it is always exercised somewhere.
+#
 # Each OS: install Postgres, build the node binary natively (CGO), then run the
 # --native runner against config.native.json (node_index-derived ports).
 
 on:
   pull_request:
     branches:
-      - release-v1
+      - development
+      - main
   workflow_dispatch:
 
 concurrency:
@@ -44,7 +50,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.22'
+          go-version: '1.24'
 
       - name: Setup Python
         uses: actions/setup-python@v6

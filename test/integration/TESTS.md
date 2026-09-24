@@ -27,8 +27,14 @@ window between each:
 
 ```
 MINTING → SHUTTLE → NFT → SMART_CONTRACT → BUNDLED_TX → FT → ALL_IN_ONE
-        → INTRA_NODE → NEGATIVE → FINALISE
+        → INTRA_NODE → NEGATIVE → SC_COLLATERAL → FT_PARTS → FINALISE
 ```
+
+The last two are accounting suites rather than subsystem exercises: each funds
+or deploys its own assets and only reads state back, so they run after every
+subsystem without disturbing it. Both SKIP themselves if the earlier phases
+have drained node A — `docker-integration.yml` runs FT_PARTS standalone in a
+job of its own (`--ft-parts-only`) so it is always exercised somewhere.
 
 ---
 
@@ -191,7 +197,43 @@ state change) is a FAIL.
 
 ---
 
-## 9. Transaction persistence (final cross-node assurance)
+## 9. FT from part RBTs (`--ft-parts-tests` / `--ft-parts-only`)
+
+Minting an FT burns whole RBT — but the tokens burnt need not be whole. A wallet
+holding only fractional RBT must mint just the same, with several **part** tokens
+burnt per FT batch. The suite funds a DID of its own with sub-1.0 transfers (so
+by construction it holds parts and no 1.000 token), mints from it twice, and
+audits what the burns did to the wallet.
+
+**Why the FT suite above cannot catch this.** It mints from `did_a`, whose
+hundreds of whole tokens are selected first, so one whole parent is burnt per
+batch — and it asserts FT counts and balances, never `token_denom`.
+
+**Why `token_denom` matters.** It is not a statistic:
+`lockTokensForSplitOnce` picks *which denominations* to select from
+`token_denom`, then reads the matching rows out of `tokens`. A counter that
+still advertises burnt tokens makes a later selection ask for rows that are no
+longer Free, and the operation dies with `lockSelectedTokens: no tokens
+provided` — attributed to whatever transaction ran next, not to the mint that
+corrupted the counter. `FTPARTS_SPEND_AFTER_MINT` reproduces exactly that.
+
+**Verification checks**
+
+| Check | Asserts |
+|-------|---------|
+| `FTPARTS_PRECONDITION` | SKIP-only: node A lacks the balance to fund a parts wallet (a harness budgeting problem, never an FT failure). |
+| `FTPARTS_WALLET_PARTS_ONLY` | The funded DID holds the full funded amount as fractional denominations and no whole token — without which the mint below would not exercise the parts path. |
+| `FTPARTS_MINT_FROM_PARTS` | An FT mint backed by several part tokens succeeds, and really did burn more than one RBT row. |
+| `FTPARTS_PARTS_BURNT` | Free balance falls by exactly the RBT minted, and that same value is recorded as `BurntForFT` — no part silently destroyed. |
+| `FTPARTS_FT_BALANCE` | The minting DID holds the FTs, per the API and independently per the `tokens` table. |
+| `FTPARTS_DENOM_CONSISTENT` | `token_denom` matches the real count of Free RBT rows at every denomination. Guards `UpdateTokenInfo`, which used to **increment** the counter for tokens it was burning. |
+| `FTPARTS_NO_ZERO_DENOM` | No phantom `denom=0` row for the minting DID. Guards the same write, which keyed on a `TokenValue` never copied from `tokenInfo` — landing on denom 0 and missing the real denomination. |
+| `FTPARTS_REPEAT_MINT` | A second mint from the same parts wallet still succeeds and costs exactly the RBT requested. |
+| `FTPARTS_SPEND_AFTER_MINT` | The parts left over after the burns are still spendable — the user-visible failure a stale counter produces. |
+
+---
+
+## 10. Transaction persistence (final cross-node assurance)
 
 A cross-cutting check that runs **last**, after every subsystem and the deferred
 intra-node check, so all writes have committed across nodes. For every recorded
