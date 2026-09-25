@@ -79,7 +79,8 @@ func (p *DynamicTxnProcessor) processTxnWithRetry(txnEvent *models.EventTransact
 	// it. The defer is what guarantees that: dynamicWorker recovers from panics
 	// (fullnode_txn_processor.go, dynamicWorker), so an early return or a panic
 	// must not leave a stale entry behind.
-	if entry := p.registerInflight(txnEvent); entry != nil {
+	entry := p.registerInflight(txnEvent)
+	if entry != nil {
 		defer p.unregisterInflight(entry.id)
 
 		// Wait here, once, rather than inside the retry loop below: a producer
@@ -126,6 +127,11 @@ func (p *DynamicTxnProcessor) processTxnWithRetry(txnEvent *models.EventTransact
 			return
 		}
 
+		// Before this counts as a verdict: a failure reached while a producer
+		// this transaction declares is still being processed is not safely this
+		// node's own conclusion.
+		err = p.deferVerdictWhileProducerInFlight(entry, err)
+
 		lastErr = err
 		p.host.Log().Error("Transaction processing failed",
 			"txnID", txnEvent.TransactionID,
@@ -161,6 +167,74 @@ func (p *DynamicTxnProcessor) processTxnWithRetry(txnEvent *models.EventTransact
 	// dead-lettered and nothing downstream is touched: this says nothing about
 	// the transaction, and the consumers waiting on it keep their own retries.
 	p.releaseAdmission(txnEvent.TransactionID)
+}
+
+// deferVerdictWhileProducerInFlight re-tags a validation verdict as transient
+// while a transaction this one declares as a producer is still in flight.
+//
+// The failure it exists for is the one GuardAgainstInflight creates. The guard
+// trims a peer's chain response so a sibling still being validated locally is
+// not ingested, but it only returns a shorter slice — nothing tells the caller
+// the result was incomplete, so the sync reports success and phase 3 of
+// TokenChainIntegrityCheck then reports "chain mismatch after sync" as a plain
+// error. classifyValidationFailure reads that as this node's own verdict, the
+// retry ladder breaks on attempt 1, and a good transaction is dead-lettered with
+// everything downstream of it — for a condition that is purely local ordering
+// and resolves within seconds.
+//
+// The truncation is not plumbed back as a typed error on purpose:
+// SyncTransactionChainsFromPeer is shared with the quorum path and swallows
+// apply errors by design, and a signal raised on every trim would fail
+// validations where nothing needed was actually lost. The question is answered
+// instead from state already in hand — entry.deps and the registry.
+//
+// This only ever turns a verdict into another attempt, which is the safe
+// direction and the same fallback the rest of the classification takes. A
+// genuinely invalid transaction whose producer happens to be in flight reaches
+// the identical verdict on the next attempt, once that producer has resolved;
+// the cost is a delayed dead-letter, not a missed one.
+func (p *DynamicTxnProcessor) deferVerdictWhileProducerInFlight(entry *inflightTxn, err error) error {
+	if entry == nil || err == nil || !errors.Is(err, errValidationFailed) {
+		return err
+	}
+
+	producer := ""
+	for _, dep := range entry.deps {
+		if p.inflight.has(dep) {
+			producer = dep
+			break
+		}
+	}
+	if producer == "" {
+		return err
+	}
+
+	atomic.AddInt64(&p.verdictsDeferred, 1)
+	p.host.Log().Info("processTxnWithRetry: deferring a verdict, a declared producer is still in flight",
+		"txnID", entry.id, "producer", producer, "reason", err)
+
+	// Forget what the memo remembers about this transaction's tokens. The sync
+	// it recorded is the one that came back trimmed, and leaving it in place
+	// would have filterRecentlySynced skip the re-sync the next attempt exists
+	// to make.
+	p.invalidateSyncedTokens(entryTokenIDs(entry))
+
+	return classify(errDependencyTimeout, stripClass(err))
+}
+
+// entryTokenIDs returns the tokens the entry's transaction touches, or nil when
+// its payload cannot be read. registerInflight keeps only the dependency edges
+// it extracted, so the info is re-read here — on a path that runs only when an
+// attempt has already failed.
+func entryTokenIDs(entry *inflightTxn) []string {
+	if entry == nil || entry.event == nil || entry.event.Transaction == nil || len(entry.event.Transaction.Info) == 0 {
+		return nil
+	}
+	var info models.TransactionInfo
+	if err := json.Unmarshal(entry.event.Transaction.Info, &info); err != nil {
+		return nil
+	}
+	return transactionTokenIDs(&info)
 }
 
 // storeInvalidTransaction records a terminal verdict in the audit table.

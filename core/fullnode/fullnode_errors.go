@@ -72,6 +72,23 @@ func classify(class, cause error) error {
 	return &classifiedError{class: class, cause: cause}
 }
 
+// stripClass removes the outermost failure class from err, returning the cause
+// it was attached to.
+//
+// Re-tagging has to go through this. classify attaches a class as a second
+// branch of the error tree rather than wrapping it into the message, so tagging
+// an already-classified error a second time would leave the first class still
+// matching errors.Is and the re-tag would have no effect. A class further down
+// the chain — a peer failure tagged at the point it happened — is deliberately
+// left alone: it is a separate, still-true statement about what went wrong.
+func stripClass(err error) error {
+	var classified *classifiedError
+	if errors.As(err, &classified) {
+		return classified.cause
+	}
+	return err
+}
+
 // classifyValidationFailure decides whether a failure reported by validation is
 // this node's verdict on the transaction or a report about its surroundings.
 //

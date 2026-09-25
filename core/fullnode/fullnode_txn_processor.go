@@ -84,6 +84,11 @@ type DynamicTxnProcessor struct {
 	// at first if good transactions start being dead-lettered: every one of them
 	// is a verdict this node reached without validating the transaction itself.
 	//
+	// verdictsDeferred counts attempts whose verdict was held back because a
+	// declared producer was still in flight — a sync trimmed by the guard
+	// surfacing as a chain mismatch. Read it against failuresPropagated: it is
+	// how many dead-letters the ordering fix avoided.
+	//
 	// registryFullEvents and staleSwept are the two that should stay at zero on
 	// a healthy node. The first counts transactions processed untracked because
 	// the registry was full; the second counts entries removed because they
@@ -98,6 +103,7 @@ type DynamicTxnProcessor struct {
 	syncsIssued        int64
 	syncsSkipped       int64
 	failuresPropagated int64
+	verdictsDeferred   int64
 	bundlesDrained     int64
 	registryFullEvents int64
 	staleSwept         int64
@@ -497,6 +503,7 @@ func (p *DynamicTxnProcessor) dedupMapCleaner() {
 				"syncsSkipped", atomic.LoadInt64(&p.syncsSkipped),
 				"syncMemo", p.syncMemo.len(),
 				"failuresPropagated", atomic.LoadInt64(&p.failuresPropagated),
+				"verdictsDeferred", atomic.LoadInt64(&p.verdictsDeferred),
 				"bundlesDrained", atomic.LoadInt64(&p.bundlesDrained),
 				"registryFull", atomic.LoadInt64(&p.registryFullEvents),
 				"staleSwept", atomic.LoadInt64(&p.staleSwept))

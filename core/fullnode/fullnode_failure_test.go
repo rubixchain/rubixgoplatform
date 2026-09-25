@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -367,5 +368,92 @@ func TestPropagationIsSafeUnderConcurrency(t *testing.T) {
 
 	if got := p.inflight.waitingLen(); got != 0 {
 		t.Errorf("waitingOn holds %d producers after every pair finished, want 0", got)
+	}
+}
+
+// A verdict reached while a producer is still being processed is the failure
+// GuardAgainstInflight creates: it trimmed the chain, the sync still reported
+// success, and phase 3 reported a mismatch that reads like this node's own
+// conclusion. Holding it back is the whole of the fix.
+func TestDeferVerdictWhileProducerInFlight(t *testing.T) {
+	p, cancel := newTestProcessor(10, time.Second)
+	defer cancel()
+
+	producer := &inflightTxn{id: "split-1", ready: make(chan struct{})}
+	if outcome := p.inflight.register(producer); outcome != registered {
+		t.Fatalf("register(producer) = %v, want registered", outcome)
+	}
+	consumer := &inflightTxn{id: "transfer-1", deps: []string{"split-1"}, ready: make(chan struct{})}
+
+	verdict := classify(errValidationFailed,
+		fmt.Errorf("processSingleTransaction: failed to validate transaction: %w",
+			errors.New("TokenChainIntigrityCheck: token X (rbt) chain mismatch after sync from peer-1")))
+
+	got := p.deferVerdictWhileProducerInFlight(consumer, verdict)
+	if errors.Is(got, errValidationFailed) {
+		t.Error("the verdict survived; it would still break the retry ladder on attempt 1")
+	}
+	if !errors.Is(got, errDependencyTimeout) {
+		t.Error("the deferred failure is not transient, so the retry ladder will not run")
+	}
+	if got.Error() != verdict.Error() {
+		t.Errorf("the message changed:\n got %q\nwant %q", got.Error(), verdict.Error())
+	}
+	if n := atomic.LoadInt64(&p.verdictsDeferred); n != 1 {
+		t.Errorf("verdictsDeferred = %d, want 1", n)
+	}
+}
+
+// The deferral is scoped to one condition. Everything else must reach the
+// dead-letter exactly as it did before, or a genuinely invalid transaction
+// would cycle forever.
+func TestDeferVerdictLeavesEverythingElseAlone(t *testing.T) {
+	p, cancel := newTestProcessor(10, time.Second)
+	defer cancel()
+
+	verdict := classify(errValidationFailed, errors.New("signature verification failed"))
+
+	cases := []struct {
+		name  string
+		entry *inflightTxn
+		err   error
+	}{
+		{"no producer declared", &inflightTxn{id: "txn-1"}, verdict},
+		{"producer already resolved", &inflightTxn{id: "txn-1", deps: []string{"gone"}}, verdict},
+		{"untracked transaction", nil, verdict},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := p.deferVerdictWhileProducerInFlight(tc.entry, tc.err); !errors.Is(got, errValidationFailed) {
+				t.Errorf("the verdict was deferred, want it kept: %v", got)
+			}
+		})
+	}
+
+	if got := p.deferVerdictWhileProducerInFlight(&inflightTxn{id: "txn-1"}, nil); got != nil {
+		t.Errorf("a success was turned into %v, want nil", got)
+	}
+	if n := atomic.LoadInt64(&p.verdictsDeferred); n != 0 {
+		t.Errorf("verdictsDeferred = %d, want 0", n)
+	}
+}
+
+// Re-tagging cannot be done by wrapping: errors.Is walks both branches, so the
+// old class would still match and the deferral would silently do nothing.
+func TestStripClassRemovesOnlyTheOutermostClass(t *testing.T) {
+	peerDown := classify(errDependencyTimeout, errors.New("peer unreachable"))
+	outer := classify(errValidationFailed, fmt.Errorf("validation: %w", peerDown))
+
+	stripped := stripClass(outer)
+	if errors.Is(stripped, errValidationFailed) {
+		t.Error("the outermost class survived stripClass")
+	}
+	if !errors.Is(stripped, errDependencyTimeout) {
+		t.Error("stripClass removed a class further down the chain, which is still true")
+	}
+
+	plain := errors.New("never classified")
+	if stripClass(plain) != plain {
+		t.Error("stripClass altered an unclassified error")
 	}
 }
