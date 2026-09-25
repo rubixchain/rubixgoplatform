@@ -44,6 +44,10 @@ type DynamicTxnProcessor struct {
 	// together; see fullnode_queued.go for why.
 	queued *queuedSet
 
+	// Tokens whose last chain sync came back trimmed by the guard. Read at
+	// classification time; see fullnode_truncation.go.
+	truncated *truncationLog
+
 	// Dependency-aware ingest settings. Always active; see bundleConfig.
 	bundle bundleConfig
 
@@ -159,6 +163,7 @@ func NewTxnProcessor(host Host) *DynamicTxnProcessor {
 		enqueueTimeout:  time.Second * 10,
 		inflight:        newInflightRegistry(),
 		queued:          newQueuedSet(),
+		truncated:       newTruncationLog(),
 		bundle:          bundleCfg,
 		syncMemo:        newSyncedTokenMemo(bundleCfg.syncMemoTTL),
 	}
@@ -501,10 +506,13 @@ func (p *DynamicTxnProcessor) dedupMapCleaner() {
 					"count", len(stale), "txnIDs", stale, "ttl", inflightTTL)
 			}
 
+			p.truncated.sweep(truncationTTL)
+
 			p.host.Log().Info("Fullnode ingest metrics",
 				"inflight", p.inflight.len(),
 				"queueLength", len(p.txnQueue),
 				"queuedTracked", p.queued.len(),
+				"truncatedTokens", p.truncated.len(),
 				"depsObserved", atomic.LoadInt64(&p.depsObserved),
 				"depsInFlight", atomic.LoadInt64(&p.depsInFlight),
 				"parked", atomic.LoadInt64(&p.parkedCount),

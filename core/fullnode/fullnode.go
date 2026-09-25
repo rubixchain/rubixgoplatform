@@ -139,7 +139,7 @@ func (p *DynamicTxnProcessor) processTxnWithRetry(txnEvent *models.EventTransact
 		// Before this counts as a verdict: a failure reached while a producer
 		// this transaction declares is still being processed is not safely this
 		// node's own conclusion.
-		err = p.deferVerdictWhileProducerInFlight(entry, err)
+		err = p.deferVerdictWhileDependencyPending(entry, err)
 
 		lastErr = err
 		p.host.Log().Error("Transaction processing failed",
@@ -178,55 +178,72 @@ func (p *DynamicTxnProcessor) processTxnWithRetry(txnEvent *models.EventTransact
 	p.releaseAdmission(txnEvent.TransactionID)
 }
 
-// deferVerdictWhileProducerInFlight re-tags a validation verdict as transient
-// while a transaction this one declares as a producer is still in flight.
+// deferVerdictWhileDependencyPending re-tags a validation verdict as transient
+// while this node is still holding something that validation needed.
 //
 // The failure it exists for is the one GuardAgainstInflight creates. The guard
-// trims a peer's chain response so a sibling still being validated locally is
-// not ingested, but it only returns a shorter slice — nothing tells the caller
-// the result was incomplete, so the sync reports success and phase 3 of
+// trims a peer's chain response so an entry still being processed locally is not
+// ingested, but it only returns a shorter slice — nothing tells the caller the
+// result was incomplete, so the sync reports success and phase 3 of
 // TokenChainIntegrityCheck then reports "chain mismatch after sync" as a plain
 // error. classifyValidationFailure reads that as this node's own verdict, the
 // retry ladder breaks on attempt 1, and a good transaction is dead-lettered with
 // everything downstream of it — for a condition that is purely local ordering
 // and resolves within seconds.
 //
-// The truncation is not plumbed back as a typed error on purpose:
-// SyncTransactionChainsFromPeer is shared with the quorum path and swallows
-// apply errors by design, and a signal raised on every trim would fail
-// validations where nothing needed was actually lost. The question is answered
-// instead from state already in hand — entry.deps and the registry.
+// Two questions are asked, because one does not cover it:
+//
+//   - Is a producer this transaction DECLARES still pending? The direct case: the
+//     entry the guard stopped at is the transaction's own producer.
+//   - Was a sync for one of this transaction's tokens trimmed recently? The guard
+//     cuts to a PREFIX, so an unrelated held transaction sitting earlier in the
+//     same chain drops everything after it, including the producer — which is
+//     then neither pending nor declared, and the first question says no. Those
+//     are the arrears a fullnode catching up accumulates.
+//
+// Neither is plumbed back as a typed error on purpose: SyncTransactionChainsFromPeer
+// is shared with the quorum path, and a signal raised on every trim would fail
+// validations where nothing needed was actually lost. Both are answered from
+// state already in hand — entry.deps, the registry, the queued set and the note
+// the guard leaves on its way past.
 //
 // This only ever turns a verdict into another attempt, which is the safe
 // direction and the same fallback the rest of the classification takes. A
-// genuinely invalid transaction whose producer happens to be in flight reaches
-// the identical verdict on the next attempt, once that producer has resolved;
-// the cost is a delayed dead-letter, not a missed one.
-func (p *DynamicTxnProcessor) deferVerdictWhileProducerInFlight(entry *inflightTxn, err error) error {
+// genuinely invalid transaction that trips either question reaches the identical
+// verdict on a later attempt, once the condition clears; the cost is a delayed
+// dead-letter, not a missed one.
+func (p *DynamicTxnProcessor) deferVerdictWhileDependencyPending(entry *inflightTxn, err error) error {
 	if entry == nil || err == nil || !errors.Is(err, errValidationFailed) {
 		return err
 	}
 
-	producer := ""
+	tokens := entryTokenIDs(entry)
+
+	reason, detail := "", ""
 	for _, dep := range entry.deps {
 		if p.isPending(dep) {
-			producer = dep
+			reason, detail = "a declared producer is still pending", dep
 			break
 		}
 	}
-	if producer == "" {
+	if reason == "" {
+		if tokenID, trimmed := p.truncated.recentlyTruncated(tokens, truncationTTL); trimmed {
+			reason, detail = "a chain sync for one of its tokens was trimmed", tokenID
+		}
+	}
+	if reason == "" {
 		return err
 	}
 
 	atomic.AddInt64(&p.verdictsDeferred, 1)
-	p.host.Log().Info("processTxnWithRetry: deferring a verdict, a declared producer is still in flight",
-		"txnID", entry.id, "producer", producer, "reason", err)
+	p.host.Log().Info("processTxnWithRetry: deferring a verdict, "+reason,
+		"txnID", entry.id, "dependency", detail, "reason", err)
 
 	// Forget what the memo remembers about this transaction's tokens. The sync
 	// it recorded is the one that came back trimmed, and leaving it in place
 	// would have filterRecentlySynced skip the re-sync the next attempt exists
 	// to make.
-	p.invalidateSyncedTokens(entryTokenIDs(entry))
+	p.invalidateSyncedTokens(tokens)
 
 	return classify(errDependencyTimeout, stripClass(err))
 }
@@ -354,7 +371,9 @@ func (p *DynamicTxnProcessor) processSingleTransaction(newEvent *models.EventTra
 	// one entry short. Forget it before waking anybody: a released waiter starts
 	// validating immediately, and it must not be handed a reason to skip a sync
 	// it now genuinely needs.
-	p.invalidateSyncedTokens(transactionTokenIDs(transactionInfo))
+	tokenIDs := transactionTokenIDs(transactionInfo)
+	p.invalidateSyncedTokens(tokenIDs)
+	p.truncated.forget(tokenIDs)
 
 	// This transaction is now a producer that has resolved, so wake anything
 	// held behind it. The call sits here, after the persist returns, and not

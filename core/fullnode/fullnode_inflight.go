@@ -592,6 +592,12 @@ func (p *DynamicTxnProcessor) GuardAgainstInflight(tokenID string, txs []types.T
 	if len(guarded) < len(txs) {
 		firstDropped = txs[len(guarded)].Tx.ID
 	}
+
+	// Leave the note. What was dropped need not be the current transaction's own
+	// producer — a prefix cut early takes everything after it — so this is the
+	// only point at which the incompleteness is visible at all.
+	p.truncated.record(tokenID)
+
 	p.host.Log().Info("Chain sync truncated at an in-flight transaction",
 		"tokenID", tokenID,
 		"remoteCount", len(txs),

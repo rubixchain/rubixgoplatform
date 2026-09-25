@@ -389,7 +389,7 @@ func TestDeferVerdictWhileProducerInFlight(t *testing.T) {
 		fmt.Errorf("processSingleTransaction: failed to validate transaction: %w",
 			errors.New("TokenChainIntigrityCheck: token X (rbt) chain mismatch after sync from peer-1")))
 
-	got := p.deferVerdictWhileProducerInFlight(consumer, verdict)
+	got := p.deferVerdictWhileDependencyPending(consumer, verdict)
 	if errors.Is(got, errValidationFailed) {
 		t.Error("the verdict survived; it would still break the retry ladder on attempt 1")
 	}
@@ -424,13 +424,13 @@ func TestDeferVerdictLeavesEverythingElseAlone(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := p.deferVerdictWhileProducerInFlight(tc.entry, tc.err); !errors.Is(got, errValidationFailed) {
+			if got := p.deferVerdictWhileDependencyPending(tc.entry, tc.err); !errors.Is(got, errValidationFailed) {
 				t.Errorf("the verdict was deferred, want it kept: %v", got)
 			}
 		})
 	}
 
-	if got := p.deferVerdictWhileProducerInFlight(&inflightTxn{id: "txn-1"}, nil); got != nil {
+	if got := p.deferVerdictWhileDependencyPending(&inflightTxn{id: "txn-1"}, nil); got != nil {
 		t.Errorf("a success was turned into %v, want nil", got)
 	}
 	if n := atomic.LoadInt64(&p.verdictsDeferred); n != 0 {
@@ -476,7 +476,87 @@ func TestDeferVerdictSeesAQueuedProducer(t *testing.T) {
 	consumer := &inflightTxn{id: "transfer-1", deps: []string{"split-1"}, ready: make(chan struct{})}
 	verdict := classify(errValidationFailed, errors.New("chain mismatch after sync from peer-1"))
 
-	if got := p.deferVerdictWhileProducerInFlight(consumer, verdict); errors.Is(got, errValidationFailed) {
+	if got := p.deferVerdictWhileDependencyPending(consumer, verdict); errors.Is(got, errValidationFailed) {
 		t.Error("the verdict stood while its producer was still sitting in the queue")
+	}
+}
+
+// The gap the declared-producer check alone leaves. The guard cuts to a PREFIX,
+// so a held transaction sitting EARLIER in the chain than the one this
+// transaction needs drops the needed entry too — and that earlier transaction is
+// not a declared producer, so asking only about deps says "verdict" and a valid
+// transaction is dead-lettered. This is the shape a fullnode catching up
+// produces, and the queued set widened it from the few transactions under a
+// worker to everything in txnQueue.
+func TestDeferVerdictOnATrimmedSyncWithNoDeclaredProducerPending(t *testing.T) {
+	p, cancel := newTestProcessor(10, time.Second)
+	defer cancel()
+
+	// txn-X sits earlier in token-a's chain and happens to be queued here.
+	p.QueueFullnodeTransaction(testEvent("txn-X"))
+
+	// The transfer needs split-1, which is NOT pending — it was already
+	// persisted elsewhere, or simply never arrived here.
+	consumer := p.registerInflight(eventWithDeps("transfer-1", "split-1"))
+	if consumer == nil {
+		t.Fatal("registerInflight returned nil")
+	}
+	if p.isPending("split-1") {
+		t.Fatal("split-1 is pending; this test needs the declared-producer check to say no")
+	}
+
+	verdict := classify(errValidationFailed, errors.New("chain mismatch after sync from peer-1"))
+
+	// Without the guard's note there is nothing to go on, so this is a verdict.
+	if got := p.deferVerdictWhileDependencyPending(consumer, verdict); !errors.Is(got, errValidationFailed) {
+		t.Fatalf("deferred with no evidence at all: %v", got)
+	}
+
+	// The guard truncating the transfer's own token is the evidence.
+	// eventWithDeps names it "<txnID>-token-a".
+	guarded := p.GuardAgainstInflight("transfer-1-token-a", chain("txn-X", "split-1"))
+	if len(guarded) != 0 {
+		t.Fatalf("guard applied %v, want nothing", chainIDs(guarded))
+	}
+
+	got := p.deferVerdictWhileDependencyPending(consumer, verdict)
+	if errors.Is(got, errValidationFailed) {
+		t.Error("the verdict stood although the sync that produced it came back trimmed")
+	}
+	if !errors.Is(got, errDependencyTimeout) {
+		t.Error("the deferred failure is not transient, so the retry ladder will not run")
+	}
+}
+
+// A note has to go stale, or a token trimmed once would soften every later
+// verdict on it for the life of the process.
+func TestTruncationNotesExpireAndAreClearedOnPersist(t *testing.T) {
+	p, cancel := newTestProcessor(10, time.Second)
+	defer cancel()
+
+	p.truncated.record("token-a")
+
+	if _, trimmed := p.truncated.recentlyTruncated([]string{"token-a"}, truncationTTL); !trimmed {
+		t.Fatal("a fresh note was not found")
+	}
+	if _, trimmed := p.truncated.recentlyTruncated([]string{"token-a"}, time.Nanosecond); trimmed {
+		t.Error("a note older than the window was still acted on")
+	}
+	if _, trimmed := p.truncated.recentlyTruncated([]string{"token-b"}, truncationTTL); trimmed {
+		t.Error("a note was found for a token that was never trimmed")
+	}
+
+	// A persist advances the chain, so the gap the note describes is gone.
+	p.truncated.forget([]string{"token-a"})
+	if _, trimmed := p.truncated.recentlyTruncated([]string{"token-a"}, truncationTTL); trimmed {
+		t.Error("the note survived the persist that resolved it")
+	}
+
+	p.truncated.record("token-c")
+	if dropped := p.truncated.sweep(time.Nanosecond); dropped != 1 {
+		t.Errorf("sweep dropped %d notes, want 1", dropped)
+	}
+	if n := p.truncated.len(); n != 0 {
+		t.Errorf("truncated.len() = %d after the sweep, want 0", n)
 	}
 }
