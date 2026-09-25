@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/json"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -90,7 +91,7 @@ func (ps *PubSub) SubscribeTopic(topic string, cb PubSubCallback) error {
 	ps.mu.Lock()
 	if _, ok := ps.sub[topic]; ok {
 		ps.mu.Unlock()
-		ps.log.Error(topic, " - already subscribed")
+		ps.log.Debug(topic, " - already subscribed")
 		return fmt.Errorf("topic already subscribed")
 	}
 	p, err := ps.ipfs.PubSubSubscribe(topic)
@@ -108,6 +109,14 @@ func (ps *PubSub) SubscribeTopic(topic string, cb PubSubCallback) error {
 	}
 	go ps.receivePub(topic, s)
 	return nil
+}
+
+// IsSubscribed reports whether the topic currently has a live subscription.
+func (ps *PubSub) IsSubscribed(topic string) bool {
+	ps.mu.RLock()
+	defer ps.mu.RUnlock()
+	_, ok := ps.sub[topic]
+	return ok
 }
 
 // Unsubscribe stops receiving messages on the given topic and tears down the
@@ -161,9 +170,19 @@ func (ps *PubSub) receivePub(topic string, s *subscription) {
 		cur, ok := ps.sub[topic]
 		ps.mu.RUnlock()
 		if ok && cur.cb != nil {
-			go cur.cb(m.From.String(), topic, m.Data)
+			go ps.invokeCallback(cur.cb, m.From.String(), topic, m.Data)
 		}
 	}
+}
+
+// invokeCallback runs a subscriber callback and turns a panic into a log line so the process survives.
+func (ps *PubSub) invokeCallback(cb PubSubCallback, from string, topic string, data []byte) {
+	defer func() {
+		if r := recover(); r != nil {
+			ps.log.Error("pubsub callback panicked", "topic", topic, "from", from, "panic", r, "stack", string(debug.Stack()))
+		}
+	}()
+	cb(from, topic, data)
 }
 
 func (ps *PubSub) Publish(topic string, model interface{}) error {
