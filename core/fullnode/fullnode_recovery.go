@@ -1,4 +1,4 @@
-package core
+package fullnode
 
 import (
 	"bytes"
@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/setup"
 	"github.com/rubixchain/rubixgoplatform/types"
@@ -21,10 +22,21 @@ import (
 // Recovery ownership-proof is carried in HTTP headers (not the request body) so
 // it can be checked before the body is parsed and kept separate from request
 // semantics. Same convention as the existing X-API-Key / Authorization headers.
+// Exported because the client side of recovery stays in package core and must
+// send exactly the header names this package reads.
 const (
-	headerRecoveryNonce     = "X-Rubix-Recovery-Nonce"
-	headerRecoverySignature = "X-Rubix-Recovery-Signature"
+	HeaderRecoveryNonce     = "X-Rubix-Recovery-Nonce"
+	HeaderRecoverySignature = "X-Rubix-Recovery-Signature"
 )
+
+// RecoveryNonceHash builds the digest the recovering node signs to prove DID
+// ownership: SHA3-256 over the fullnode-issued single-use nonce. Both client
+// and fullnode MUST build it identically, so there is one definition and the
+// client side calls this one. SHA3-256 matches the hash the rest of the
+// DID-signing flow uses.
+func RecoveryNonceHash(nonce string) []byte {
+	return util.CalculateHash([]byte("recover-from-fullnode:"+nonce), constants.HashAlgorithm_SHA3_256)
+}
 
 // recoverySession is one in-flight, ownership-proven recovery. Bound to a DID;
 // `validated` flips true after the first signature check so later pages only
@@ -97,14 +109,14 @@ func newRecoveryNonce() (string, error) {
 // evicted when the recovery completes.
 // reqDID is the DID from the request body; nonce and signature come from the
 // X-Rubix-Recovery-* headers.
-func (c *Core) verifyRecoveryOwnership(reqDID, nonce, signature string) error {
-	if c.recoverySessions == nil {
+func (p *DynamicTxnProcessor) verifyRecoveryOwnership(reqDID, nonce, signature string) error {
+	if p.recoverySessions == nil {
 		return fmt.Errorf("recovery sessions not initialised")
 	}
 	if nonce == "" || signature == "" {
 		return fmt.Errorf("missing recovery nonce/signature header")
 	}
-	did, validated, ok := c.recoverySessions.lookup(nonce)
+	did, validated, ok := p.recoverySessions.lookup(nonce)
 	if !ok {
 		return fmt.Errorf("unknown or completed recovery nonce")
 	}
@@ -118,43 +130,43 @@ func (c *Core) verifyRecoveryOwnership(reqDID, nonce, signature string) error {
 	if err != nil {
 		return fmt.Errorf("decode ownership signature: %w", err)
 	}
-	dc, err := c.InitialiseDID(reqDID)
+	dc, err := p.host.InitialiseDID(reqDID)
 	if err != nil {
 		return fmt.Errorf("resolve requester DID public key: %w", err)
 	}
-	verified, err := dc.SignVerify(recoveryNonceHash(nonce), sigBytes)
+	verified, err := dc.SignVerify(RecoveryNonceHash(nonce), sigBytes)
 	if err != nil {
 		return fmt.Errorf("verify ownership signature: %w", err)
 	}
 	if !verified {
 		return fmt.Errorf("ownership signature does not match DID public key")
 	}
-	c.recoverySessions.markValidated(nonce)
+	p.recoverySessions.markValidated(nonce)
 	return nil
 }
 
 // recoverChallengeHandler mints a one-time nonce bound to the requested DID and
 // returns it. The caller signs the nonce (proving private-key ownership) and
 // presents nonce + signature on each recovery page.
-func (c *Core) recoverChallengeHandler(req *ensweb.Request) *ensweb.Result {
+func (p *DynamicTxnProcessor) recoverChallengeHandler(req *ensweb.Request) *ensweb.Result {
 	var chReq types.RecoverChallengeRequest
-	if err := c.l.ParseJSON(req, &chReq); err != nil {
-		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: "Invalid input"}, http.StatusOK)
+	if err := p.host.Listener().ParseJSON(req, &chReq); err != nil {
+		return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: false, Message: "Invalid input"}, http.StatusOK)
 	}
 	if chReq.DID == "" {
-		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: "did is required"}, http.StatusOK)
+		return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: false, Message: "did is required"}, http.StatusOK)
 	}
-	if c.recoverySessions == nil {
-		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: "recovery sessions not initialised"}, http.StatusOK)
+	if p.recoverySessions == nil {
+		return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: false, Message: "recovery sessions not initialised"}, http.StatusOK)
 	}
 	nonce, err := newRecoveryNonce()
 	if err != nil {
-		c.log.Warn("recoverChallengeHandler: nonce generation failed", "err", err)
-		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: "failed to mint nonce"}, http.StatusOK)
+		p.host.Log().Warn("recoverChallengeHandler: nonce generation failed", "err", err)
+		return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: false, Message: "failed to mint nonce"}, http.StatusOK)
 	}
-	c.recoverySessions.create(nonce, chReq.DID)
-	c.log.Info("recoverChallengeHandler: issued nonce", "did", chReq.DID)
-	return c.l.RenderJSON(req, &models.BasicResponse{Status: true, Message: "ok", Result: types.RecoverChallengeResult{Nonce: nonce}}, http.StatusOK)
+	p.recoverySessions.create(nonce, chReq.DID)
+	p.host.Log().Info("recoverChallengeHandler: issued nonce", "did", chReq.DID)
+	return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: true, Message: "ok", Result: types.RecoverChallengeResult{Nonce: nonce}}, http.StatusOK)
 }
 
 // renderGzipFixedLengthJSON writes a gzipped JSON response with an explicit
@@ -262,12 +274,12 @@ func compressedSize(raw []byte) (int, error) {
 // registerRecoveryRoute is called from SubscribeTxnSetup when the node is a
 // fullnode; the endpoint is meaningless on a non-fullnode (no fullnode_* tables
 // to read from).
-func (c *Core) registerRecoveryRoute() {
-	if c.recoverySessions == nil {
-		c.recoverySessions = newRecoverySessionStore()
+func (p *DynamicTxnProcessor) registerRecoveryRoute() {
+	if p.recoverySessions == nil {
+		p.recoverySessions = newRecoverySessionStore()
 	}
-	c.l.AddRoute(setup.APIRecoverChallenge, "POST", c.recoverChallengeHandler)
-	c.l.AddRoute(setup.APIRecoverFromFullnode, "POST", c.recoverFromFullnodeHandler)
+	p.host.Listener().AddRoute(setup.APIRecoverChallenge, "POST", p.recoverChallengeHandler)
+	p.host.Listener().AddRoute(setup.APIRecoverFromFullnode, "POST", p.recoverFromFullnodeHandler)
 }
 
 // recoverFromFullnodeHandler serves the libp2p endpoint normal nodes call to
@@ -280,23 +292,23 @@ func (c *Core) registerRecoveryRoute() {
 // (token_id, position) cursor; the per-response byte budget keeps the
 // gzipped wire body under the p2p-forward truncation ceiling.
 // See types.RecoverFromFullnodeRequest for the full contract.
-func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
-	c.log.Info("recoverFromFullnodeHandler: HIT")
+func (p *DynamicTxnProcessor) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
+	p.host.Log().Info("recoverFromFullnodeHandler: HIT")
 	if httpReq := req.GetHTTPRequest(); httpReq != nil && httpReq.Body != nil {
 		httpReq.Body = http.MaxBytesReader(req.GetHTTPWritter(), httpReq.Body, recoverMaxRequestBodyBytes)
 	}
 
 	var recReq types.RecoverFromFullnodeRequest
-	if err := c.l.ParseJSON(req, &recReq); err != nil {
-		c.log.Warn("recoverFromFullnodeHandler: parse request body failed", "err", err)
-		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: "Invalid input"}, http.StatusOK)
+	if err := p.host.Listener().ParseJSON(req, &recReq); err != nil {
+		p.host.Log().Warn("recoverFromFullnodeHandler: parse request body failed", "err", err)
+		return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: false, Message: "Invalid input"}, http.StatusOK)
 	}
-	c.log.Info("recoverFromFullnodeHandler: parsed",
+	p.host.Log().Info("recoverFromFullnodeHandler: parsed",
 		"did", recReq.DID,
 		"cursor", fmt.Sprintf("(%s,%d)", recReq.LastTokenID, recReq.LastPosition),
 		"known_count", len(recReq.KnownTokens))
 	if recReq.DID == "" {
-		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: "did is required"}, http.StatusOK)
+		return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: false, Message: "did is required"}, http.StatusOK)
 	}
 
 	// Ownership gate: only the holder of the DID's private key may pull its
@@ -306,24 +318,24 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 	// fullnode with unauthenticated paginated pulls.
 	var ownerNonce, ownerSig string
 	if httpReq := req.GetHTTPRequest(); httpReq != nil {
-		ownerNonce = httpReq.Header.Get(headerRecoveryNonce)
-		ownerSig = httpReq.Header.Get(headerRecoverySignature)
+		ownerNonce = httpReq.Header.Get(HeaderRecoveryNonce)
+		ownerSig = httpReq.Header.Get(HeaderRecoverySignature)
 	}
-	if err := c.verifyRecoveryOwnership(recReq.DID, ownerNonce, ownerSig); err != nil {
-		c.log.Warn("recoverFromFullnodeHandler: ownership verification failed",
+	if err := p.verifyRecoveryOwnership(recReq.DID, ownerNonce, ownerSig); err != nil {
+		p.host.Log().Warn("recoverFromFullnodeHandler: ownership verification failed",
 			"did", recReq.DID, "err", err)
-		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: "recovery authorization failed"}, http.StatusOK)
+		return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: false, Message: "recovery authorization failed"}, http.StatusOK)
 	}
 
 	// Divergence detection: tokens whose KnownTokens claim doesn't match the
 	// fullnode's chain at the claimed position. These get their full chain
 	// back (threshold = -1) and are surfaced to the client so it can discard
 	// its stale data for them.
-	divergent, err := c.w.DetectDivergentRecoveryTokens(c.w.Ctx, recReq.DID, recReq.KnownTokens)
+	divergent, err := p.host.Wallet().DetectDivergentRecoveryTokens(p.host.Wallet().Ctx, recReq.DID, recReq.KnownTokens)
 	if err != nil {
-		c.log.Warn("recoverFromFullnodeHandler: divergence check failed",
+		p.host.Log().Warn("recoverFromFullnodeHandler: divergence check failed",
 			"did", recReq.DID, "err", err)
-		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: "fullnode divergence check failed"}, http.StatusOK)
+		return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: false, Message: "fullnode divergence check failed"}, http.StatusOK)
 	}
 	divergentSet := make(map[string]struct{}, len(divergent))
 	for _, t := range divergent {
@@ -350,11 +362,11 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 		cursorPosition = -1
 	}
 
-	chainRows, err := c.w.GetRecoverableChainPageByCursor(c.w.Ctx, recReq.DID, thresholds, cursorTokenID, cursorPosition, recoverBatchSize)
+	chainRows, err := p.host.Wallet().GetRecoverableChainPageByCursor(p.host.Wallet().Ctx, recReq.DID, thresholds, cursorTokenID, cursorPosition, recoverBatchSize)
 	if err != nil {
-		c.log.Warn("recoverFromFullnodeHandler: page fetch failed",
+		p.host.Log().Warn("recoverFromFullnodeHandler: page fetch failed",
 			"did", recReq.DID, "cursor", fmt.Sprintf("(%s,%d)", cursorTokenID, cursorPosition), "err", err)
-		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: "fullnode read failed"}, http.StatusOK)
+		return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: false, Message: "fullnode read failed"}, http.StatusOK)
 	}
 
 	if len(chainRows) == 0 {
@@ -364,7 +376,7 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 			HasMore:         false,
 		}
 		// Recovery complete — retire the single-use nonce so it can't be replayed.
-		c.recoverySessions.remove(ownerNonce)
+		p.recoverySessions.remove(ownerNonce)
 		return renderGzipFixedLengthJSON(req, &models.BasicResponse{Status: true, Message: "ok", Result: result}, http.StatusOK)
 	}
 
@@ -382,11 +394,11 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 		seenTokenID[tid] = struct{}{}
 		uniqueTokenIDs = append(uniqueTokenIDs, tid)
 	}
-	ownedSubset, err := c.w.ListOwnedTokensByIDs(c.w.Ctx, recReq.DID, uniqueTokenIDs)
+	ownedSubset, err := p.host.Wallet().ListOwnedTokensByIDs(p.host.Wallet().Ctx, recReq.DID, uniqueTokenIDs)
 	if err != nil {
-		c.log.Warn("recoverFromFullnodeHandler: load owned-token states failed",
+		p.host.Log().Warn("recoverFromFullnodeHandler: load owned-token states failed",
 			"did", recReq.DID, "err", err)
-		return c.l.RenderJSON(req, &models.BasicResponse{Status: false, Message: "fullnode read failed"}, http.StatusOK)
+		return p.host.Listener().RenderJSON(req, &models.BasicResponse{Status: false, Message: "fullnode read failed"}, http.StatusOK)
 	}
 	stateByToken := make(map[string]*wallet.RecoverableToken, len(ownedSubset))
 	for i := range ownedSubset {
@@ -447,7 +459,7 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 			// Owned-state vanished between the chain query and the state
 			// query (extremely unlikely under churn). Skip; cursor advances
 			// so we don't loop on the same row forever.
-			c.log.Warn("recoverFromFullnodeHandler: owned state missing for token on this page; skipping",
+			p.host.Log().Warn("recoverFromFullnodeHandler: owned state missing for token on this page; skipping",
 				"did", recReq.DID, "tokenID", row.TokenID)
 			nextCursorTokenID = row.TokenID
 			nextCursorPosition = row.Position
@@ -534,10 +546,10 @@ func (c *Core) recoverFromFullnodeHandler(req *ensweb.Request) *ensweb.Result {
 	// Recovery complete on this page — retire the single-use nonce so it can't
 	// be replayed. While more pages remain the nonce stays live (no time limit).
 	if !hasMore {
-		c.recoverySessions.remove(ownerNonce)
+		p.recoverySessions.remove(ownerNonce)
 	}
 
-	c.log.Info("recoverFromFullnodeHandler: returning",
+	p.host.Log().Info("recoverFromFullnodeHandler: returning",
 		"did", recReq.DID,
 		"rows_included", rowsIncluded,
 		"compressed_bytes", lastCompressed,
