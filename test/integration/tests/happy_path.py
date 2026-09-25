@@ -996,6 +996,24 @@ FROM tokens;
         )
         return engine.run()
 
+    def run_properties(self) -> List[Dict[str, str]]:
+        """Run the NFT-properties suite (positive + negative) against A <-> B.
+
+        Returns verification results in the shared shape so they fold into
+        verification.json and the runner's exit-on-fail gate.
+        """
+        from test.integration.tests.properties import PropertiesEngine
+
+        log.info("=== PROPERTIES: running NFT permissioned-execution tests ===")
+        engine = PropertiesEngine(
+            node_a=self.node_a,
+            node_b=self.node_b,
+            did_a=self.did_a,
+            did_b=self.did_b,
+            password=self.cfg.password,
+        )
+        return engine.run()
+
     def run_db_snapshot(self) -> str:
         """Run diagnostic queries against all 3 DBs and write the results.
 
@@ -1157,6 +1175,7 @@ FROM tokens;
         nft_self_execute: bool = False,
         nft_transfer: bool = False,
         nft_cross_execute: bool = False,
+        nft_burn: bool = False,
         sc_count: int = 0,
         sc_execute: bool = False,
         sc_only: bool = False,
@@ -1184,6 +1203,7 @@ FROM tokens;
         intra_node_ft_fund: int = 2,
         run_all_tests: bool = False,
         negative_tests: bool = False,
+        properties_tests: bool = False,
         sc_collateral_tests: bool = False,
         ft_parts_tests: bool = False,
         ft_parts_only: bool = False,
@@ -1266,6 +1286,21 @@ FROM tokens;
                 log.info("=== NFT REPEATED EXECUTION START (%d rounds) ===", exec_rounds)
                 nft_exec_stats = self.nft_engine.run_repeated_executions(exec_rounds)
                 log.info("=== NFT REPEATED EXECUTION COMPLETE ===")
+
+            # NFT burn — MUST be last among the NFT phases: a burnt NFT can no
+            # longer be executed or transferred, so running this earlier would
+            # break every phase that follows. The parent-rejection test also
+            # depends on run_nft_mint_children having already run.
+            if nft_burn:
+                log.info("=== NFT BURN START ===")
+                self.nft_engine.run_nft_burn()
+                self.nft_engine.run_nft_burn_parent_rejected()
+                self.nft_engine.run_nft_burn_idempotent()
+                # Negatives run last: the child-burn positive case at the end
+                # destroys a child NFT, which would make the parent burnable and
+                # invalidate run_nft_burn_parent_rejected if it ran earlier.
+                self.nft_engine.run_nft_burn_negatives()
+                log.info("=== NFT BURN COMPLETE ===")
 
             # NFT API verification (exercises list, chain, fetch, balance, tx APIs)
             log.info("=== NFT API VERIFICATION START ===")
@@ -1488,6 +1523,12 @@ FROM tokens;
         if negative_tests:
             negative_verification = self.run_negative()
 
+        # NFT-properties suite. Runs after the negative tests and mints its own
+        # NFTs, so it neither depends on nor disturbs the happy-path state.
+        properties_verification: List[Dict[str, str]] = []
+        if properties_tests:
+            properties_verification = self.run_properties()
+
         # SC deploy collateral. Deploys its own contracts at a fractional value
         # and only reads balances back, so it neither depends on nor disturbs
         # the happy-path state.
@@ -1530,6 +1571,7 @@ FROM tokens;
             + all_in_one_verification
             + intra_node_verification
             + negative_verification
+            + properties_verification
             + sc_collateral_verification
             + ft_parts_verification
             + deferred_verification

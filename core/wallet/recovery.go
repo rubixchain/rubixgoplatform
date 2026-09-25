@@ -81,6 +81,12 @@ func (w *Wallet) ListOwnedTokensByDID(ctx context.Context, did string) ([]Recove
 			       NULL::text AS parent_token_id
 			FROM fullnode_nft
 			WHERE did = $1
+			UNION ALL
+			SELECT token_id, $5::text AS token_type, did, token_status, token_value,
+			       token_state_hash, transaction_id, latest_position, latest_role,
+			       NULL::text AS parent_token_id
+			FROM fullnode_properties
+			WHERE did = $1
 		) AS owned
 		ORDER BY token_id ASC
 	`
@@ -90,6 +96,7 @@ func (w *Wallet) ListOwnedTokensByDID(ctx context.Context, did string) ([]Recove
 		constants.TokenType_RBT,
 		constants.TokenType_FT,
 		constants.TokenType_NFT,
+		constants.TokenType_Properties,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("ListOwnedTokensByDID: query: %w", err)
@@ -170,6 +177,12 @@ func (w *Wallet) ListOwnedTokensByIDs(ctx context.Context, did string, tokenIDs 
 			       NULL::text AS parent_token_id
 			FROM fullnode_nft
 			WHERE did = $1 AND token_id = ANY($5::text[])
+			UNION ALL
+			SELECT token_id, $6::text AS token_type, did, token_status, token_value,
+			       token_state_hash, transaction_id, latest_position, latest_role,
+			       NULL::text AS parent_token_id
+			FROM fullnode_properties
+			WHERE did = $1 AND token_id = ANY($5::text[])
 		) AS owned
 		ORDER BY token_id ASC
 	`
@@ -180,6 +193,7 @@ func (w *Wallet) ListOwnedTokensByIDs(ctx context.Context, did string, tokenIDs 
 		constants.TokenType_FT,
 		constants.TokenType_NFT,
 		tokenIDs,
+		constants.TokenType_Properties,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("ListOwnedTokensByIDs: query: %w", err)
@@ -269,6 +283,8 @@ func (w *Wallet) GetRecoverableChainPageByCursor(
 			SELECT token_id FROM fullnode_ft  WHERE did = $1
 			UNION ALL
 			SELECT token_id FROM fullnode_nft WHERE did = $1
+			UNION ALL
+			SELECT token_id FROM fullnode_properties WHERE did = $1
 		),
 		thresholds AS (
 			SELECT * FROM unnest($2::text[], $3::bigint[]) AS t(token_id, threshold)
@@ -337,6 +353,8 @@ func (w *Wallet) DetectDivergentRecoveryTokens(ctx context.Context, did string, 
 			SELECT token_id FROM fullnode_ft  WHERE did = $1
 			UNION ALL
 			SELECT token_id FROM fullnode_nft WHERE did = $1
+			UNION ALL
+			SELECT token_id FROM fullnode_properties WHERE did = $1
 		)
 		SELECT input.token_id
 		FROM unnest($2::text[], $3::bigint[], $4::text[]) AS input(token_id, position, claimed_tx_id)

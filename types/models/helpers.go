@@ -30,6 +30,12 @@ func (tr *TransactionRequest) HasNFT() bool {
 	return len(tr.Tokens.NFT) > 0
 }
 
+// IsNFTBurn reports whether this request is an NFT burn. A burn takes the
+// non-consensus path in InitiateTransaction: no pledge, no quorum voting.
+func (tr *TransactionRequest) IsNFTBurn() bool {
+	return tr.Tokens.BurnNFT && len(tr.Tokens.NFT) > 0
+}
+
 // GetAllSmartContracts returns all smart contract info in the transfer
 func (tr *TransactionRequest) GetAllSmartContracts() []SmartContractInfo {
 	return tr.Tokens.SmartContract

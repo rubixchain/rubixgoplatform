@@ -291,3 +291,43 @@ func (s *Server) APIGetNFTsByDid(req *ensweb.Request) *ensweb.Result {
 	}
 	return s.RenderJSON(req, nftResp, http.StatusOK)
 }
+
+// APIGetNFTProperties godoc
+// @Summary      Get the properties governing an NFT
+// @Description  Returns the resolved permission document, or reports that the NFT is unrestricted.
+// @Tags         NFT
+// @Accept       json
+// @Produce      json
+// @Param        nft_id  path      string  true  "NFT token ID"
+// @Success      200     {object}  model.BasicResponse
+// @Failure      400     {object}  model.BasicResponse
+// @Router       /rubix/v1/nfts/{nft_id}/properties [get]
+func (s *Server) APIGetNFTProperties(req *ensweb.Request) *ensweb.Result {
+	nftID := s.GetRouteVar(req, "nft_id")
+	if err := util.ValidateCIDFormat(nftID); err != nil {
+		return s.BasicResponse(req, false, fmt.Sprintf("NFT %s", err.Error()), nil)
+	}
+
+	resolved, err := s.c.GetNFTProperties(nftID)
+	if err != nil {
+		return s.BasicResponse(req, false, "failed to get NFT properties, err: "+err.Error(), nil)
+	}
+	if resolved == nil || resolved.Doc == nil {
+		return s.BasicResponse(req, true, "NFT has no properties and is unrestricted", nil)
+	}
+
+	return s.BasicResponse(req, true, "got NFT properties successfully", model.NFTPropertiesResponse{
+		NFTId:                 nftID,
+		PropertiesTokenID:     resolved.PropertiesTokenID,
+		PropertiesCID:         resolved.DocCID,
+		Version:               resolved.Doc.Version,
+		Transferable:          resolved.Doc.IsTransferable(),
+		ValidFrom:             resolved.Doc.Policy.ValidFrom,
+		ValidTo:               resolved.Doc.Policy.ValidTo,
+		Whitelist:             resolved.Whitelist,
+		Admins:                resolved.Admins,
+		AllowedSubnets:        resolved.Doc.Restriction.AllowedSubnets,
+		AllowedSmartContracts: resolved.Doc.Restriction.AllowedSmartContracts,
+		Deployer:              resolved.Deployer,
+	})
+}

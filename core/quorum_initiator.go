@@ -270,6 +270,12 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 		for _, sc := range txnInfo.Tokens.SmartContract {
 			transactionTokens = append(transactionTokens, sc.TokenID)
 		}
+
+		// A properties edit carries no other token, so without this the pledge
+		// has nothing to attach to and fails with "no transaction tokens".
+		for _, props := range txnInfo.Tokens.Properties {
+			transactionTokens = append(transactionTokens, props.TokenID)
+		}
 	}
 
 	//Need to call ValidateTransaction function here
@@ -321,7 +327,14 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 	fetchGenesisTx := func(peerDID, tokenID string) (*models.Transactions, error) {
 		return c.FetchGenesisTransactionFromPeer(peerDID, tokenID)
 	}
-	isTransactionInfoValidated, err := consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, nil, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains, syncAuthoritative, getTxByID, getParentBurnTx, fetchGenesisTx, consensusRequest.TransferNFTOwnership)
+	// Must also be bound in core/fullnode.go, or that path goes unenforced.
+	resolveProperties := func(nftTokenID string) (*models.ResolvedProperties, error) {
+		return c.ResolveNFTProperties(nftTokenID)
+	}
+	resolvePropertiesByTokenID := func(propsTokenID, docCID string) (*models.ResolvedProperties, error) {
+		return c.ResolvePropertiesByTokenID(propsTokenID, docCID)
+	}
+	isTransactionInfoValidated, err := consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, nil, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains, syncAuthoritative, getTxByID, getParentBurnTx, fetchGenesisTx, resolveProperties, resolvePropertiesByTokenID, consensusRequest.TransferNFTOwnership)
 	if err != nil || !isTransactionInfoValidated {
 		c.log.Error("initiateConsensusHandler: transaction info validation failed", "err", err)
 		if err != nil {

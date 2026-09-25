@@ -32,6 +32,10 @@ type TransactionTokens struct {
 	NFT           []*TokenInfo `json:"nft"`
 	FT            []*TokenInfo `json:"ft"`
 	SmartContract []*TokenInfo `json:"smartContract"`
+	// Properties must stay last and keep omitempty: without it every
+	// transaction emits "properties":null and hashes differently from legacy
+	// nodes. Pinned by transaction_info_hash_test.go.
+	Properties []*TokenInfo `json:"properties,omitempty"`
 }
 
 type TokenInfo struct {
@@ -73,6 +77,54 @@ type TransactionTokenDetails struct {
 	NFT                  []NFTInfo           `json:"nft"`
 	SmartContract        []SmartContractInfo `json:"smartContract"`
 	TransferNFTOwnership bool                `json:"transferNftOwnership"`
+	// BurnNFT, when true, permanently destroys the NFTs listed in NFT rather
+	// than executing or transferring them. A burn is a non-consensus,
+	// self-signed transaction: it is persisted locally and published to both
+	// the rubix_txn stream (so quorums that pledged against this NFT can
+	// release their collateral) and the NFT's own topic (so subscribers learn
+	// the NFT is dead). Mutually exclusive with TransferNFTOwnership, and
+	// cannot be combined with RBT/FT/SmartContract in the same request.
+	BurnNFT bool `json:"burnNft"`
+	// SetProperties, when true, creates or edits the properties token governing
+	// the NFTs listed in NFT. Only the deployer may edit an existing one.
+	SetProperties bool `json:"setProperties"`
+	// Properties is the document to write when SetProperties is true.
+	Properties *PropertiesInfo `json:"properties,omitempty"`
+}
+
+// PropertiesInfo is the request shape for a properties document. It is a
+// request type, not part of the signed payload, so field order is not
+// hash-critical.
+type PropertiesInfo struct {
+	Transferable          bool     `json:"transferable"`
+	ValidFrom             int64    `json:"validFrom,omitempty"`
+	ValidTo               int64    `json:"validTo,omitempty"`
+	Whitelist             []string `json:"whitelist,omitempty"`
+	Admins                []string `json:"admins,omitempty"`
+	AllowedSubnets        []string `json:"allowedSubnets,omitempty"`
+	AllowedSmartContracts []string `json:"allowedSmartContracts,omitempty"`
+}
+
+// ToDocument converts the request shape into the stored document. Whitelist and
+// Admins become CIDs once uploaded, so they are filled in by the caller.
+func (p *PropertiesInfo) ToDocument() *TokenProperties {
+	doc := &TokenProperties{
+		Version: PropertiesDocVersion,
+		Policy:  PropertiesPolicy{ValidFrom: p.ValidFrom, ValidTo: p.ValidTo},
+		Restriction: PropertiesRestrict{
+			AllowedSubnets:        p.AllowedSubnets,
+			AllowedSmartContracts: p.AllowedSmartContracts,
+		},
+	}
+	if p.Transferable {
+		doc.Flags |= FlagTransferable
+	}
+	return doc
+}
+
+// IsPropertiesSet reports whether this request carries a properties write.
+func (tr *TransactionRequest) IsPropertiesSet() bool {
+	return tr.Tokens.SetProperties
 }
 
 // Gave the key names as FTInfo, NFTInfo and SmartContract info for now as these are the informations which are required to perform the transfer operation
@@ -88,8 +140,9 @@ type NFTInfo struct {
 	Data  string  `json:"data"`
 	// ParentNFTId, when non-empty, signals a child-mint instruction: this entry
 	// mints a brand-new child NFT linked to the named parent. The parent is
-	// executed in the same transaction. NFTId is ignored when ParentNFTId is set —
-	// the server derives the child NFT ID via IPFS-add of parentNFTId+uuid.
+	// executed in the same transaction. NFTId, when set, is used as the child's
+	// ID (must be CID-shaped and not already exist locally); leave it empty to
+	// have the server derive one via IPFS-add of parentNFTId+uuid.
 	ParentNFTId string `json:"parentNFTId,omitempty"`
 }
 

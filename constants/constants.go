@@ -58,6 +58,10 @@ const (
 	TokenType_NFT           = "nft"
 	TokenType_FT            = "ft"
 	TokenType_SmartContract = "smart_contract"
+	// TokenType_Properties is a token whose chain carries the mutable
+	// permission document governing an NFT. Its ID is derived from the NFT's
+	// ID, and it is never transferred or burnt independently.
+	TokenType_Properties = "properties"
 )
 
 // Token Statuses -- grouped by lifecycle stage

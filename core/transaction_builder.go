@@ -36,6 +36,11 @@ func BuildTransactionInfoFromRequest(
 	log logger.Logger,
 	pubsub *types.PubSub, // punishFn which was of type func(*model.PubSubTxnInfo)  is change to types.PubSub to be passed to CollectRBTTokens
 	referenceID string, // referenceID is added to be passed to LockTokensForSplit and CollectRBTTokens for better traceability of locked tokens
+	// isPropertiesEdit reports whether this request edits an existing properties
+	// token, as opposed to setting one for the first time. An edit leaves the
+	// NFT out of the transaction entirely, so its chain is untouched. It errors
+	// rather than guessing when the answer cannot be determined.
+	isPropertiesEdit func() (bool, error),
 ) (*models.TransactionInfo, float64, error) {
 	log.Debug("Initating BuildTransactionInfoFromRequest")
 
@@ -306,8 +311,21 @@ func BuildTransactionInfoFromRequest(
 			}
 		}
 
+		// A properties edit names its NFT only so the document can be built; the
+		// NFT is not executed, so it is left out of the transaction and its
+		// chain does not advance. The genesis set is different: the NFT is
+		// genuinely deployed or executed alongside, so it stays.
+		propertiesEditOnly := false
+		if req.IsPropertiesSet() && isPropertiesEdit != nil {
+			isEdit, err := isPropertiesEdit()
+			if err != nil {
+				return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: cannot determine whether this is a properties edit: %w", err)
+			}
+			propertiesEditOnly = isEdit
+		}
+
 		// NFT path - handle both deployment and execution
-		if req.HasNFT() {
+		if req.HasNFT() && !propertiesEditOnly {
 			allNFTs := req.GetAllNFTs()
 			log.Info("BuildTransactionInfoFromRequest: Processing NFT tokens", "nftCount", len(allNFTs))
 
@@ -335,6 +353,12 @@ func BuildTransactionInfoFromRequest(
 					tok := locked[0]
 					log.Info("BuildTransactionInfoFromRequest: NFT locked for execution", "nftID", tok.TokenID, "prevTxID", tok.TransactionID)
 
+					// A properties token is never transferred or burnt on its
+					// own; it only moves as part of the NFT it governs.
+					if tok.TokenType == int16(models.GetTokenTypeID(constants.TokenType_Properties)) {
+						return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: %s is a properties token and cannot be transferred or burnt independently", tok.TokenID)
+					}
+
 					// Capture the chain owner cached in the wallet row. Used below to
 					// pin txInfo.Owner for NFT-only execute transactions so the chain
 					// payload reflects the actual on-chain owner instead of the
@@ -348,6 +372,14 @@ func BuildTransactionInfoFromRequest(
 					// Data can still be set by any executor.
 					chosenValue := nftInfo.Value
 					if chosenValue == 0 || req.Initiator != tok.DID {
+						chosenValue = tok.TokenValue
+					}
+
+					// On a properties write the NFT is named so the quorum can
+					// derive and authorise its properties token, not to be
+					// revalued. Honouring the request value here would let a
+					// properties edit silently change the NFT's value.
+					if req.IsPropertiesSet() {
 						chosenValue = tok.TokenValue
 					}
 
@@ -543,6 +575,13 @@ func BuildTransactionInfoFromRequest(
 		"committedTokensCount", len(committedTokens),
 		"network", networkMode,
 	)
+
+	// A properties token's value is intrinsic — always the minimum unit,
+	// never the NFT's value — so a properties write pledges that regardless of
+	// what the NFT is worth. Mirrored in the quorum's own accounting.
+	if req.IsPropertiesSet() {
+		totalAmount = rubixmath.AddFloat(totalAmount, rubixmath.MinDecimalUnit())
+	}
 
 	return txInfo, totalAmount, nil
 }

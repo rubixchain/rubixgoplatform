@@ -472,6 +472,25 @@ func (w *Wallet) readFullNodeTokenStateTx(ctx context.Context, tx pgx.Tx, tokenT
 		}
 		state.exists = true
 		return state, nil
+	case constants.TokenType_Properties:
+		var state fullNodeTokenState
+		err := tx.QueryRow(ctx, `
+			SELECT token_id, token_value, token_status, did, transaction_id,
+			       token_state_hash, latest_position, latest_role
+			FROM fullnode_properties
+			WHERE token_id = $1
+		`, tokenID).Scan(
+			&state.tokenID, &state.tokenValue, &state.tokenStatus, &state.did,
+			&state.transactionID, &state.tokenStateHash, &state.latestPosition, &state.latestRole,
+		)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				return fullNodeTokenState{}, nil
+			}
+			return fullNodeTokenState{}, fmt.Errorf("fullnode persistence: read fullnode_properties token %q: %w", tokenID, err)
+		}
+		state.exists = true
+		return state, nil
 	default:
 		return fullNodeTokenState{}, fmt.Errorf("fullnode persistence: unsupported token type %q", tokenType)
 	}
@@ -557,6 +576,26 @@ func (w *Wallet) upsertFullNodeTokenStateTx(ctx context.Context, tx pgx.Tx, toke
 		`, state.tokenID, state.tokenValue, state.tokenStatus, state.transactionID, state.tokenStateHash, state.latestPosition, state.latestRole)
 		if err != nil {
 			return fmt.Errorf("fullnode persistence: upsert fullnode_smart_contract token %q: %w", state.tokenID, err)
+		}
+		return nil
+	case constants.TokenType_Properties:
+		_, err := tx.Exec(ctx, `
+			INSERT INTO fullnode_properties (
+				token_id, token_value, token_status, did, transaction_id,
+				token_state_hash, latest_position, latest_role, created_at, updated_at
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())
+			ON CONFLICT (token_id) DO UPDATE SET
+				token_value = EXCLUDED.token_value,
+				token_status = EXCLUDED.token_status,
+				did = EXCLUDED.did,
+				transaction_id = EXCLUDED.transaction_id,
+				token_state_hash = EXCLUDED.token_state_hash,
+				latest_position = EXCLUDED.latest_position,
+				latest_role = EXCLUDED.latest_role,
+				updated_at = NOW()
+		`, state.tokenID, state.tokenValue, state.tokenStatus, state.did, state.transactionID, state.tokenStateHash, state.latestPosition, state.latestRole)
+		if err != nil {
+			return fmt.Errorf("fullnode persistence: upsert fullnode_properties token %q: %w", state.tokenID, err)
 		}
 		return nil
 	default:

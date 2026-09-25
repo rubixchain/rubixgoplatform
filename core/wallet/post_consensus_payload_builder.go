@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/rubixchain/rubixgoplatform/constants"
+	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -109,9 +110,13 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 					if tokenValue == 0 && input.TokenTypeName != constants.TokenType_NFT {
 						return nil, nil, nil, fmt.Errorf("post-consensus persistence: cannot determine token value for genesis token %q", input.TokenID)
 					}
+					// TokenTypeName is always set from a constant at the collect
+					// site, so an unresolvable name is a programming error.
+					// Falling back to RBT would make a 0.001 properties token
+					// spendable as RBT.
 					tokenTypeID := models.GetTokenTypeID(input.TokenTypeName)
 					if tokenTypeID <= 0 {
-						tokenTypeID = models.GetTokenTypeID(constants.TokenType_RBT)
+						return nil, nil, nil, fmt.Errorf("post-consensus persistence: unknown token type %q for token %q", input.TokenTypeName, input.TokenID)
 					}
 					currentToken = models.Token{
 						TokenID:    input.TokenID,
@@ -137,9 +142,11 @@ func (w *Wallet) BuildPersistencePayload(ctx context.Context, transactionID stri
 					tokenValue = derived
 				}
 			}
+			// See the sibling branch above: unknown type names hard-error
+			// rather than silently becoming RBT.
 			tokenTypeID := models.GetTokenTypeID(input.TokenTypeName)
 			if tokenTypeID <= 0 {
-				tokenTypeID = models.GetTokenTypeID(constants.TokenType_RBT)
+				return nil, nil, nil, fmt.Errorf("post-consensus persistence: unknown token type %q for genesis token %q", input.TokenTypeName, input.TokenID)
 			}
 			currentToken = models.Token{
 				TokenID:    input.TokenID,
@@ -394,6 +401,39 @@ func collectPersistenceTokenInputs(txInfo *models.TransactionInfo, transferNFTOw
 					RoleName:              roleName,
 					TokenTypeName:         constants.TokenType_SmartContract,
 					TokenValue:            sc.TokenValue,
+				})
+			}
+		}
+
+		// Properties tokens: Deploy on first set, Execute on edit. Like SC
+		// tokens these are initiator-side only — never transferred, so there
+		// is no receiver to persist them for.
+		if executionRole != ExecutionRoleReceiver {
+			for _, props := range txInfo.Tokens.Properties {
+				if props == nil {
+					return nil, nil, fmt.Errorf("post-consensus persistence: transaction token is nil")
+				}
+				if props.TokenID == "" {
+					return nil, nil, fmt.Errorf("post-consensus persistence: transaction token id is empty")
+				}
+				if _, exists := seen[props.TokenID]; exists {
+					return nil, nil, fmt.Errorf("post-consensus persistence: duplicate token %q in transaction payload", props.TokenID)
+				}
+				seen[props.TokenID] = struct{}{}
+				affected = append(affected, props.TokenID)
+
+				roleName := constants.TokenRole_Execute // Edit of an existing properties token
+				if props.PreviousTransactionID == "" {
+					roleName = constants.TokenRole_Deploy // Genesis - first properties set
+				}
+
+				inputs = append(inputs, persistenceTokenInput{
+					TokenID:               props.TokenID,
+					PreviousTransactionID: props.PreviousTransactionID,
+					RoleName:              roleName,
+					TokenTypeName:         constants.TokenType_Properties,
+					// Fixed value, not read from the payload.
+					TokenValue: rubixmath.MinDecimalUnit(),
 				})
 			}
 		}

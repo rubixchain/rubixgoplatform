@@ -81,6 +81,17 @@ func FindTokenRoleInTxn(tokenID string, txInfo *models.TransactionInfo, transfer
 				return int16(models.GetTokenRoleID(constants.TokenRole_Execute))
 			}
 		}
+		for _, t := range txInfo.Tokens.Properties {
+			if t.TokenID == tokenID {
+				// Created on first set (Deploy), thereafter only edited
+				// (Execute). Never transferred, so it must not reach the
+				// Transfer fallback below.
+				if t.PreviousTransactionID == "" {
+					return int16(models.GetTokenRoleID(constants.TokenRole_Deploy))
+				}
+				return int16(models.GetTokenRoleID(constants.TokenRole_Execute))
+			}
+		}
 	}
 
 	for _, t := range txInfo.CommittedTokens {

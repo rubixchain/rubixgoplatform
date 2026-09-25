@@ -310,6 +310,23 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             DEFERRABLE INITIALLY DEFERRED
         );
 
+        CREATE TABLE IF NOT EXISTS fullnode_properties (
+            token_id         TEXT PRIMARY KEY,
+            token_value      NUMERIC NOT NULL CHECK (token_value >= 0),
+            token_status     SMALLINT NOT NULL DEFAULT 99,
+            did              TEXT NOT NULL,
+            transaction_id   TEXT NOT NULL,
+            token_state_hash TEXT NOT NULL,
+            latest_position  BIGINT NOT NULL DEFAULT 0,
+            latest_role      SMALLINT,
+            created_at       TIMESTAMPTZ DEFAULT NOW(),
+            updated_at       TIMESTAMPTZ DEFAULT NOW(),
+            CONSTRAINT fullnode_properties_transaction_id_fk
+            FOREIGN KEY (transaction_id)
+            REFERENCES fullnode_transactions(id)
+            DEFERRABLE INITIALLY DEFERRED
+        );
+
         CREATE TABLE IF NOT EXISTS fullnode_tokenchain (
             id                         INT        GENERATED ALWAYS AS IDENTITY,
             token_id                   TEXT       NOT NULL,

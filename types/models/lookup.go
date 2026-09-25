@@ -47,6 +47,8 @@ var TokenTypeTypes []TokenType = []TokenType{
 	{Name: constants.TokenType_NFT, IsActive: true},
 	{Name: constants.TokenType_FT, IsActive: true},
 	{Name: constants.TokenType_SmartContract, IsActive: true},
+	// Appended at the END so existing IDs 1-4 are unchanged; this is ID 5.
+	{Name: constants.TokenType_Properties, IsActive: true},
 }
 
 func GetTokenTypeID(tokenType string) int {
