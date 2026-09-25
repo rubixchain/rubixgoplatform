@@ -157,6 +157,44 @@ func ValidatePledgeTransferDisjoint(txnInfo *models.TransactionInfo) error {
 	return nil
 }
 
+// ValidateNoDuplicateTokens rejects a payload that carries the same token ID more than once.
+// Persistence refuses such a payload, so letting it through consensus forks the initiator from the quorum.
+func ValidateNoDuplicateTokens(txnInfo *models.TransactionInfo) error {
+	if txnInfo == nil {
+		return fmt.Errorf("ValidateNoDuplicateTokens: transaction info is nil")
+	}
+
+	seen := make(map[string]string)
+	check := func(tokens []*models.TokenInfo, role string) error {
+		for _, t := range tokens {
+			if t == nil || t.TokenID == "" {
+				continue
+			}
+			if first, dup := seen[t.TokenID]; dup {
+				return fmt.Errorf("ValidateNoDuplicateTokens: token %s appears more than once (as %s and %s)", t.TokenID, first, role)
+			}
+			seen[t.TokenID] = role
+		}
+		return nil
+	}
+
+	if txnInfo.Tokens != nil {
+		if err := check(txnInfo.Tokens.RBT, "transferred RBT"); err != nil {
+			return err
+		}
+		if err := check(txnInfo.Tokens.FT, "transferred FT"); err != nil {
+			return err
+		}
+		if err := check(txnInfo.Tokens.NFT, "transferred NFT"); err != nil {
+			return err
+		}
+		if err := check(txnInfo.Tokens.SmartContract, "transferred smart contract"); err != nil {
+			return err
+		}
+	}
+	return check(txnInfo.CommittedTokens, "committed")
+}
+
 // ValidateQuorumIsNotReceiver rejects a quorum that would receive value from the transaction it validates.
 // Owner names a receiver only when ownership moves; on an NFT execute it is the NFT's current owner, so that case is exempt.
 func ValidateQuorumIsNotReceiver(txnInfo *models.TransactionInfo, transferNFTOwnership bool) error {
@@ -1271,6 +1309,10 @@ func ValidateTransaction(
 	}
 
 	if err := ValidateTransactionInfoFields(&txnInfo); err != nil {
+		return false, fmt.Errorf("ValidateTransaction: %w", err)
+	}
+
+	if err := ValidateNoDuplicateTokens(&txnInfo); err != nil {
 		return false, fmt.Errorf("ValidateTransaction: %w", err)
 	}
 
