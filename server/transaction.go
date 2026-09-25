@@ -16,6 +16,8 @@ type syncTransactionChainRequest struct {
 
 // @Summary Initiates a transaction
 // @Description Submits a transfer request (RBT, FT, NFT or smart contract) and runs it through quorum consensus. Returns a request ID that must be passed to the signature API (POST /rubix/v1/signature) to sign and complete the transaction.
+// @Description
+// @Description Setting `tokens.burnNft` to true permanently destroys the NFTs listed in `tokens.nft` instead of transferring them. A burn skips quorum consensus (it destroys value rather than moving it) but is still published to the network so quorums that pledged against those NFTs can release their collateral. It cannot be combined with `transferNftOwnership`, or with RBT/FT/smart contract transfers, and an NFT that still has live child NFTs cannot be burnt until its children are burnt first.
 // @ID txInit
 // @Tags Transactions
 // @Accept json
