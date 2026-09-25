@@ -82,12 +82,7 @@ func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
 	createNFT.Artifact = nftFileDest
 	createNFT.Metadata = nftFileInfoDest
 
-	_, did, err := s.ParseMultiPartForm(req, "did")
-	if err != nil {
-		s.log.Error("Creation of NFT failed, failed to retrieve DID", "err", err)
-		return s.BasicResponse(req, false, "Creation of NFT failed, failed to retrieve DID", nil)
-	}
-	createNFT.DID = did["did"][0]
+	createNFT.DID = req.GetHTTPRequest().FormValue("did")
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(createNFT.DID)
 	if !strings.HasPrefix(createNFT.DID, "bafybmi") || len(createNFT.DID) != 59 || !is_alphanumeric {
 		s.log.Error("Invalid DID")
