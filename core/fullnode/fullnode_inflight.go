@@ -568,7 +568,10 @@ func truncateAtInflight(txs []types.TransactionWithRole, inflight map[string]boo
 }
 
 // GuardAgainstInflight trims a peer's chain response so it cannot carry an
-// entry belonging to a transaction this node is still processing.
+// entry belonging to a transaction this node already holds — in flight under a
+// worker, or still waiting in txnQueue. Both count: an entry ingested from a
+// peer is unvalidated either way, and the queue is where a transaction spends
+// most of its life on a busy node.
 //
 // Returns txs unchanged when there is nothing to trim, including on a node with
 // no transaction processor, so the non-fullnode sync path is unaffected.
@@ -577,7 +580,7 @@ func (p *DynamicTxnProcessor) GuardAgainstInflight(tokenID string, txs []types.T
 		return txs
 	}
 
-	guarded := truncateAtInflight(txs, p.inflight.idSet())
+	guarded := truncateAtInflight(txs, p.pendingIDSet())
 	if len(guarded) == len(txs) {
 		return txs
 	}

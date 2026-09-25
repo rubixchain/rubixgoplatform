@@ -39,6 +39,13 @@ func (p *DynamicTxnProcessor) QueueFullnodeTransaction(newEvent *models.EventTra
 	currentQueueLen := int64(len(p.txnQueue))
 	atomic.StoreInt64(&p.queueLength, currentQueueLen)
 
+	// Visible as held by this node from here on, not from the moment a worker
+	// picks it up. Marked before the send: the send hands the event to a waiting
+	// worker the instant it completes, so marking afterwards would race that
+	// worker's own remove and could strand the ID. Every branch below that fails
+	// to hand it over clears it again.
+	p.queued.add(newEvent.TransactionID)
+
 	// Queue transaction for processing with enhanced timeout handling
 	select {
 	case p.txnQueue <- newEvent:
@@ -51,6 +58,7 @@ func (p *DynamicTxnProcessor) QueueFullnodeTransaction(newEvent *models.EventTra
 		// No worker ever saw this event, so give up the reservation: a later
 		// re-delivery has to be free to try again instead of being rejected as a
 		// duplicate until dedupMapCleaner sweeps the entry.
+		p.queued.remove(newEvent.TransactionID)
 		p.releaseAdmission(newEvent.TransactionID)
 		p.host.Log().Error("Failed to queue transaction - queue full, will retry on next delivery",
 			"txnID", newEvent.TransactionID,
@@ -63,6 +71,7 @@ func (p *DynamicTxnProcessor) QueueFullnodeTransaction(newEvent *models.EventTra
 		}
 
 	case <-p.ctx.Done():
+		p.queued.remove(newEvent.TransactionID)
 		p.releaseAdmission(newEvent.TransactionID)
 		p.host.Log().Info("Transaction processor shutting down")
 	}
@@ -200,7 +209,7 @@ func (p *DynamicTxnProcessor) deferVerdictWhileProducerInFlight(entry *inflightT
 
 	producer := ""
 	for _, dep := range entry.deps {
-		if p.inflight.has(dep) {
+		if p.isPending(dep) {
 			producer = dep
 			break
 		}

@@ -84,16 +84,21 @@ func (p *DynamicTxnProcessor) partitionDependencies(deps []string) (resolved, un
 
 // dependencyWait picks how long to wait, taking the longest applicable tier.
 //
-// A producer that is currently in flight is worth waiting for, because it is
-// going to resolve. A producer that is simply absent may never arrive — this
-// node may have joined the network after it was published — and gets a much
-// shorter grace period.
+// A producer this node already holds is worth waiting for, because it is going
+// to resolve. Held means queued as well as in flight: a producer sitting in
+// txnQueue is just as certain to be processed, and reading only the registry
+// gave it the short tier and made the consumer give up on something that was
+// seconds away.
+//
+// A producer that is genuinely absent may never arrive — this node may have
+// joined the network after it was published — and gets a much shorter grace
+// period.
 func (p *DynamicTxnProcessor) dependencyWait(unresolved []string) time.Duration {
 	cfg := p.bundle
 	var wait time.Duration
 	for _, dep := range unresolved {
 		tier := cfg.unknownWait
-		if p.inflight.has(dep) {
+		if p.isPending(dep) {
 			tier = cfg.inflightWait
 		}
 		if tier > wait {

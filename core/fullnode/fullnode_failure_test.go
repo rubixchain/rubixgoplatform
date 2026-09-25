@@ -457,3 +457,26 @@ func TestStripClassRemovesOnlyTheOutermostClass(t *testing.T) {
 		t.Error("stripClass altered an unclassified error")
 	}
 }
+
+// P1 and P3 are one mechanism seen twice. Making a queued producer visible is
+// what causes the guard to trim for it, and trimming is what produces the
+// mismatch that reads like a verdict — so the deferral has to see the queue too,
+// or closing the blind spot would only move the dead-letter from the producer to
+// the consumer.
+func TestDeferVerdictSeesAQueuedProducer(t *testing.T) {
+	p, cancel := newTestProcessor(10, time.Second)
+	defer cancel()
+
+	// The split is admitted and queued; no worker has reached it.
+	p.QueueFullnodeTransaction(testEvent("split-1"))
+	if p.inflight.has("split-1") {
+		t.Fatal("the split reached the registry; this test needs it queued only")
+	}
+
+	consumer := &inflightTxn{id: "transfer-1", deps: []string{"split-1"}, ready: make(chan struct{})}
+	verdict := classify(errValidationFailed, errors.New("chain mismatch after sync from peer-1"))
+
+	if got := p.deferVerdictWhileProducerInFlight(consumer, verdict); errors.Is(got, errValidationFailed) {
+		t.Error("the verdict stood while its producer was still sitting in the queue")
+	}
+}

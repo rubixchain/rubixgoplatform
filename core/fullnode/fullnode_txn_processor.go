@@ -39,6 +39,11 @@ type DynamicTxnProcessor struct {
 	// is a seen-recently set rather than a live one.
 	inflight *inflightRegistry
 
+	// Admitted transactions still waiting in txnQueue. Kept apart from inflight
+	// rather than folded into it, and unioned only where the two are read
+	// together; see fullnode_queued.go for why.
+	queued *queuedSet
+
 	// Dependency-aware ingest settings. Always active; see bundleConfig.
 	bundle bundleConfig
 
@@ -153,6 +158,7 @@ func NewTxnProcessor(host Host) *DynamicTxnProcessor {
 		retryDelay:      time.Second * 2,
 		enqueueTimeout:  time.Second * 10,
 		inflight:        newInflightRegistry(),
+		queued:          newQueuedSet(),
 		bundle:          bundleCfg,
 		syncMemo:        newSyncedTokenMemo(bundleCfg.syncMemoTTL),
 	}
@@ -360,6 +366,12 @@ func (p *DynamicTxnProcessor) dynamicWorker(workerID int, stopChan chan struct{}
 			if !ok || txnEvent == nil {
 				return
 			}
+			// No longer queued. Cleared here rather than after
+			// processTxnWithRetry so a panic — which the deferred recover above
+			// swallows — cannot leave the ID behind, and registerInflight picks
+			// the transaction up a few calls later.
+			p.queued.remove(txnEvent.TransactionID)
+
 			startTime := time.Now()
 			p.processTxnWithRetry(txnEvent, workerID)
 			processingTime := time.Since(startTime)
@@ -492,6 +504,7 @@ func (p *DynamicTxnProcessor) dedupMapCleaner() {
 			p.host.Log().Info("Fullnode ingest metrics",
 				"inflight", p.inflight.len(),
 				"queueLength", len(p.txnQueue),
+				"queuedTracked", p.queued.len(),
 				"depsObserved", atomic.LoadInt64(&p.depsObserved),
 				"depsInFlight", atomic.LoadInt64(&p.depsInFlight),
 				"parked", atomic.LoadInt64(&p.parkedCount),
