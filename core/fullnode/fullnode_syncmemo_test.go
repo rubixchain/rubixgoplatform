@@ -377,3 +377,38 @@ func TestSyncOnceThroughTheBundleCascade(t *testing.T) {
 		t.Errorf("syncMemo holds %d records, want 1", got)
 	}
 }
+
+// A chain that did not apply used to reach here as a successful sync:
+// SyncTransactionChainsFromPeer logged the apply failure and returned nil. The
+// memo then recorded the token, so the retry skipped the fetch it needed, and
+// the integrity check's phase 3 reported a plain mismatch that reads as a
+// verdict. The apply error now surfaces, and this pins what must happen to it.
+func TestSyncOnceTreatsAnApplyFailureAsTransient(t *testing.T) {
+	p, recorder := memoCore(t, time.Second)
+	p.registerInflight(eventWithDeps("txn-T", "txn-S"))
+
+	applyFailed := errors.New("SyncTransactionChainsFromPeer: chain apply failed for 1 of 1 token(s) from peer-1 [token-a: fork detected]")
+	recorder.fail(applyFailed)
+
+	err := p.syncChainsOnce("txn-T", "peer-1", []string{"token-a"}, nil, nil)
+	if !errors.Is(err, applyFailed) {
+		t.Fatalf("syncChainsOnce() = %v, want the apply failure to reach the caller", err)
+	}
+	if !errors.Is(err, errDependencyTimeout) {
+		t.Error("the apply failure is not tagged transient, so the retry ladder will not run and the transaction is dead-lettered")
+	}
+	if errors.Is(err, errValidationFailed) {
+		t.Error("a peer's unusable chain was classified as this node's verdict on the transaction")
+	}
+
+	// And the retry must genuinely go back to the network rather than being
+	// suppressed by a memo entry that should never have been written.
+	recorder.fail(nil)
+	if err := p.syncChainsOnce("txn-T", "peer-1", []string{"token-a"}, nil, nil); err != nil {
+		t.Fatalf("retry after an apply failure = %v, want nil", err)
+	}
+	calls := recorder.snapshot()
+	if len(calls) != 1 || !reflect.DeepEqual(calls[0].tokenIDs, []string{"token-a"}) {
+		t.Errorf("retry reached the network %d time(s) with %v, want 1 fetch of token-a", len(calls), calls)
+	}
+}

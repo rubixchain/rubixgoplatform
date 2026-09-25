@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -213,6 +214,10 @@ func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, 
 		"message", resp.Message,
 	)
 
+	// Apply failures on the fullnode path, collected rather than returned at the
+	// first one so every token still gets its chance. See the aggregate below.
+	var applyErrs []string
+
 	for tokenID, txs := range resp.Data {
 		c.log.Info("SyncTransactionChainsFromPeer: Applying chain for token",
 			"tokenID", tokenID,
@@ -228,10 +233,11 @@ func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, 
 			// transaction. Trim to the prefix that predates anything in flight.
 			txs = c.txnProcessor.GuardAgainstInflight(tokenID, txs)
 			if err := c.applyTokenChainFromSyncForFullNode(tokenID, txs, prevTxID); err != nil {
-				c.log.Warn("SyncTransactionChainsFromPeer: fullnode apply failed (non-fatal)", "tokenID", tokenID, "err", err)
-			} else {
-				c.log.Info("SyncTransactionChainsFromPeer: Chain applied successfully (fullnode)", "tokenID", tokenID, "txCount", len(txs))
+				c.log.Error("SyncTransactionChainsFromPeer: fullnode apply failed", "tokenID", tokenID, "err", err)
+				applyErrs = append(applyErrs, fmt.Sprintf("%s: %v", tokenID, err))
+				continue
 			}
+			c.log.Info("SyncTransactionChainsFromPeer: Chain applied successfully (fullnode)", "tokenID", tokenID, "txCount", len(txs))
 		} else {
 			if err := c.applyTokenChainFromSync(tokenID, txs, prevTxID, transferNFTOwnership); err != nil {
 				c.log.Warn("SyncTransactionChainsFromPeer: apply failed (non-fatal)", "tokenID", tokenID, "err", err)
@@ -239,6 +245,26 @@ func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, 
 				c.log.Info("SyncTransactionChainsFromPeer: Chain applied successfully", "tokenID", tokenID, "txCount", len(txs))
 			}
 		}
+	}
+
+	// A chain that did not apply is not a sync that happened. Reporting nil here
+	// told the caller the opposite, and two things downstream believed it:
+	// syncChainsOnce recorded the token in the sync-once memo, so the retry that
+	// followed skipped the fetch it needed; and the integrity check's phase 3
+	// then found the chain still short and reported a plain mismatch, which
+	// classifyValidationFailure reads as this node's own verdict on the
+	// transaction — dead-lettering it, and everything downstream of it, for a
+	// peer whose chain forked or arrived out of canonical order.
+	//
+	// Returning the error instead is enough to fix both: syncChainsOnce tags it
+	// transient and leaves the memo untouched, so the retry genuinely re-fetches.
+	//
+	// Fullnode path only. The non-fullnode branch above keeps its swallow-and-log
+	// behaviour, so the quorum and NFT/smart-contract callers are unaffected —
+	// they have no retry ladder to hand this to and no memo to keep honest.
+	if len(applyErrs) > 0 {
+		return fmt.Errorf("SyncTransactionChainsFromPeer: chain apply failed for %d of %d token(s) from %s [%s]",
+			len(applyErrs), len(resp.Data), peerDID, strings.Join(applyErrs, "; "))
 	}
 
 	c.log.Info("SyncTransactionChainsFromPeer: Sync completed", "peerDID", peerDID, "tokenCount", len(tokenIDs))
