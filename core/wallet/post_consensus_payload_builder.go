@@ -520,12 +520,18 @@ func (w *Wallet) readTokensByIDs(ctx context.Context, tokenIDs []string) (map[st
 }
 
 func (w *Wallet) readLatestTokenChainRows(ctx context.Context, tokenIDs []string) (map[string]*models.TokenChain, error) {
+	// One backward index probe per token. DISTINCT ON ... ORDER BY position DESC cannot use the
+	// (token_id, position) primary key for the sort, so it read and sorted every row of every chain.
 	rows, err := w.db.Pool().Query(ctx,
-		`SELECT DISTINCT ON (token_id)
-		 id, token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at
-		 FROM tokenchain
-		 WHERE token_id = ANY($1::text[])
-		 ORDER BY token_id, position DESC`,
+		`SELECT tc.id, tc.token_id, tc.transaction_id, tc.previous_transaction_id, tc.role, tc.position, tc.created_at, tc.updated_at
+		 FROM unnest($1::text[]) AS ids(token_id)
+		 CROSS JOIN LATERAL (
+		 	SELECT id, token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at
+		 	FROM tokenchain
+		 	WHERE token_id = ids.token_id
+		 	ORDER BY position DESC
+		 	LIMIT 1
+		 ) tc`,
 		tokenIDs,
 	)
 	if err != nil {
