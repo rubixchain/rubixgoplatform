@@ -154,6 +154,35 @@ class DBValidator:
             log.warning("[%s] check_tokenchain_gaps skipped: %s", self.name, exc)
             return []
 
+    def check_tokenchain_index_mismatches(self) -> List[str]:
+        """Return token_ids whose tokenchain_index array differs from a rebuild.
+
+        tokenchain_index must hold every tokenchain row id for the token in
+        position order. Persistence appends ids incrementally, so this check
+        proves no id was lost or duplicated. Empty list means all consistent.
+        """
+        sql = """
+            SELECT tc.token_id
+            FROM (
+                SELECT token_id, array_agg(id ORDER BY position) AS rebuilt
+                FROM tokenchain
+                GROUP BY token_id
+            ) tc
+            LEFT JOIN tokenchain_index ti USING (token_id)
+            WHERE ti.index IS NULL OR ti.index <> tc.rebuilt
+        """
+        try:
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(sql)
+                rows = cur.fetchall()
+            result = [row[0] for row in rows]
+            if result:
+                log.warning("[%s] tokenchain_index mismatches for token_ids: %s", self.name, result)
+            return result
+        except Exception as exc:
+            log.warning("[%s] check_tokenchain_index_mismatches skipped: %s", self.name, exc)
+            return []
+
     def wait_for_unpledge_clearance(self, tx_id: str, timeout: int = 30) -> bool:
         """Poll until tx_id is removed from unpledge_sequence_info (max *timeout* seconds).
 

@@ -139,9 +139,6 @@ func (pc *PostConsensusPersistenceCoordinator) Persist(ctx context.Context, req 
 	if err := pc.insertTokenChainRows(ctx, tx, req.TokenChainRows); err != nil {
 		return err
 	}
-	if err := pc.syncTokenChainIndex(ctx, tx, req.AffectedTokens); err != nil {
-		return err
-	}
 	if err := pc.upsertTokenStates(ctx, tx, req.TokenStates); err != nil {
 		return err
 	}
@@ -565,68 +562,27 @@ func (pc *PostConsensusPersistenceCoordinator) insertTokenChainRows(ctx context.
 			)
 		}
 
+		// The rows and their tokenchain_index entries are written in one statement, so the index cannot lag the chain.
+		// ON CONFLICT DO NOTHING ... RETURNING yields only rows actually inserted, so a retried persist appends nothing.
+		// The index is appended, not rebuilt: a rebuild re-read the whole chain per persist, which is O(n) per append.
 		query := `
-				INSERT INTO tokenchain (token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at)
-				VALUES ` + strings.Join(placeholders, ",") + `
-				ON CONFLICT (token_id, position) DO NOTHING
+				WITH inserted AS (
+					INSERT INTO tokenchain (token_id, transaction_id, previous_transaction_id, role, position, created_at, updated_at)
+					VALUES ` + strings.Join(placeholders, ",") + `
+					ON CONFLICT (token_id, position) DO NOTHING
+					RETURNING token_id, id, position
+				)
+				INSERT INTO tokenchain_index (token_id, index, created_at, updated_at)
+				SELECT token_id, array_agg(id ORDER BY position), NOW(), NOW()
+				FROM inserted
+				GROUP BY token_id
+				ON CONFLICT (token_id) DO UPDATE SET
+					index = tokenchain_index.index || EXCLUDED.index,
+					updated_at = NOW()
 			`
 		if _, err := tx.Exec(ctx, query, args...); err != nil {
 			return fmt.Errorf("post-consensus persistence: insert tokenchain rows: %w", err)
 		}
-	}
-
-	return nil
-}
-
-func (pc *PostConsensusPersistenceCoordinator) syncTokenChainIndex(ctx context.Context, tx pgx.Tx, tokenIDs []string) error {
-	rows, err := tx.Query(ctx, `
-		SELECT token_id, array_agg(id ORDER BY position)
-		FROM tokenchain
-		WHERE token_id = ANY($1::text[])
-		GROUP BY token_id
-	`, tokenIDs)
-	if err != nil {
-		return fmt.Errorf("post-consensus persistence: read tokenchain index: %w", err)
-	}
-	defer rows.Close()
-
-	type tokenchainIndexRow struct {
-		tokenID string
-		index   []int32
-	}
-
-	indexRows := make([]tokenchainIndexRow, 0, len(tokenIDs))
-	for rows.Next() {
-		var row tokenchainIndexRow
-		if err := rows.Scan(&row.tokenID, &row.index); err != nil {
-			return fmt.Errorf("post-consensus persistence: scan tokenchain index: %w", err)
-		}
-		indexRows = append(indexRows, row)
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("post-consensus persistence: stream tokenchain index: %w", err)
-	}
-	if len(indexRows) == 0 {
-		return nil
-	}
-
-	placeholders := make([]string, 0, len(indexRows))
-	args := make([]any, 0, len(indexRows)*2)
-	for i, row := range indexRows {
-		offset := i*2 + 1
-		placeholders = append(placeholders, fmt.Sprintf("($%d, $%d, NOW(), NOW())", offset, offset+1))
-		args = append(args, row.tokenID, row.index)
-	}
-
-	query := `
-		INSERT INTO tokenchain_index (token_id, index, created_at, updated_at)
-		VALUES ` + strings.Join(placeholders, ",") + `
-		ON CONFLICT (token_id) DO UPDATE SET
-			index = EXCLUDED.index,
-			updated_at = NOW()
-	`
-	if _, err := tx.Exec(ctx, query, args...); err != nil {
-		return fmt.Errorf("post-consensus persistence: upsert tokenchain index: %w", err)
 	}
 
 	return nil
