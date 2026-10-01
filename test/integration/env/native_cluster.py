@@ -182,10 +182,42 @@ class NativeClusterManager:
         # resolve to work_dir/work_dir and the node would read the wrong config.
         abs_dir = os.path.abspath(node.work_dir)
         log.info("[%s] rubixgoplatform init -p %s", node.name, abs_dir)
-        subprocess.run(
+        proc = subprocess.run(
             [self._binary, "init", "-p", abs_dir],
-            check=True, cwd=node.work_dir, capture_output=True, text=True,
+            check=False, cwd=node.work_dir, capture_output=True, text=True,
         )
+        if proc.returncode != 0:
+            # Surface the binary's own output. Without this the caller only sees
+            # "died with SIGABRT" and the actual cause — a Go panic trace, a dyld
+            # "library not loaded" error, an arch mismatch — is silently
+            # discarded, leaving a CI failure undiagnosable from the logs.
+            log.error(
+                "[%s] init failed (exit=%s)\n"
+                "  binary: %s\n"
+                "  cwd:    %s\n"
+                "  stdout: %s\n"
+                "  stderr: %s",
+                node.name,
+                proc.returncode,
+                self._binary,
+                node.work_dir,
+                proc.stdout.strip() or "<empty>",
+                proc.stderr.strip() or "<empty>",
+            )
+            # A negative return code is a signal (e.g. -6 = SIGABRT), which means
+            # the process crashed rather than exiting with an error status.
+            if proc.returncode < 0:
+                log.error(
+                    "[%s] init was killed by signal %s — the binary crashed before "
+                    "or during startup. Common causes: a dynamic library the binary "
+                    "was linked against is missing or the wrong architecture, or a "
+                    "panic in a package initializer. Check `file %s` and "
+                    "`otool -L %s` (macOS) / `ldd` (Linux) on the runner.",
+                    node.name, -proc.returncode, self._binary, self._binary,
+                )
+            raise subprocess.CalledProcessError(
+                proc.returncode, proc.args, output=proc.stdout, stderr=proc.stderr
+            )
 
     def _render_config(self, node: NativeNode) -> None:
         """Write config.toml with this node's node_index / network / DB coords.

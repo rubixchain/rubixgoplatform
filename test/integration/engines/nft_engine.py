@@ -78,6 +78,26 @@ class NFTEngine:
         # Outcome of the child-mint phase, surfaced as a verification check.
         self._child_mint_outcome = None  # type: Optional[dict]
 
+        # NFTs successfully burnt: {"nft_id": str, "owner_did": str,
+        # "owner_node": NodeClient, "label": str, "burn_txn_id": str}.
+        # Populated by run_nft_burn.
+        self._burnt_nfts = []  # type: list
+        # Set when run_nft_burn found no burnable NFT, so verification can report
+        # the skip instead of silently emitting no burn checks at all.
+        self._burn_skipped = None  # type: Optional[str]
+        # Per-case outcomes from run_nft_burn_negatives.
+        self._burn_negative_results = []  # type: list
+        # Outcome of burning a CHILD NFT, which must be ALLOWED (only parents
+        # with live children are blocked).
+        self._child_burn_allowed = None  # type: Optional[dict]
+        # Outcome of the parent-burn rejection test. The burn of a parent NFT
+        # that still has live children MUST be refused; this records whether it
+        # actually was, so a silently-permitted orphaning shows up as a FAIL.
+        self._parent_burn_blocked = None  # type: Optional[dict]
+        # Outcome of the repeat-burn test: burning an already-burnt NFT should
+        # succeed idempotently rather than erroring.
+        self._repeat_burn_outcome = None  # type: Optional[dict]
+
     # ------------------------------------------------------------------
     # Entry point
     # ------------------------------------------------------------------
@@ -573,6 +593,521 @@ class NFTEngine:
         log.info("=== NFT CROSS-NODE EXECUTION COMPLETE ===")
 
     # ------------------------------------------------------------------
+    # NFT Burn Phase
+    # ------------------------------------------------------------------
+
+    def run_nft_burn(self) -> None:
+        """Burn a deployed NFT that has no live children.
+
+        A burn permanently destroys the NFT. It is the terminal operation in an
+        NFT's life, so this phase MUST run after every execute/transfer phase —
+        a burnt NFT can no longer be executed or transferred.
+
+        Picks the LAST deployed NFT rather than the first: run_nft_mint_children
+        mints children under the first one, and a parent with live children is
+        deliberately un-burnable (see run_nft_burn_parent_rejected).
+        """
+        with self._deployed_lock:
+            if not self._deployed_nfts:
+                log.warning("No deployed NFTs available for burn")
+                return
+            parents = {mc["parent"] for mc in self._minted_children}
+            children = {
+                child
+                for mc in self._minted_children
+                for child in mc.get("children", [])
+            }
+            # Prefer an NFT that is neither a parent (blocked) nor a child
+            # (burning it would change what the parent-rejection test observes).
+            candidates = [
+                info
+                for info in reversed(self._deployed_nfts)
+                if info["nft_id"] not in parents and info["nft_id"] not in children
+            ]
+            if not candidates:
+                # Every deployed NFT is either a parent (deliberately un-burnable)
+                # or a child. Surface this rather than returning silently — an
+                # empty _burnt_nfts list would otherwise make the burn checks
+                # disappear from verification entirely.
+                log.warning(
+                    "No burnable NFT available (all %d deployed NFTs are parents or children) "
+                    "— increase --nft-count to exercise the burn phase",
+                    len(self._deployed_nfts),
+                )
+                self._burn_skipped = (
+                    f"all {len(self._deployed_nfts)} deployed NFT(s) are parents or "
+                    f"children; need at least one standalone NFT to burn"
+                )
+                return
+            nft_info = candidates[0]
+
+        nft_id = nft_info["nft_id"]
+        owner_did = nft_info["owner_did"]
+        owner_node = nft_info["owner_node"]
+        label = nft_info["label"]
+
+        log.info(
+            "=== NFT BURN: nft=%s  owner=%s (Node-%s) ===",
+            nft_id[:12] + "...",
+            owner_did[:20] + "...",
+            label,
+        )
+
+        ts = datetime.now(tz=timezone.utc).isoformat()
+        t0 = time.time()
+        status = "SUCCESS"
+        req_id: Optional[str] = None
+        txn_id: Optional[str] = None
+        error: Optional[str] = None
+
+        try:
+            result = owner_node.burn_nft(
+                owner_did=owner_did,
+                nft_id=nft_id,
+                data="NFT burn test",
+            )
+            req_id = result.get("req_id")
+            txn_id = owner_node.extract_txn_id(result)
+            with self._deployed_lock:
+                self._burnt_nfts.append({
+                    "nft_id": nft_id,
+                    "owner_did": owner_did,
+                    "owner_node": owner_node,
+                    "label": label,
+                    "burn_txn_id": txn_id,
+                })
+            log.info("NFT burn completed: req_id=%s txn=%s", req_id, txn_id)
+        except Exception as exc:  # noqa: BLE001
+            status = "FAIL"
+            error = str(exc)
+            log.error("NFT burn failed: %s", exc)
+
+        self.reporter.record_transaction({
+            "id": f"NFT-BURN-{nft_id[:8]}",
+            "type": "NFT_BURN",
+            "node": label,
+            "did": owner_did[:20] + "...",
+            "nft_id": nft_id,
+            "status": status,
+            "req_id": req_id,
+            "transaction_id": txn_id,
+            "duration_ms": int((time.time() - t0) * 1000),
+            "timestamp": ts,
+            "error": error,
+        })
+
+        # Settle so the burn is queryable and any subscriber sync has landed.
+        time.sleep(5)
+        log.info("=== NFT BURN COMPLETE ===")
+
+    def run_nft_burn_parent_rejected(self) -> None:
+        """NEGATIVE TEST: burning a parent NFT with live children must be refused.
+
+        Without this guard a parent could be destroyed while its children still
+        reference it, leaving them orphaned and GetParentNFT resolving to a dead
+        token. A PASS here means the API *rejected* the burn.
+
+        Requires run_nft_mint_children to have run first.
+        """
+        with self._deployed_lock:
+            minted = list(self._minted_children)
+
+        if not minted:
+            log.warning(
+                "No minted children available — skipping parent-burn rejection test"
+            )
+            self._parent_burn_blocked = {
+                "skipped": True,
+                "detail": "no child NFTs were minted, nothing to test",
+            }
+            return
+
+        parent_entry = minted[0]
+        parent_id = parent_entry["parent"]
+        owner_did = parent_entry["owner_did"]
+        owner_node = parent_entry["owner_node"]
+        child_count = len(parent_entry.get("children", []))
+
+        log.info(
+            "=== NFT BURN PARENT REJECTION: parent=%s (%d live children) ===",
+            parent_id[:12] + "...",
+            child_count,
+        )
+
+        ts = datetime.now(tz=timezone.utc).isoformat()
+        t0 = time.time()
+
+        blocked = False
+        error: Optional[str] = None
+        try:
+            owner_node.burn_nft(
+                owner_did=owner_did,
+                nft_id=parent_id,
+                data="NFT parent burn (expected to be rejected)",
+            )
+            # Reaching here means the burn was ACCEPTED — the guard failed.
+            log.error(
+                "Parent NFT burn was ACCEPTED but should have been rejected: %s",
+                parent_id,
+            )
+        except Exception as exc:  # noqa: BLE001
+            blocked = True
+            error = str(exc)
+            log.info("Parent NFT burn correctly rejected: %s", exc)
+
+        self._parent_burn_blocked = {
+            "skipped": False,
+            "blocked": blocked,
+            "parent": parent_id,
+            "child_count": child_count,
+            "error": error,
+        }
+
+        # A rejected burn is the SUCCESS case for this phase.
+        self.reporter.record_transaction({
+            "id": f"NFT-BURN-PARENT-{parent_id[:8]}",
+            "type": "NFT_BURN_PARENT_REJECTED",
+            "node": parent_entry.get("owner_node").name
+            if hasattr(parent_entry.get("owner_node"), "name")
+            else "?",
+            "nft_id": parent_id,
+            "children_count": child_count,
+            "status": "SUCCESS" if blocked else "FAIL",
+            "duration_ms": int((time.time() - t0) * 1000),
+            "timestamp": ts,
+            "error": None if blocked else "burn was accepted but should have been rejected",
+        })
+
+        log.info("=== NFT BURN PARENT REJECTION COMPLETE ===")
+
+    def run_nft_burn_idempotent(self) -> None:
+        """Burn an already-burnt NFT — should succeed idempotently, not error.
+
+        Requires run_nft_burn to have burnt something first.
+        """
+        with self._deployed_lock:
+            burnt = list(self._burnt_nfts)
+
+        if not burnt:
+            log.warning("No burnt NFTs available — skipping repeat-burn test")
+            self._repeat_burn_outcome = {
+                "skipped": True,
+                "detail": "no NFT was burnt, nothing to repeat",
+            }
+            return
+
+        entry = burnt[0]
+        nft_id = entry["nft_id"]
+        owner_did = entry["owner_did"]
+        owner_node = entry["owner_node"]
+
+        log.info("=== NFT REPEAT BURN: nft=%s ===", nft_id[:12] + "...")
+
+        ts = datetime.now(tz=timezone.utc).isoformat()
+        t0 = time.time()
+
+        idempotent = False
+        short_circuited = False
+        error: Optional[str] = None
+        try:
+            result = owner_node.burn_nft(
+                owner_did=owner_did,
+                nft_id=nft_id,
+                data="NFT repeat burn (expected to be idempotent)",
+            )
+            idempotent = True
+            # The node should recognise the NFT as already burnt and return
+            # without opening a signature challenge, rather than building and
+            # publishing a second burn transaction for the same NFT.
+            short_circuited = bool(result.get("already_burnt"))
+            log.info(
+                "Repeat burn accepted idempotently (short-circuited=%s)",
+                short_circuited,
+            )
+        except Exception as exc:  # noqa: BLE001
+            error = str(exc)
+            log.error("Repeat burn errored instead of succeeding idempotently: %s", exc)
+
+        self._repeat_burn_outcome = {
+            "skipped": False,
+            "idempotent": idempotent,
+            "short_circuited": short_circuited,
+            "nft_id": nft_id,
+            "error": error,
+        }
+
+        self.reporter.record_transaction({
+            "id": f"NFT-BURN-REPEAT-{nft_id[:8]}",
+            "type": "NFT_BURN_REPEAT",
+            "nft_id": nft_id,
+            "status": "SUCCESS" if idempotent else "FAIL",
+            "duration_ms": int((time.time() - t0) * 1000),
+            "timestamp": ts,
+            "error": error,
+        })
+
+        log.info("=== NFT REPEAT BURN COMPLETE ===")
+
+    def run_nft_burn_negatives(self) -> None:
+        """NEGATIVE TESTS: every burn request that must be REFUSED.
+
+        A burn is terminal and skips consensus, so validateNFTBurnRequest is the
+        only thing standing between a malformed request and permanent
+        destruction of an asset. Each case here asserts the node says NO.
+
+        Also covers one POSITIVE case that is easy to get wrong: burning a CHILD
+        NFT is allowed (only parents with live children are blocked).
+        """
+        with self._deployed_lock:
+            deployed = list(self._deployed_nfts)
+            minted = list(self._minted_children)
+            burnt = list(self._burnt_nfts)
+
+        if not deployed:
+            log.warning("No deployed NFTs — skipping burn negative tests")
+            self._burn_negative_results = [{
+                "name": "ALL",
+                "skipped": True,
+                "detail": "no deployed NFTs to build negative cases from",
+            }]
+            return
+
+        node = self.node_a
+        owner_did = self.did_a
+        other_did = self.did_b
+
+        # An NFT that is still live (not burnt, not a parent) to use as the
+        # subject of the malformed-request cases.
+        parents = {mc["parent"] for mc in minted}
+        burnt_ids = {b["nft_id"] for b in burnt}
+        live = [
+            d for d in deployed
+            if d["nft_id"] not in parents
+            and d["nft_id"] not in burnt_ids
+            and d["owner_node"] is node
+        ]
+        subject = live[0]["nft_id"] if live else None
+
+        def entry(nft_id: str) -> dict:
+            return {"nftId": nft_id, "value": 1.0, "data": "negative test"}
+
+        cases = []
+
+        # 1. Burning an NFT owned by someone else.
+        if subject:
+            cases.append((
+                "WRONG_OWNER",
+                "burning an NFT the initiator does not own",
+                node.build_burn_payload(other_did, [entry(subject)],
+                                        memo="negative: wrong owner"),
+            ))
+
+        # 2. Burning an NFT that does not exist.
+        cases.append((
+            "UNKNOWN_NFT",
+            "burning a non-existent NFT id",
+            node.build_burn_payload(
+                owner_did,
+                [entry("QmThisNFTDoesNotExistAAAAAAAAAAAAAAAAAAAAAAAAAA")],
+                memo="negative: unknown nft"),
+        ))
+
+        # 3. burnNft combined with transferNftOwnership — contradictory.
+        if subject:
+            cases.append((
+                "BURN_PLUS_TRANSFER",
+                "burnNft combined with transferNftOwnership",
+                node.build_burn_payload(owner_did, [entry(subject)],
+                                        transfer_ownership=True,
+                                        memo="negative: burn+transfer"),
+            ))
+
+        # 4. burnNft combined with an RBT transfer — the RBT side would silently
+        #    lose its quorum validation by riding the non-consensus burn path.
+        if subject:
+            cases.append((
+                "BURN_PLUS_RBT",
+                "burnNft combined with an RBT transfer",
+                node.build_burn_payload(owner_did, [entry(subject)], rbt=1.0,
+                                        memo="negative: burn+rbt"),
+            ))
+
+        # 5. burnNft combined with a smart contract entry.
+        if subject:
+            cases.append((
+                "BURN_PLUS_SC",
+                "burnNft combined with a smart contract entry",
+                node.build_burn_payload(
+                    owner_did, [entry(subject)],
+                    smart_contract=[{"smartContractId": "QmFakeSCForNegativeTest",
+                                     "value": 1.0, "data": "x"}],
+                    memo="negative: burn+sc"),
+            ))
+
+        # 6. burnNft with an empty nftId.
+        cases.append((
+            "EMPTY_NFT_ID",
+            "burnNft with an empty nftId",
+            node.build_burn_payload(owner_did, [entry("")],
+                                    memo="negative: empty nft id"),
+        ))
+
+        # 7. Re-burning an already-burnt NFT ALONGSIDE a live one. The mixed
+        #    request is rejected rather than partially applied.
+        if subject and burnt:
+            cases.append((
+                "MIXED_BURNT_AND_LIVE",
+                "request mixing an already-burnt NFT with a live one",
+                node.build_burn_payload(
+                    owner_did,
+                    [entry(burnt[0]["nft_id"]), entry(subject)],
+                    memo="negative: mixed burnt+live"),
+            ))
+
+        log.info("=== NFT BURN NEGATIVE TESTS (%d cases) ===", len(cases))
+
+        results = []
+        for name, description, payload in cases:
+            ts = datetime.now(tz=timezone.utc).isoformat()
+            t0 = time.time()
+            rejected = False
+            message: Optional[str] = None
+            try:
+                node.initiate_nft_burn_raw(payload)
+                log.error("[%s] request was ACCEPTED but should have been refused", name)
+            except Exception as exc:  # noqa: BLE001
+                rejected = True
+                message = str(exc)
+                log.info("[%s] correctly refused: %s", name, exc)
+
+            results.append({
+                "name": name,
+                "skipped": False,
+                "description": description,
+                "rejected": rejected,
+                "message": message,
+            })
+
+            self.reporter.record_transaction({
+                "id": f"NFT-BURN-NEG-{name}",
+                "type": "NFT_BURN_NEGATIVE",
+                "status": "SUCCESS" if rejected else "FAIL",
+                "detail": description,
+                "duration_ms": int((time.time() - t0) * 1000),
+                "timestamp": ts,
+                "error": None if rejected else "request was accepted but should have been refused",
+            })
+
+        self._burn_negative_results = results
+
+        # POSITIVE cases, run last because they destroy NFTs the earlier cases
+        # depend on. Three linked assertions that together prove the parent
+        # guard unblocks correctly rather than pinning a subtree forever:
+        #
+        #   1. burning a CHILD is allowed (only parents with LIVE children block)
+        #   2. the parent is STILL blocked while a second child is alive
+        #   3. once EVERY child is burnt, the parent becomes burnable
+        #
+        # Step 3 is the one that matters: liveChildNFTs filters out already-burnt
+        # children, so a fully-burnt subtree must not keep its root un-burnable.
+        self._child_burn_allowed = None
+        self._parent_still_blocked = None
+        self._parent_burn_after_children = None
+
+        if minted:
+            children = list(minted[0].get("children", []))
+            child_owner_node = minted[0]["owner_node"]
+            child_owner_did = minted[0]["owner_did"]
+            parent_id = minted[0]["parent"]
+
+            if children:
+                # --- 1. Burn the first child: must be ALLOWED ----------------
+                first_child = children[0]
+                log.info("=== NFT CHILD BURN (expected to SUCCEED): %s ===",
+                         first_child[:12] + "...")
+                try:
+                    child_owner_node.burn_nft(
+                        owner_did=child_owner_did,
+                        nft_id=first_child,
+                        data="child NFT burn (expected to succeed)",
+                    )
+                    self._child_burn_allowed = {"allowed": True, "child": first_child,
+                                                "error": None}
+                    log.info("Child NFT burn succeeded as expected")
+                except Exception as exc:  # noqa: BLE001
+                    self._child_burn_allowed = {"allowed": False, "child": first_child,
+                                                "error": str(exc)}
+                    log.error("Child NFT burn was refused but should be allowed: %s", exc)
+
+                remaining = children[1:]
+
+                # --- 2. Parent still blocked while a sibling is alive --------
+                if remaining and self._child_burn_allowed.get("allowed"):
+                    log.info("=== PARENT BURN with %d child(ren) still live "
+                             "(expected to be REFUSED) ===", len(remaining))
+                    try:
+                        child_owner_node.burn_nft(
+                            owner_did=child_owner_did,
+                            nft_id=parent_id,
+                            data="parent burn with a live child (expected refusal)",
+                        )
+                        self._parent_still_blocked = {
+                            "blocked": False, "live_children": len(remaining),
+                            "error": None,
+                        }
+                        log.error("Parent was BURNT while %d child(ren) were still live",
+                                  len(remaining))
+                    except Exception as exc:  # noqa: BLE001
+                        self._parent_still_blocked = {
+                            "blocked": True, "live_children": len(remaining),
+                            "error": str(exc),
+                        }
+                        log.info("Parent correctly still refused: %s", exc)
+
+                # --- 3. Burn the rest, then the parent must be ALLOWED -------
+                if self._child_burn_allowed.get("allowed"):
+                    all_children_burnt = True
+                    for child_id in remaining:
+                        try:
+                            child_owner_node.burn_nft(
+                                owner_did=child_owner_did,
+                                nft_id=child_id,
+                                data="remaining child burn",
+                            )
+                            log.info("Burnt remaining child %s", child_id[:12] + "...")
+                        except Exception as exc:  # noqa: BLE001
+                            all_children_burnt = False
+                            log.error("Failed to burn remaining child %s: %s",
+                                      child_id[:12] + "...", exc)
+
+                    if all_children_burnt:
+                        log.info("=== PARENT BURN after ALL children burnt "
+                                 "(expected to SUCCEED): %s ===", parent_id[:12] + "...")
+                        try:
+                            child_owner_node.burn_nft(
+                                owner_did=child_owner_did,
+                                nft_id=parent_id,
+                                data="parent burn after all children burnt",
+                            )
+                            self._parent_burn_after_children = {
+                                "allowed": True, "parent": parent_id, "error": None,
+                            }
+                            log.info("Parent burn succeeded once every child was burnt")
+                        except Exception as exc:  # noqa: BLE001
+                            self._parent_burn_after_children = {
+                                "allowed": False, "parent": parent_id, "error": str(exc),
+                            }
+                            log.error("Parent burn was refused even though every child "
+                                      "is burnt — burnt children must not block: %s", exc)
+                    else:
+                        self._parent_burn_after_children = {
+                            "skipped": True, "parent": parent_id,
+                            "error": "could not burn every child, so the parent case is inconclusive",
+                        }
+
+        log.info("=== NFT BURN NEGATIVE TESTS COMPLETE ===")
+
+    # ------------------------------------------------------------------
     # NFT Verification Phase
     # ------------------------------------------------------------------
 
@@ -781,6 +1316,231 @@ class NFTEngine:
                     "check": f"TX_LIST_NODE_{label}",
                     "status": "FAIL",
                     "detail": str(exc),
+                })
+
+        # --- 5. NFT burn checks ---
+        with self._deployed_lock:
+            burnt_snapshot = list(self._burnt_nfts)
+
+        if self._burn_skipped:
+            results.append({
+                "check": "NFT_BURN_RAN",
+                "status": "WARN",
+                "detail": f"burn phase skipped: {self._burn_skipped}",
+            })
+
+        for burnt in burnt_snapshot:
+            nft_id = burnt["nft_id"]
+            short_id = nft_id[:12] + "..."
+            owner_node = burnt["owner_node"]
+            label = burnt["label"]
+
+            # The burn must appear as a new entry at the tail of the chain.
+            try:
+                chain = owner_node.get_nft_chain(nft_id)
+                chain_len = len(chain) if chain else 0
+                # A burnt NFT was deployed (>=1) and then burnt (+1), so its
+                # chain must have grown beyond a bare deployment.
+                passed = chain_len >= 2
+                results.append({
+                    "check": f"NFT_BURN_STATUS_{short_id}",
+                    "status": "PASS" if passed else "FAIL",
+                    "detail": f"burnt NFT chain has {chain_len} entries (expected >= 2: deploy + burn)",
+                })
+            except Exception as exc:  # noqa: BLE001
+                results.append({
+                    "check": f"NFT_BURN_STATUS_{short_id}",
+                    "status": "FAIL",
+                    "detail": str(exc),
+                })
+
+            # A burnt NFT must disappear from its owner's NFT balance. This is
+            # the assertion that covers the GetNFTsByDid status filter — without
+            # it a destroyed NFT keeps being reported as owned.
+            try:
+                balance = owner_node.get_nft_balance(burnt["owner_did"])
+                # types.NFTBalance serialises as {"nft_id": ..., "value": ...}
+                still_listed = any(
+                    (entry.get("nft_id") or entry.get("nftId")) == nft_id
+                    for entry in (balance or [])
+                )
+                results.append({
+                    "check": f"NFT_BURN_BALANCE_NODE_{label}",
+                    "status": "FAIL" if still_listed else "PASS",
+                    "detail": (
+                        f"burnt NFT {short_id} still present in balance"
+                        if still_listed
+                        else f"burnt NFT {short_id} correctly excluded from balance"
+                    ),
+                })
+            except Exception as exc:  # noqa: BLE001
+                results.append({
+                    "check": f"NFT_BURN_BALANCE_NODE_{label}",
+                    "status": "FAIL",
+                    "detail": str(exc),
+                })
+
+            # Did the burn reach the opposite (subscriber) node?
+            #
+            # This check is informational (WARN, never FAIL) because this
+            # harness is localnet-only and util.PublishTransaction returns
+            # early on localnet (util/transaction.go:63-66) — nothing is ever
+            # broadcast, so a missing remote chain is CORRECT behaviour here,
+            # not a regression. Failing the build on it would make CI red for
+            # a condition the code is supposed to exhibit.
+            #
+            # A PASS is still reported when the chain IS present, so if this
+            # suite is ever pointed at a real testnet the check becomes
+            # meaningful without any edit.
+            other_node = self.node_b if owner_node is self.node_a else self.node_a
+            try:
+                other_chain = other_node.get_nft_chain(nft_id)
+                other_len = len(other_chain) if other_chain else 0
+                results.append({
+                    "check": f"NFT_BURN_CHAIN_SYNC_{short_id}",
+                    "status": "PASS" if other_len >= 2 else "WARN",
+                    "detail": (
+                        f"subscriber node chain has {other_len} entries "
+                        f"(>= 2 means the burn synced; 0 is expected on localnet, "
+                        f"where transaction publish is a no-op)"
+                    ),
+                })
+            except Exception as exc:  # noqa: BLE001
+                results.append({
+                    "check": f"NFT_BURN_CHAIN_SYNC_{short_id}",
+                    "status": "WARN",
+                    "detail": (
+                        f"subscriber node has no chain for this NFT: {exc} "
+                        f"(expected on localnet: transaction publish is a no-op)"
+                    ),
+                })
+
+        # Parent-with-children burn must have been REFUSED.
+        if self._parent_burn_blocked is not None:
+            pb = self._parent_burn_blocked
+            if pb.get("skipped"):
+                # No children were minted, so there is no parent to test against.
+                # WARN rather than FAIL: the guard was not exercised, but nothing
+                # was proven broken either — failing CI here would punish a run
+                # that simply had too few NFTs to build a parent/child pair.
+                results.append({
+                    "check": "NFT_BURN_PARENT_BLOCKED",
+                    "status": "WARN",
+                    "detail": f"guard not exercised: {pb.get('detail')}",
+                })
+            else:
+                blocked = pb.get("blocked", False)
+                results.append({
+                    "check": "NFT_BURN_PARENT_BLOCKED",
+                    "status": "PASS" if blocked else "FAIL",
+                    "detail": (
+                        f"parent {pb['parent'][:12]}... with {pb['child_count']} "
+                        f"live child(ren) was correctly refused"
+                        if blocked
+                        else f"parent {pb['parent'][:12]}... was BURNT despite having "
+                             f"{pb['child_count']} live child(ren) — children are now orphaned"
+                    ),
+                })
+
+        # Every negative case must have been REFUSED.
+        for neg in self._burn_negative_results:
+            if neg.get("skipped"):
+                results.append({
+                    "check": "NFT_BURN_NEGATIVES",
+                    "status": "WARN",
+                    "detail": f"negative cases not exercised: {neg.get('detail')}",
+                })
+                continue
+            rejected = neg.get("rejected", False)
+            results.append({
+                "check": f"NFT_BURN_REJECTS_{neg['name']}",
+                "status": "PASS" if rejected else "FAIL",
+                "detail": (
+                    f"{neg['description']} — correctly refused"
+                    if rejected
+                    else f"{neg['description']} — WAS ACCEPTED but must be refused"
+                ),
+            })
+
+        # Burning a CHILD NFT must be ALLOWED.
+        if self._child_burn_allowed is not None:
+            cb = self._child_burn_allowed
+            results.append({
+                "check": "NFT_BURN_CHILD_ALLOWED",
+                "status": "PASS" if cb.get("allowed") else "FAIL",
+                "detail": (
+                    f"child NFT {cb['child'][:12]}... burnt successfully "
+                    f"(only parents with live children are blocked)"
+                    if cb.get("allowed")
+                    else f"child NFT burn was refused but should be allowed: {cb.get('error')}"
+                ),
+            })
+
+        # Parent must STILL be blocked while any sibling is alive.
+        if self._parent_still_blocked is not None:
+            psb = self._parent_still_blocked
+            results.append({
+                "check": "NFT_BURN_PARENT_STILL_BLOCKED",
+                "status": "PASS" if psb.get("blocked") else "FAIL",
+                "detail": (
+                    f"parent still refused with {psb['live_children']} live child(ren) "
+                    f"after one child was burnt"
+                    if psb.get("blocked")
+                    else f"parent was BURNT while {psb['live_children']} child(ren) "
+                         f"were still live — children orphaned"
+                ),
+            })
+
+        # Once every child is burnt, the parent must become burnable — burnt
+        # children must not pin their parent forever.
+        if self._parent_burn_after_children is not None:
+            pba = self._parent_burn_after_children
+            if pba.get("skipped"):
+                results.append({
+                    "check": "NFT_BURN_PARENT_AFTER_CHILDREN",
+                    "status": "WARN",
+                    "detail": f"inconclusive: {pba.get('error')}",
+                })
+            else:
+                results.append({
+                    "check": "NFT_BURN_PARENT_AFTER_CHILDREN",
+                    "status": "PASS" if pba.get("allowed") else "FAIL",
+                    "detail": (
+                        f"parent {pba['parent'][:12]}... became burnable once every "
+                        f"child was burnt (burnt children correctly do not block)"
+                        if pba.get("allowed")
+                        else f"parent {pba['parent'][:12]}... is STILL blocked after "
+                             f"every child was burnt — a fully-burnt subtree pins its "
+                             f"root forever: {pba.get('error')}"
+                    ),
+                })
+
+        # Repeat burn must be idempotent.
+        if self._repeat_burn_outcome is not None:
+            rb = self._repeat_burn_outcome
+            if rb.get("skipped"):
+                # Nothing was burnt, so there is nothing to re-burn. WARN for the
+                # same reason as NFT_BURN_PARENT_BLOCKED above.
+                results.append({
+                    "check": "NFT_BURN_IDEMPOTENT",
+                    "status": "WARN",
+                    "detail": f"guard not exercised: {rb.get('detail')}",
+                })
+            else:
+                results.append({
+                    "check": "NFT_BURN_IDEMPOTENT",
+                    "status": "PASS" if rb.get("idempotent") else "FAIL",
+                    "detail": (
+                        "repeat burn of an already-burnt NFT succeeded idempotently"
+                        + (
+                            " (short-circuited without a signature challenge)"
+                            if rb.get("short_circuited")
+                            else " — WARNING: it opened a signature challenge, so a "
+                                 "second burn transaction may have been published"
+                        )
+                        if rb.get("idempotent")
+                        else f"repeat burn errored: {rb.get('error')}"
+                    ),
                 })
 
         # --- Log summary ---

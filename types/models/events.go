@@ -25,6 +25,11 @@ type EventNFTPublishInfo struct {
 	Epoch                int    `json:"epoch"`
 	NFTData              string `json:"nft_data"`
 	NFTOwnershipTransfer bool   `json:"nft_ownership_transfer,omitempty"`
+	// IsBurn marks this event as an NFT burn. Subscribers use it to
+	// distinguish a terminal destruction from an ordinary state change: after
+	// a burn the NFT can never be transacted again, so a subscriber should
+	// stop treating it as live rather than merely re-syncing its chain.
+	IsBurn bool `json:"is_burn,omitempty"`
 }
 
 type EventUnpledgeInfo struct {
