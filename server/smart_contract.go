@@ -28,12 +28,7 @@ func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	var err error
 
 	// Step 1: Parse DID from request
-	_, did, err := s.ParseMultiPartForm(req, "did")
-	if err != nil {
-		s.log.Error("Generate smart contract failed, failed to retrieve DID", "err", err)
-		return s.BasicResponse(req, false, "Generate smart contract failed, failed to retrieve DID", nil)
-	}
-	deploySC.DID = did["did"][0]
+	deploySC.DID = req.GetHTTPRequest().FormValue("did")
 
 	// Step 2: Validate DID format
 	is_alphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(deploySC.DID)
