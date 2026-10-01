@@ -23,9 +23,16 @@ func TestQueuedProducerIsHeldThenReleasedEndToEnd(t *testing.T) {
 	p, cancel := newAwaitCore(t, awaitTestConfig(), resolvedSet())
 	defer cancel()
 
+	// A zero timeout can win the enqueue select even when the buffer has room.
+	// Give admission time to complete so this test exercises a held producer.
+	p.enqueueTimeout = time.Second
+
 	// The split is admitted and queued. No workers run in this processor, so it
 	// stays on txnQueue exactly as it would behind a backlog.
 	p.QueueFullnodeTransaction(testEvent("split-1"))
+	if !p.queued.has("split-1") {
+		t.Fatal("the split was not queued")
+	}
 	if p.inflight.has("split-1") {
 		t.Fatal("the split reached the registry; this test needs it queued only")
 	}

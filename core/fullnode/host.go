@@ -32,6 +32,8 @@ type Host interface {
 	SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string, transferNFTOwnership bool, isFullnode bool) error
 	SyncTokensFromFullnode(tokenIDs []string) (map[string]string, error)
 	FetchGenesisTransactionFromPeer(peerDID, tokenID string) (*models.Transactions, error)
+	SyncBurntTokenChainFromPeer(peerDID, tokenID string) error
+	VerifyGenesisSignature(signerDID string, info *models.TransactionInfo, signature string) error
 	GetTransactionInfoByID(txID string) (*models.TransactionInfo, error)
 	GetParentBurnTxID(parentID string) (string, bool, error)
 

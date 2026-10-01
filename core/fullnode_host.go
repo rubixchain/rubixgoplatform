@@ -135,7 +135,11 @@ func (c *Core) NetworkFlags() (testnet, mainnet, localnet bool) {
 	return c.testnet, c.mainnet, c.localnet
 }
 
-// The remaining four wrap unexported methods, which another package cannot see.
+// These adapters wrap unexported methods, which another package cannot see.
+
+func (c *Core) VerifyGenesisSignature(signerDID string, info *models.TransactionInfo, signature string) error {
+	return c.verifyGenesisSignature(signerDID, info, signature)
+}
 
 func (c *Core) SyncTokensFromFullnode(tokenIDs []string) (map[string]string, error) {
 	return c.syncTokensFromFullnode(tokenIDs)
@@ -163,5 +167,6 @@ func (c *Core) MemoryUsagePercent() float64 {
 	return rm.MemoryUsagePercent()
 }
 
-// InitialiseDID, SyncTransactionChainsFromPeer and FetchGenesisTransactionFromPeer
+// InitialiseDID, SyncTransactionChainsFromPeer, SyncBurntTokenChainFromPeer
+// and FetchGenesisTransactionFromPeer
 // already match the Host signatures, so they need no adapter here.

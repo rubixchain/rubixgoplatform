@@ -65,3 +65,11 @@ func (h *testHost) CPUUsage(map[string]uint64) (float64, map[string]uint64) {
 }
 
 func (h *testHost) MemoryUsagePercent() float64 { return 0 }
+
+func (h *testHost) SyncBurntTokenChainFromPeer(string, string) error {
+	return fmt.Errorf("testHost: SyncBurntTokenChainFromPeer not available in unit tests")
+}
+
+func (h *testHost) VerifyGenesisSignature(string, *models.TransactionInfo, string) error {
+	return fmt.Errorf("testHost: VerifyGenesisSignature not available in unit tests")
+}

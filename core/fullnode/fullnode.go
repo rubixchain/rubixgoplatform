@@ -338,10 +338,15 @@ func (p *DynamicTxnProcessor) processSingleTransaction(newEvent *models.EventTra
 		txn, err := p.host.FetchGenesisTransactionFromPeer(peerDID, tokenID)
 		return txn, classify(errDependencyTimeout, err)
 	}
+	// Cache terminal ancestor chains through the host; its apply path also
+	// respects transactions still pending in this processor.
+	syncBurntChain := func(peerDID, tokenID string) error {
+		return p.host.SyncBurntTokenChainFromPeer(peerDID, tokenID)
+	}
 	// Fullnode trusts the quorum's earlier transfer-auth decision; the flag
 	// is not in the EventTransaction.
 	testnet, mainnet, localnet := p.host.NetworkFlags()
-	_, err = consensus.ValidateTransaction(txn, p.host.IsFullNode(), p.host.Wallet(), p.host.Log(), initiatorDIDCrypto, quorumDCs, testnet, mainnet, localnet, p.host.CheckTokenStateHashPinned, syncTxChains, syncAuthoritative, getTxByID, getParentBurnTx, fetchGenesisTx, false)
+	_, err = consensus.ValidateTransaction(txn, p.host.IsFullNode(), p.host.Wallet(), p.host.Log(), initiatorDIDCrypto, quorumDCs, testnet, mainnet, localnet, p.host.CheckTokenStateHashPinned, syncTxChains, syncAuthoritative, getTxByID, getParentBurnTx, fetchGenesisTx, syncBurntChain, p.host.VerifyGenesisSignature, false)
 	if err != nil {
 		p.host.Log().Error("processSingleTransaction:failed to validate transaction", "error", err)
 		// Storing the invalid transaction is deferred to processTxnWithRetry,
