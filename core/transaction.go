@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -471,6 +472,11 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		// Auto-subscribe the deploying node to each SC topic so it receives
 		// future execution notifications without a separate subscribe call.
 		for _, sc := range request.GetAllSmartContracts() {
+			// Executions re-enter here; only the first pass per topic needs to subscribe.
+			if c.ps.IsSubscribed(sc.SmartContractId) {
+				c.log.Debug("InitiateTransaction: SC topic already subscribed, skipping", "topic", sc.SmartContractId)
+				continue
+			}
 			if err := c.ps.SubscribeTopic(sc.SmartContractId, c.ContractCallBack); err != nil {
 				if err.Error() == "topic already subscribed" {
 					c.log.Debug("InitiateTransaction: already subscribed to SC topic", "topic", sc.SmartContractId)
@@ -489,6 +495,11 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		// Auto-subscribe the deploying node to each NFT topic so it receives
 		// future execution/transfer notifications without a separate subscribe call.
 		for _, nft := range request.GetAllNFTs() {
+			// Executions re-enter here; only the first pass per topic needs to subscribe.
+			if c.ps.IsSubscribed(nft.NFTId) {
+				c.log.Debug("InitiateTransaction: NFT topic already subscribed, skipping", "topic", nft.NFTId)
+				continue
+			}
 			if err := c.ps.SubscribeTopic(nft.NFTId, c.NFTCallBack); err != nil {
 				if err.Error() == "topic already subscribed" {
 					c.log.Debug("InitiateTransaction: already subscribed to NFT topic", "topic", nft.NFTId)
@@ -553,7 +564,10 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 				ExecutionRole:        wallet.ExecutionRoleReceiver,
 				TransferNFTOwnership: request.Tokens.TransferNFTOwnership,
 			})
-			if persistErr != nil {
+			if errors.Is(persistErr, wallet.ErrNoPersistenceInputs) {
+				// Expected for SC/NFT executions: the receiver role has no token rows to derive here.
+				c.log.Debug("InitiateTransaction: nothing to persist for receiver", "transactionID", transactionId, "did", nextOwnerDID)
+			} else if persistErr != nil {
 				c.log.Error("InitiateTransaction: Failed to persist receiver state", "err", persistErr, "transactionID", transactionId, "did", nextOwnerDID)
 			} else {
 				c.log.Info("InitiateTransaction: Receiver state persisted", "transactionID", transactionId, "did", nextOwnerDID)
