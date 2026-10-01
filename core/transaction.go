@@ -315,6 +315,12 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 		resp.Message = "InitiateTransaction: " + err.Error()
 		return resp
 	}
+	// Same token twice would pass consensus and then fail local persistence, forking this node from the quorum.
+	if err := consensus.ValidateNoDuplicateTokens(transactionInfo); err != nil {
+		c.log.Error("InitiateTransaction: duplicate token in transaction payload", "err", err)
+		resp.Message = "InitiateTransaction: " + err.Error()
+		return resp
+	}
 	c.log.Debug("InitiateTransaction: Calculating transaction ID")
 	transactionId, err := util.GetTransactionID(transactionInfo)
 	if err != nil {
