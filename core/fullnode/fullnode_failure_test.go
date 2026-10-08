@@ -336,7 +336,6 @@ func TestPropagationIsSafeUnderConcurrency(t *testing.T) {
 
 	p, cancel := cascadeCore(t)
 	defer cancel()
-	p.bundle.maxParked = pairs * 2
 	p.bundle.unknownWait = 500 * time.Millisecond
 	p.bundle.inflightWait = 500 * time.Millisecond
 
@@ -380,8 +379,8 @@ func TestDeferVerdictWhileProducerInFlight(t *testing.T) {
 	defer cancel()
 
 	producer := &inflightTxn{id: "split-1", ready: make(chan struct{})}
-	if outcome := p.inflight.register(producer); outcome != registered {
-		t.Fatalf("register(producer) = %v, want registered", outcome)
+	if !p.inflight.register(producer) {
+		t.Fatal("register(producer) = false, want true")
 	}
 	consumer := &inflightTxn{id: "transfer-1", deps: []string{"split-1"}, ready: make(chan struct{})}
 

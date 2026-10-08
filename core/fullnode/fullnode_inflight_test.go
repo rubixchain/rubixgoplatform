@@ -43,7 +43,7 @@ func TestRegistryRegisterAndHas(t *testing.T) {
 	if r.has("txn-1") {
 		t.Error("has() true for an unregistered ID")
 	}
-	if r.register(newInflightEntry("txn-1")) != registered {
+	if !r.register(newInflightEntry("txn-1")) {
 		t.Fatal("register() did not register a new ID")
 	}
 	if !r.has("txn-1") {
@@ -61,11 +61,11 @@ func TestRegistryRegisterRejectsDuplicate(t *testing.T) {
 	r := newInflightRegistry()
 	first := newInflightEntry("txn-1")
 
-	if r.register(first) != registered {
+	if !r.register(first) {
 		t.Fatal("first register() did not register the entry")
 	}
-	if got := r.register(newInflightEntry("txn-1")); got != alreadyInFlight {
-		t.Errorf("second register() of the same ID = %v, want alreadyInFlight", got)
+	if r.register(newInflightEntry("txn-1")) {
+		t.Error("second register() of the same ID succeeded, want it refused")
 	}
 	if got := r.len(); got != 1 {
 		t.Errorf("len() = %d after a rejected duplicate, want 1", got)
@@ -78,10 +78,10 @@ func TestRegistryRegisterRejectsDuplicate(t *testing.T) {
 func TestRegistryRejectsNilAndEmptyID(t *testing.T) {
 	r := newInflightRegistry()
 
-	if r.register(nil) == registered {
+	if r.register(nil) {
 		t.Error("register(nil) registered an entry")
 	}
-	if r.register(newInflightEntry("")) == registered {
+	if r.register(newInflightEntry("")) {
 		t.Error("register() with an empty ID registered an entry")
 	}
 	if r.has("") {
@@ -109,7 +109,7 @@ func TestRegistryUnregisterIsSafeAndIdempotent(t *testing.T) {
 	if got := r.len(); got != 0 {
 		t.Errorf("len() = %d, want 0", got)
 	}
-	if r.register(newInflightEntry("txn-1")) != registered {
+	if !r.register(newInflightEntry("txn-1")) {
 		t.Error("register() after unregister() failed; the ID should be free again")
 	}
 }
@@ -132,7 +132,7 @@ func TestRegistryIsSafeUnderConcurrency(t *testing.T) {
 		go func() { // owner: register, then release
 			defer done.Done()
 			start.Wait()
-			if r.register(newInflightEntry(id)) == registered {
+			if r.register(newInflightEntry(id)) {
 				atomic.AddInt64(&wins, 1)
 				r.unregister(id)
 			}
@@ -171,7 +171,7 @@ func TestRegistrySingleOwnerUnderContention(t *testing.T) {
 		go func() {
 			defer done.Done()
 			start.Wait()
-			if r.register(newInflightEntry("txn-contended")) == registered {
+			if r.register(newInflightEntry("txn-contended")) {
 				atomic.AddInt64(&wins, 1)
 			}
 		}()

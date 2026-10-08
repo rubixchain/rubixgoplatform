@@ -74,8 +74,7 @@ type DynamicTxnProcessor struct {
 	// every declared PreviousTransactionID edge; depsInFlight counts the subset
 	// whose producer was still being processed when the consumer arrived. Their
 	// ratio is what sizes the readiness gate. parkedCount is how many
-	// transactions are waiting on a producer right now, and is what maxParked
-	// bounds.
+	// transactions are waiting on a producer right now.
 	//
 	// revEdges counts arrivals that found transactions already parked on them —
 	// the out-of-order case. cascadeReleases counts waiters woken by a producer
@@ -98,11 +97,9 @@ type DynamicTxnProcessor struct {
 	// surfacing as a chain mismatch. Read it against failuresPropagated: it is
 	// how many dead-letters the ordering fix avoided.
 	//
-	// registryFullEvents and staleSwept are the two that should stay at zero on
-	// a healthy node. The first counts transactions processed untracked because
-	// the registry was full; the second counts entries removed because they
-	// outlived any plausible amount of work, which means a worker died without
-	// releasing one. bundlesDrained counts completed bundles, and is the
+	// staleSwept should stay at zero on a healthy node. It counts entries
+	// removed because they outlived any plausible amount of work, which means a
+	// worker died without releasing one. bundlesDrained counts completed bundles, and is the
 	// denominator the other bundling numbers are read against.
 	depsObserved       int64
 	depsInFlight       int64
@@ -114,7 +111,6 @@ type DynamicTxnProcessor struct {
 	failuresPropagated int64
 	verdictsDeferred   int64
 	bundlesDrained     int64
-	registryFullEvents int64
 	staleSwept         int64
 
 	// Worker management
@@ -526,7 +522,6 @@ func (p *DynamicTxnProcessor) dedupMapCleaner() {
 				"failuresPropagated", atomic.LoadInt64(&p.failuresPropagated),
 				"verdictsDeferred", atomic.LoadInt64(&p.verdictsDeferred),
 				"bundlesDrained", atomic.LoadInt64(&p.bundlesDrained),
-				"registryFull", atomic.LoadInt64(&p.registryFullEvents),
 				"staleSwept", atomic.LoadInt64(&p.staleSwept))
 		case <-p.ctx.Done():
 			return

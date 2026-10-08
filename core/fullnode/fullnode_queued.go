@@ -19,14 +19,12 @@ import "sync"
 // dead-lettered when its own turn comes and the tip has moved past it.
 //
 // Registering queued transactions in the registry itself would fix the blind
-// spot and break four other things: maxInflightEntries (5 000) sits deliberately
-// below the queue's capacity so the queue fills first, and inverting that would
-// have the registry reject transactions under load and process them with no
-// protections at all; the defer that releases an entry would no longer sit
-// beside the call that takes it, which is the only reason leaks are impossible
-// today; sweepStale's registeredAt would start measuring queue time and raise
-// Error lines that mean "a worker died"; and the waiting edges, ready channels
-// and components are all meaningless for a transaction with no goroutine.
+// spot and break three other things: the defer that releases an entry would no
+// longer sit beside the call that takes it, which is the only reason leaks are
+// impossible today; sweepStale's registeredAt would start measuring queue time
+// and raise Error lines that mean "a worker died"; and the waiting edges, ready
+// channels and components are all meaningless for a transaction with no
+// goroutine.
 //
 // So the two states stay separate and are unioned where they are read. This set
 // holds only IDs, is bounded by the queue it shadows, and has exactly one

@@ -439,7 +439,6 @@ func TestCascadeIsSafeUnderConcurrency(t *testing.T) {
 
 	p, cancel := cascadeCore(t)
 	defer cancel()
-	p.bundle.maxParked = pairs * 2
 	p.bundle.unknownWait = 500 * time.Millisecond
 	p.bundle.inflightWait = 500 * time.Millisecond
 

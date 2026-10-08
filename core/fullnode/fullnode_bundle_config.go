@@ -23,12 +23,6 @@ type bundleConfig struct {
 	// an in-flight one would add the full wait to every cold token.
 	unknownWait time.Duration
 
-	// maxParked caps how many transactions may be waiting at once. Past the cap
-	// the gate fails open and transactions proceed unheld, so a flood of
-	// unresolvable dependencies degrades to today's behaviour instead of
-	// consuming the worker pool.
-	maxParked int
-
 	// syncMemoTTL is how long a successful chain sync is remembered, so a later
 	// member of the same bundle does not repeat it.
 	//
@@ -44,7 +38,6 @@ func defaultBundleConfig() bundleConfig {
 	return bundleConfig{
 		inflightWait: 5 * time.Second,
 		unknownWait:  1 * time.Second,
-		maxParked:    1000,
 		syncMemoTTL:  5 * time.Second,
 	}
 }

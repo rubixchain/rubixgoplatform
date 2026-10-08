@@ -16,7 +16,6 @@ func awaitTestConfig() bundleConfig {
 	return bundleConfig{
 		inflightWait: 300 * time.Millisecond,
 		unknownWait:  40 * time.Millisecond,
-		maxParked:    10,
 	}
 }
 
@@ -40,7 +39,7 @@ func resolvedSet(ids ...string) func(string) (bool, error) {
 }
 
 // The gate is compulsory, so a real processor always has usable timings. A zero
-// bundleConfig would silently mean unbounded parking and no cap, which is why
+// bundleConfig would silently mean waits that expire at once, which is why
 // initDynamicTxnProcessor sets the defaults unconditionally.
 func TestDefaultBundleConfigIsUsable(t *testing.T) {
 	cfg := defaultBundleConfig()
@@ -50,9 +49,6 @@ func TestDefaultBundleConfigIsUsable(t *testing.T) {
 	if cfg.unknownWait > cfg.inflightWait {
 		t.Errorf("unknownWait %v exceeds inflightWait %v; an absent producer must not be waited on longer than one in flight",
 			cfg.unknownWait, cfg.inflightWait)
-	}
-	if cfg.maxParked <= 0 {
-		t.Errorf("maxParked = %d, want a positive cap", cfg.maxParked)
 	}
 }
 
@@ -221,29 +217,6 @@ func TestAwaitDependenciesProceedsWhenTheProbeFails(t *testing.T) {
 	}
 }
 
-// Past the cap the gate stops holding anything, so a flood of unresolvable
-// dependencies degrades to the old behaviour instead of consuming the pool.
-func TestAwaitDependenciesFailsOpenPastMaxParked(t *testing.T) {
-	cfg := awaitTestConfig()
-	cfg.maxParked = 2
-	cfg.unknownWait = time.Second
-	p, cancel := newAwaitCore(t, cfg, resolvedSet())
-	defer cancel()
-
-	atomic.StoreInt64(&p.parkedCount, int64(cfg.maxParked))
-
-	start := time.Now()
-	if err := p.awaitDependencies(newInflightEntry("txn-T", "txn-S")); err != nil {
-		t.Fatalf("awaitDependencies() = %v, want nil", err)
-	}
-	if elapsed := time.Since(start); elapsed > 50*time.Millisecond {
-		t.Errorf("waited %v past the parked cap, want no wait", elapsed)
-	}
-	if got := atomic.LoadInt64(&p.parkedCount); got != int64(cfg.maxParked) {
-		t.Errorf("parkedCount = %d, want %d — the rejected waiter must not stay counted", got, cfg.maxParked)
-	}
-}
-
 func TestAwaitDependenciesReturnsErrorOnShutdown(t *testing.T) {
 	cfg := awaitTestConfig()
 	cfg.unknownWait = time.Second
@@ -261,8 +234,8 @@ func TestAwaitDependenciesReturnsErrorOnShutdown(t *testing.T) {
 	}
 }
 
-// parkedCount is what maxParked bounds, so a leak here would silently disable
-// the cap.
+// parkedCount is reported on the metrics line, so a leak here would show a
+// stuck wait that is not there.
 func TestAwaitDependenciesReleasesParkedCount(t *testing.T) {
 	cfg := awaitTestConfig()
 	p, cancel := newAwaitCore(t, cfg, resolvedSet())

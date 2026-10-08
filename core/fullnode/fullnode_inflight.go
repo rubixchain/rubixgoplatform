@@ -77,21 +77,6 @@ func (t *inflightTxn) markReady() {
 // timeout rather than growing the list without limit.
 const maxWaitersPerProducer = 64
 
-// maxInflightEntries bounds the registry as a whole.
-//
-// Nothing upstream limits how many transactions can be in the pipeline at once:
-// admission checks only for duplicates, and signature verification happens
-// inside validation, i.e. after a transaction is already registered. An attacker
-// publishing transactions that declare fabricated producers therefore reaches
-// this map directly.
-//
-// Past the cap the pipeline stops tracking rather than stops working. An
-// untracked transaction is validated exactly as it was before any of this
-// existed, so a flood degrades to the old behaviour instead of exhausting the
-// node. Set well above the parked cap and the worker pool, and well below the
-// queue's own capacity, so the queue is what fills first under honest load.
-const maxInflightEntries = 5000
-
 // inflightTTL is how long an entry may live before the sweep treats it as
 // leaked.
 //
@@ -102,21 +87,6 @@ const maxInflightEntries = 5000
 // tracking that the sync guard depends on, which is the very harm it exists to
 // prevent.
 const inflightTTL = 15 * time.Minute
-
-// registerOutcome says what happened to a registration attempt.
-//
-// Three outcomes rather than a bool because the two failures need different
-// handling and, more importantly, different log lines: a duplicate should be
-// impossible and means admission let two copies through, while a full registry
-// is a bound doing its job. Only registered gives the caller ownership of the
-// entry, and only the owner may unregister it.
-type registerOutcome int
-
-const (
-	registered registerOutcome = iota
-	alreadyInFlight
-	registryFull
-)
 
 // inflightRegistry indexes received-but-unresolved transactions by their own ID.
 //
@@ -142,11 +112,10 @@ type inflightRegistry struct {
 	// single lock exists to close.
 	waitingOn map[string][]*inflightTxn
 
-	// maxWaiters caps the length of any one waiter list, and maxEntries caps the
-	// registry as a whole. Fields rather than the constants directly so a test
-	// can reach either bound without building thousands of transactions.
+	// maxWaiters caps the length of any one waiter list. A field rather than the
+	// constant directly so a test can reach the bound without building dozens of
+	// transactions.
 	maxWaiters int
-	maxEntries int
 
 	// parent is the union-find forest over transaction IDs and members maps each
 	// root to its full membership. Together they answer which bundle a
@@ -161,41 +130,36 @@ func newInflightRegistry() *inflightRegistry {
 		byID:       make(map[string]*inflightTxn),
 		waitingOn:  make(map[string][]*inflightTxn),
 		maxWaiters: maxWaitersPerProducer,
-		maxEntries: maxInflightEntries,
 		parent:     make(map[string]string),
 		members:    make(map[string][]string),
 	}
 }
 
-// register adds t and reports what happened.
+// register adds t and reports whether it did.
 //
-// Anything other than registered means the caller does not own an entry and
-// must not unregister one: for a duplicate the entry belongs to whoever
-// registered it first, and for a full registry there is no entry at all.
+// A false return means the caller does not own an entry and must not unregister
+// one: the entry belongs to whoever registered that ID first.
 //
-// The cap is checked here, under the same lock as the insert, rather than by the
-// caller beforehand. A check-then-act on a bound is a bound that a burst walks
-// straight through, which is exactly the traffic it exists to stop.
-func (r *inflightRegistry) register(t *inflightTxn) registerOutcome {
+// The registry needs no size cap of its own. Only a worker registers, and only
+// for the transaction it is processing, so the registry never holds more
+// entries than there are live workers; txnQueue is what bounds the backlog.
+func (r *inflightRegistry) register(t *inflightTxn) bool {
 	if t == nil || t.id == "" {
-		return alreadyInFlight
+		return false
 	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if _, exists := r.byID[t.id]; exists {
-		return alreadyInFlight
-	}
-	if r.maxEntries > 0 && len(r.byID) >= r.maxEntries {
-		return registryFull
+		return false
 	}
 
 	if t.registeredAt.IsZero() {
 		t.registeredAt = time.Now()
 	}
 	r.byID[t.id] = t
-	return registered
+	return true
 }
 
 // unregister removes id. It is a no-op if id is absent, so callers can defer it
@@ -635,25 +599,11 @@ func (p *DynamicTxnProcessor) registerInflight(txnEvent *models.EventTransaction
 		}
 	}
 
-	switch p.inflight.register(entry) {
-	case alreadyInFlight:
+	if !p.inflight.register(entry) {
 		// Admission is single-winner, so one transaction reaches one worker and
 		// this should be unreachable. Log rather than assume.
 		p.host.Log().Warn("registerInflight: transaction is already in flight, leaving the existing entry alone",
 			"txnID", txnEvent.TransactionID)
-		return nil
-
-	case registryFull:
-		// The bound doing its job. This transaction is processed untracked,
-		// which means no readiness gate, no cascade and no sync guard for it —
-		// in other words exactly the path every transaction took before any of
-		// this existed. Degrading to that is the point: the alternative under a
-		// flood of fabricated dependencies is a registry that never stops
-		// growing.
-		atomic.AddInt64(&p.registryFullEvents, 1)
-		p.host.Log().Warn("registerInflight: in-flight registry is full, processing this transaction untracked",
-			"txnID", txnEvent.TransactionID,
-			"inflight", p.inflight.len())
 		return nil
 	}
 

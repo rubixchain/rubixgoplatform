@@ -129,16 +129,10 @@ func (p *DynamicTxnProcessor) awaitDependencies(t *inflightTxn) error {
 		return nil
 	}
 
-	// Bound how much of the worker pool can be waiting at once. Past the cap the
-	// gate stops holding anything: degrading to the old behaviour is much better
-	// than starving the pool.
-	parked := atomic.AddInt64(&p.parkedCount, 1)
-	if p.bundle.maxParked > 0 && parked > int64(p.bundle.maxParked) {
-		atomic.AddInt64(&p.parkedCount, -1)
-		p.host.Log().Warn("awaitDependencies: too many transactions already waiting, proceeding without holding",
-			"txnID", t.id, "parked", parked-1, "maxParked", p.bundle.maxParked)
-		return nil
-	}
+	// How many transactions are holding right now, for the metrics line. No cap
+	// is needed: a transaction only waits on its own worker, so at most the
+	// whole pool can be waiting, and every wait is bounded by its timer.
+	atomic.AddInt64(&p.parkedCount, 1)
 	defer atomic.AddInt64(&p.parkedCount, -1)
 
 	// Record the reverse edges before waiting on anything. From here on, a

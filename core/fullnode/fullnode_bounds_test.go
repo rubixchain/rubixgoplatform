@@ -1,21 +1,12 @@
 package fullnode
 
 import (
-	"fmt"
 	"reflect"
-	"sync"
 	"testing"
 	"time"
-
-	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
-// Tests for the bounds and the bundle drain.
-//
-// Every bound here has the same contract: past it the pipeline stops tracking,
-// never stops working. A cap that dropped transactions would be a worse failure
-// than the growth it prevents, so each test checks both halves — that the bound
-// engages, and that the work still happens.
+// Tests for the stale-entry sweep and the bundle drain.
 
 // The drain is the only moment a bundle is complete, so what it reports has to
 // be the whole membership — and sorted, since it is the sole record of the
@@ -65,79 +56,6 @@ func TestUnregisterReportsNoDrainWithoutABundle(t *testing.T) {
 	}
 	if got := r.unregister("txn-never-registered"); got != nil {
 		t.Errorf("unregister() of an absent ID reported %v", got)
-	}
-}
-
-// The bound engages, and past it registration reports why rather than pretending
-// to have succeeded.
-func TestRegisterRefusesPastTheRegistryCap(t *testing.T) {
-	r := newInflightRegistry()
-	r.maxEntries = 3
-
-	for i := 0; i < r.maxEntries; i++ {
-		if got := r.register(newInflightEntry(fmt.Sprintf("txn-%d", i))); got != registered {
-			t.Fatalf("register() %d = %v below the cap, want registered", i, got)
-		}
-	}
-
-	if got := r.register(newInflightEntry("txn-overflow")); got != registryFull {
-		t.Errorf("register() past the cap = %v, want registryFull", got)
-	}
-	if got := r.len(); got != r.maxEntries {
-		t.Errorf("len() = %d, want the cap of %d", got, r.maxEntries)
-	}
-	if r.has("txn-overflow") {
-		t.Error("the refused transaction was registered anyway")
-	}
-
-	// And the bound lifts as soon as there is room again.
-	r.unregister("txn-0")
-	if got := r.register(newInflightEntry("txn-overflow")); got != registered {
-		t.Errorf("register() = %v once an entry was released, want registered", got)
-	}
-}
-
-// A duplicate and a full registry both mean "you do not own an entry", but they
-// are different events and must stay distinguishable.
-func TestRegistryFullIsDistinctFromDuplicate(t *testing.T) {
-	r := newInflightRegistry()
-	r.maxEntries = 1
-	r.register(newInflightEntry("txn-1"))
-
-	if got := r.register(newInflightEntry("txn-1")); got != alreadyInFlight {
-		t.Errorf("re-registering the same ID = %v, want alreadyInFlight", got)
-	}
-	if got := r.register(newInflightEntry("txn-2")); got != registryFull {
-		t.Errorf("registering past the cap = %v, want registryFull", got)
-	}
-}
-
-// Fail-open is the whole contract: a transaction the registry cannot take is
-// still processed, just untracked — which is what every transaction did before
-// any of this existed.
-func TestRegisterInflightFailsOpenWhenFull(t *testing.T) {
-	p, cancel := newTestProcessor(10, 0)
-	defer cancel()
-	p.inflight.maxEntries = 1
-	p.maxRetries = 1
-	p.retryDelay = 0
-
-	if entry := p.registerInflight(eventWithDeps("txn-first", "txn-S")); entry == nil {
-		t.Fatal("the first transaction was not registered")
-	}
-	if entry := p.registerInflight(eventWithDeps("txn-second", "txn-S")); entry != nil {
-		t.Error("registerInflight() returned an entry past the cap; the caller would unregister someone else's")
-	}
-	if got := p.registryFullEvents; got != 1 {
-		t.Errorf("registryFullEvents = %d, want 1", got)
-	}
-
-	// The untracked transaction still runs. A nil payload fails inside
-	// processSingleTransaction before it reaches the wallet, so the whole path
-	// runs with no database.
-	p.processTxnWithRetry(&models.EventTransaction{TransactionID: "txn-untracked"}, 0)
-	if p.inflight.has("txn-untracked") {
-		t.Error("an untracked transaction left an entry behind")
 	}
 }
 
@@ -215,33 +133,5 @@ func TestSweepStaleClearsWaitersAndComponents(t *testing.T) {
 	}
 	if got := p.inflight.len(); got != 0 {
 		t.Errorf("len() = %d after the sweep, want 0", got)
-	}
-}
-
-// The cap is checked under the same lock as the insert. A check-then-act bound
-// is one a burst walks straight through, which is the traffic it exists to stop.
-func TestRegistryCapHoldsUnderConcurrency(t *testing.T) {
-	const goroutines = 200
-	const cap = 20
-
-	r := newInflightRegistry()
-	r.maxEntries = cap
-
-	var start, done sync.WaitGroup
-	start.Add(1)
-	done.Add(goroutines)
-	for i := 0; i < goroutines; i++ {
-		id := fmt.Sprintf("txn-%03d", i)
-		go func() {
-			defer done.Done()
-			start.Wait()
-			r.register(newInflightEntry(id))
-		}()
-	}
-	start.Done()
-	done.Wait()
-
-	if got := r.len(); got != cap {
-		t.Errorf("len() = %d after %d concurrent registrations, want exactly the cap of %d", got, goroutines, cap)
 	}
 }
