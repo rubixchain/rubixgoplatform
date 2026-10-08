@@ -6,6 +6,10 @@ type CoreConfig struct {
 	NodeIndex            int    `toml:"node_index"`
 	NetworkMode          string `toml:"network_mode"`
 	EnableTrustedNetwork bool   `toml:"enable_trusted_network"`
+	// LogRotation enables time-based rotation of log.txt (default true).
+	LogRotation bool `toml:"log_rotation"`
+	// LogRotationDuration is the rotation period, e.g. "7d" or "12h" (default "7d").
+	LogRotationDuration string `toml:"log_rotation_duration"`
 }
 
 type DBParams struct {

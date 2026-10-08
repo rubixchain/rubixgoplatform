@@ -5,6 +5,9 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/rubixchain/rubixgoplatform/constants"
@@ -18,6 +21,8 @@ const userConfigTemplate = `
 node_index = 0
 network_mode = "mainnet|testnet|localnet"
 enable_trusted_network = false
+log_rotation = true
+log_rotation_duration = "7d"
 
 [db]
 host = "localhost"
@@ -94,12 +99,44 @@ func ParseConfigFromPath(configPath string) (types.UserConfig, error) {
 		return types.UserConfig{}, fmt.Errorf("failed to read config.toml file from path: %v, err: %v", configFilePath, err)
 	}
 
-	var rubixConfig types.UserConfig
+	// Defaults for fields that older config files may not have
+	rubixConfig := types.UserConfig{
+		Core: types.CoreConfig{
+			LogRotation:         DefaultLogRotation,
+			LogRotationDuration: DefaultLogRotationDuration,
+		},
+	}
 	if err := toml.Unmarshal(configDataBytes, &rubixConfig); err != nil {
 		return types.UserConfig{}, fmt.Errorf("failed to marshal config, err: %v", err)
 	}
+	if _, err := ParseLogRotationDuration(rubixConfig.Core.LogRotationDuration); err != nil {
+		return types.UserConfig{}, err
+	}
 
 	return rubixConfig, nil
+}
+
+const (
+	DefaultLogRotation         = true
+	DefaultLogRotationDuration = "7d"
+)
+
+// ParseLogRotationDuration parses log_rotation_duration. It accepts Go
+// durations ("12h", "30m") and whole days with a "d" suffix ("7d").
+func ParseLogRotationDuration(s string) (time.Duration, error) {
+	var d time.Duration
+	var err error
+	if days, ok := strings.CutSuffix(s, "d"); ok {
+		var n int
+		n, err = strconv.Atoi(days)
+		d = time.Duration(n) * 24 * time.Hour
+	} else {
+		d, err = time.ParseDuration(s)
+	}
+	if err != nil || d <= 0 {
+		return 0, fmt.Errorf("invalid log_rotation_duration %q, expected a positive duration such as \"7d\" or \"12h\"", s)
+	}
+	return d, nil
 }
 
 func CreateConfigFileFromTemplate(configPath string) error {

@@ -522,10 +522,28 @@ func Run(args []string) {
 
 	level := logger.Debug
 
-	fp, err := os.OpenFile(cmd.logFile,
-		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		panic(err)
+	// Only the running node rotates its log; other commands just append to it.
+	// A config error here is reported by runApp, so rotation is simply skipped.
+	var logRotation *logger.RotatingFile
+	var logRotationPeriod time.Duration
+	if cmdName == RunCmd {
+		if userConfig, err := config.ParseConfigFromPath(cmd.nodeConfigPath); err == nil && userConfig.Core.LogRotation {
+			logRotationPeriod, _ = config.ParseLogRotationDuration(userConfig.Core.LogRotationDuration)
+			logRotation = logger.NewRotatingFile(cmd.logFile)
+			defer logRotation.Close()
+		}
+	}
+
+	var fp io.Writer
+	if logRotation != nil {
+		fp = logRotation
+	} else {
+		f, err := os.OpenFile(cmd.logFile,
+			os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			panic(err)
+		}
+		fp = f
 	}
 
 	switch strings.ToLower(cmd.logLevel) {
@@ -548,6 +566,11 @@ func Run(args []string) {
 
 	cmd.log = logger.New(logOptions)
 
+	if logRotation != nil {
+		defer logger.StartRotation(logRotation, logRotationPeriod, cmd.log)()
+	}
+
+	var err error
 	cmd.c, err = client.NewClient(&srvcfg.Config{ServerAddress: cmd.addr, ServerPort: cmd.port}, cmd.log, cmd.timeout)
 	if err != nil {
 		cmd.log.Error("Failed to create client")
