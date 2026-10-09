@@ -12,7 +12,6 @@ import (
 
 // DynamicTxnProcessor handles adaptive concurrent transaction processing
 type DynamicTxnProcessor struct {
-	// host is the node this pipeline runs inside; see Host.
 	host Host
 
 	txnQueue      chan *models.EventTransaction
@@ -35,34 +34,28 @@ type DynamicTxnProcessor struct {
 	scaleDownDelay  time.Duration
 	lastScaleAction time.Time
 
-	// Received-but-unresolved transactions. Distinct from processedTxns, which
-	// is a seen-recently set rather than a live one.
+	// Transactions a worker is processing right now. processedTxns, by
+	// contrast, is the recently-admitted dedup set.
 	inflight *inflightRegistry
 
-	// Admitted transactions still waiting in txnQueue. Kept apart from inflight
-	// rather than folded into it, and unioned only where the two are read
-	// together; see fullnode_queued.go for why.
+	// Admitted transactions still waiting in txnQueue; see fullnode_queued.go.
 	queued *queuedSet
 
-	// Tokens whose last chain sync came back trimmed by the guard. Read at
-	// classification time; see fullnode_truncation.go.
+	// Tokens whose recent chain sync was trimmed by the sync guard, so a chain
+	// mismatch on them is treated as transient, not a verdict.
 	truncated *truncationLog
 
-	// Dependency-aware ingest settings. Always active; see bundleConfig.
 	bundle bundleConfig
 
-	// resolveDependency reports whether a producer transaction is persisted.
-	// A field rather than a direct call so the readiness gate can be tested
-	// without a database; initDynamicTxnProcessor points it at the real probe.
+	// resolveDependency reports whether a previous transaction is persisted.
+	// A field so tests can substitute it; NewTxnProcessor sets dependencyResolved.
 	resolveDependency func(depID string) (bool, error)
 
-	// syncMemo records which chain syncs a bundle has already performed, so its
-	// later members do not repeat them.
+	// syncMemo records chain syncs a bundle already did, so later members skip them.
 	syncMemo *syncedTokenMemo
 
-	// syncChains fetches token chains from a peer. A field for the same reason
-	// resolveDependency is one: the memo's rule is to mark on success only, and
-	// that rule cannot be exercised against a real peer.
+	// syncChains fetches token chains from a peer. A field so tests can
+	// substitute it (e.g. to check the memo is marked only on success).
 	syncChains func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error
 
 	// Metrics
@@ -70,37 +63,11 @@ type DynamicTxnProcessor struct {
 	averageProcessTime time.Duration
 	processedTxnCount  int64 // ADD ATOMIC COUNTER
 
-	// Bundling observation counters, read via sync/atomic. depsObserved counts
-	// every declared PreviousTransactionID edge; depsInFlight counts the subset
-	// whose producer was still being processed when the consumer arrived. Their
-	// ratio is what sizes the readiness gate. parkedCount is how many
-	// transactions are waiting on a producer right now.
-	//
-	// revEdges counts arrivals that found transactions already parked on them —
-	// the out-of-order case. cascadeReleases counts waiters woken by a producer
-	// committing rather than by their own timer; the gap between it and the
-	// number that parked is how many holds ended in a timeout, which is the
-	// number that says whether the wait tiers are set correctly.
-	//
-	// syncsIssued and syncsSkipped count tokens, not calls, so they are directly
-	// comparable: of every token the integrity check wanted fetched, skipped is
-	// the share the bundle had already fetched from that same peer. That ratio is
-	// the entire measurable effect of the sync-once gate.
-	//
-	// failuresPropagated counts transactions abandoned because a producer of
-	// theirs was found invalid. It should be rare, and it is the number to look
-	// at first if good transactions start being dead-lettered: every one of them
-	// is a verdict this node reached without validating the transaction itself.
-	//
-	// verdictsDeferred counts attempts whose verdict was held back because a
-	// declared producer was still in flight — a sync trimmed by the guard
-	// surfacing as a chain mismatch. Read it against failuresPropagated: it is
-	// how many dead-letters the ordering fix avoided.
-	//
-	// staleSwept should stay at zero on a healthy node. It counts entries
-	// removed because they outlived any plausible amount of work, which means a
-	// worker died without releasing one. bundlesDrained counts completed bundles, and is the
-	// denominator the other bundling numbers are read against.
+	// Bundling counters (sync/atomic), logged by dedupMapCleaner. parkedCount is
+	// a gauge of transactions waiting on a previous transaction; the rest are
+	// cumulative. syncsIssued/syncsSkipped count tokens, not calls.
+	// failuresPropagated counts transactions failed because a previous one was
+	// invalid, without validating them. staleSwept should stay at zero.
 	depsObserved       int64
 	depsInFlight       int64
 	parkedCount        int64
@@ -122,13 +89,11 @@ type DynamicTxnProcessor struct {
 	retryDelay time.Duration
 
 	// How long an admitted transaction waits for room in txnQueue before it is
-	// dropped and its admission released. A field rather than a literal so the
-	// queue-full path is testable without a ten-second test.
+	// dropped and its admission released. A field so tests can shorten it.
 	enqueueTimeout time.Duration
 
 	// recoverySessions holds the single-use nonces issued to nodes rebuilding
-	// their wallet from this fullnode. Moved off Core with the endpoint that
-	// uses it; only a fullnode serves it.
+	// their wallet from this fullnode.
 	recoverySessions *recoverySessionStore
 }
 
@@ -367,10 +332,8 @@ func (p *DynamicTxnProcessor) dynamicWorker(workerID int, stopChan chan struct{}
 			if !ok || txnEvent == nil {
 				return
 			}
-			// No longer queued. Cleared here rather than after
-			// processTxnWithRetry so a panic — which the deferred recover above
-			// swallows — cannot leave the ID behind, and registerInflight picks
-			// the transaction up a few calls later.
+			// Cleared before processing so a recovered panic cannot leave the ID
+			// queued; processTxnWithRetry registers it as in flight next.
 			p.queued.remove(txnEvent.TransactionID)
 
 			startTime := time.Now()
@@ -438,29 +401,18 @@ func (p *DynamicTxnProcessor) workerHealthCheck() {
 	}
 }
 
-// admit reserves txnID for processing and reports whether this caller won the
-// reservation. A false return means the transaction was already admitted and the
-// caller must drop it.
-//
-// The reservation has to be atomic. pubsub dispatches every message on its own
-// goroutine (types/pubsub.go:164), so TxnCallBack runs concurrently with itself,
-// and a Load-then-Store pair leaves a window in which two deliveries of the same
-// transaction both observe "not seen" and both enqueue.
-//
-// The stored value is the admission time, which dedupMapCleaner reads to expire
-// entries after dedupTTL.
+// admit reserves txnID and reports whether this caller won; a loser must drop
+// the transaction. It must be atomic (LoadOrStore): PubSub.receivePub runs each
+// callback on its own goroutine, so duplicate deliveries race each other. The
+// stored admission time lets dedupMapCleaner expire entries after dedupTTL.
 func (p *DynamicTxnProcessor) admit(txnID string) bool {
 	_, alreadyAdmitted := p.processedTxns.LoadOrStore(txnID, time.Now())
 	return !alreadyAdmitted
 }
 
-// releaseAdmission drops a reservation taken by admit, making txnID eligible for
-// admission again on a later pubsub delivery.
-//
-// It must be called on every path that admits a transaction without handing it to
-// a worker, and once a transaction has exhausted its retries. Skipping it leaves
-// the transaction suppressed until dedupMapCleaner sweeps the entry dedupTTL
-// later.
+// releaseAdmission drops admit's reservation so a later delivery can retry.
+// Call it when an admitted transaction never reaches a worker, or ends without a
+// validation verdict; otherwise it stays suppressed until dedupTTL expires.
 func (p *DynamicTxnProcessor) releaseAdmission(txnID string) {
 	p.processedTxns.Delete(txnID)
 }
@@ -484,18 +436,10 @@ func (p *DynamicTxnProcessor) dedupMapCleaner() {
 				return true
 			})
 
-			// Piggy-backed on the existing sweep rather than adding another
-			// ticker. inflight should hover near the number of busy workers; a
-			// value that climbs steadily means entries are leaking.
-			//
-			// waitingOn and components are the same kind of signal: both should
-			// rise and fall with the workload, and either one only ever rising
-			// means something is failing to unpark or to prune.
 			p.syncMemo.sweep()
 
-			// The registry has no natural expiry — an entry leaves when its
-			// worker is done with it — so this is the only thing that would ever
-			// notice one that never left. It should always find nothing.
+			// Registry entries leave when their worker finishes, so this should
+			// never find anything; a hit means an entry leaked.
 			if stale := p.inflight.sweepStale(inflightTTL); len(stale) > 0 {
 				atomic.AddInt64(&p.staleSwept, int64(len(stale)))
 				p.host.Log().Error("Swept in-flight entries that outlived any plausible processing time",
@@ -504,6 +448,8 @@ func (p *DynamicTxnProcessor) dedupMapCleaner() {
 
 			p.truncated.sweep(truncationTTL)
 
+			// inflight should track busy workers; inflight, waitingOn or
+			// components only ever rising suggests a leak.
 			p.host.Log().Info("Fullnode ingest metrics",
 				"inflight", p.inflight.len(),
 				"queueLength", len(p.txnQueue),

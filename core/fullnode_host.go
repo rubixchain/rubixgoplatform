@@ -12,15 +12,9 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
-// The node's side of the fullnode ingest pipeline, which lives in core/fullnode.
-//
-// Two things stay here rather than moving with it. SubscribeTxnSetup and
-// TxnCallBack run on every node including a quorum, and do quorum unpledge and
-// peer-table work that is not fullnode business. checkTokenStateHashPinned is
-// passed to ValidateTransaction by the quorum path too (quorum_initiator.go).
-//
-// Everything else the pipeline needs from the node arrives through
-// fullnode.Host, which Core implements below.
+// The node's side of the fullnode pipeline in core/fullnode. SubscribeTxnSetup
+// and TxnCallBack stay here because every node (quorums too) runs them, and the
+// quorum path also validates with checkTokenStateHashPinned.
 
 // Enhanced subscription setup with error handling
 func (c *Core) SubscribeTxnSetup() {
@@ -121,9 +115,8 @@ func (c *Core) checkTokenStateHashPinned(tokenID string, previousTransactionID s
 	return nil
 }
 
-// Core implements fullnode.Host. Every method below is a thin adapter over
-// existing node state or an existing method; the assertion keeps the two in step
-// so a missing one fails the build here rather than at a call site.
+// Core implements fullnode.Host; the assertion fails the build here if a method
+// goes missing.
 var _ fullnode.Host = (*Core)(nil)
 
 func (c *Core) Log() logger.Logger           { return c.log }
@@ -161,12 +154,11 @@ func (c *Core) CPUUsage(lastStats map[string]uint64) (float64, map[string]uint64
 	return c.getCPUUsageLinux(lastStats)
 }
 
-// ResourceMonitor is stateless, so this allocates nothing worth caching on Core.
+// ResourceMonitor holds no state, so a zero value per call is fine.
 func (c *Core) MemoryUsagePercent() float64 {
 	var rm ResourceMonitor
 	return rm.MemoryUsagePercent()
 }
 
-// InitialiseDID, SyncTransactionChainsFromPeer, SyncBurntTokenChainFromPeer
-// and FetchGenesisTransactionFromPeer
-// already match the Host signatures, so they need no adapter here.
+// InitialiseDID, SyncTransactionChainsFromPeer, SyncBurntTokenChainFromPeer and
+// FetchGenesisTransactionFromPeer already match Host, so need no adapter.

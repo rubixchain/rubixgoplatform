@@ -8,8 +8,8 @@ import (
 	"time"
 )
 
-// awaitTestConfig is deliberately fast: the tiers only have to be
-// distinguishable from one another, not realistic.
+// awaitTestConfig uses short waits to keep tests fast; the two wait tiers only
+// need to be told apart.
 func awaitTestConfig() bundleConfig {
 	return bundleConfig{
 		inflightWait: 300 * time.Millisecond,
@@ -17,8 +17,8 @@ func awaitTestConfig() bundleConfig {
 	}
 }
 
-// newAwaitCore wires a processor whose dependency probe is driven by resolved,
-// so the gate can be exercised with no database at all.
+// newAwaitCore builds a processor whose dependency probe is resolve, so the
+// readiness gate runs without a database.
 func newAwaitCore(t *testing.T, cfg bundleConfig, resolve func(string) (bool, error)) (*DynamicTxnProcessor, func()) {
 	t.Helper()
 	p, cancel := newTestProcessor(10, 0)
@@ -36,9 +36,9 @@ func resolvedSet(ids ...string) func(string) (bool, error) {
 	return func(dep string) (bool, error) { return set[dep], nil }
 }
 
-// The gate is compulsory, so a real processor always has usable timings. A zero
-// bundleConfig would silently mean waits that expire at once, which is why
-// initDynamicTxnProcessor sets the defaults unconditionally.
+// The readiness gate is always on, so the defaults must be usable: a zero wait
+// would expire at once, and an absent previous transaction must not be waited
+// on longer than one this node is processing.
 func TestDefaultBundleConfigIsUsable(t *testing.T) {
 	cfg := defaultBundleConfig()
 	if cfg.inflightWait <= 0 || cfg.unknownWait <= 0 {
@@ -63,8 +63,8 @@ func TestAwaitDependenciesNoDepsReturnsImmediately(t *testing.T) {
 	}
 }
 
-// An absent producer gets the short tier, not the long one — a fullnode that
-// joined after network genesis has legitimately never seen most producers.
+// An absent previous transaction gets the short wait: a fullnode that joined
+// after network genesis has never seen most previous transactions.
 func TestAwaitDependenciesUnknownProducerUsesShortTier(t *testing.T) {
 	cfg := awaitTestConfig()
 	p, cancel := newAwaitCore(t, cfg, resolvedSet())
@@ -83,8 +83,8 @@ func TestAwaitDependenciesUnknownProducerUsesShortTier(t *testing.T) {
 	}
 }
 
-// A producer this node is demonstrably still processing is worth waiting for,
-// so it gets the long tier.
+// A previous transaction this node is still processing will resolve, so it
+// gets the long wait.
 func TestAwaitDependenciesInFlightProducerUsesLongTier(t *testing.T) {
 	cfg := awaitTestConfig()
 	cfg.inflightWait = 120 * time.Millisecond
@@ -103,15 +103,10 @@ func TestAwaitDependenciesInFlightProducerUsesLongTier(t *testing.T) {
 	}
 }
 
-// The lost-wakeup window, and why the gate probes twice.
-//
-// Between the first probe and the parking that follows it, the producer can
-// commit — and its release finds nobody, because the edge does not exist yet.
-// A ready channel closes once and is never rearmed, so without the second probe
-// this transaction would wait out its whole timer for a producer that is already
-// on disk.
-//
-// The probe here reports unresolved exactly once, which is that interleaving.
+// Guards against a lost wake-up: the previous transaction can be persisted
+// between the first probe and parking, when there is no edge to release yet.
+// The gate re-probes after parking. This probe reports unresolved exactly once
+// to reproduce that interleaving.
 func TestAwaitDependenciesReprobesAfterParking(t *testing.T) {
 	cfg := awaitTestConfig()
 	cfg.inflightWait = time.Second
@@ -137,9 +132,8 @@ func TestAwaitDependenciesReprobesAfterParking(t *testing.T) {
 	}
 }
 
-// The load-bearing distinction: an unreadable database is not an absent
-// producer. Parking on a lookup that failed would turn a brief outage into a
-// stalled pipeline, so a failed probe means proceed.
+// A failed database lookup is not an absent previous transaction. Waiting on it
+// would turn a brief outage into a stalled pipeline, so the gate proceeds.
 func TestAwaitDependenciesProceedsWhenTheProbeFails(t *testing.T) {
 	cfg := awaitTestConfig()
 	cfg.unknownWait = time.Second
@@ -178,8 +172,8 @@ func TestAwaitDependenciesReturnsErrorOnShutdown(t *testing.T) {
 	}
 }
 
-// parkedCount is reported on the metrics line, so a leak here would show a
-// stuck wait that is not there.
+// parkedCount is reported on the metrics line, so a leak would show a stuck
+// wait that does not exist.
 func TestAwaitDependenciesReleasesParkedCount(t *testing.T) {
 	cfg := awaitTestConfig()
 	p, cancel := newAwaitCore(t, cfg, resolvedSet())
@@ -195,8 +189,8 @@ func TestAwaitDependenciesReleasesParkedCount(t *testing.T) {
 	}
 }
 
-// Only the unresolved subset is waited on, and a mix must still take the tier of
-// the strongest reason to wait.
+// With a mix of dependencies, only the unresolved ones are waited on, and the
+// longest applicable wait is used.
 func TestAwaitDependenciesIgnoresResolvedMembersOfAMixedSet(t *testing.T) {
 	cfg := awaitTestConfig()
 	cfg.inflightWait = 120 * time.Millisecond
@@ -220,7 +214,7 @@ func TestDependencyResolvedEmptyIDIsResolved(t *testing.T) {
 	p, cancel := newAwaitCore(t, awaitTestConfig(), resolvedSet())
 	defer cancel()
 
-	// An empty PreviousTransactionID is a genesis entry: no producer to wait for.
+	// An empty PreviousTransactionID is a genesis entry: nothing to wait for.
 	resolved, err := p.dependencyResolved("")
 	if err != nil || !resolved {
 		t.Errorf("dependencyResolved(\"\") = (%v, %v), want (true, nil)", resolved, err)

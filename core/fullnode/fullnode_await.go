@@ -9,37 +9,19 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 )
 
-// The readiness gate.
-//
-// A transfer that spends the output of a split declares that split's ID as the
-// PreviousTransactionID of the token it moves. If the fullnode validates the
-// transfer before it has persisted the split, the integrity check finds a token
-// it has never seen and pulls the whole chain from a peer to catch up.
-//
-// Holding the transfer until its producers are actually persisted removes that
-// round trip. When the wait expires the transaction proceeds anyway, straight
-// into the existing validate-and-sync path, so the gate can only ever save work
-// — never block a transaction permanently.
-//
-// The hold is released by the producer itself: a transaction that commits wakes
-// everything parked on it (see releaseWaiters). The timer is only the backstop
-// for a producer that never arrives, so a transfer held behind a split now
-// resumes within microseconds of that split's commit rather than on the next
-// tick of a poll.
+// The readiness gate holds a transaction until its previous transactions are
+// persisted, saving the peer chain sync that validating it early would trigger.
+// A previous transaction wakes its waiters when it commits (releaseWaiters); the
+// timer is only a backstop, and an expired wait falls through to the normal
+// validate-and-sync path, so the gate never blocks a transaction permanently.
 
 // errProcessorShuttingDown reports that the wait was abandoned because the
-// processor is stopping, not because the dependencies resolved.
+// processor is stopping.
 var errProcessorShuttingDown = errors.New("transaction processor is shutting down")
 
-// dependencyResolved reports whether depID is durably persisted on this node.
-//
-// "Resolved" means present in the fullnode's own transaction table. An empty ID
-// is a genesis entry, which has no producer to wait for and is resolved by
-// definition.
-//
-// The error return exists to keep a database problem distinguishable from an
-// absent producer. Both used to look the same from here, and conflating them
-// would park every transaction during an outage.
+// dependencyResolved reports whether depID is persisted on this node. An empty
+// ID (genesis) is always resolved. A lookup failure is returned as an error, not
+// as "absent", so the caller can tell a database problem from a missing row.
 func (p *DynamicTxnProcessor) dependencyResolved(depID string) (bool, error) {
 	if depID == "" {
 		return true, nil
@@ -54,16 +36,9 @@ func (p *DynamicTxnProcessor) dependencyResolved(depID string) (bool, error) {
 }
 
 // partitionDependencies splits deps into those already persisted and those not.
-//
-// A dependency whose lookup failed is reported as resolved. That is deliberate:
-// the point of waiting is to avoid a chain sync we know is unnecessary, and a
-// lookup that did not answer tells us nothing. Proceeding sends the transaction
-// down the path it would have taken anyway; parking it would convert a database
-// blip into a stalled pipeline.
-//
-// Both halves are returned because the caller needs both: the resolved half to
-// give back the edges it has just parked on, the unresolved half to pick how
-// long to wait.
+// A failed lookup counts as resolved: proceeding takes the path the transaction
+// would have taken anyway, whereas waiting would turn a database blip into a
+// stalled pipeline.
 func (p *DynamicTxnProcessor) partitionDependencies(deps []string) (resolved, unresolved []string) {
 	for _, dep := range deps {
 		ok, err := p.resolveDependency(dep)
@@ -82,17 +57,10 @@ func (p *DynamicTxnProcessor) partitionDependencies(deps []string) (resolved, un
 	return resolved, unresolved
 }
 
-// dependencyWait picks how long to wait, taking the longest applicable tier.
-//
-// A producer this node already holds is worth waiting for, because it is going
-// to resolve. Held means queued as well as in flight: a producer sitting in
-// txnQueue is just as certain to be processed, and reading only the registry
-// gave it the short tier and made the consumer give up on something that was
-// seconds away.
-//
-// A producer that is genuinely absent may never arrive — this node may have
-// joined the network after it was published — and gets a much shorter grace
-// period.
+// dependencyWait picks how long to wait, taking the longest applicable tier. A
+// previous transaction this node holds (queued or in flight) will be processed
+// soon and gets the long tier; one that is absent may never arrive (the node may
+// have joined after it was published) and gets the short one.
 func (p *DynamicTxnProcessor) dependencyWait(unresolved []string) time.Duration {
 	cfg := p.bundle
 	var wait time.Duration
@@ -108,17 +76,11 @@ func (p *DynamicTxnProcessor) dependencyWait(unresolved []string) time.Duration 
 	return wait
 }
 
-// awaitDependencies blocks until every producer t declares is persisted, the
-// wait expires, or the processor shuts down.
-//
-// It returns an error only for shutdown. An expired wait is a normal outcome and
-// returns nil: the transaction then runs the ordinary validation path, whose
-// integrity check syncs whatever is missing, exactly as it did before this gate
-// existed.
-//
-// Called once, before the retry loop rather than inside it. Waiting per attempt
-// would multiply the hold by maxRetries for a transaction whose producer never
-// shows up.
+// awaitDependencies blocks until every previous transaction t declares is
+// persisted, the wait expires, or the processor shuts down. It returns an error
+// on shutdown or when a previous transaction was found invalid (wrapping
+// errProducerFailed). An expired wait returns nil, so the transaction falls
+// through to normal validation, whose integrity check syncs what is missing.
 func (p *DynamicTxnProcessor) awaitDependencies(t *inflightTxn) error {
 	if t == nil || len(t.deps) == 0 {
 		return nil
@@ -129,15 +91,13 @@ func (p *DynamicTxnProcessor) awaitDependencies(t *inflightTxn) error {
 		return nil
 	}
 
-	// How many transactions are holding right now, for the metrics line. No cap
-	// is needed: a transaction only waits on its own worker, so at most the
-	// whole pool can be waiting, and every wait is bounded by its timer.
+	// Gauge for the metrics log only. Each wait occupies its own worker and is
+	// bounded by its timer, so the number waiting is bounded by the pool size.
 	atomic.AddInt64(&p.parkedCount, 1)
 	defer atomic.AddInt64(&p.parkedCount, -1)
 
-	// Record the reverse edges before waiting on anything. From here on, a
-	// producer that commits finds this transaction and wakes it directly, which
-	// is what replaces re-checking the database on a ticker.
+	// Record the edges first, so a previous transaction that commits from here
+	// on finds this transaction and wakes it directly.
 	parkedOn := make([]string, 0, len(unresolved))
 	for _, dep := range unresolved {
 		if p.inflight.park(t, dep) {
@@ -148,20 +108,15 @@ func (p *DynamicTxnProcessor) awaitDependencies(t *inflightTxn) error {
 			"txnID", t.id, "dependsOn", dep)
 	}
 	if len(parkedOn) == 0 {
-		// A cycle, or the fan-out cap on every dependency. Nothing can wake this
-		// transaction, so waiting could only ever expire.
+		// Every edge was refused (a cycle, or a previous transaction's fan-out
+		// cap). Nothing can wake this transaction, so waiting could only expire.
 		return nil
 	}
 	defer p.inflight.unpark(t, parkedOn)
 
-	// Close the gap between the first probe and the parking that followed it. A
-	// producer that committed in between released nobody, because there was
-	// nothing yet to release, and a ready channel closes once and is never
-	// rearmed — so missing that wake-up would cost the full wait.
-	//
-	// Re-probing after parking is what makes it impossible to miss: release
-	// strictly follows the commit, so a producer that committed either shows up
-	// in this probe or finds the edge already recorded.
+	// Re-probe after parking to avoid a lost wake-up: a previous transaction
+	// that committed between the first probe and parking released nobody.
+	// Release follows the commit, so it either shows up here or finds the edge.
 	started := time.Now()
 	resolved, waitingFor := p.partitionDependencies(parkedOn)
 	if len(resolved) > 0 {
@@ -184,12 +139,9 @@ func (p *DynamicTxnProcessor) awaitDependencies(t *inflightTxn) error {
 
 	select {
 	case <-t.ready:
-		// The channel is closed for either outcome, so which one it was has to
-		// be asked for. A producer found invalid is the one case where this
-		// transaction must not go on to validation: it declares that it spends
-		// an output of something this node has determined never legitimately
-		// existed, so validating it would only reach the same conclusion more
-		// slowly, after a peer sync that cannot help.
+		// ready closes on both release and failure. If a previous transaction
+		// was found invalid, skip validation: it could only reach the same
+		// verdict, after a peer sync that cannot help.
 		if failure := p.inflight.failureOf(t); failure != nil {
 			p.host.Log().Info("awaitDependencies: a producer failed validation",
 				"txnID", t.id, "waited", time.Since(started), "cause", failure)
@@ -201,9 +153,7 @@ func (p *DynamicTxnProcessor) awaitDependencies(t *inflightTxn) error {
 		return nil
 
 	case <-timer.C:
-		// Not a failure. The transaction proceeds and the integrity check syncs
-		// what is missing, which is what would have happened immediately without
-		// this gate.
+		// Not a failure: proceed, and let the integrity check sync what is missing.
 		p.host.Log().Info("awaitDependencies: wait expired, proceeding to validation",
 			"txnID", t.id, "unresolved", waitingFor, "waited", time.Since(started))
 		return nil

@@ -10,18 +10,13 @@ import (
 	"time"
 )
 
-// Tests for failure classification and downstream propagation.
-//
-// Almost all of these are about restraint. The walk reaches forwards and must
-// reach nothing else; the verdict is this node's own and must not be inferred
-// from a peer being unreachable. Over-propagation is the dangerous direction —
-// one misclassified transient failure would dead-letter a whole bundle of good
-// transactions — so the tests that matter most are the ones asserting that
-// nothing happened.
+// Tests for verdict-vs-transient classification and failure propagation.
+// Over-propagation is the dangerous direction: one transient failure mistaken
+// for a verdict would dead-letter a bundle of valid transactions, so most tests
+// assert that nothing else was touched.
 
-// The audit trail was selected by strings.Contains on this text before typed
-// errors existed, and log tooling outside this repository may still match on it.
-// The switch must not have altered a single byte.
+// Audit rows and external log tooling match on this text, so classifying must
+// keep the message byte for byte and keep the original cause reachable.
 func TestValidationFailureMessageIsUnchanged(t *testing.T) {
 	const substring = "failed to validate transaction"
 
@@ -43,9 +38,8 @@ func TestValidationFailureMessageIsUnchanged(t *testing.T) {
 	}
 }
 
-// Validation reaches out to peers to fill chain gaps, so an unreachable peer
-// arrives at the caller as a validation failure. Treating that as a verdict is
-// the single most damaging mistake this classification could make.
+// Validation contacts peers, so an unreachable peer surfaces as a validation
+// failure. It must classify as transient, never as a verdict.
 func TestClassifyValidationFailureSeparatesTransientFromVerdict(t *testing.T) {
 	peerDown := classify(errDependencyTimeout, errors.New("SyncTransactionChainsFromPeer: request failed"))
 	throughValidation := fmt.Errorf("ValidateTransaction: %w",
@@ -67,8 +61,8 @@ func TestClassifyLeavesNilAlone(t *testing.T) {
 	}
 }
 
-// The linear case: a split is found invalid and the transfer that spends it can
-// never succeed.
+// A failure propagates down a chain: every transitive waiter of the invalid
+// transaction is failed.
 func TestFailWaitersPropagatesAlongAChain(t *testing.T) {
 	r := newInflightRegistry()
 	middle := newInflightEntry("txn-B", "txn-A")
@@ -92,14 +86,13 @@ func TestFailWaitersPropagatesAlongAChain(t *testing.T) {
 	}
 }
 
-// The safety property. The walk follows waitingOn forwards, so it can only ever
-// reach transactions that declared a dependency on something downstream of the
-// failure — never a producer of it, never a sibling that merely shares a bundle.
+// The walk only follows waiters forwards, so it never touches the failed
+// transaction's own previous transaction or an unrelated sibling.
 func TestFailWaitersLeavesProducersAndSiblingsAlone(t *testing.T) {
 	r := newInflightRegistry()
 
-	// The failing transaction has a producer of its own, and a sibling parked on
-	// an entirely different producer.
+	// txn-B waits on its own previous transaction; txn-S waits on an unrelated
+	// one.
 	failing := newInflightEntry("txn-B", "txn-A")
 	sibling := newInflightEntry("txn-S", "txn-other")
 	consumer := newInflightEntry("txn-C", "txn-B")
@@ -148,12 +141,9 @@ func TestFailWaitersHandlesADiamond(t *testing.T) {
 	}
 }
 
-// A malformed graph must come out as a bounded walk rather than a hang or a
-// blown stack. park refuses to create a cycle, so the edges here are planted
-// directly to exercise the walk's own defence.
-//
-// The origin closes the loop, and the visited set is what stops the walk turning
-// back onto it: a transaction is never failed by its own failure.
+// The walk must terminate on a malformed cycle. park refuses cycles, so the
+// edges are planted directly; the visited set stops the walk failing its own
+// origin.
 func TestFailWaitersTerminatesOnACycle(t *testing.T) {
 	r := newInflightRegistry()
 	origin := newInflightEntry("txn-A", "txn-B")
@@ -178,9 +168,8 @@ func TestFailWaitersTerminatesOnACycle(t *testing.T) {
 	}
 }
 
-// An entry that already carries a failure is left exactly as it is: its failure
-// may already have been read by a waiter woken through the channel, and writing
-// again would be a write racing that read.
+// An existing failure is never overwritten: a woken waiter may already have
+// read it, and a second write would race that read.
 func TestFailWaitersDoesNotOverwriteAnExistingFailure(t *testing.T) {
 	r := newInflightRegistry()
 	consumer := newInflightEntry("txn-C", "txn-A", "txn-B")
@@ -218,9 +207,8 @@ func TestFailWaitersIgnoresDegenerateInput(t *testing.T) {
 	}
 }
 
-// A held transaction whose producer is found invalid stops waiting at once and
-// reports why, rather than sitting out its timer and then validating against a
-// chain that will never exist.
+// A waiting transaction whose previous transaction is found invalid stops
+// waiting at once and returns that failure, instead of waiting out its timer.
 func TestAwaitDependenciesReturnsTheProducerFailure(t *testing.T) {
 	p, cancel := cascadeCore(t)
 	defer cancel()
@@ -248,13 +236,10 @@ func TestAwaitDependenciesReturnsTheProducerFailure(t *testing.T) {
 	}
 }
 
-// A failure that is not a verdict must not propagate. The producer here fails
-// every attempt because the initiator DID cannot be initialised, which says
-// nothing about the transaction: its consumer stays parked with no failure
-// recorded, nothing is dead-lettered, and the producer's admission is released
-// so a re-delivery can try again. Treating this as a verdict would reach
-// storeInvalidTransaction, whose wallet the test host does not have, so that
-// regression fails here too.
+// A non-verdict failure (the test host cannot initialise the DID) must not
+// propagate: the waiter stays parked with no failure and the previous
+// transaction's admission is released for re-delivery. Treating it as a verdict
+// would also call storeInvalidTransaction, and the test host's Wallet() panics.
 func TestProcessTxnWithRetryDoesNotPropagateANonVerdict(t *testing.T) {
 	p, cancel := cascadeCore(t)
 	defer cancel()
@@ -290,9 +275,8 @@ func TestFailDownstreamToleratesNoProcessor(t *testing.T) {
 	(*DynamicTxnProcessor)(nil).failDownstream("txn-S", errors.New("boom"))
 }
 
-// Fig. 3b in miniature, through the real entry points: the quorum split is found
-// invalid, the transfer inherits that and never reaches validation, and the
-// initiator's split — which produced nothing that failed — is untouched.
+// A quorum split found invalid fails the transfer waiting on it, while the
+// initiator's split, which is not downstream of the failure, is untouched.
 func TestPropagationReachesOnlyDownstream(t *testing.T) {
 	p, cancel := cascadeCore(t)
 	defer cancel()
@@ -324,8 +308,8 @@ func TestPropagationReachesOnlyDownstream(t *testing.T) {
 	}
 }
 
-// Fifty producers failing while their consumers are parking on them. The walk
-// mutates entries the waiters read back, so run with -race.
+// Fifty previous transactions fail while their waiters park. The walk writes
+// entries the waiters read back, so run with -race.
 func TestPropagationIsSafeUnderConcurrency(t *testing.T) {
 	const pairs = 50
 
@@ -365,10 +349,9 @@ func TestPropagationIsSafeUnderConcurrency(t *testing.T) {
 	}
 }
 
-// A verdict reached while a producer is still being processed is the failure
-// GuardAgainstInflight creates: it trimmed the chain, the sync still reported
-// success, and phase 3 reported a mismatch that reads like this node's own
-// conclusion. Holding it back is the whole of the fix.
+// A chain mismatch reached while a previous transaction is still pending comes
+// from GuardAgainstInflight trimming the sync, not from an invalid transaction.
+// It must be re-tagged transient so the retries run.
 func TestDeferVerdictWhileProducerInFlight(t *testing.T) {
 	p, cancel := newTestProcessor(10, time.Second)
 	defer cancel()
@@ -398,9 +381,8 @@ func TestDeferVerdictWhileProducerInFlight(t *testing.T) {
 	}
 }
 
-// The deferral is scoped to one condition. Everything else must reach the
-// dead-letter exactly as it did before, or a genuinely invalid transaction
-// would cycle forever.
+// Without a pending previous transaction or a trimmed sync, a verdict must stand,
+// or an invalid transaction would never be dead-lettered.
 func TestDeferVerdictLeavesEverythingElseAlone(t *testing.T) {
 	p, cancel := newTestProcessor(10, time.Second)
 	defer cancel()
@@ -452,11 +434,9 @@ func TestStripClassRemovesOnlyTheOutermostClass(t *testing.T) {
 	}
 }
 
-// P1 and P3 are one mechanism seen twice. Making a queued producer visible is
-// what causes the guard to trim for it, and trimming is what produces the
-// mismatch that reads like a verdict — so the deferral has to see the queue too,
-// or closing the blind spot would only move the dead-letter from the producer to
-// the consumer.
+// The guard also trims for a queued previous transaction, so the deferral must
+// count the queue as pending, or that trim would dead-letter the waiting
+// transaction.
 func TestDeferVerdictSeesAQueuedProducer(t *testing.T) {
 	p, cancel := newTestProcessor(10, time.Second)
 	defer cancel()
@@ -475,13 +455,9 @@ func TestDeferVerdictSeesAQueuedProducer(t *testing.T) {
 	}
 }
 
-// The gap the declared-producer check alone leaves. The guard cuts to a PREFIX,
-// so a held transaction sitting EARLIER in the chain than the one this
-// transaction needs drops the needed entry too — and that earlier transaction is
-// not a declared producer, so asking only about deps says "verdict" and a valid
-// transaction is dead-lettered. This is the shape a fullnode catching up
-// produces, and the queued set widened it from the few transactions under a
-// worker to everything in txnQueue.
+// The guard cuts to a prefix, so a pending transaction EARLIER in the chain
+// drops the needed entry too. It is not a declared dependency, so only the
+// guard's trim note defers the verdict. A catching-up fullnode hits this often.
 func TestDeferVerdictOnATrimmedSyncWithNoDeclaredProducerPending(t *testing.T) {
 	p, cancel := newTestProcessor(10, time.Second)
 	defer cancel()
@@ -489,8 +465,7 @@ func TestDeferVerdictOnATrimmedSyncWithNoDeclaredProducerPending(t *testing.T) {
 	// txn-X sits earlier in token-a's chain and happens to be queued here.
 	p.QueueFullnodeTransaction(testEvent("txn-X"))
 
-	// The transfer needs split-1, which is NOT pending — it was already
-	// persisted elsewhere, or simply never arrived here.
+	// The transfer needs split-1, which is NOT pending.
 	consumer := p.registerInflight(eventWithDeps("transfer-1", "split-1"))
 	if consumer == nil {
 		t.Fatal("registerInflight returned nil")
@@ -522,8 +497,8 @@ func TestDeferVerdictOnATrimmedSyncWithNoDeclaredProducerPending(t *testing.T) {
 	}
 }
 
-// A note has to go stale, or a token trimmed once would soften every later
-// verdict on it for the life of the process.
+// Trim notes must expire and be cleared on persist, or one trim would soften
+// every later verdict on that token.
 func TestTruncationNotesExpireAndAreClearedOnPersist(t *testing.T) {
 	p, cancel := newTestProcessor(10, time.Second)
 	defer cancel()

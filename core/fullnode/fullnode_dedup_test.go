@@ -10,11 +10,9 @@ import (
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
-// newTestProcessor builds a DynamicTxnProcessor with only the fields the
-// admission and enqueue paths touch. The worker pool, scaling loop and resource
-// monitor are all left nil — nothing under test reaches them.
-//
-// The caller must cancel the returned context.
+// newTestProcessor builds a processor without the worker pool, scaling loop or
+// resource monitor, which no unit test reaches. The caller must cancel the
+// returned context.
 func newTestProcessor(queueCap int, enqueueTimeout time.Duration) (*DynamicTxnProcessor, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.Background())
 	p := &DynamicTxnProcessor{
@@ -27,8 +25,8 @@ func newTestProcessor(queueCap int, enqueueTimeout time.Duration) (*DynamicTxnPr
 		inflight:       newInflightRegistry(),
 		queued:         newQueuedSet(),
 		truncated:      newTruncationLog(),
-		// Production defaults, since the readiness gate is always active and a
-		// zero bundleConfig would mean no parked cap at all.
+		// Production defaults: the readiness gate is always on, and a zero
+		// bundleConfig would make every wait expire at once.
 		bundle:   defaultBundleConfig(),
 		syncMemo: newSyncedTokenMemo(defaultBundleConfig().syncMemoTTL),
 	}
@@ -66,10 +64,9 @@ func TestAdmitDistinctIDsAllSucceed(t *testing.T) {
 	}
 }
 
-// The regression this commit exists for. Before the change, admission was a
-// Load followed by a later Store, and pubsub hands every message to its own
-// goroutine (types/pubsub.go:164), so concurrent deliveries of one transaction
-// could both pass the check.
+// Admission must be one atomic check-and-set: pubsub runs each delivery on its
+// own goroutine (types/pubsub.go), so a separate load and store would let
+// duplicate deliveries both pass.
 func TestAdmitIsAtomicUnderConcurrency(t *testing.T) {
 	const goroutines = 100
 
@@ -99,10 +96,8 @@ func TestAdmitIsAtomicUnderConcurrency(t *testing.T) {
 	}
 }
 
-// dedupMapCleaner type-asserts the map value to time.Time
-// (fullnode_txn_processor.go, dedupMapCleaner). If admit ever stored something
-// else the assertion would fail silently and entries would never expire, turning
-// the bounded dedup window into a permanent one and leaking memory.
+// dedupMapCleaner expects a time.Time value. Anything else would fail its type
+// assertion silently, so entries would never expire and memory would leak.
 func TestAdmitStoresTimestampForTTLSweep(t *testing.T) {
 	p, cancel := newTestProcessor(10, time.Second)
 	defer cancel()
@@ -167,9 +162,8 @@ func TestQueueFullnodeTransactionConcurrentDuplicates(t *testing.T) {
 	}
 }
 
-// A queue-full drop must not suppress the transaction for the whole dedup TTL.
-// This is the branch most easily got wrong: forgetting the release here leaves
-// the transaction unprocessable for ten minutes even if pubsub re-delivers it.
+// A queue-full drop must release admission, or a re-delivery would be rejected
+// as a duplicate until dedupTTL (10 minutes) expires.
 func TestQueueFullnodeTransactionReleasesAdmissionWhenQueueFull(t *testing.T) {
 	p, cancel := newTestProcessor(1, 20*time.Millisecond)
 	defer cancel()
@@ -196,9 +190,8 @@ func TestQueueFullnodeTransactionReleasesAdmissionWhenQueueFull(t *testing.T) {
 	}
 }
 
-// Shutdown takes the same release path. The queue is filled first so that
-// ctx.Done() is the only ready case — select chooses uniformly among ready
-// cases, so leaving room would make this test flaky.
+// Shutdown also releases admission. The queue is filled first so ctx.Done() is
+// the only ready select case; with room left, select would pick randomly.
 func TestQueueFullnodeTransactionReleasesAdmissionOnShutdown(t *testing.T) {
 	p, cancel := newTestProcessor(1, time.Minute)
 	defer cancel()
@@ -216,9 +209,8 @@ func TestQueueFullnodeTransactionReleasesAdmissionOnShutdown(t *testing.T) {
 	}
 }
 
-// processTxnWithRetry releases the admission once retries are exhausted so a
-// later re-delivery can try again. A released ID must be admissible again, even
-// after a second release.
+// A released ID must be admissible again, even after a second release, so a
+// re-delivery can retry a transaction that failed without a verdict.
 func TestReleaseAdmissionIsIdempotent(t *testing.T) {
 	p, cancel := newTestProcessor(10, time.Second)
 	defer cancel()

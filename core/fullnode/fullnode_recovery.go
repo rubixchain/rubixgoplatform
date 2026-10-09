@@ -22,18 +22,15 @@ import (
 // Recovery ownership-proof is carried in HTTP headers (not the request body) so
 // it can be checked before the body is parsed and kept separate from request
 // semantics. Same convention as the existing X-API-Key / Authorization headers.
-// Exported because the client side of recovery stays in package core and must
-// send exactly the header names this package reads.
+// Exported so the recovery client in package core sends the same names.
 const (
 	HeaderRecoveryNonce     = "X-Rubix-Recovery-Nonce"
 	HeaderRecoverySignature = "X-Rubix-Recovery-Signature"
 )
 
-// RecoveryNonceHash builds the digest the recovering node signs to prove DID
-// ownership: SHA3-256 over the fullnode-issued single-use nonce. Both client
-// and fullnode MUST build it identically, so there is one definition and the
-// client side calls this one. SHA3-256 matches the hash the rest of the
-// DID-signing flow uses.
+// RecoveryNonceHash is the digest a recovering node signs to prove DID
+// ownership: SHA3-256 of "recover-from-fullnode:" plus the single-use nonce.
+// Client and fullnode both call it so the two cannot diverge.
 func RecoveryNonceHash(nonce string) []byte {
 	return util.CalculateHash([]byte("recover-from-fullnode:"+nonce), constants.HashAlgorithm_SHA3_256)
 }

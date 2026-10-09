@@ -5,40 +5,14 @@ import (
 	"time"
 )
 
-// Truncation records for the fullnode transaction pipeline.
-//
-// GuardAgainstInflight trims a peer's chain to the longest prefix containing
-// nothing this node holds. That is the right thing to apply, but it is a *prefix*
-// — so a held transaction sitting early in the chain drops everything after it,
-// including entries the current transaction genuinely needed. The sync then
-// reports success having applied nothing useful, the integrity check's phase 3
-// finds the chain still short, and the plain mismatch it reports reads as this
-// node's own verdict.
-//
-// deferVerdictWhileDependencyPending already catches the common shape of this by
-// asking whether a producer the transaction DECLARES is still pending. That
-// misses the case above: the entry the guard stopped at need not be the
-// transaction's own producer, only something further back in the same chain.
-// Those are exactly the arrears a fullnode catching up accumulates, and the
-// queued set widened the trigger from the handful of transactions under a worker
-// to everything sitting in txnQueue.
-//
-// So the guard leaves a note. It runs as a method on the processor and already
-// knows which token it truncated, which is enough to answer the question later
-// without threading a new error contract back through
-// SyncTransactionChainsFromPeer — shared with the quorum path, and swallowing
-// apply errors by design until very recently.
-//
-// The note is deliberately weak evidence: it says a sync for this token came
-// back trimmed a moment ago, not that this transaction was harmed by it. Acting
-// on it only ever costs a retry, and the retry ladder is bounded at three, so a
-// stale note is worth a few seconds, never a wrong outcome.
+// Truncation notes. GuardAgainstInflight trims a peer's chain at the first
+// locally pending transaction, which can drop entries the current transaction
+// needed even when the cut is not at its own previous transaction. The note lets
+// deferVerdictWhileDependencyPending treat the resulting phase-3 mismatch as
+// transient; a stale note at worst defers a verdict, it never creates one.
 
-// truncationTTL is how long a note stays worth acting on. It has to outlive one
-// validation pass — the guard writes it during phase 2's sync and the
-// classification reads it after phase 3, with peer round-trips in between — and
-// nothing beyond that, since a transaction retrying past it has already had its
-// three attempts.
+// truncationTTL is how long a note stays worth acting on: long enough to span
+// one validation pass (written during the sync, read after phase 3).
 const truncationTTL = 30 * time.Second
 
 // truncationLog records, per token, when a chain sync for it was last trimmed.
@@ -79,9 +53,8 @@ func (l *truncationLog) recentlyTruncated(tokenIDs []string, ttl time.Duration) 
 	return "", false
 }
 
-// forget drops the notes for these tokens. Called when a transaction persists:
-// the chain has just advanced, so whatever a sync was short of before is no
-// longer what this node is short of now.
+// forget drops the notes for these tokens. Called when a transaction persists,
+// since the chain has advanced and the old shortfall no longer applies.
 func (l *truncationLog) forget(tokenIDs []string) {
 	if l == nil || len(tokenIDs) == 0 {
 		return
@@ -93,8 +66,8 @@ func (l *truncationLog) forget(tokenIDs []string) {
 	}
 }
 
-// sweep drops notes older than ttl and returns how many went. Without it a token
-// synced once on a quiet node would keep its note for the life of the process.
+// sweep drops notes older than ttl and returns how many went, so notes for
+// tokens never touched again do not accumulate.
 func (l *truncationLog) sweep(ttl time.Duration) int {
 	if l == nil {
 		return 0

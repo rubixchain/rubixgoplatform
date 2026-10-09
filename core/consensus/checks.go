@@ -784,28 +784,14 @@ func ValidateTokenIDRelatedChecks(
 	return nil
 }
 
-// validateSingleGenesis enforces the "a token is minted exactly once" rule for
-// an incoming genesis transaction, independently of the order in which
-// transactions happen to arrive.
-//
-// It deliberately does NOT consult the chain tip. Fullnode ingests transactions
-// from pubsub in arbitrary order, so the tip can legitimately have moved past
-// the mint by the time the mint itself is validated: a split S mints child X1
-// and a transfer T spends X1, and if T is processed first then tip(X1) == T
-// while S is still perfectly valid. The same applies to a re-delivery of S
-// after dedupTTL, long after its own descendants landed. A tip-based check
-// rejects both, dead-letters a legitimate transaction and fails its dependents.
-//
-// Instead it mirrors what PersistFullNodeTransaction already does: a row for
-// this exact (tokenID, txID) pair means the transaction is already recorded, at
-// any position, so there is nothing left to validate. Only a genesis row owned
-// by a DIFFERENT transaction is a real double-mint. This keeps every rejection
-// the tip-based check made and drops only its false positives.
+// validateSingleGenesis rejects a genesis entry only if a different transaction
+// holds tokenID's genesis row; a row for (tokenID, currentTxID) means it is
+// already recorded. It ignores the chain tip, which may already be past the mint
+// when transactions arrive out of order or are re-delivered.
 func validateSingleGenesis(tokenID string, currentTxID string, isFullnode bool, w *wallet.Wallet, log logger.Logger) error {
 	alreadyRecorded, err := w.HasTokenChainRow(tokenID, currentTxID, isFullnode)
 	if err != nil {
-		// Fail open on a lookup failure, as the previous tip-based check did:
-		// a flaky read must not turn into a permanent validation verdict.
+		// Fail open: a flaky read must not become a validation verdict.
 		log.Warn("TokenChainIntigrityCheck: genesis row lookup failed, skipping single-genesis check",
 			"tokenID", tokenID, "currentTxID", currentTxID, "err", err)
 		return nil

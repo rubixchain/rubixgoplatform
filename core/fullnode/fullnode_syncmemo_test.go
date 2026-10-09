@@ -10,17 +10,11 @@ import (
 	"time"
 )
 
-// Tests for the sync-once gate.
-//
-// The gate exists to drop a repeat, so almost every test here is about the cases
-// where it must *not* drop one: a different peer, a failed sync, a token this
-// node has since advanced, an expired record, another bundle. Suppressing a sync
-// that would have succeeded is the only way this can do harm, and each of those
-// is a way it could.
+// Tests for the per-bundle sync memo. It drops repeat syncs, so most tests check
+// the cases where it must NOT: a different peer, a failed sync, a token since
+// advanced locally, an expired record, another bundle.
 
-// memoCore wires a Core whose peer sync is driven by syncChains, so the gate can
-// be exercised without a peer. The returned recorder holds one entry per sync
-// that actually reached the network layer.
+// syncRecorder stands in for the peer sync and records each call that reached it.
 type syncRecorder struct {
 	mu    sync.Mutex
 	calls []syncCall
@@ -54,6 +48,7 @@ func (s *syncRecorder) fail(err error) {
 	s.err = err
 }
 
+// memoCore returns a processor whose peer sync goes to the returned recorder.
 func memoCore(t *testing.T, ttl time.Duration) (*DynamicTxnProcessor, *syncRecorder) {
 	t.Helper()
 	p, cancel := newTestProcessor(10, 0)
@@ -66,12 +61,12 @@ func memoCore(t *testing.T, ttl time.Duration) (*DynamicTxnProcessor, *syncRecor
 	return p, recorder
 }
 
-// The case the gate is for: two members of one bundle both needing the same
-// token from the same peer. The second must not go to the network.
+// Two transactions in one bundle needing the same token from the same peer:
+// only the first may go to the network.
 func TestSyncOnceSkipsARepeatWithinTheBundle(t *testing.T) {
 	p, recorder := memoCore(t, time.Second)
 
-	// One bundle: the transfer names the split, which is what merges them.
+	// txn-T names txn-S as its previous transaction, so they form one bundle.
 	p.registerInflight(eventWithDeps("txn-S"))
 	p.registerInflight(eventWithDeps("txn-T", "txn-S"))
 
@@ -92,8 +87,7 @@ func TestSyncOnceSkipsARepeatWithinTheBundle(t *testing.T) {
 	}
 }
 
-// Only the seen tokens are dropped. A call mixing one of each must still fetch
-// the one it has not seen.
+// Only already-synced tokens are dropped; the rest of the call is still fetched.
 func TestSyncOnceFiltersOnlyTheSeenTokens(t *testing.T) {
 	p, recorder := memoCore(t, time.Second)
 	p.registerInflight(eventWithDeps("txn-T", "txn-S"))
@@ -114,9 +108,8 @@ func TestSyncOnceFiltersOnlyTheSeenTokens(t *testing.T) {
 	}
 }
 
-// Different peers hold genuinely different chains for the same token: transfer
-// tokens come from the initiator, pledge tokens from each quorum member. Keying
-// on the token alone would suppress a sync that would have succeeded.
+// Different peers can hold different chains for the same token (transfer tokens
+// from the initiator, pledge tokens from each quorum), so the memo is per peer.
 func TestSyncOnceDoesNotSuppressADifferentPeer(t *testing.T) {
 	p, recorder := memoCore(t, time.Second)
 	p.registerInflight(eventWithDeps("txn-T", "txn-S"))
@@ -133,9 +126,8 @@ func TestSyncOnceDoesNotSuppressADifferentPeer(t *testing.T) {
 	}
 }
 
-// A failed sync must stay re-syncable. Marking on attempt rather than on success
-// would let one unreachable peer suppress, for a whole TTL, the retry that would
-// have worked.
+// A failed sync must not be remembered, or one unreachable peer would suppress
+// the retry for a whole TTL.
 func TestSyncOnceDoesNotMarkAFailedSync(t *testing.T) {
 	p, recorder := memoCore(t, time.Second)
 	p.registerInflight(eventWithDeps("txn-T", "txn-S"))
@@ -156,8 +148,7 @@ func TestSyncOnceDoesNotMarkAFailedSync(t *testing.T) {
 	}
 }
 
-// Two bundles are two scopes. What one of them fetched says nothing about what
-// the other is looking at.
+// What one bundle synced must not suppress a sync for another bundle.
 func TestSyncOnceScopesToTheBundle(t *testing.T) {
 	p, recorder := memoCore(t, time.Second)
 	p.registerInflight(eventWithDeps("txn-T1", "txn-S1"))
@@ -171,9 +162,8 @@ func TestSyncOnceScopesToTheBundle(t *testing.T) {
 	}
 }
 
-// Once this node persists a transaction touching a token, that token's tip has
-// advanced and every record of what a peer held a moment ago is describing a
-// chain one entry short.
+// Persisting a transaction advances the local tip of its tokens, so their memo
+// records are stale and must be dropped.
 func TestSyncOnceInvalidatesOnPersist(t *testing.T) {
 	p, recorder := memoCore(t, time.Second)
 	p.registerInflight(eventWithDeps("txn-T", "txn-S"))
@@ -191,8 +181,8 @@ func TestSyncOnceInvalidatesOnPersist(t *testing.T) {
 	}
 }
 
-// The TTL is what stops a bundle that never drains from holding an opinion about
-// a chain indefinitely.
+// Records expire after the TTL, so a bundle that never drains cannot suppress
+// syncs forever.
 func TestSyncOnceRecordExpires(t *testing.T) {
 	p, recorder := memoCore(t, 30*time.Millisecond)
 	p.registerInflight(eventWithDeps("txn-T", "txn-S"))
@@ -206,8 +196,8 @@ func TestSyncOnceRecordExpires(t *testing.T) {
 	}
 }
 
-// seen only expires the keys something asks about again, so a bundle nobody
-// revisits would hold its records forever without the sweep.
+// seen only expires keys it is asked about, so the sweep is what frees records
+// of a bundle nobody revisits.
 func TestSyncMemoSweepDropsExpiredRecords(t *testing.T) {
 	m := newSyncedTokenMemo(20 * time.Millisecond)
 	m.mark("bundle-1", "peer-1", []string{"token-a", "token-b"})
@@ -245,8 +235,7 @@ func TestSyncMemoIgnoresDegenerateInput(t *testing.T) {
 	}
 }
 
-// Invalidation is a fact about the token, not about who observed it, so it must
-// reach every bundle and every peer.
+// Invalidating a token must clear it for every bundle and peer, and only it.
 func TestSyncMemoInvalidateSpansBundlesAndPeers(t *testing.T) {
 	m := newSyncedTokenMemo(time.Second)
 	m.mark("bundle-1", "peer-1", []string{"token-a", "token-b"})
@@ -265,9 +254,8 @@ func TestSyncMemoInvalidateSpansBundlesAndPeers(t *testing.T) {
 	}
 }
 
-// A transaction with no component scopes to itself. It still collapses the
-// repeat syncs across its own retry attempts, and it cannot reach past the one
-// transaction.
+// A transaction in no bundle uses its own ID as scope, so it still skips repeat
+// syncs across its own retries; bundle members share one scope.
 func TestBundleScopeFallsBackToTheTransactionID(t *testing.T) {
 	p, _ := memoCore(t, time.Second)
 
@@ -288,8 +276,7 @@ func TestBundleScopeFallsBackToTheTransactionID(t *testing.T) {
 	}
 }
 
-// A Core with no transaction processor is not a fullnode, so there is nothing to
-// scope a memo to and the call must fall through rather than panic.
+// The memo helpers must tolerate a nil processor rather than panic.
 func TestSyncMemoHelpersToleratesNoProcessor(t *testing.T) {
 	var p *DynamicTxnProcessor
 
@@ -303,8 +290,7 @@ func TestSyncMemoHelpersToleratesNoProcessor(t *testing.T) {
 	p.invalidateSyncedTokens([]string{"token-a"})
 }
 
-// The memo is read on the validation path, which every worker is on at once, and
-// written from persists happening concurrently with those reads. Run with -race.
+// Workers read and write the memo concurrently. Run with -race.
 func TestSyncMemoIsSafeUnderConcurrency(t *testing.T) {
 	const workers = 50
 
@@ -340,11 +326,8 @@ func TestSyncMemoIsSafeUnderConcurrency(t *testing.T) {
 	done.Wait()
 }
 
-// A chain that did not apply used to reach here as a successful sync:
-// SyncTransactionChainsFromPeer logged the apply failure and returned nil. The
-// memo then recorded the token, so the retry skipped the fetch it needed, and
-// the integrity check's phase 3 reported a plain mismatch that reads as a
-// verdict. The apply error now surfaces, and this pins what must happen to it.
+// A peer chain that fails to apply must come back as a transient error, not a
+// validation verdict, and must not be remembered, so the retry fetches again.
 func TestSyncOnceTreatsAnApplyFailureAsTransient(t *testing.T) {
 	p, recorder := memoCore(t, time.Second)
 	p.registerInflight(eventWithDeps("txn-T", "txn-S"))
@@ -363,8 +346,7 @@ func TestSyncOnceTreatsAnApplyFailureAsTransient(t *testing.T) {
 		t.Error("a peer's unusable chain was classified as this node's verdict on the transaction")
 	}
 
-	// And the retry must genuinely go back to the network rather than being
-	// suppressed by a memo entry that should never have been written.
+	// The retry must reach the network, not be suppressed by the memo.
 	recorder.fail(nil)
 	if err := p.syncChainsOnce("txn-T", "peer-1", []string{"token-a"}, nil, nil); err != nil {
 		t.Fatalf("retry after an apply failure = %v, want nil", err)

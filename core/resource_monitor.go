@@ -113,18 +113,15 @@ func (rm *ResourceMonitor) CalculateDynamicWorkers(tokenCount int) int {
 	return workers
 }
 
-// MemoryUsagePercent reports how much of total memory is in use, 0-100.
-//
-// Callers that want the single number should use this rather than reaching into
-// the GetResourceStats map, which is untyped and panics on a missing key.
+// MemoryUsagePercent reports how much of total memory is in use, 0-100. Prefer
+// it to reading the untyped GetResourceStats map.
 func (rm *ResourceMonitor) MemoryUsagePercent() float64 {
 	totalMB, availableMB := rm.GetMemoryStats()
 	return memoryUsagePercent(totalMB, availableMB)
 }
 
-// memoryUsagePercent works off an already-taken sample, so a caller that needs
-// both the percentage and the raw numbers pays for only one GetMemoryStats.
-// GetMemoryStats calls runtime.ReadMemStats, which stops the world.
+// memoryUsagePercent takes an existing sample so callers needing the raw numbers
+// too pay for only one GetMemoryStats (runtime.ReadMemStats stops the world).
 func memoryUsagePercent(totalMB, availableMB uint64) float64 {
 	// availableMB can exceed totalMB when GetMemoryStats falls back to its 1GB
 	// default; report 0 rather than underflowing the subtraction below.

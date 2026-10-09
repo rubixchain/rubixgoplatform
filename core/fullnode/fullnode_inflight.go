@@ -11,116 +11,76 @@ import (
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
-// In-flight tracking for the fullnode transaction pipeline.
-//
-// processedTxns is a *seen-recently* set: an ID stays in it for dedupTTL after
-// admission whether or not the transaction is still being worked on. This
-// registry answers a different question — which transactions has the fullnode
-// received but not yet persisted or failed, right now.
-//
-// Three things read that answer: the sync guard, which keeps a chain sync from
-// ingesting a sibling that is still being validated; the readiness gate, which
-// holds a transaction until the producers it declares are persisted; and the
-// cascade below, which wakes those held transactions the moment their producer
-// commits instead of leaving them to re-check or time out.
+// In-flight tracking for the fullnode transaction pipeline: which transactions a
+// worker is processing right now (unlike processedTxns, which remembers every
+// admitted ID for dedupTTL). Read by the sync guard, by the readiness gate that
+// holds a transaction until its previous transactions are persisted, and by the
+// wake-up that releases those waiting transactions when one is persisted.
 
-// inflightTxn is one transaction taken off txnQueue and not yet resolved.
+// inflightTxn is one transaction a worker has taken off txnQueue and not yet
+// resolved.
 type inflightTxn struct {
 	id    string
 	deps  []string
 	event *models.EventTransaction
 
-	// ready is closed once every producer this transaction parked on has been
-	// persisted. The readiness gate waits on it; the cascade release closes it.
+	// ready is closed when every previous transaction this one parked on is
+	// persisted, or when one of them fails validation.
 	ready     chan struct{}
 	readyOnce sync.Once
 
-	// pending is how many producers this transaction is still parked on.
-	//
-	// It is guarded by inflightRegistry.mu rather than by the entry itself,
-	// because it only ever changes together with waitingOn and the two must not
-	// be able to disagree: the count reaching zero is precisely the condition
-	// that closes ready.
+	// pending is how many previous transactions this one is still parked on.
+	// Guarded by inflightRegistry.mu because it must change together with
+	// waitingOn.
 	pending int
 
-	// registeredAt is when this entry entered the registry, and exists only so a
-	// leak can be found. Every path defers unregister, so an entry that outlives
-	// any plausible amount of work indicates a bug rather than slow progress —
-	// and since the sync guard trims chains at in-flight IDs, a leaked entry does
-	// not merely occupy memory, it silently truncates every sync of that token.
+	// registeredAt lets sweepStale find a leaked entry. A leak matters because
+	// the sync guard trims chains at pending IDs, so a stale entry would truncate
+	// every sync of that token.
 	registeredAt time.Time
 
-	// failure is set when a producer of this transaction was found invalid, and
-	// is the reason the wait ended. Guarded by inflightRegistry.mu and read back
-	// through failureOf — a waiter woken by a release and a walk that fails it
-	// are two different goroutines, and the channel close alone does not order
-	// them.
+	// failure is set when a previous transaction was found invalid. Guarded by
+	// inflightRegistry.mu and read through failureOf: the channel close alone does
+	// not order the writer's store against the waiter's read.
 	failure error
 }
 
-// markReady closes ready, at most once.
-//
-// A plain close would panic on the second call, and there genuinely are two
-// callers: the cascade, when the last producer commits, and — in the
-// double-check below — the waiter itself. Always called outside the registry
-// lock.
+// markReady closes ready at most once; both releaseWaiters and failDownstream
+// may close it. Call it outside the registry lock.
 func (t *inflightTxn) markReady() {
 	t.readyOnce.Do(func() { close(t.ready) })
 }
 
-// maxWaitersPerProducer bounds how many transactions may park on a single
-// producer.
-//
-// The legitimate fan-out is small: a transfer plus one split per quorum member,
-// so a handful. A list far longer than that is not a real bundle, it is either
-// malformed input or a leak, and past the cap parking degrades to the plain
-// timeout rather than growing the list without limit.
+// maxWaitersPerProducer bounds how many transactions may park on one previous
+// transaction. Real fan-out is a handful; past the cap park refuses and the
+// waiting transaction falls back to its timer.
 const maxWaitersPerProducer = 64
 
-// inflightTTL is how long an entry may live before the sweep treats it as
-// leaked.
-//
-// Deliberately far longer than any legitimate lifetime. A transaction can wait
-// on its producers, then spend three validation attempts each of which may sync
-// chains from a peer, so minutes are normal. This is a backstop for a bug, not a
-// deadline for work: sweeping something still being processed would remove the
-// tracking that the sync guard depends on, which is the very harm it exists to
-// prevent.
+// inflightTTL is how old an entry must be before sweepStale treats it as
+// leaked. Deliberately far above any real lifetime (wait plus three validation
+// attempts with peer syncs), since sweeping a live entry would disable the sync
+// guard for it.
 const inflightTTL = 15 * time.Minute
 
-// inflightRegistry indexes received-but-unresolved transactions by their own ID.
-//
-// One mutex guards every field. sync.Map is deliberately not used: the
-// operations are compound — check-and-insert, and later read-then-append — and
-// sync.Map cannot make those atomic. Atomicity is the point, since pubsub
-// dispatches each message on its own goroutine (types/pubsub.go:164) and the
-// worker pool adds more concurrency on top.
-//
-// The lock is never held across a database call, a network call or a channel
-// receive; every method below returns before its caller does any of those.
+// inflightRegistry indexes in-flight transactions by ID. One mutex guards every
+// field because the operations are compound (check-and-insert, read-then-append),
+// which sync.Map cannot make atomic. The lock is never held across a database
+// call, a network call or a channel operation.
 type inflightRegistry struct {
 	mu   sync.Mutex
 	byID map[string]*inflightTxn
 
-	// waitingOn maps a producer transaction ID to the consumers blocked on it.
-	//
-	// The producer is a bare ID because it may be a transaction this node has
-	// never seen — that is the whole point of the reverse edge, that a consumer
-	// can park before its producer arrives. The consumers are entries rather
-	// than IDs because releasing them means closing a channel on each, and
-	// resolving IDs back to entries afterwards would reintroduce the window the
-	// single lock exists to close.
+	// waitingOn maps a previous transaction's ID to the transactions parked on
+	// it. The key is a bare ID because the previous transaction may not have
+	// arrived yet; the values are entries so release can close their channels
+	// under the same lock.
 	waitingOn map[string][]*inflightTxn
 
-	// maxWaiters caps the length of any one waiter list. A field rather than the
-	// constant directly so a test can reach the bound without building dozens of
-	// transactions.
+	// maxWaiters caps any one waiter list; a field so tests can lower it.
 	maxWaiters int
 
-	// parent is the union-find forest over transaction IDs and members maps each
-	// root to its full membership. Together they answer which bundle a
-	// transaction belongs to; see fullnode_components.go. Both are guarded by
-	// the mutex above rather than one of their own.
+	// parent (union-find forest) and members (root -> membership) track bundles;
+	// see fullnode_components.go. Guarded by mu.
 	parent  map[string]string
 	members map[string][]string
 }
@@ -135,14 +95,9 @@ func newInflightRegistry() *inflightRegistry {
 	}
 }
 
-// register adds t and reports whether it did.
-//
-// A false return means the caller does not own an entry and must not unregister
-// one: the entry belongs to whoever registered that ID first.
-//
-// The registry needs no size cap of its own. Only a worker registers, and only
-// for the transaction it is processing, so the registry never holds more
-// entries than there are live workers; txnQueue is what bounds the backlog.
+// register adds t and reports whether it did. On false the caller does not own
+// the entry and must not unregister it. No size cap is needed: only workers
+// register, so the registry holds at most one entry per worker.
 func (r *inflightRegistry) register(t *inflightTxn) bool {
 	if t == nil || t.id == "" {
 		return false
@@ -162,15 +117,8 @@ func (r *inflightRegistry) register(t *inflightTxn) bool {
 	return true
 }
 
-// unregister removes id. It is a no-op if id is absent, so callers can defer it
-// unconditionally.
-//
-// This is the only point at which the pipeline shrinks, so it is also where a
-// component gets the chance to be found dead. Pruning here rather than on a
-// sweep means a bundle is forgotten as soon as its last member leaves, with no
-// interval during which the forest holds work that has already finished.
-// It returns the bundle membership that drained as a result, or nil if this
-// transaction belonged to no bundle or its bundle still has members in flight.
+// unregister removes id (a no-op if absent) and prunes its bundle if no member is
+// still in flight. It returns the drained bundle's membership, or nil.
 func (r *inflightRegistry) unregister(id string) []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -178,18 +126,10 @@ func (r *inflightRegistry) unregister(id string) []string {
 	return r.pruneComponentLocked(id)
 }
 
-// sweepStale removes entries that have outlived ttl and returns their IDs.
-//
-// Purely a backstop. Every path that registers also defers an unregister, so
-// this should never find anything, and finding something means a worker died
-// somewhere the recover did not reach. It matters anyway because of what a
-// leaked entry does rather than what it costs: the sync guard trims a peer's
-// chain at the first in-flight ID, so one stale entry silently truncates every
-// sync of that token for as long as it survives.
-//
-// A swept producer's waiter list goes with it. Those waiters keep their own
-// timers and fall through to the ordinary path, which is the same outcome they
-// would have had if the producer had never arrived.
+// sweepStale removes entries older than ttl and returns their IDs. A backstop:
+// unregister is deferred (and runs on panic too), so a hit means a stuck worker.
+// It matters because a stale entry makes the sync guard truncate every sync of
+// that token. Waiters on a swept entry lose their wake-up and rely on their timers.
 func (r *inflightRegistry) sweepStale(ttl time.Duration) []string {
 	if ttl <= 0 {
 		return nil
@@ -211,8 +151,8 @@ func (r *inflightRegistry) sweepStale(ttl time.Duration) []string {
 		delete(r.byID, id)
 		delete(r.waitingOn, id)
 	}
-	// Pruned only after every removal, so a bundle whose members all went stale
-	// is judged dead on the final state rather than on a half-swept one.
+	// Prune only after every removal, so a bundle whose members all went stale
+	// is judged on the final state.
 	for _, id := range stale {
 		r.pruneComponentLocked(id)
 	}
@@ -239,18 +179,10 @@ func (r *inflightRegistry) len() int {
 	return len(r.byID)
 }
 
-// park records that t is waiting for producerID, and reports whether the edge
-// was recorded.
-//
-// A false return is not an error. It means no cascade release will arrive for
-// this edge and the caller is on its own timeout — which is exactly the
-// behaviour that existed before the cascade, so refusing to park is always safe.
-// There are three reasons for it: the edge is degenerate, the fan-out cap is
-// reached, or the edge would close a waiting cycle.
-//
-// The caller must pass distinct producers. Parking twice on the same producer is
-// refused rather than counted twice, since the release that follows would only
-// decrement once and the waiter would never reach zero.
+// park records that t waits for the previous transaction producerID and reports
+// whether the edge was recorded. Refusing is always safe: t just relies on its
+// timer. It refuses a degenerate or duplicate edge (a duplicate would be counted
+// twice but released once), a full waiter list, or an edge that closes a cycle.
 func (r *inflightRegistry) park(t *inflightTxn, producerID string) bool {
 	if t == nil || t.id == "" || producerID == "" || producerID == t.id {
 		return false
@@ -277,15 +209,10 @@ func (r *inflightRegistry) park(t *inflightTxn, producerID string) bool {
 	return true
 }
 
-// unpark removes t from the waiter list of each producer named and returns how
-// many producers it is still parked on.
-//
-// The waiter calls this itself when its wait ends, whatever ended it. Without it
-// a producer that never arrives would hold a waiter list, and therefore an entry
-// in waitingOn, for the lifetime of the process.
-//
-// Calling it for an edge that release already removed is a no-op, so the waiter
-// can defer it unconditionally over the same set it parked on.
+// unpark removes t from the waiter list of each named previous transaction and
+// returns how many it is still parked on. Edges already removed by release are
+// skipped, so the waiting transaction can defer it unconditionally; without it a
+// previous transaction that never arrives would keep its waitingOn entry forever.
 func (r *inflightRegistry) unpark(t *inflightTxn, producerIDs []string) int {
 	if t == nil {
 		return 0
@@ -318,15 +245,9 @@ func (r *inflightRegistry) unpark(t *inflightTxn, producerIDs []string) int {
 	return t.pending
 }
 
-// release removes every waiter parked on producerID and returns those left with
-// no producer to wait for.
-//
-// Only the last of a transaction's producers frees it: a transfer that spends
-// two splits has to see both persisted, and waking it after the first would send
-// it to validate against a chain that is still incomplete.
-//
-// Callers must invoke this only after the producer's row is committed, and must
-// signal the returned entries outside the lock.
+// release removes every transaction parked on producerID and returns those with
+// no previous transaction left to wait for. Call only after producerID's row is
+// committed, and signal the returned entries outside the lock.
 func (r *inflightRegistry) release(producerID string) []*inflightTxn {
 	if producerID == "" {
 		return nil
@@ -353,23 +274,11 @@ func (r *inflightRegistry) release(producerID string) []*inflightTxn {
 	return freed
 }
 
-// failWaiters records cause against every transaction transitively waiting on
-// producerID, and returns them so the caller can wake them.
-//
-// The walk follows waitingOn forwards only — a producer to those parked on it,
-// then to those parked on *them*. That direction is the whole safety property:
-// it can only ever reach transactions that declared a dependency on something
-// downstream of the failure. A transaction that produced the failed one, or that
-// merely shares a bundle with it, is never on this path and is never touched.
-//
-// Iterative with a visited set rather than recursive. A malformed graph must
-// come out as a bounded walk rather than a blown stack, and the same visited set
-// is what makes a cycle terminate.
-//
-// An entry that already carries a failure is left exactly as it is. That is not
-// only tidiness: its failure may already have been read by a waiter woken
-// through the channel, and writing to it again would be a write racing that
-// read.
+// failWaiters records cause against every transaction transitively parked on
+// producerID and returns them for the caller to wake. The walk only follows
+// waitingOn forwards, so it never touches a previous transaction or a mere bundle
+// member. A visited set bounds it on cycles, and an existing failure is never
+// overwritten (its waiter may already have read it).
 func (r *inflightRegistry) failWaiters(producerID string, cause error) []*inflightTxn {
 	if producerID == "" || cause == nil {
 		return nil
@@ -408,11 +317,8 @@ func (r *inflightRegistry) failWaiters(producerID string, cause error) []*inflig
 	return failed
 }
 
-// failureOf reports the failure recorded against t, if any.
-//
-// Taken under the lock rather than read directly after the channel close. A
-// release and a failure are raised by different goroutines, and only the lock
-// orders the write against this read.
+// failureOf reports the failure recorded against t, if any. Read under the lock
+// because failure is written by another goroutine.
 func (r *inflightRegistry) failureOf(t *inflightTxn) error {
 	if t == nil {
 		return nil
@@ -423,11 +329,7 @@ func (r *inflightRegistry) failureOf(t *inflightTxn) error {
 	return t.failure
 }
 
-// waitersOf returns the IDs parked on producerID.
-//
-// This is the reverse check performed when a transaction arrives: it answers
-// "did anyone give up on me arriving and park in the meantime?". A copy, because
-// the caller reads it after the lock is dropped.
+// waitersOf returns a copy of the IDs parked on producerID.
 func (r *inflightRegistry) waitersOf(producerID string) []string {
 	if producerID == "" {
 		return nil
@@ -447,11 +349,8 @@ func (r *inflightRegistry) waitersOf(producerID string) []string {
 	return ids
 }
 
-// waitingLen returns how many producers currently have waiters.
-//
-// Purely an observability figure. It should track the number of parked
-// transactions and fall back to zero when the pipeline is idle; a value that
-// only climbs means a waiter is failing to unpark.
+// waitingLen returns how many previous transactions currently have waiters, for
+// metrics. It should return to zero when idle; steady growth means a missed unpark.
 func (r *inflightRegistry) waitingLen() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -459,17 +358,9 @@ func (r *inflightRegistry) waitingLen() int {
 }
 
 // wouldCycleLocked reports whether parking consumerID on producerID would close a
-// waiting cycle. The caller must hold r.mu.
-//
-// waitingOn maps a producer to its waiters, so walking it forwards from
-// consumerID enumerates everything transitively blocked *by* consumerID. If
-// producerID turns up in that set then producerID is already waiting, directly
-// or through a chain, on consumerID — and adding the reverse edge would park
-// both until their timers expire.
-//
-// A real chain cannot do this: a transaction's producers precede it. The guard
-// is for malformed or hostile input, where the cost of refusing is one lost
-// cascade and the cost of not refusing is two stalled workers.
+// waiting cycle, i.e. producerID already waits (transitively) on consumerID.
+// The caller must hold r.mu. Real chains cannot cycle; this guards malformed
+// input that would otherwise stall both workers until their timers expire.
 func (r *inflightRegistry) wouldCycleLocked(consumerID, producerID string) bool {
 	visited := map[string]bool{consumerID: true}
 	frontier := []string{consumerID}
@@ -491,10 +382,8 @@ func (r *inflightRegistry) wouldCycleLocked(consumerID, producerID string) bool 
 	return false
 }
 
-// idSet returns a snapshot of the in-flight transaction IDs.
-//
-// A copy rather than a live view: callers use it while doing network and
-// database work, and the lock must not be held across either.
+// idSet returns a copy of the in-flight IDs, so callers can use it without
+// holding the lock.
 func (r *inflightRegistry) idSet() map[string]bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -505,20 +394,10 @@ func (r *inflightRegistry) idSet() map[string]bool {
 	return ids
 }
 
-// truncateAtInflight returns the longest prefix of txs that contains no
-// transaction currently in flight.
-//
-// A peer returns a token's chain as it stands on that peer, which can include
-// transactions this fullnode has received but not yet validated. Applying those
-// persists a chain entry the fullnode never checked, and it advances the local
-// tip past what the still-in-flight transaction expects — that transaction then
-// fails its own integrity check with a chain mismatch, caused entirely by a sync
-// performed on someone else's behalf.
-//
-// Cutting to a prefix is what makes this safe. Dropping entries from the middle
-// instead would leave a hole, and applyTokenChainFromSyncForFullNode rejects a
-// chain whose links do not join up, failing the whole sync rather than trimming
-// it. A prefix of a valid chain is always itself a valid chain.
+// truncateAtInflight returns the longest prefix of txs containing no ID in
+// inflight. Applying a pending transaction from a peer would persist it
+// unvalidated and move the tip past what its own validation expects. It cuts a
+// prefix rather than dropping entries, because a chain with a hole is rejected.
 func truncateAtInflight(txs []types.TransactionWithRole, inflight map[string]bool) []types.TransactionWithRole {
 	if len(inflight) == 0 {
 		return txs
@@ -531,14 +410,9 @@ func truncateAtInflight(txs []types.TransactionWithRole, inflight map[string]boo
 	return txs
 }
 
-// GuardAgainstInflight trims a peer's chain response so it cannot carry an
-// entry belonging to a transaction this node already holds — in flight under a
-// worker, or still waiting in txnQueue. Both count: an entry ingested from a
-// peer is unvalidated either way, and the queue is where a transaction spends
-// most of its life on a busy node.
-//
-// Returns txs unchanged when there is nothing to trim, including on a node with
-// no transaction processor, so the non-fullnode sync path is unaffected.
+// GuardAgainstInflight trims a peer's chain at the first transaction this node
+// already holds, in flight or still in txnQueue, and records the truncation.
+// Returns txs unchanged when nothing needs trimming or there is no registry.
 func (p *DynamicTxnProcessor) GuardAgainstInflight(tokenID string, txs []types.TransactionWithRole) []types.TransactionWithRole {
 	if p == nil || p.inflight == nil {
 		return txs
@@ -549,17 +423,14 @@ func (p *DynamicTxnProcessor) GuardAgainstInflight(tokenID string, txs []types.T
 		return txs
 	}
 
-	// Worth an Info line: this is the difference between the fullnode ingesting
-	// an unvalidated sibling and not. A token that truncates on every sync
-	// points at a leaked registry entry rather than genuine concurrency.
+	// A token that truncates on every sync points at a leaked entry.
 	var firstDropped string
 	if len(guarded) < len(txs) {
 		firstDropped = txs[len(guarded)].Tx.ID
 	}
 
-	// Leave the note. What was dropped need not be the current transaction's own
-	// producer — a prefix cut early takes everything after it — so this is the
-	// only point at which the incompleteness is visible at all.
+	// Recorded because the cut can drop entries beyond the current transaction's
+	// own previous transactions; later error classification reads this note.
 	p.truncated.record(tokenID)
 
 	p.host.Log().Info("Chain sync truncated at an in-flight transaction",
@@ -571,17 +442,10 @@ func (p *DynamicTxnProcessor) GuardAgainstInflight(tokenID string, txs []types.T
 	return guarded
 }
 
-// registerInflight records txnEvent as in flight and counts the dependency edges
-// it declares.
-//
-// It returns the entry only when this call created it, in which case the caller
-// owns the entry and must unregister it. It returns nil when the ID was already
-// registered — unregistering in that case would remove another worker's entry.
-//
-// Registration is unconditional on the payload parsing: a transaction whose info
-// cannot be unmarshalled still occupies the pipeline and still has to be visible
-// as in flight. It is registered with no dependencies and will fail validation
-// shortly afterwards on its own merits.
+// registerInflight records txnEvent as in flight and links it into a bundle with
+// its declared previous transactions. It returns the entry only if this call
+// created it (the caller must then unregister it), else nil. A transaction whose
+// info fails to parse is still registered, with no dependencies.
 func (p *DynamicTxnProcessor) registerInflight(txnEvent *models.EventTransaction) *inflightTxn {
 	entry := &inflightTxn{
 		id:    txnEvent.TransactionID,
@@ -600,15 +464,13 @@ func (p *DynamicTxnProcessor) registerInflight(txnEvent *models.EventTransaction
 	}
 
 	if !p.inflight.register(entry) {
-		// Admission is single-winner, so one transaction reaches one worker and
-		// this should be unreachable. Log rather than assume.
+		// Should be unreachable: admission is single-winner.
 		p.host.Log().Warn("registerInflight: transaction is already in flight, leaving the existing entry alone",
 			"txnID", txnEvent.TransactionID)
 		return nil
 	}
 
-	// How often a transaction arrives while a producer it declares is still
-	// being processed is the number that sizes the readiness gate.
+	// Metrics: how often a declared previous transaction is still in flight.
 	if len(entry.deps) > 0 {
 		atomic.AddInt64(&p.depsObserved, int64(len(entry.deps)))
 		for _, dep := range entry.deps {
@@ -619,39 +481,28 @@ func (p *DynamicTxnProcessor) registerInflight(txnEvent *models.EventTransaction
 			}
 		}
 
-		// Forward linkage: this transaction and every producer it names are one
-		// bundle. Every declared producer, not merely the unresolved ones — a
-		// bundle is who relates to whom, which does not change because one
-		// member happened to be persisted before another arrived.
+		// Link every declared previous transaction, not just unresolved ones, so
+		// bundle membership does not depend on persist timing.
 		p.inflight.linkComponent(entry.id, entry.deps)
 	}
 
-	// The reverse edge. This transaction may be the producer that others have
-	// already parked on, which is the arrival order the cascade exists to make
-	// harmless: they are woken when this transaction persists, without ever
-	// having had to know it was coming.
-	//
-	// Nothing has to be done here to release them — the edges were recorded when
-	// they parked — but this is the only point at which the out-of-order case is
-	// visible, and its frequency is what justifies the machinery.
+	// Transactions that arrived first may already be parked on this one; they are
+	// woken when it persists. Counted here because this is where out-of-order
+	// arrival is visible.
 	waiters := p.inflight.waitersOf(entry.id)
 	if len(waiters) > 0 {
 		atomic.AddInt64(&p.revEdges, int64(len(waiters)))
 
-		// Reverse linkage. Redundant as things stand, because a transaction only
-		// ever parks on a producer it declared and its own registration already
-		// merged the two. It is here because that redundancy is a property of
-		// the parking rule rather than of the forest: if parking ever extends
-		// beyond the declared dependency set, this is the direction that would
-		// otherwise be silently lost.
+		// Redundant today (a transaction only parks on a previous transaction it
+		// declared, already linked at its registration); kept in case parking
+		// ever goes beyond declared dependencies.
 		p.inflight.linkComponent(entry.id, waiters)
 
 		p.host.Log().Debug("registerInflight: transactions are already waiting on this one",
 			"txnID", entry.id, "waiters", waiters)
 	}
 
-	// Observation only at this commit. The consumer is the per-bundle sync memo,
-	// which cannot be scoped until this identity exists.
+	// Debug log only.
 	if len(entry.deps) > 0 || len(waiters) > 0 {
 		if members := p.inflight.componentMembers(entry.id); len(members) > 1 {
 			p.host.Log().Debug("registerInflight: transaction belongs to a bundle",
@@ -662,18 +513,8 @@ func (p *DynamicTxnProcessor) registerInflight(txnEvent *models.EventTransaction
 	return entry
 }
 
-// unregisterInflight releases a transaction's registry entry and reports its
-// bundle if that entry was the last of one.
-//
-// The drain is the only moment a bundle is complete — until then more members
-// can still join it, and afterwards the forest has forgotten it — so it is the
-// only place the whole membership can be stated.
-//
-// The membership is logged as-is rather than reduced to an identifier. A derived
-// name would read more compactly and would let one bundle be matched across
-// nodes, but nothing in the pipeline consumes it, and computing one costs work
-// on every drained bundle whether or not the line is ever emitted. The sorted
-// member list already identifies the bundle; it is simply longer.
+// unregisterInflight removes a transaction's registry entry and, if it was the
+// last live member of its bundle, logs and counts the drained bundle.
 func (p *DynamicTxnProcessor) unregisterInflight(id string) {
 	if p == nil || p.inflight == nil {
 		return
@@ -688,16 +529,10 @@ func (p *DynamicTxnProcessor) unregisterInflight(id string) {
 	p.host.Log().Debug("Bundle drained", "size", len(drained), "members", drained)
 }
 
-// releaseWaiters wakes every transaction parked on producerID.
-//
-// Must be called only once producerID's row is committed. A waiter woken any
-// earlier would re-probe, still not find the row, and lose its cascade for
-// nothing — its ready channel closes once and cannot be rearmed.
-//
-// The channel closes happen outside the registry lock. Nothing blocks on a
-// close, but keeping every wake-up outside the lock is what makes the rule
-// "never hold the registry mutex across a database call or a channel operation"
-// simple enough to enforce by inspection.
+// releaseWaiters wakes every transaction whose last pending previous transaction
+// was producerID. Call only after producerID's row is committed: ready closes
+// once, so a waiting transaction woken early would miss the row and not be woken
+// again. Channels are closed outside the registry lock.
 func (p *DynamicTxnProcessor) releaseWaiters(producerID string) {
 	if p == nil || p.inflight == nil {
 		return
@@ -718,18 +553,10 @@ func (p *DynamicTxnProcessor) releaseWaiters(producerID string) {
 		"producerID", producerID, "released", ids)
 }
 
-// failDownstream abandons every transaction that was waiting to build on a
-// producer this node has found invalid.
-//
-// Only ever called for a deterministic verdict. A transient failure — an
-// unreachable peer, a chain that could not be fetched — says nothing about the
-// consumers and must leave them to their own retries; failing them on one of
-// those would destroy the recovery path that is currently the only one they
-// have.
-//
-// Forward only. Nothing that produced this transaction, and nothing that merely
-// shares a bundle with it, is affected, and no transaction already committed is
-// ever reconsidered — a persisted row is final.
+// failDownstream fails and wakes every transaction transitively waiting on
+// producerID, which this node found invalid. Call it only for a validation
+// verdict: a transient error says nothing about the waiting transactions, which
+// must keep their own retries. Persisted transactions are never touched.
 func (p *DynamicTxnProcessor) failDownstream(producerID string, cause error) {
 	if p == nil || p.inflight == nil {
 		return

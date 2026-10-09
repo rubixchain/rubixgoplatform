@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// Dequeue is what ends the queued state. If it did not, a leaked ID would
-// truncate every sync of that token for as long as the node runs.
+// Taking a transaction off the queue must clear its queued mark, or the sync
+// guard would trim every sync of that token for as long as the node runs.
 func TestDequeueClearsTheQueuedEntry(t *testing.T) {
 	p, cancel := newTestProcessor(10, time.Second)
 	defer cancel()
@@ -28,8 +28,7 @@ func TestDequeueClearsTheQueuedEntry(t *testing.T) {
 	}
 }
 
-// A transaction that never reached a worker must leave nothing behind, or the
-// set outlives the queue it shadows.
+// A transaction whose enqueue timed out must not stay marked as queued.
 func TestFailedEnqueueLeavesNothingQueued(t *testing.T) {
 	p, cancel := newTestProcessor(1, 20*time.Millisecond)
 	defer cancel()
@@ -45,8 +44,8 @@ func TestFailedEnqueueLeavesNothingQueued(t *testing.T) {
 	}
 }
 
-// Both readers must be unaffected on a node that never built the set, since the
-// same processor type serves the non-fullnode sync path.
+// The pending checks and the sync guard must work on a processor whose queued
+// set was never built (nil).
 func TestPendingReadsTolerateAnAbsentQueuedSet(t *testing.T) {
 	p := &DynamicTxnProcessor{host: newTestHost(), inflight: newInflightRegistry()}
 

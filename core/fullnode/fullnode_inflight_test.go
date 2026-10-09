@@ -13,8 +13,8 @@ func newInflightEntry(id string, deps ...string) *inflightTxn {
 	return &inflightTxn{id: id, deps: deps, ready: make(chan struct{})}
 }
 
-// eventWithDeps builds an EventTransaction whose info declares one RBT token per
-// dependency, which is the shape registerInflight extracts edges from.
+// eventWithDeps builds an event with one RBT token per previous transaction ID,
+// the shape registerInflight reads dependencies from.
 func eventWithDeps(txnID string, prevTxIDs ...string) *models.EventTransaction {
 	info := &models.TransactionInfo{
 		Initiator: "did-initiator",
@@ -54,9 +54,8 @@ func TestRegistryRegisterAndHas(t *testing.T) {
 	}
 }
 
-// A false return means someone else owns the entry, and the caller must not
-// unregister it. If register wrongly returned true, two workers would both defer
-// unregister and the first to finish would erase the other's tracking.
+// A duplicate must be refused: otherwise two workers would both defer
+// unregister and the first to finish would erase the other's entry.
 func TestRegistryRegisterRejectsDuplicate(t *testing.T) {
 	r := newInflightRegistry()
 	first := newInflightEntry("txn-1")
@@ -92,8 +91,7 @@ func TestRegistryRejectsNilAndEmptyID(t *testing.T) {
 	}
 }
 
-// unregister is deferred unconditionally by the worker, so it has to tolerate
-// being called for an ID that is not present.
+// The worker defers unregister unconditionally, so it must tolerate absent IDs.
 func TestRegistryUnregisterIsSafeAndIdempotent(t *testing.T) {
 	r := newInflightRegistry()
 
@@ -114,9 +112,8 @@ func TestRegistryUnregisterIsSafeAndIdempotent(t *testing.T) {
 	}
 }
 
-// The registry is written by every worker and read by the pubsub callback
-// goroutines, so all four operations have to be safe under contention. Run with
-// -race; a plain map here would be a fatal concurrent map read/write.
+// Workers and the sync guard use the registry concurrently. Run with -race;
+// an unguarded map here would be a fatal concurrent map read/write.
 func TestRegistryIsSafeUnderConcurrency(t *testing.T) {
 	const workers = 50
 
@@ -204,8 +201,7 @@ func TestRegisterInflightExtractsDependencies(t *testing.T) {
 	}
 }
 
-// Genesis entries declare no previous transaction, so a split leg depends on
-// nothing and must not be counted as an edge.
+// Tokens with no previous transaction ID (genesis) add no dependency.
 func TestRegisterInflightGenesisHasNoDependencies(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
@@ -222,9 +218,8 @@ func TestRegisterInflightGenesisHasNoDependencies(t *testing.T) {
 	}
 }
 
-// A payload that cannot be parsed still occupies the pipeline, so it must still
-// be tracked. Registering only parseable transactions would leave a blind spot
-// exactly where malformed input is being handled.
+// An unparseable payload is still being processed, so it must still be
+// registered (with no dependencies).
 func TestRegisterInflightRegistersUnparseablePayload(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
@@ -257,8 +252,8 @@ func TestRegisterInflightNilTransaction(t *testing.T) {
 	}
 }
 
-// Returning nil for an already-registered ID is what stops the second caller
-// from deferring an unregister that would erase the first caller's entry.
+// nil for an already-registered ID stops the second caller from deferring an
+// unregister that would erase the first caller's entry.
 func TestRegisterInflightReturnsNilForDuplicate(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
@@ -274,14 +269,11 @@ func TestRegisterInflightReturnsNilForDuplicate(t *testing.T) {
 	}
 }
 
-// The entry must be released when the worker finishes with the transaction, on
-// every path including failure. dynamicWorker recovers from panics, so a leak
-// here would go unnoticed at runtime — and from the next commit a stale entry
-// permanently truncates chain syncs for that transaction.
-//
-// A nil payload fails inside processSingleTransaction before it touches the
-// wallet, and its error does not match the audit substring that would trigger
-// StoreInvalidTransaction, so the full retry path runs with no database.
+// The entry must be released on every path, including failure: a leaked entry
+// makes the sync guard trim every chain sync of that token.
+// A nil payload fails in processSingleTransaction before touching the wallet,
+// and that error is not a validation verdict, so nothing is stored as invalid
+// and the full retry path runs with no database.
 func TestProcessTxnWithRetryReleasesInflightEntry(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
@@ -310,17 +302,17 @@ func TestProcessTxnWithRetryNilEventRegistersNothing(t *testing.T) {
 	}
 }
 
-// The metric this commit exists to produce: how often a transaction arrives
-// while a producer it names is still being processed.
+// depsInFlight counts how often a transaction arrives while a previous
+// transaction it names is still being processed.
 func TestRegisterInflightCountsDependencyEdges(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
 
-	// The producer is registered and still in flight.
+	// The previous transaction is still in flight.
 	if entry := p.registerInflight(eventWithDeps("txn-S")); entry == nil {
 		t.Fatal("registering the producer returned nil")
 	}
-	// The consumer names it, plus one producer that is not in flight.
+	// The current transaction names it, plus one that is not in flight.
 	if entry := p.registerInflight(eventWithDeps("txn-T", "txn-S", "txn-absent")); entry == nil {
 		t.Fatal("registering the consumer returned nil")
 	}

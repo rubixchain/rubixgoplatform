@@ -10,12 +10,9 @@ import (
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
-// ErrTransactionNotFound reports that a transaction is genuinely absent, as
-// opposed to unreadable. Callers that treat "no such transaction" as a normal
-// outcome must distinguish the two: a database that is merely unreachable
-// otherwise looks identical to one that has never seen the transaction, and
-// acting on that confusion turns an outage into wrong behaviour rather than a
-// visible error. Match with errors.Is.
+// ErrTransactionNotFound reports that a transaction is absent, as opposed to
+// unreadable, so callers do not mistake a database outage for a missing
+// transaction. Match with errors.Is.
 var ErrTransactionNotFound = errors.New("transaction not found")
 
 // CreateTransaction inserts a new transaction into the transactions table.
@@ -152,10 +149,9 @@ func (w *Wallet) GetGenesisTransactionIdByTokenId(tokenID string, isFullNode boo
 	return genesisTxnId, nil
 }
 
-// HasTokenChainRow reports whether a chain row already exists for the
-// (tokenID, transactionID) pair, at any position. It is the read-only twin of
-// findFullNodeTokenChainRowByTokenIDTx, which PersistFullNodeTransaction uses
-// to stay idempotent across duplicate pubsub deliveries.
+// HasTokenChainRow reports whether a chain row exists for (tokenID,
+// transactionID) at any position; the same match PersistFullNodeTransaction uses
+// to stay idempotent.
 func (w *Wallet) HasTokenChainRow(tokenID string, transactionID string, isFullNode bool) (bool, error) {
 	query := `SELECT EXISTS (
 		SELECT 1 FROM tokenchain WHERE token_id = $1 AND transaction_id = $2
@@ -173,14 +169,9 @@ func (w *Wallet) HasTokenChainRow(tokenID string, transactionID string, isFullNo
 }
 
 // GetGenesisRowTransactionIdByTokenId returns the transaction id of the token's
-// genesis chain row, or an empty string when the token has no genesis row
-// locally. Unlike GetGenesisTransactionIdByTokenId it does not error when the
-// token is absent, and it does not go through the index table.
-//
-// Genesis is identified by the absence of a previous_transaction_id rather than
-// by position 0: applyTokenChainFromSyncForFullNode numbers rows relative to the
-// local chain, so a chain synced from a peer that did not start at the mint can
-// hold a non-genesis row at position 0.
+// genesis row (empty previous_transaction_id), or "" if there is none locally.
+// Unlike GetGenesisTransactionIdByTokenId it does not error on a missing token
+// and does not go through the index table.
 func (w *Wallet) GetGenesisRowTransactionIdByTokenId(tokenID string, isFullNode bool) (string, error) {
 	query := `SELECT transaction_id
 		FROM tokenchain

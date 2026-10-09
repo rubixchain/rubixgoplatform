@@ -2,35 +2,22 @@ package fullnode
 
 import "time"
 
-// bundleConfig holds the knobs for the dependency-aware ingest path.
-//
-// The behaviour is always on: there is no switch to turn it off, so the defaults
-// have to be safe rather than merely reasonable. Holding a transaction costs a
-// worker for the duration of the wait, and the pool is only max(1, NumCPU/2)
-// workers to begin with, so they are chosen to make the common case cost nothing
-// and the uncommon case cost a second.
-//
-// Every wait is bounded and every expiry falls through to the behaviour that
-// existed before the gate, so the worst case is the old behaviour plus the wait.
+// bundleConfig holds the settings for the dependency-aware ingest path, which is
+// always on. A waiting transaction occupies a worker, so waits are short, and
+// every expiry falls through to normal validate-and-sync.
 type bundleConfig struct {
-	// inflightWait is how long to wait for a producer this node is demonstrably
-	// still processing. Worth waiting for: it is going to resolve.
+	// inflightWait is how long to wait for a previous transaction this node
+	// holds (queued or in flight); it is expected to be persisted soon.
 	inflightWait time.Duration
 
-	// unknownWait is how long to wait for a producer that is simply not here.
-	// Deliberately much shorter — a fullnode that joined after network genesis
-	// has legitimately never seen most producers, and treating those the same as
-	// an in-flight one would add the full wait to every cold token.
+	// unknownWait is how long to wait for a previous transaction this node does
+	// not hold. Much shorter, because a fullnode that joined late may never see
+	// it, and a long wait would delay every such token.
 	unknownWait time.Duration
 
 	// syncMemoTTL is how long a successful chain sync is remembered, so a later
-	// member of the same bundle does not repeat it.
-	//
-	// Short on purpose. The memo can only ever suppress a sync that would have
-	// been redundant, and the integrity check re-reads every token from the
-	// database afterwards regardless, so a wrong suppression fails loudly rather
-	// than persisting bad data. A few seconds covers a bundle arriving together
-	// without keeping opinions about a chain long enough for them to go stale.
+	// transaction in the same bundle does not repeat it. Short because a wrong
+	// skip can turn into a verdict (see fullnode_syncmemo.go).
 	syncMemoTTL time.Duration
 }
 

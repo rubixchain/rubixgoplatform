@@ -8,9 +8,8 @@ import (
 
 // Tests for the stale-entry sweep and the bundle drain.
 
-// The drain is the only moment a bundle is complete, so what it reports has to
-// be the whole membership — and sorted, since it is the sole record of the
-// bundle and arrival order decides nothing about which transactions were in it.
+// The drain report is the only record of a bundle's full membership, so it must
+// be complete and sorted (arrival order carries no meaning).
 func TestDrainReportsTheWholeMembershipSorted(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
@@ -28,8 +27,8 @@ func TestDrainReportsTheWholeMembershipSorted(t *testing.T) {
 	}
 }
 
-// Only the last member out drains the bundle, so only one label is emitted per
-// bundle however many members it had.
+// Only the last member to leave drains the bundle, so each bundle is reported
+// once.
 func TestUnregisterReportsTheDrainOnlyOnce(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
@@ -45,8 +44,7 @@ func TestUnregisterReportsTheDrainOnlyOnce(t *testing.T) {
 	}
 }
 
-// A transaction that relates to nothing has no bundle, so there is nothing to
-// name when it leaves.
+// A transaction that relates to nothing has no bundle to report.
 func TestUnregisterReportsNoDrainWithoutABundle(t *testing.T) {
 	r := newInflightRegistry()
 	r.register(newInflightEntry("txn-alone"))
@@ -59,8 +57,8 @@ func TestUnregisterReportsNoDrainWithoutABundle(t *testing.T) {
 	}
 }
 
-// The sweep is a backstop for a bug, so the case that matters most is that it
-// leaves working transactions alone.
+// The sweep is a backstop for leaks, so above all it must leave working
+// transactions alone.
 func TestSweepStaleLeavesRecentEntriesAlone(t *testing.T) {
 	r := newInflightRegistry()
 	r.register(newInflightEntry("txn-working"))
@@ -76,8 +74,8 @@ func TestSweepStaleLeavesRecentEntriesAlone(t *testing.T) {
 	}
 }
 
-// An entry that outlived any plausible amount of work is a leak, and leaving it
-// would silently truncate every chain sync for its token.
+// An entry that outlives any plausible work is a leak; left in place, the sync
+// guard would keep truncating every chain sync for its token.
 func TestSweepStaleRemovesLeakedEntries(t *testing.T) {
 	r := newInflightRegistry()
 
@@ -97,15 +95,14 @@ func TestSweepStaleRemovesLeakedEntries(t *testing.T) {
 	if !r.has("txn-working") {
 		t.Error("the sweep took a healthy entry with it")
 	}
-	// The sync guard reads this set; a leak that survived here would keep
-	// truncating.
+	// The sync guard reads this set, so a surviving ID would keep truncating.
 	if r.idSet()["txn-leaked"] {
 		t.Error("the swept ID is still in the guard set")
 	}
 }
 
-// A swept producer takes its waiter list with it. The waiters keep their own
-// timers, which is the same outcome as a producer that never arrived.
+// Sweeping removes the entries' waiter lists and bundle too. Waiters fall back
+// to their own timers, as if the previous transaction never arrived.
 func TestSweepStaleClearsWaitersAndComponents(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()

@@ -11,10 +11,8 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
-// testHost stands in for the node. It supplies the discard logger the code under
-// test writes to; every other method fails, because nothing these tests exercise
-// is supposed to reach the node around the pipeline. This replaces the newTestCore
-// helper, which existed for the same reason: to supply a logger and nothing else.
+// testHost stands in for the node in unit tests. It supplies a discard logger;
+// node-facing methods fail or panic, since these tests must not reach the node.
 type testHost struct{}
 
 var _ Host = (*testHost)(nil)

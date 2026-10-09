@@ -181,19 +181,11 @@ func (c *Core) verifyGenesisSignature(signerDID string, info *models.Transaction
 	return util.VerifySignature(dc, info, signature)
 }
 
-// SyncBurntTokenChainFromPeer fetches tokenID's chain from peerDID and applies it
-// locally ONLY if that chain is terminal — that is, its last entry is a burn.
-//
-// This is the narrow, safe half of the chain sync that ValidateMinterAllowlist
-// relied on before v1.0.5. The hazard that removed the general path — a sibling
-// transaction still being validated elsewhere gets pulled in and persisted before
-// it is actually valid — is avoided by requiring a terminal chain and, on a
-// fullnode, skipping caching while any chain entry is pending locally. A peer
-// may already report a burn that this fullnode has not finished validating.
-//
-// A non-terminal chain is left unapplied and is NOT an error. The caller has
-// already resolved what it needed from the genesis-only fetch; persisting the
-// chain is purely an optimisation so the next validation reads it locally.
+// SyncBurntTokenChainFromPeer caches tokenID's chain from peerDID only if it is
+// terminal (ends in a burn); a non-terminal chain is skipped without error. It is
+// the safe remnant of the general chain sync removed in v1.0.5, which persisted
+// transactions before they were validated; a fullnode also skips any chain
+// holding a transaction it is still validating.
 func (c *Core) SyncBurntTokenChainFromPeer(peerDID, tokenID string) error {
 	if peerDID == "" || tokenID == "" {
 		return fmt.Errorf("SyncBurntTokenChainFromPeer: peer DID and token ID are both required")
@@ -231,8 +223,8 @@ func (c *Core) SyncBurntTokenChainFromPeer(peerDID, tokenID string) error {
 	}
 
 	if c.fullNode {
-		// Caching is optional. Do not ingest a pending transaction or cache a
-		// non-terminal prefix produced by the ordering guard.
+		// Skip if the guard trimmed anything: the chain holds a pending
+		// transaction, and the trimmed prefix would no longer be terminal.
 		if len(c.txnProcessor.GuardAgainstInflight(tokenID, txs)) != len(txs) {
 			return nil
 		}
@@ -303,8 +295,7 @@ func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, 
 		"message", resp.Message,
 	)
 
-	// Apply failures on the fullnode path, collected rather than returned at the
-	// first one so every token still gets its chance. See the aggregate below.
+	// Fullnode apply failures, collected so every token is still attempted.
 	var applyErrs []string
 
 	for tokenID, txs := range resp.Data {
@@ -314,12 +305,9 @@ func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, 
 		)
 		prevTxID := prevTxIDs[tokenID] // empty string if not in map — applyTokenChainFromSync handles this
 		if isFullnode {
-			// The peer returns the chain as it stands on the peer, which can
-			// include transactions this fullnode has received but not yet
-			// validated. Persisting one of those advances the local tip past
-			// what that transaction itself expects, and it then fails its own
-			// integrity check because of a sync run for a different
-			// transaction. Trim to the prefix that predates anything in flight.
+			// The peer's chain may include transactions this fullnode is still
+			// validating; persisting one would move the tip past what it expects
+			// and fail its own check. Keep only the prefix before them.
 			txs = c.txnProcessor.GuardAgainstInflight(tokenID, txs)
 			if err := c.applyTokenChainFromSyncForFullNode(tokenID, txs, prevTxID); err != nil {
 				c.log.Error("SyncTransactionChainsFromPeer: fullnode apply failed", "tokenID", tokenID, "err", err)
@@ -336,21 +324,10 @@ func (c *Core) SyncTransactionChainsFromPeer(peerDID string, tokenIDs []string, 
 		}
 	}
 
-	// A chain that did not apply is not a sync that happened. Reporting nil here
-	// told the caller the opposite, and two things downstream believed it:
-	// syncChainsOnce recorded the token in the sync-once memo, so the retry that
-	// followed skipped the fetch it needed; and the integrity check's phase 3
-	// then found the chain still short and reported a plain mismatch, which
-	// classifyValidationFailure reads as this node's own verdict on the
-	// transaction — dead-lettering it, and everything downstream of it, for a
-	// peer whose chain forked or arrived out of canonical order.
-	//
-	// Returning the error instead is enough to fix both: syncChainsOnce tags it
-	// transient and leaves the memo untouched, so the retry genuinely re-fetches.
-	//
-	// Fullnode path only. The non-fullnode branch above keeps its swallow-and-log
-	// behaviour, so the quorum and NFT/smart-contract callers are unaffected —
-	// they have no retry ladder to hand this to and no memo to keep honest.
+	// Fullnode only: returning nil would let syncChainsOnce mark the sync memo
+	// (so the retry skips the fetch) and turn the resulting chain mismatch into
+	// a validation verdict. As an error it is treated as transient and retried.
+	// The non-fullnode path still logs and continues.
 	if len(applyErrs) > 0 {
 		return fmt.Errorf("SyncTransactionChainsFromPeer: chain apply failed for %d of %d token(s) from %s [%s]",
 			len(applyErrs), len(resp.Data), peerDID, strings.Join(applyErrs, "; "))

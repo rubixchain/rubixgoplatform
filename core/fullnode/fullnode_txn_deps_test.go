@@ -7,8 +7,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
-// tok is a terse constructor for the (tokenID, previousTransactionID) pairs that
-// these tests are made of.
+// tok builds a TokenInfo from a token ID and its previous transaction ID.
 func tok(tokenID, prevTxID string) *models.TokenInfo {
 	return &models.TokenInfo{TokenID: tokenID, PreviousTransactionID: prevTxID}
 }
@@ -63,8 +62,8 @@ func TestTransactionDependencies(t *testing.T) {
 			want: []string{"txn-P"},
 		},
 		{
-			// The split leg of a transfer: new children at genesis, burnt parent
-			// carrying the only real dependency.
+			// A split: the new child tokens have no previous transaction; only
+			// the parent token in CommittedTokens adds a dependency.
 			name: "split shape - genesis children plus burnt parent",
 			info: &models.TransactionInfo{
 				Tokens: &models.TransactionTokens{
@@ -135,8 +134,8 @@ func TestTransactionDependencies(t *testing.T) {
 			want: []string{"txn-S", "txn-Q1"},
 		},
 		{
-			// CommittedTokens live outside the `Tokens != nil` guard here, unlike
-			// wallet.collectFullNodeTokenInputs. See forEachTokenInfo's doc comment.
+			// Unlike wallet.collectFullNodeTokenInputs, CommittedTokens are walked
+			// even when Tokens is nil (see forEachTokenInfo).
 			name: "committed tokens are found even when Tokens is nil",
 			info: &models.TransactionInfo{
 				CommittedTokens: []*models.TokenInfo{tok("parent", "txn-P")},
@@ -181,8 +180,8 @@ func TestTransactionTokenIDs(t *testing.T) {
 			want: nil,
 		},
 		{
-			// The key difference from transactionDependencies: a genesis token has
-			// no dependency but is still a token this transaction affects.
+			// Unlike transactionDependencies, a genesis token is included: it has
+			// no previous transaction but this transaction still touches it.
 			name: "genesis tokens are included",
 			info: &models.TransactionInfo{
 				Tokens: &models.TransactionTokens{
@@ -247,8 +246,8 @@ func TestTransactionTokenIDs(t *testing.T) {
 	}
 }
 
-// bigTxnInfo is a transaction that populates every token list the traversal
-// walks, including committed and quorum pledge tokens.
+// bigTxnInfo fills every token list the traversal walks, including committed
+// and quorum pledge tokens.
 func bigTxnInfo() *models.TransactionInfo {
 	info := &models.TransactionInfo{
 		Tokens:          &models.TransactionTokens{},
@@ -269,8 +268,8 @@ func bigTxnInfo() *models.TransactionInfo {
 	return info
 }
 
-// The helpers must not mutate the transaction they are handed — they run on the
-// pubsub ingest path, where the same event is passed to validation afterwards.
+// The helpers must not mutate their input: the same transaction is validated
+// afterwards.
 func TestTraversalDoesNotMutateInput(t *testing.T) {
 	info := bigTxnInfo()
 	before := reflect.DeepEqual(info, bigTxnInfo())

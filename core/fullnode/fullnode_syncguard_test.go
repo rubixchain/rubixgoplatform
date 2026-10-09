@@ -53,17 +53,16 @@ func TestTruncateAtInflight(t *testing.T) {
 			want:     []string{"A", "B", "C"},
 		},
 		{
-			// The common case: the newest entry is the sibling still being
-			// validated, so the tail is dropped and the settled history applied.
+			// Common case: the newest entry is still being validated locally,
+			// so only the settled history before it is applied.
 			name:     "in-flight at the tail keeps the prefix",
 			remote:   []string{"A", "B", "C"},
 			inflight: []string{"C"},
 			want:     []string{"A", "B"},
 		},
 		{
-			// The case that makes truncation necessary rather than filtering:
-			// removing B alone would leave [A, C] where C links back to B, which
-			// the apply path rejects outright as a broken chain.
+			// Why we cut rather than filter: dropping B alone would leave [A, C]
+			// with C linking to B, which the apply path rejects as broken.
 			name:     "in-flight in the middle drops it and everything after",
 			remote:   []string{"A", "B", "C", "D"},
 			inflight: []string{"B"},
@@ -99,9 +98,8 @@ func TestTruncateAtInflight(t *testing.T) {
 	}
 }
 
-// The result is only ever a prefix, so every retained entry still links to its
-// predecessor. This is the property the apply path's canonical-order check
-// depends on, and it must hold for any input.
+// The result must always be a prefix, so every kept entry still links to the
+// one before it, which the apply path requires.
 func TestTruncateAtInflightAlwaysReturnsAPrefix(t *testing.T) {
 	remote := chain("A", "B", "C", "D", "E")
 
@@ -142,8 +140,8 @@ func TestRegistryIDSetSnapshot(t *testing.T) {
 		t.Fatalf("idSet() = %v, want txn-1 and txn-2", set)
 	}
 
-	// A snapshot, not a live view: it is used while the caller does network and
-	// database work, and must not change underneath it.
+	// A copy, not a live view: the guard holds it across network and database
+	// work, and it must not change underneath it.
 	r.unregister("txn-1")
 	r.register(newInflightEntry("txn-3"))
 	if !set["txn-1"] || set["txn-3"] {
@@ -155,7 +153,7 @@ func TestGuardAgainstInflightTrimsInFlightTail(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
 
-	// "B" is a sibling this node is still processing.
+	// "B" is still being processed on this node.
 	p.inflight.register(newInflightEntry("B"))
 
 	got := p.GuardAgainstInflight("token-X", chain("A", "B", "C"))
@@ -175,9 +173,8 @@ func TestGuardAgainstInflightPassesThroughWhenNothingInFlight(t *testing.T) {
 	}
 }
 
-// SyncTransactionChainsFromPeer is shared with the quorum path, where there is
-// no transaction processor at all. The guard must be inert there rather than
-// panicking.
+// With no transaction processor (nil) the guard must return the chain unchanged
+// rather than panic.
 func TestGuardAgainstInflightIsInertWithoutAProcessor(t *testing.T) {
 	var p *DynamicTxnProcessor
 

@@ -7,17 +7,13 @@ import (
 	"time"
 )
 
-// Tests for the cascade: parking a consumer on its producer, releasing it when
-// that producer commits, and the guards that stop either from going wrong.
-//
-// The distinction that matters throughout is between the two arrival orders. A
-// producer that arrives first is found by the consumer's readiness probe and no
-// parking happens at all. A producer that arrives second has to be able to find
-// consumers that parked before it existed, which is the reverse edge.
+// Tests for parking a waiting transaction on its previous transaction and waking
+// it when that one is persisted. A previous transaction that arrives first is
+// found by the probe, so nothing parks; one that arrives second must find the
+// transactions that parked before it existed (the reverse edge).
 
-// cascadeCore wires a Core whose dependency probe reports only the given IDs as
-// persisted, with tiers long enough that a test failing to release shows up as a
-// timeout rather than as a pass.
+// cascadeCore reports only the given IDs as persisted. The 2s waits make a
+// missed wake-up show up as a full timeout rather than a pass.
 func cascadeCore(t *testing.T, resolved ...string) (*DynamicTxnProcessor, func()) {
 	t.Helper()
 	cfg := awaitTestConfig()
@@ -62,9 +58,8 @@ func TestParkRejectsDegenerateEdges(t *testing.T) {
 	}
 }
 
-// A second park on the same producer is refused rather than counted, because the
-// release that follows decrements once. Counting it twice would leave the waiter
-// permanently one short of zero and it would never be woken.
+// A duplicate park is refused, not counted: release decrements once, so a
+// double count would leave the waiter never woken.
 func TestParkRefusesDuplicateEdge(t *testing.T) {
 	r := newInflightRegistry()
 	consumer := newInflightEntry("txn-T", "txn-S")
@@ -80,9 +75,8 @@ func TestParkRefusesDuplicateEdge(t *testing.T) {
 	}
 }
 
-// Past the cap the edge is refused and the transaction falls back to its timer,
-// which is the behaviour that existed before the cascade. Growing the list
-// without limit is what this prevents.
+// Past the per-transaction fan-out cap (maxWaiters), park is refused and the
+// waiter falls back to its timer instead of growing the list without limit.
 func TestParkEnforcesFanOutCap(t *testing.T) {
 	r := newInflightRegistry()
 	r.maxWaiters = 3
@@ -106,9 +100,8 @@ func TestParkEnforcesFanOutCap(t *testing.T) {
 	}
 }
 
-// A cycle cannot arise from a real chain — a transaction's producers precede it
-// — but a malformed pair claiming to produce each other would park both until
-// their timers expired. Refusing the closing edge keeps at least one of them
+// A real chain cannot form a cycle, but two malformed transactions naming each
+// other would both wait out their timers. Refusing the closing edge keeps one
 // moving.
 func TestParkRefusesEdgeThatWouldCycle(t *testing.T) {
 	r := newInflightRegistry()
@@ -126,9 +119,8 @@ func TestParkRefusesEdgeThatWouldCycle(t *testing.T) {
 	}
 }
 
-// The guard has to follow the whole chain, not just the immediate edge: A waits
-// on B, B waits on C, and C waiting on A is just as stuck for being three hops
-// around.
+// The cycle check follows the whole chain: A on B, B on C, then C on A is a
+// three-hop cycle.
 func TestParkRefusesTransitiveCycle(t *testing.T) {
 	r := newInflightRegistry()
 	a := newInflightEntry("txn-A", "txn-B")
@@ -146,9 +138,8 @@ func TestParkRefusesTransitiveCycle(t *testing.T) {
 	}
 }
 
-// A diamond is not a cycle. Two transactions waiting on the same producer, and a
-// third waiting on both of them, is an ordinary bundle shape and the guard must
-// not mistake the repeated visit for a loop.
+// A diamond (two transactions on one previous transaction, a third on both) is
+// a normal bundle shape, not a cycle.
 func TestParkAllowsDiamond(t *testing.T) {
 	r := newInflightRegistry()
 	left := newInflightEntry("txn-left", "txn-S")
@@ -180,9 +171,8 @@ func TestReleaseFreesWaiters(t *testing.T) {
 	}
 }
 
-// Only the last producer frees a consumer. A transfer spending two splits has to
-// see both on disk; woken after the first, it would validate against a chain
-// that is still incomplete and sync the rest from a peer anyway.
+// Only the last previous transaction frees the waiter: woken early, a transfer
+// spending two splits would validate against an incomplete chain.
 func TestReleaseWaitsForEveryProducer(t *testing.T) {
 	r := newInflightRegistry()
 	consumer := newInflightEntry("txn-T", "txn-S1", "txn-S2")
@@ -197,9 +187,8 @@ func TestReleaseWaitsForEveryProducer(t *testing.T) {
 	}
 }
 
-// release is driven by whatever persists, so it is called for transactions with
-// no waiters constantly, and can be called twice for the same producer if a
-// re-delivery is validated again.
+// release runs for every persisted transaction, usually with no waiters, and
+// may run twice if a re-delivery is validated again.
 func TestReleaseIsSafeWithoutWaiters(t *testing.T) {
 	r := newInflightRegistry()
 
@@ -218,8 +207,8 @@ func TestReleaseIsSafeWithoutWaiters(t *testing.T) {
 	}
 }
 
-// Both a release and a timeout can reach the same entry, so the close has to
-// survive being asked for twice. A plain close() would panic here.
+// A release and a failure propagation can both close the same entry, so
+// markReady must survive a second call; a plain close() would panic.
 func TestMarkReadyIsIdempotent(t *testing.T) {
 	entry := newInflightEntry("txn-T")
 
@@ -233,8 +222,8 @@ func TestMarkReadyIsIdempotent(t *testing.T) {
 	}
 }
 
-// unpark is deferred by every waiter over the set it parked on, so it runs
-// routinely for edges that release has already taken away.
+// Every waiter defers unpark over all its edges, so it routinely runs for edges
+// release already removed.
 func TestUnparkIsIdempotent(t *testing.T) {
 	r := newInflightRegistry()
 	consumer := newInflightEntry("txn-T", "txn-S1", "txn-S2")
@@ -254,9 +243,8 @@ func TestUnparkIsIdempotent(t *testing.T) {
 	}
 }
 
-// A producer with several waiters must lose only the one that unparks. Removing
-// from the middle of the list is where an index slip would silently drop
-// somebody else's edge.
+// Unparking from the middle of a waiter list must remove only that waiter's
+// edge.
 func TestUnparkRemovesOnlyItsOwnEdge(t *testing.T) {
 	r := newInflightRegistry()
 	first := newInflightEntry("txn-1", "txn-S")
@@ -280,8 +268,8 @@ func TestUnparkRemovesOnlyItsOwnEdge(t *testing.T) {
 	}
 }
 
-// Producer first: the ordinary case. The consumer's probe finds the row, so it
-// never parks and never waits.
+// Previous transaction first (the common case): the probe finds it on disk, so
+// nothing parks or waits.
 func TestAwaitDependenciesProducerAlreadyPersistedDoesNotPark(t *testing.T) {
 	p, cancel := cascadeCore(t, "txn-S")
 	defer cancel()
@@ -298,9 +286,9 @@ func TestAwaitDependenciesProducerAlreadyPersistedDoesNotPark(t *testing.T) {
 	}
 }
 
-// Consumer first, the reverse edge: the transfer arrives before the split it
-// spends, parks, and is woken by the split's persist rather than by its own
-// timer. Without the cascade this costs the full wait and then a peer sync.
+// Waiting transaction first: it parks and is woken by the previous
+// transaction's persist, not its timer. Otherwise it would wait the full
+// timeout and then sync from a peer.
 func TestAwaitDependenciesWokenByProducerPersist(t *testing.T) {
 	p, cancel := cascadeCore(t)
 	defer cancel()
@@ -332,8 +320,8 @@ func TestAwaitDependenciesWokenByProducerPersist(t *testing.T) {
 	}
 }
 
-// The reverse edge has to survive the producer being registered in between: the
-// split arrives, is seen to have a waiter, and only wakes it once it persists.
+// The edge survives the previous transaction registering in between:
+// registration counts the waiter (revEdges), and only the persist wakes it.
 func TestAwaitDependenciesReverseEdgeSurvivesProducerRegistration(t *testing.T) {
 	p, cancel := cascadeCore(t)
 	defer cancel()
@@ -356,8 +344,8 @@ func TestAwaitDependenciesReverseEdgeSurvivesProducerRegistration(t *testing.T) 
 	}
 }
 
-// A consumer waiting on two producers resumes on the second persist, not the
-// first.
+// A transaction waiting on two previous transactions resumes on the second
+// persist, not the first.
 func TestAwaitDependenciesWaitsForEveryProducer(t *testing.T) {
 	p, cancel := cascadeCore(t)
 	defer cancel()
@@ -383,8 +371,8 @@ func TestAwaitDependenciesWaitsForEveryProducer(t *testing.T) {
 	}
 }
 
-// A producer that never arrives leaves the waiter to its timer, which is exactly
-// the pre-cascade behaviour, and the edge must not outlive the wait.
+// A previous transaction that never arrives leaves the waiter to its timer, and
+// the edge must not outlive the wait.
 func TestAwaitDependenciesTimesOutWhenProducerNeverArrives(t *testing.T) {
 	p, cancel := newAwaitCore(t, awaitTestConfig(), resolvedSet())
 	defer cancel()
@@ -404,9 +392,8 @@ func TestAwaitDependenciesTimesOutWhenProducerNeverArrives(t *testing.T) {
 	}
 }
 
-// A cycle must not park either side indefinitely: the first edge is recorded,
-// the closing one is refused, and the refused transaction proceeds without
-// waiting at all.
+// The edge that would close a cycle is refused, and that transaction proceeds
+// without waiting.
 func TestAwaitDependenciesProceedsRatherThanClosingACycle(t *testing.T) {
 	p, cancel := cascadeCore(t)
 	defer cancel()
@@ -425,15 +412,13 @@ func TestAwaitDependenciesProceedsRatherThanClosingACycle(t *testing.T) {
 	}
 }
 
-// releaseWaiters is called from processSingleTransaction on a Core that may have
-// no processor at all in a non-fullnode configuration.
+// releaseWaiters must tolerate a nil processor.
 func TestReleaseWaitersToleratesNoProcessor(t *testing.T) {
 	(*DynamicTxnProcessor)(nil).releaseWaiters("txn-S")
 }
 
-// Fifty pairs racing, each consumer parking while its own producer releases. Run
-// with -race: the registry is the only thing serialising park, release and
-// unpark, and the whole design rests on that being true.
+// Fifty pairs race a park against its previous transaction's release. Run with
+// -race: the registry mutex alone serialises park, release and unpark.
 func TestCascadeIsSafeUnderConcurrency(t *testing.T) {
 	const pairs = 50
 

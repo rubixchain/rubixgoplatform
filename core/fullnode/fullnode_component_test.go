@@ -7,23 +7,18 @@ import (
 	"testing"
 )
 
-// Tests for the union-find forest that turns the cascade's pairwise edges into
-// bundles.
-//
-// Two properties carry the whole thing. Membership must not depend on arrival
-// order, since a bundle identity that changed with delivery timing would not be
-// an identity. And the forest must empty itself, since it is the one map here
-// with no per-entry removal point: an ID that never arrives is only ever a name
-// in it.
+// Tests for the union-find forest that groups related transactions into
+// bundles. The bundle's root keys the sync memo (bundleScope), so membership must
+// not depend on arrival order, and the forest must empty itself once a bundle
+// drains, including IDs that never arrived.
 
-// bundleEvents returns a three-member bundle: two splits and the transfer that
-// spends both. This is the shape a transfer with one quorum pledge produces.
+// bundleEvents names a three-member bundle: two splits and the transfer that
+// spends both.
 func bundleEvents() []string {
 	return []string{"txn-S", "txn-Q", "txn-T"}
 }
 
-// registerBundle registers the three members in the given order and returns the
-// core so the caller can inspect the forest.
+// registerBundle registers the bundle's members in the given order.
 func registerBundle(t *testing.T, order []string) *DynamicTxnProcessor {
 	t.Helper()
 	p, cancel := newTestProcessor(10, 0)
@@ -32,7 +27,7 @@ func registerBundle(t *testing.T, order []string) *DynamicTxnProcessor {
 	for _, id := range order {
 		event := eventWithDeps(id)
 		if id == "txn-T" {
-			// Only the transfer declares edges; the splits are genesis legs.
+			// Only the transfer declares previous transactions.
 			event = eventWithDeps("txn-T", "txn-S", "txn-Q")
 		}
 		if entry := p.registerInflight(event); entry == nil {
@@ -59,10 +54,8 @@ func permutations(ids []string) [][]string {
 	return out
 }
 
-// The property that matters: the bundle is the same set however its members
-// arrive. Only the transfer declares the edges, so in half of these orders the
-// splits are already registered when the edges appear and in the other half they
-// are not.
+// Membership must be the same in every arrival order, whether the splits
+// register before or after the transfer that links them.
 func TestComponentIsIndependentOfArrivalOrder(t *testing.T) {
 	want := []string{"txn-Q", "txn-S", "txn-T"} // sorted
 
@@ -80,9 +73,8 @@ func TestComponentIsIndependentOfArrivalOrder(t *testing.T) {
 	}
 }
 
-// The forest must empty itself. Nothing else in the process would notice if it
-// did not: the map is not consulted on any hot path and its growth would show up
-// only as memory.
+// The forest must empty itself once a bundle drains; otherwise it would only
+// show up as growing memory.
 func TestComponentPrunedWhenBundleDrains(t *testing.T) {
 	p := registerBundle(t, bundleEvents())
 
@@ -102,9 +94,8 @@ func TestComponentPrunedWhenBundleDrains(t *testing.T) {
 	}
 }
 
-// A component is dropped whole and only once nothing in it is left. Dropping it
-// while a member is still working would lose the identity that member's own
-// bundle-scoped work depends on.
+// A bundle is kept until its last member leaves; dropping it early would change
+// the sync-memo key of a member still working.
 func TestComponentSurvivesWhileAnyMemberIsInFlight(t *testing.T) {
 	p := registerBundle(t, bundleEvents())
 
@@ -125,9 +116,8 @@ func TestComponentSurvivesWhileAnyMemberIsInFlight(t *testing.T) {
 	}
 }
 
-// A producer that is named but never arrives is only ever a name in the forest.
-// It has no entry in byID to be removed, so if the drain check waited for one it
-// would never fire.
+// A named previous transaction that never arrives has no byID entry, so the
+// drain must not wait for it.
 func TestComponentPrunedWhenNamedProducerNeverArrives(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
@@ -146,8 +136,7 @@ func TestComponentPrunedWhenNamedProducerNeverArrives(t *testing.T) {
 	}
 }
 
-// The overwhelming majority of transactions relate to nothing, and must not pay
-// for the forest or leave anything in it.
+// Most transactions relate to nothing and must not enter the forest.
 func TestComponentNotCreatedForUnrelatedTransaction(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
@@ -164,8 +153,8 @@ func TestComponentNotCreatedForUnrelatedTransaction(t *testing.T) {
 	}
 }
 
-// Two bundles that share no member stay two bundles. Merging them would hand the
-// per-bundle work downstream a scope wider than the thing it is scoping.
+// Bundles that share no member stay separate; merging them would widen the
+// sync-memo scope.
 func TestComponentsStaySeparate(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
@@ -184,8 +173,8 @@ func TestComponentsStaySeparate(t *testing.T) {
 	}
 }
 
-// Transactions that share a producer are one bundle, and draining one of them
-// must not take the other's identity with it.
+// Transactions sharing a previous transaction are one bundle, and one leaving
+// must not change the other's membership.
 func TestComponentsMergeThroughASharedProducer(t *testing.T) {
 	p, cancel := newTestProcessor(10, 0)
 	defer cancel()
@@ -228,8 +217,7 @@ func TestComponentChainCollapses(t *testing.T) {
 	}
 }
 
-// The caller gets a copy. Handing out the registry's own slice would let a
-// caller reading a bundle corrupt it for everybody else.
+// componentMembers returns a copy, so a caller cannot corrupt the registry.
 func TestComponentMembersReturnsACopy(t *testing.T) {
 	r := newInflightRegistry()
 	r.linkComponent("txn-T", []string{"txn-S"})
@@ -258,9 +246,8 @@ func TestLinkComponentIgnoresDegenerateInput(t *testing.T) {
 	}
 }
 
-// The forest is merged by the pubsub callback goroutines and read while workers
-// are draining. Path compression writes on what looks like a read, so a query
-// racing a merge is a write racing a write. Run with -race.
+// Workers link and query the forest concurrently, and path compression writes
+// during a query. Run with -race.
 func TestComponentsAreSafeUnderConcurrency(t *testing.T) {
 	const bundles = 50
 
@@ -273,12 +260,12 @@ func TestComponentsAreSafeUnderConcurrency(t *testing.T) {
 		transfer := fmt.Sprintf("txn-T%02d", i)
 		split := fmt.Sprintf("txn-S%02d", i)
 
-		go func() { // arrival: merge the bundle
+		go func() { // link the bundle
 			defer done.Done()
 			start.Wait()
 			r.linkComponent(transfer, []string{split})
 		}()
-		go func() { // observer: query it, compressing paths as it goes
+		go func() { // query it, compressing paths
 			defer done.Done()
 			start.Wait()
 			_ = r.componentMembers(transfer)
@@ -300,8 +287,8 @@ func TestComponentsAreSafeUnderConcurrency(t *testing.T) {
 	}
 }
 
-// The whole pipeline: a bundle registers, parks, cascades and drains, and leaves
-// nothing behind in any of the four maps.
+// After register, park, wake-up and drain, byID, waitingOn and the forest must
+// all be empty.
 func TestComponentDrainsAfterAFullCascade(t *testing.T) {
 	p, cancel := cascadeCore(t)
 	defer cancel()

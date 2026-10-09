@@ -9,23 +9,15 @@ import (
 )
 
 // Host is what the fullnode pipeline needs from the node it runs inside.
-//
-// This package cannot define methods on core.Core, and cannot import core
-// without closing an import cycle. Host is the seam: core implements it and
-// passes an implementation to newTxnProcessor, so the dependency runs one way
-// only.
-//
-// It carries node state (the wallet, the listener, the network flags) and
-// operations that need the rest of the node to perform (resolving a DID,
-// reaching a peer). Nothing on it is pipeline logic.
+// core.Core implements it and passes itself to NewTxnProcessor; this package
+// cannot import core without an import cycle.
 type Host interface {
 	Log() logger.Logger
 	Wallet() *wallet.Wallet
 	Listener() *ipfsport.Listener
 	IsFullNode() bool
 
-	// NetworkFlags returns testnet, mainnet and localnet together; validation
-	// takes all three and they are only ever read as a set.
+	// NetworkFlags returns testnet, mainnet and localnet, which validation takes together.
 	NetworkFlags() (testnet, mainnet, localnet bool)
 
 	InitialiseDID(did string) (types.DIDCrypto, error)
@@ -37,17 +29,12 @@ type Host interface {
 	GetTransactionInfoByID(txID string) (*models.TransactionInfo, error)
 	GetParentBurnTxID(parentID string) (string, bool, error)
 
-	// CheckTokenStateHashPinned stays on the node because the quorum path calls
-	// it too (core/quorum_initiator.go).
+	// CheckTokenStateHashPinned stays on the node because quorum validation uses it too.
 	CheckTokenStateHashPinned(tokenID, previousTransactionID string) error
 
-	// CPUUsage reports utilisation since the previous sample and returns the new
-	// sample to pass back. The worker pool scales on it.
+	// CPUUsage reports utilisation since lastStats and returns the new sample.
 	CPUUsage(lastStats map[string]uint64) (float64, map[string]uint64)
 
-	// MemoryUsagePercent reports memory utilisation, 0-100. The worker pool
-	// scales on it alongside CPUUsage. Backed by core.ResourceMonitor, which
-	// stays on the node because it is a general node utility rather than
-	// pipeline logic.
+	// MemoryUsagePercent reports memory utilisation, 0-100.
 	MemoryUsagePercent() float64
 }

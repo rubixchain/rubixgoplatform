@@ -7,28 +7,21 @@ import (
 	"time"
 )
 
-// End-to-end ordering tests.
-//
-// The units are covered individually elsewhere, and that is the gap these fill:
-// the guard tests hand truncateAtInflight an ID set directly, so they would pass
-// unchanged against the production race this pipeline exists to close — a
-// producer sitting in txnQueue, invisible to everything, while its consumer is
-// validated. Each test below drives the real entry point instead and asserts on
-// what the next stage actually observes.
+// End-to-end ordering tests. Unlike the unit tests, these drive the real entry
+// points, so they catch a previous transaction still sitting in txnQueue while
+// the transaction that spends it is validated.
 
-// The deep-queue case, driven from QueueFullnodeTransaction rather than from an
-// injected set: a producer that no worker has reached yet must be treated as
-// held, and must stop being treated as held the moment it resolves.
+// A previous transaction still waiting in txnQueue must be treated as pending
+// locally, and must stop being treated so once it leaves the pipeline.
 func TestQueuedProducerIsHeldThenReleasedEndToEnd(t *testing.T) {
 	p, cancel := newAwaitCore(t, awaitTestConfig(), resolvedSet())
 	defer cancel()
 
-	// A zero timeout can win the enqueue select even when the buffer has room.
-	// Give admission time to complete so this test exercises a held producer.
+	// A zero timeout can win the enqueue select even when the buffer has room,
+	// so allow time for the enqueue to succeed.
 	p.enqueueTimeout = time.Second
 
-	// The split is admitted and queued. No workers run in this processor, so it
-	// stays on txnQueue exactly as it would behind a backlog.
+	// No workers run here, so the split stays on txnQueue as if behind a backlog.
 	p.QueueFullnodeTransaction(testEvent("split-1"))
 	if !p.queued.has("split-1") {
 		t.Fatal("the split was not queued")
@@ -42,22 +35,20 @@ func TestQueuedProducerIsHeldThenReleasedEndToEnd(t *testing.T) {
 		t.Fatal("registerInflight returned nil")
 	}
 
-	// 1. The readiness gate must offer the long tier. Before the queued set this
-	//    was the short one, so the consumer gave up on something seconds away.
+	// 1. A queued previous transaction gets the long wait, not the short one
+	//    used for transactions this node has never seen.
 	if got, want := p.dependencyWait([]string{"split-1"}), p.bundle.inflightWait; got != want {
 		t.Errorf("dependencyWait = %v, want %v for a queued producer", got, want)
 	}
 
-	// 2. The guard must refuse to hand the queued split back from a peer. This is
-	//    the "syncing a transaction that is pending locally but not yet
-	//    validated" bug in its original form.
+	// 2. The guard must not ingest the queued split from a peer's chain: it is
+	//    pending locally and not yet validated.
 	if guarded := p.GuardAgainstInflight("token-a", chain("split-1", "later-1")); len(guarded) != 0 {
 		t.Errorf("guard applied %v, want nothing ingested while the split is queued", chainIDs(guarded))
 	}
 
-	// 3. The cascade must still reach a consumer parked on a producer that was
-	//    only ever queued — park() keys on the bare ID, so this works without the
-	//    producer ever having been registered.
+	// 3. A waiting transaction parked on a previous transaction that was only
+	//    queued (never registered) is still woken; park() keys on the bare ID.
 	if !p.inflight.park(consumer, "split-1") {
 		t.Fatal("could not park on a queued producer")
 	}
@@ -68,8 +59,8 @@ func TestQueuedProducerIsHeldThenReleasedEndToEnd(t *testing.T) {
 		t.Error("the consumer was not woken when its queued producer persisted")
 	}
 
-	// 4. And once the producer leaves the pipeline the guard must stop trimming,
-	//    or the dependency could never be fetched from a peer again.
+	// 4. Once it leaves the pipeline the guard must stop trimming, or it could
+	//    never be fetched from a peer again.
 	p.queued.remove("split-1")
 	guarded := p.GuardAgainstInflight("token-a", chain("split-1", "later-1"))
 	if !reflect.DeepEqual(chainIDs(guarded), []string{"split-1", "later-1"}) {
@@ -77,9 +68,8 @@ func TestQueuedProducerIsHeldThenReleasedEndToEnd(t *testing.T) {
 	}
 }
 
-// A deferred verdict is only worth anything if the next attempt does more work
-// than the last. The memo would otherwise suppress the very sync the retry
-// exists to make.
+// Deferring a verdict must clear the sync memo for the transaction's tokens,
+// or the memo would suppress the very sync the retry exists to make.
 func TestDeferredVerdictMakesTheRetryReFetch(t *testing.T) {
 	p, recorder := memoCore(t, time.Minute)
 
@@ -97,7 +87,7 @@ func TestDeferredVerdictMakesTheRetryReFetch(t *testing.T) {
 		t.Fatalf("first sync reached the network %d times, want 1", n)
 	}
 
-	// Without a deferral the memo suppresses the repeat — the gate working.
+	// Without a deferral the memo suppresses the repeat.
 	if err := p.syncChainsOnce("transfer-1", "peer-1", []string{tokenID}, nil, nil); err != nil {
 		t.Fatalf("suppressed sync = %v, want nil", err)
 	}
@@ -124,10 +114,8 @@ func TestDeferredVerdictMakesTheRetryReFetch(t *testing.T) {
 	}
 }
 
-// The regression this whole mechanism is prone to: refusing to fetch something
-// that is genuinely absent, or softening a verdict that was real. A dependency
-// this node does not hold must behave exactly as it did before any of it
-// existed.
+// A previous transaction this node does not hold must not be held back: it
+// gets the short wait, its chain syncs in full, and a real verdict is kept.
 func TestGenuinelyMissingDependencyStillSyncsAndStillVerdicts(t *testing.T) {
 	p, cancel := newAwaitCore(t, awaitTestConfig(), resolvedSet())
 	defer cancel()
@@ -140,7 +128,7 @@ func TestGenuinelyMissingDependencyStillSyncsAndStillVerdicts(t *testing.T) {
 		t.Fatal("the producer is held locally; this test needs it genuinely absent")
 	}
 
-	// The short tier, because a producer that is simply not here may never come.
+	// The short wait, because a transaction that is not here may never come.
 	if got, want := p.dependencyWait([]string{"split-1"}), p.bundle.unknownWait; got != want {
 		t.Errorf("dependencyWait = %v, want %v for an absent producer", got, want)
 	}
@@ -152,8 +140,8 @@ func TestGenuinelyMissingDependencyStillSyncsAndStillVerdicts(t *testing.T) {
 		t.Errorf("guard applied %v, want the whole chain %v", chainIDs(guarded), chainIDs(remote))
 	}
 
-	// And a real verdict is still a verdict: no pending producer, no recent trim,
-	// so the retry ladder must break and the transaction must dead-letter.
+	// No pending previous transaction and no recent trim, so the verdict stands
+	// and the transaction is stored as invalid.
 	verdict := classify(errValidationFailed, errors.New("signature verification failed"))
 	if got := p.deferVerdictWhileDependencyPending(consumer, verdict); !errors.Is(got, errValidationFailed) {
 		t.Errorf("a genuine verdict was deferred: %v — invalid transactions would never dead-letter", got)

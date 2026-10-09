@@ -17,17 +17,9 @@ import (
 )
 
 // QueueFullnodeTransaction admits a transaction and hands it to the worker pool.
-//
-// Split out of TxnCallBack so the admission/enqueue interaction can be tested
-// without a database — everything above this point in TxnCallBack needs a wallet.
-//
-// Admission is reserved up front rather than recorded after a successful send.
-// The previous order (check, enqueue, then mark) was a check-then-act race:
-// pubsub gives every message its own goroutine (types/pubsub.go:164), so two
-// deliveries of the same transaction could both pass the check and both enqueue.
-// Reserving first closes that window, and every path that fails to hand the event
-// to a worker releases the reservation, which preserves the original invariant
-// that a failed send must not poison the dedup map.
+// Admission is reserved before the send because pubsub delivers each message on
+// its own goroutine, so two deliveries could otherwise both pass the check. Any
+// path that fails to hand the event to a worker releases the reservation.
 func (p *DynamicTxnProcessor) QueueFullnodeTransaction(newEvent *models.EventTransaction) {
 	// Cheaply reject already-seen transactions without blocking.
 	if !p.admit(newEvent.TransactionID) {
@@ -39,11 +31,9 @@ func (p *DynamicTxnProcessor) QueueFullnodeTransaction(newEvent *models.EventTra
 	currentQueueLen := int64(len(p.txnQueue))
 	atomic.StoreInt64(&p.queueLength, currentQueueLen)
 
-	// Visible as held by this node from here on, not from the moment a worker
-	// picks it up. Marked before the send: the send hands the event to a waiting
-	// worker the instant it completes, so marking afterwards would race that
-	// worker's own remove and could strand the ID. Every branch below that fails
-	// to hand it over clears it again.
+	// Mark as queued before the send: a worker removes the mark as soon as it
+	// receives the event, so marking afterwards could strand the ID. Failed
+	// sends below clear it.
 	p.queued.add(newEvent.TransactionID)
 
 	// Queue transaction for processing with enhanced timeout handling
@@ -55,9 +45,8 @@ func (p *DynamicTxnProcessor) QueueFullnodeTransaction(newEvent *models.EventTra
 			"queueLength", currentQueueLen)
 
 	case <-time.After(p.enqueueTimeout):
-		// No worker ever saw this event, so give up the reservation: a later
-		// re-delivery has to be free to try again instead of being rejected as a
-		// duplicate until dedupMapCleaner sweeps the entry.
+		// Release admission so a re-delivery can try again instead of being
+		// rejected as a duplicate.
 		p.queued.remove(newEvent.TransactionID)
 		p.releaseAdmission(newEvent.TransactionID)
 		p.host.Log().Error("Failed to queue transaction - queue full, will retry on next delivery",
@@ -84,27 +73,19 @@ func (p *DynamicTxnProcessor) processTxnWithRetry(txnEvent *models.EventTransact
 		return
 	}
 
-	// Mark the transaction as in flight for exactly as long as this worker owns
-	// it. The defer is what guarantees that: dynamicWorker recovers from panics
-	// (fullnode_txn_processor.go, dynamicWorker), so an early return or a panic
-	// must not leave a stale entry behind.
+	// In flight for as long as this worker owns it. The defer also covers
+	// panics, which dynamicWorker recovers from.
 	entry := p.registerInflight(txnEvent)
 	if entry != nil {
 		defer p.unregisterInflight(entry.id)
 
-		// Wait here, once, rather than inside the retry loop below: a producer
-		// that never arrives would otherwise cost the wait on every attempt.
-		// An expired wait returns nil and the transaction proceeds normally.
+		// Wait once, before the retry loop, not per attempt: a previous
+		// transaction that never arrives would otherwise cost the wait each time.
 		if err := p.awaitDependencies(entry); err != nil {
-			// A producer found invalid is a verdict on this transaction too,
-			// reached without validating it: it spends an output of something
-			// that never legitimately existed. Dead-letter it and stop. Its own
-			// consumers were failed by the same walk that failed this one, so
-			// there is nothing further to propagate from here.
-			//
-			// Admission is deliberately not released. The verdict is terminal,
-			// and letting a re-delivery back in would only produce a second
-			// dead-letter row for the same conclusion.
+			// A previous transaction was found invalid: dead-letter this one
+			// without validating it. Its own waiting transactions were already
+			// failed by the same walk. Admission is not released: the verdict is
+			// terminal and a re-delivery would only add a second dead-letter row.
 			if errors.Is(err, errProducerFailed) {
 				p.host.Log().Info("processTxnWithRetry: not validating, a producer of this transaction failed",
 					"txnID", txnEvent.TransactionID, "workerID", workerID, "reason", err)
@@ -136,9 +117,8 @@ func (p *DynamicTxnProcessor) processTxnWithRetry(txnEvent *models.EventTransact
 			return
 		}
 
-		// Before this counts as a verdict: a failure reached while a producer
-		// this transaction declares is still being processed is not safely this
-		// node's own conclusion.
+		// A verdict reached while something it depends on is still pending
+		// locally is downgraded to transient.
 		err = p.deferVerdictWhileDependencyPending(entry, err)
 
 		lastErr = err
@@ -148,70 +128,33 @@ func (p *DynamicTxnProcessor) processTxnWithRetry(txnEvent *models.EventTransact
 			"error", err,
 			"workerID", workerID)
 
-		// A verdict does not change on re-reading the same data, so the
-		// remaining attempts would only postpone it — and everything parked on
-		// this transaction stays parked while they run, which is what would
-		// leave the propagation below with nobody left to reach.
+		// Retrying a verdict only delays it, and keeps waiting transactions
+		// parked until their timers expire and failure propagation misses them.
 		if errors.Is(err, errValidationFailed) {
 			break
 		}
 	}
 
 	if errors.Is(lastErr, errValidationFailed) {
-		// Terminal, and this node's own conclusion. Record it once — here
-		// rather than inside processSingleTransaction, so a row is written per
-		// transaction and not per attempt — and fail everything that was
-		// waiting to build on it.
-		//
-		// Admission is not released: the verdict will not change, so a
-		// re-delivery would only reach it again.
+		// Record the verdict once per transaction (not per attempt) and fail
+		// the waiting transactions. Admission is not released: a re-delivery
+		// would only reach the same verdict.
 		p.storeInvalidTransaction(txnEvent, lastErr)
 		p.failDownstream(txnEvent.TransactionID, lastErr)
 		return
 	}
 
-	// Transient, or no verdict at all. Release the admission so future pubsub
-	// re-deliveries can attempt processing again — conditions may change, for
-	// instance a peer becoming reachable for chain sync. Nothing is
-	// dead-lettered and nothing downstream is touched: this says nothing about
-	// the transaction, and the consumers waiting on it keep their own retries.
+	// Transient or unclassified: release admission so a re-delivery can try
+	// again (e.g. once a peer is reachable). Nothing is dead-lettered and
+	// waiting transactions are left to their own timers and retries.
 	p.releaseAdmission(txnEvent.TransactionID)
 }
 
-// deferVerdictWhileDependencyPending re-tags a validation verdict as transient
-// while this node is still holding something that validation needed.
-//
-// The failure it exists for is the one GuardAgainstInflight creates. The guard
-// trims a peer's chain response so an entry still being processed locally is not
-// ingested, but it only returns a shorter slice — nothing tells the caller the
-// result was incomplete, so the sync reports success and phase 3 of
-// TokenChainIntegrityCheck then reports "chain mismatch after sync" as a plain
-// error. classifyValidationFailure reads that as this node's own verdict, the
-// retry ladder breaks on attempt 1, and a good transaction is dead-lettered with
-// everything downstream of it — for a condition that is purely local ordering
-// and resolves within seconds.
-//
-// Two questions are asked, because one does not cover it:
-//
-//   - Is a producer this transaction DECLARES still pending? The direct case: the
-//     entry the guard stopped at is the transaction's own producer.
-//   - Was a sync for one of this transaction's tokens trimmed recently? The guard
-//     cuts to a PREFIX, so an unrelated held transaction sitting earlier in the
-//     same chain drops everything after it, including the producer — which is
-//     then neither pending nor declared, and the first question says no. Those
-//     are the arrears a fullnode catching up accumulates.
-//
-// Neither is plumbed back as a typed error on purpose: SyncTransactionChainsFromPeer
-// is shared with the quorum path, and a signal raised on every trim would fail
-// validations where nothing needed was actually lost. Both are answered from
-// state already in hand — entry.deps, the registry, the queued set and the note
-// the guard leaves on its way past.
-//
-// This only ever turns a verdict into another attempt, which is the safe
-// direction and the same fallback the rest of the classification takes. A
-// genuinely invalid transaction that trips either question reaches the identical
-// verdict on a later attempt, once the condition clears; the cost is a delayed
-// dead-letter, not a missed one.
+// deferVerdictWhileDependencyPending re-tags a verdict as transient when a
+// declared previous transaction is still pending, or a recent sync of one of its
+// tokens was trimmed by GuardAgainstInflight. Either can make phase 3 report a
+// local-ordering mismatch as a verdict. It only ever defers a verdict; if every
+// attempt is deferred, admission is released and nothing is dead-lettered.
 func (p *DynamicTxnProcessor) deferVerdictWhileDependencyPending(entry *inflightTxn, err error) error {
 	if entry == nil || err == nil || !errors.Is(err, errValidationFailed) {
 		return err
@@ -239,19 +182,14 @@ func (p *DynamicTxnProcessor) deferVerdictWhileDependencyPending(entry *inflight
 	p.host.Log().Info("processTxnWithRetry: deferring a verdict, "+reason,
 		"txnID", entry.id, "dependency", detail, "reason", err)
 
-	// Forget what the memo remembers about this transaction's tokens. The sync
-	// it recorded is the one that came back trimmed, and leaving it in place
-	// would have filterRecentlySynced skip the re-sync the next attempt exists
-	// to make.
+	// The memoised sync may be the trimmed one; drop it so the retry re-syncs.
 	p.invalidateSyncedTokens(tokens)
 
 	return classify(errDependencyTimeout, stripClass(err))
 }
 
 // entryTokenIDs returns the tokens the entry's transaction touches, or nil when
-// its payload cannot be read. registerInflight keeps only the dependency edges
-// it extracted, so the info is re-read here — on a path that runs only when an
-// attempt has already failed.
+// its payload cannot be read.
 func entryTokenIDs(entry *inflightTxn) []string {
 	if entry == nil || entry.event == nil || entry.event.Transaction == nil || len(entry.event.Transaction.Info) == 0 {
 		return nil
@@ -263,11 +201,8 @@ func entryTokenIDs(entry *inflightTxn) []string {
 	return transactionTokenIDs(&info)
 }
 
-// storeInvalidTransaction records a terminal verdict in the audit table.
-//
-// The stored reason is the error's own message, which is why classification is
-// attached beside the message rather than wrapped into it: what lands in this
-// table reads exactly as it did before typed errors existed.
+// storeInvalidTransaction records a terminal verdict in the audit table, using
+// the error's message unchanged (classification is attached beside it).
 func (p *DynamicTxnProcessor) storeInvalidTransaction(txnEvent *models.EventTransaction, cause error) {
 	if txnEvent == nil || txnEvent.Transaction == nil || cause == nil {
 		return
@@ -315,10 +250,9 @@ func (p *DynamicTxnProcessor) processSingleTransaction(newEvent *models.EventTra
 		quorumDCs[quorum.Did] = quorumDIDCrypto
 	}
 
-	// The sync-once gate. excludeTxIDs is passed straight through: the guard that
-	// keeps an in-flight sibling's chain entry out lives one layer down, in the
-	// apply loop, and duplicating it here as a peer-side exclusion would make the
-	// peer return a chain with a hole in it rather than a shorter one.
+	// Chain syncs go through the per-bundle sync memo. Pending transactions are
+	// kept out by the guard in the apply path, not by excludeTxIDs, which would
+	// make the peer return a chain with a hole in it.
 	syncTxChains := func(peerDID string, tokenIDs []string, prevTxIDs map[string]string, excludeTxIDs []string) error {
 		return p.syncChainsOnce(txn.ID, peerDID, tokenIDs, prevTxIDs, excludeTxIDs)
 	}
@@ -332,9 +266,7 @@ func (p *DynamicTxnProcessor) processSingleTransaction(newEvent *models.EventTra
 		return p.host.GetParentBurnTxID(parentID)
 	}
 	fetchGenesisTx := func(peerDID, tokenID string) (*models.Transactions, error) {
-		// Tagged transient for the same reason the chain sync is: this reaches
-		// out to a peer, and a peer that cannot be reached is not a verdict on
-		// the transaction.
+		// A peer failure is transient, not a verdict on the transaction.
 		txn, err := p.host.FetchGenesisTransactionFromPeer(peerDID, tokenID)
 		return txn, classify(errDependencyTimeout, err)
 	}
@@ -349,13 +281,9 @@ func (p *DynamicTxnProcessor) processSingleTransaction(newEvent *models.EventTra
 	_, err = consensus.ValidateTransaction(txn, p.host.IsFullNode(), p.host.Wallet(), p.host.Log(), initiatorDIDCrypto, quorumDCs, testnet, mainnet, localnet, p.host.CheckTokenStateHashPinned, syncTxChains, syncAuthoritative, getTxByID, getParentBurnTx, fetchGenesisTx, syncBurntChain, p.host.VerifyGenesisSignature, false)
 	if err != nil {
 		p.host.Log().Error("processSingleTransaction:failed to validate transaction", "error", err)
-		// Storing the invalid transaction is deferred to processTxnWithRetry,
-		// which records it once instead of on every attempt.
-		//
-		// The message is unchanged, deliberately. classify attaches the verdict
-		// as a second branch of the error tree rather than wrapping it into the
-		// text, so "failed to validate transaction" still appears here byte for
-		// byte and anything matching on it keeps working.
+		// processTxnWithRetry stores the invalid transaction, once. classify
+		// attaches the class beside the error so its text, including "failed to
+		// validate transaction", stays byte-identical.
 		return classify(
 			classifyValidationFailure(err),
 			fmt.Errorf("processSingleTransaction: failed to validate transaction: %w", err),
@@ -371,24 +299,15 @@ func (p *DynamicTxnProcessor) processSingleTransaction(newEvent *models.EventTra
 		return fmt.Errorf("processSingleTransaction: failed to persist fullnode transaction: %w", err)
 	}
 
-	// This node has just advanced the tip of every token the transaction
-	// touched, so anything the memo remembers about them now describes a chain
-	// one entry short. Forget it before waking anybody: a released waiter starts
-	// validating immediately, and it must not be handed a reason to skip a sync
-	// it now genuinely needs.
+	// The tips just advanced, so invalidate the memo BEFORE waking waiters: a
+	// woken transaction validates immediately and must not skip a needed sync.
 	tokenIDs := transactionTokenIDs(transactionInfo)
 	p.invalidateSyncedTokens(tokenIDs)
 	p.truncated.forget(tokenIDs)
 
-	// This transaction is now a producer that has resolved, so wake anything
-	// held behind it. The call sits here, after the persist returns, and not
-	// anywhere earlier: PersistFullNodeTransaction writes the chain entry inside
-	// its own database transaction, and a waiter woken before that commits would
-	// re-probe, still not find the row, and have spent its one wake-up.
-	//
-	// Nothing is released when the persist fails. The waiters then fall back to
-	// their timers and behave as they did before the cascade existed, which is
-	// correct: there is no row for them to have been waiting for.
+	// Wake waiting transactions only after the persist commits: one woken
+	// earlier would not find the row and has only one wake-up. On a failed
+	// persist nobody is woken and waiters fall back to their timers.
 	p.releaseWaiters(txn.ID)
 
 	return nil
