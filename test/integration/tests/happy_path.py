@@ -599,6 +599,34 @@ class StressRunner:
             "detail": detail,
         }]
 
+    def _verify_tokenchain_index(self) -> List[Dict[str, str]]:
+        """Assert tokenchain_index equals a full rebuild from tokenchain on every node.
+
+        Persistence appends new row ids to the index instead of rebuilding it,
+        so this is the end-of-run proof that no id was lost or duplicated by any
+        transfer, pledge, sync, or retry during the run. A mismatch is a FAIL.
+        """
+        mismatches: Dict[str, List[str]] = {}
+        for label, db in (("A", self.db_a), ("B", self.db_b), ("quorum", self.db_q)):
+            bad = db.check_tokenchain_index_mismatches()
+            if bad:
+                mismatches[label] = bad
+
+        if not mismatches:
+            detail = "tokenchain_index matches a full rebuild on all 3 nodes"
+            status = "PASS"
+        else:
+            detail = "; ".join(
+                f"{node}: {len(ids)} token(s) e.g. {ids[:3]}" for node, ids in mismatches.items()
+            )
+            status = "FAIL"
+
+        return [{
+            "check": "TOKENCHAIN_INDEX_CONSISTENT",
+            "status": status,
+            "detail": detail,
+        }]
+
     # ------------------------------------------------------------------
     # Step 4: NFT creation (optional)
     # ------------------------------------------------------------------
@@ -1516,6 +1544,7 @@ FROM tokens;
         # persisted on each participating node. Runs LAST so all subsystem and
         # deferred writes have committed across nodes.
         tx_persist_verification = self._verify_transactions_persisted()
+        tokenchain_index_verification = self._verify_tokenchain_index()
 
         self.finalise()
         self.run_db_snapshot()
@@ -1535,6 +1564,7 @@ FROM tokens;
             + deferred_verification
             + extra_api_verification
             + tx_persist_verification
+            + tokenchain_index_verification
         )
         if all_verifications:
             self._write_verification_summary(all_verifications)
