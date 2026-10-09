@@ -302,6 +302,18 @@ class NodeClient:
         log.info("[%s] Transaction initiated, req_id=%s", self.name, req_id)
         return req_id
 
+    def initiate_transaction_payload(self, payload: Dict[str, Any]) -> str:
+        """Step 1 with a caller-built /rubix/v1/tx body. Returns the request ID for step 2.
+
+        For tests that need a body the convenience methods will not produce, such
+        as a deliberately malformed one.
+        """
+        log.info("[%s] Initiating transaction from raw payload: memo=%s", self.name, payload.get("memo", ""))
+        resp = self._post_raw("/rubix/v1/tx", payload)
+        req_id: str = resp["result"]["id"]
+        log.info("[%s] Transaction initiated, req_id=%s", self.name, req_id)
+        return req_id
+
     def complete_transaction(
         self, req_id: str, password: str = "mypassword"
     ) -> Dict[str, Any]:
