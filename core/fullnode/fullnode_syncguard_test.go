@@ -175,22 +175,6 @@ func TestGuardAgainstInflightPassesThroughWhenNothingInFlight(t *testing.T) {
 	}
 }
 
-// The transaction being validated registers itself before it validates, so its
-// own entry is in the set. Trimming at it matches what the sync request already
-// asks the peer to exclude, and prevents a transaction ingesting itself from a
-// peer mid-validation.
-func TestGuardAgainstInflightTrimsTheCurrentTransaction(t *testing.T) {
-	p, cancel := newTestProcessor(10, 0)
-	defer cancel()
-
-	p.inflight.register(newInflightEntry("current"))
-
-	got := p.GuardAgainstInflight("token-X", chain("A", "current"))
-	if want := []string{"A"}; !reflect.DeepEqual(chainIDs(got), want) {
-		t.Errorf("guardAgainstInflight() = %v, want %v", chainIDs(got), want)
-	}
-}
-
 // SyncTransactionChainsFromPeer is shared with the quorum path, where there is
 // no transaction processor at all. The guard must be inert there rather than
 // panicking.

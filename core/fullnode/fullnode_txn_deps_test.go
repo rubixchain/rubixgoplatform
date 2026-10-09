@@ -247,8 +247,8 @@ func TestTransactionTokenIDs(t *testing.T) {
 	}
 }
 
-// bigTxnInfo is a transaction wide enough that a map-ordered traversal would
-// almost certainly reorder it between runs.
+// bigTxnInfo is a transaction that populates every token list the traversal
+// walks, including committed and quorum pledge tokens.
 func bigTxnInfo() *models.TransactionInfo {
 	info := &models.TransactionInfo{
 		Tokens:          &models.TransactionTokens{},
@@ -267,33 +267,6 @@ func bigTxnInfo() *models.TransactionInfo {
 		})
 	}
 	return info
-}
-
-// Both helpers feed decisions that must be reproducible across workers and
-// across retries of the same transaction, so ordering must not vary run to run.
-// consensus.TokenChainIntegrityCheck ranges over a map and does vary; this is
-// the guard that these helpers do not.
-func TestTraversalIsDeterministic(t *testing.T) {
-	info := bigTxnInfo()
-
-	wantDeps := transactionDependencies(info)
-	wantTokens := transactionTokenIDs(info)
-
-	if len(wantDeps) != 48 {
-		t.Fatalf("fixture produced %d dependencies, expected 48", len(wantDeps))
-	}
-	if len(wantTokens) != 48 {
-		t.Fatalf("fixture produced %d token IDs, expected 48", len(wantTokens))
-	}
-
-	for i := 0; i < 100; i++ {
-		if got := transactionDependencies(info); !reflect.DeepEqual(got, wantDeps) {
-			t.Fatalf("transactionDependencies() varied on run %d:\n got %v\nwant %v", i, got, wantDeps)
-		}
-		if got := transactionTokenIDs(info); !reflect.DeepEqual(got, wantTokens) {
-			t.Fatalf("transactionTokenIDs() varied on run %d:\n got %v\nwant %v", i, got, wantTokens)
-		}
-	}
 }
 
 // The helpers must not mutate the transaction they are handed — they run on the

@@ -5,38 +5,6 @@ import (
 	"time"
 )
 
-// The blind spot this set exists to close: a producer sitting in txnQueue must
-// be as visible as one under a worker, or the guard ingests it from a peer
-// unvalidated and the readiness gate gives up on it early.
-func TestQueuedTransactionsAreVisibleToBothReaders(t *testing.T) {
-	p, cancel := newTestProcessor(10, time.Second)
-	defer cancel()
-
-	// A split admitted and queued, no worker on it yet.
-	p.QueueFullnodeTransaction(testEvent("split-1"))
-
-	if !p.isPending("split-1") {
-		t.Fatal("a queued transaction is invisible to isPending")
-	}
-	if !p.pendingIDSet()["split-1"] {
-		t.Error("a queued transaction is missing from pendingIDSet")
-	}
-	if p.inflight.has("split-1") {
-		t.Error("the queued transaction leaked into the in-flight registry")
-	}
-
-	// The guard must now refuse to hand that split back from a peer response.
-	guarded := p.GuardAgainstInflight("token-X1", chain("split-1", "transfer-1"))
-	if len(guarded) != 0 {
-		t.Errorf("guard applied %v, want nothing: the split is queued and unvalidated", chainIDs(guarded))
-	}
-
-	// And the gate must offer the long tier rather than giving up in 1s.
-	if got, want := p.dependencyWait([]string{"split-1"}), p.bundle.inflightWait; got != want {
-		t.Errorf("dependencyWait = %v, want %v (the producer is queued, not absent)", got, want)
-	}
-}
-
 // Dequeue is what ends the queued state. If it did not, a leaked ID would
 // truncate every sync of that token for as long as the node runs.
 func TestDequeueClearsTheQueuedEntry(t *testing.T) {

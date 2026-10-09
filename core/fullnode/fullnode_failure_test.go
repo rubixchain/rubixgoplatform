@@ -248,46 +248,41 @@ func TestAwaitDependenciesReturnsTheProducerFailure(t *testing.T) {
 	}
 }
 
-// A producer that persists must not look like one that failed.
-func TestAwaitDependenciesReleaseIsNotAFailure(t *testing.T) {
+// A failure that is not a verdict must not propagate. The producer here fails
+// every attempt because the initiator DID cannot be initialised, which says
+// nothing about the transaction: its consumer stays parked with no failure
+// recorded, nothing is dead-lettered, and the producer's admission is released
+// so a re-delivery can try again. Treating this as a verdict would reach
+// storeInvalidTransaction, whose wallet the test host does not have, so that
+// regression fails here too.
+func TestProcessTxnWithRetryDoesNotPropagateANonVerdict(t *testing.T) {
 	p, cancel := cascadeCore(t)
 	defer cancel()
-
-	consumer := newInflightEntry("txn-T", "txn-S")
-	go func() {
-		time.Sleep(20 * time.Millisecond)
-		p.releaseWaiters("txn-S")
-	}()
-
-	if err := p.awaitDependencies(consumer); err != nil {
-		t.Errorf("awaitDependencies() = %v, want nil for a producer that persisted", err)
-	}
-}
-
-// The whole point of Q6: a transient failure must not propagate. Nothing is
-// recorded against the consumers, and they keep their own retries.
-func TestFailDownstreamIsNotCalledForATransientFailure(t *testing.T) {
-	p, cancel := cascadeCore(t)
-	defer cancel()
+	p.maxRetries = 2
+	p.retryDelay = 0
 
 	consumer := newInflightEntry("txn-T", "txn-S")
 	if !p.inflight.park(consumer, "txn-S") {
 		t.Fatal("park() returned false")
 	}
 
-	// The predicate the retry path gates propagation on, applied to a transient
-	// failure exactly as processTxnWithRetry applies it.
-	transient := classify(errDependencyTimeout, errors.New("peer unreachable"))
-	if errors.Is(transient, errValidationFailed) {
-		p.failDownstream("txn-S", transient)
-		t.Error("a transient failure matched the verdict class and propagated")
+	producer := eventWithDeps("txn-S")
+	if !p.admit(producer.TransactionID) {
+		t.Fatal("admit() returned false for a fresh producer")
 	}
+	p.processTxnWithRetry(producer, 0)
 
 	if got := p.inflight.failureOf(consumer); got != nil {
-		t.Errorf("the consumer was failed by a transient producer failure: %v", got)
+		t.Errorf("the consumer was failed by a non-verdict producer failure: %v", got)
 	}
-	if got := len(p.inflight.waitersOf("txn-S")); got != 1 {
-		t.Errorf("waitersOf(txn-S) has %d entries, want the consumer still parked", got)
+	if got := p.inflight.waitersOf("txn-S"); len(got) != 1 || got[0] != "txn-T" {
+		t.Errorf("waitersOf(txn-S) = %v, want the consumer still parked", got)
+	}
+	if got := atomic.LoadInt64(&p.failuresPropagated); got != 0 {
+		t.Errorf("failuresPropagated = %d, want 0", got)
+	}
+	if !p.admit(producer.TransactionID) {
+		t.Error("the producer's admission was not released after a non-verdict failure")
 	}
 }
 

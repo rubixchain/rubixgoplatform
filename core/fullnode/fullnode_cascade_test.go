@@ -390,7 +390,7 @@ func TestAwaitDependenciesTimesOutWhenProducerNeverArrives(t *testing.T) {
 	defer cancel()
 
 	start := time.Now()
-	if err := p.awaitDependencies(newInflightEntry("txn-T", "txn-S")); err != nil {
+	if err := p.awaitDependencies(newInflightEntry("txn-T", "txn-S", "txn-Q")); err != nil {
 		t.Fatalf("awaitDependencies() = %v, want nil", err)
 	}
 	if elapsed := time.Since(start); elapsed < p.bundle.unknownWait {

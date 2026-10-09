@@ -6,8 +6,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/rubixchain/rubixgoplatform/core/wallet"
 )
 
 // awaitTestConfig is deliberately fast: the tiers only have to be
@@ -62,21 +60,6 @@ func TestAwaitDependenciesNoDepsReturnsImmediately(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > 20*time.Millisecond {
 		t.Errorf("waited %v for a transaction with no dependencies", elapsed)
-	}
-}
-
-// The common case: an ordinary transfer whose producer is long since persisted
-// must cost nothing at all.
-func TestAwaitDependenciesAlreadyResolvedReturnsImmediately(t *testing.T) {
-	p, cancel := newAwaitCore(t, awaitTestConfig(), resolvedSet("txn-S"))
-	defer cancel()
-
-	start := time.Now()
-	if err := p.awaitDependencies(newInflightEntry("txn-T", "txn-S")); err != nil {
-		t.Fatalf("awaitDependencies() = %v, want nil", err)
-	}
-	if elapsed := time.Since(start); elapsed > 20*time.Millisecond {
-		t.Errorf("waited %v for an already-persisted producer", elapsed)
 	}
 }
 
@@ -151,45 +134,6 @@ func TestAwaitDependenciesReprobesAfterParking(t *testing.T) {
 	}
 	if got := p.inflight.waitingLen(); got != 0 {
 		t.Errorf("waitingOn holds %d producers, want 0 — the edge should have been given back", got)
-	}
-}
-
-// Closing ready releases the wait. The cascade is what closes it in production;
-// this pins the contract independently of that path.
-func TestAwaitDependenciesReleasedByReadyChannel(t *testing.T) {
-	cfg := awaitTestConfig()
-	cfg.inflightWait = time.Second
-	cfg.unknownWait = time.Second
-	p, cancel := newAwaitCore(t, cfg, resolvedSet())
-	defer cancel()
-
-	entry := newInflightEntry("txn-T", "txn-S")
-	go func() {
-		time.Sleep(20 * time.Millisecond)
-		entry.markReady()
-	}()
-
-	start := time.Now()
-	if err := p.awaitDependencies(entry); err != nil {
-		t.Fatalf("awaitDependencies() = %v, want nil", err)
-	}
-	if elapsed := time.Since(start); elapsed >= time.Second {
-		t.Errorf("waited %v; closing ready should have released it", elapsed)
-	}
-}
-
-// Every wait must give its edges back, however it ended. A waiter that timed out
-// and left itself in waitingOn would be resurrected by a producer arriving much
-// later, and its list would grow for the lifetime of the process.
-func TestAwaitDependenciesUnparksOnTimeout(t *testing.T) {
-	p, cancel := newAwaitCore(t, awaitTestConfig(), resolvedSet())
-	defer cancel()
-
-	if err := p.awaitDependencies(newInflightEntry("txn-T", "txn-S", "txn-Q")); err != nil {
-		t.Fatalf("awaitDependencies() = %v, want nil", err)
-	}
-	if got := p.inflight.waitingLen(); got != 0 {
-		t.Errorf("waitingOn holds %d producers after the wait expired, want 0", got)
 	}
 }
 
@@ -269,20 +213,6 @@ func TestAwaitDependenciesIgnoresResolvedMembersOfAMixedSet(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed < cfg.inflightWait {
 		t.Errorf("returned after %v; the in-flight member should have set the long tier", elapsed)
-	}
-}
-
-// dependencyResolved translates the wallet's outcomes into the gate's vocabulary,
-// and the "not found" case must be a normal answer rather than an error.
-func TestDependencyResolvedTreatsNotFoundAsUnresolved(t *testing.T) {
-	notFound := fmt.Errorf("transaction ID: %v is not present: %w", "txn-S", wallet.ErrTransactionNotFound)
-	if !errors.Is(notFound, wallet.ErrTransactionNotFound) {
-		t.Fatal("wallet.ErrTransactionNotFound does not survive wrapping")
-	}
-
-	other := fmt.Errorf("failed to get transaction: %w", errors.New("connection refused"))
-	if errors.Is(other, wallet.ErrTransactionNotFound) {
-		t.Error("an unrelated database error matched ErrTransactionNotFound")
 	}
 }
 

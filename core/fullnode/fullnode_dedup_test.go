@@ -66,19 +66,6 @@ func TestAdmitDistinctIDsAllSucceed(t *testing.T) {
 	}
 }
 
-func TestReleaseAdmissionAllowsReadmission(t *testing.T) {
-	p, cancel := newTestProcessor(10, time.Second)
-	defer cancel()
-
-	if !p.admit("txn-1") {
-		t.Fatal("first admit() returned false, want true")
-	}
-	p.releaseAdmission("txn-1")
-	if !p.admit("txn-1") {
-		t.Error("admit() after releaseAdmission() returned false, want true")
-	}
-}
-
 // The regression this commit exists for. Before the change, admission was a
 // Load followed by a later Store, and pubsub hands every message to its own
 // goroutine (types/pubsub.go:164), so concurrent deliveries of one transaction
@@ -230,8 +217,8 @@ func TestQueueFullnodeTransactionReleasesAdmissionOnShutdown(t *testing.T) {
 }
 
 // processTxnWithRetry releases the admission once retries are exhausted so a
-// later re-delivery can try again. That path is not reachable without a wallet,
-// but the release primitive it depends on is exercised here.
+// later re-delivery can try again. A released ID must be admissible again, even
+// after a second release.
 func TestReleaseAdmissionIsIdempotent(t *testing.T) {
 	p, cancel := newTestProcessor(10, time.Second)
 	defer cancel()

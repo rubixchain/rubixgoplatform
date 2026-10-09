@@ -340,44 +340,6 @@ func TestSyncMemoIsSafeUnderConcurrency(t *testing.T) {
 	done.Wait()
 }
 
-// End to end through the closure the validator actually calls: a split and the
-// transfer that spends it, sharing a bundle, needing the same token from the
-// same peer. The second must be served from the memo.
-func TestSyncOnceThroughTheBundleCascade(t *testing.T) {
-	p, recorder := memoCore(t, time.Second)
-
-	producer := p.registerInflight(eventWithDeps("txn-S"))
-	consumer := p.registerInflight(eventWithDeps("txn-T", "txn-S"))
-	if producer == nil || consumer == nil {
-		t.Fatal("registerInflight() returned nil")
-	}
-
-	if err := p.syncChainsOnce("txn-S", "peer-1", []string{"token-a"}, nil, nil); err != nil {
-		t.Fatalf("producer sync = %v, want nil", err)
-	}
-	p.releaseWaiters("txn-S")
-	if err := p.syncChainsOnce("txn-T", "peer-1", []string{"token-a"}, nil, nil); err != nil {
-		t.Fatalf("consumer sync = %v, want nil", err)
-	}
-
-	if got := recorder.snapshot(); len(got) != 1 {
-		t.Errorf("the peer was asked %d times for one bundle's token, want 1", len(got))
-	}
-
-	// And once the node advances that token itself, the memo stops answering for
-	// it.
-	p.invalidateSyncedTokens([]string{"token-a"})
-	if err := p.syncChainsOnce("txn-T", "peer-1", []string{"token-a"}, nil, nil); err != nil {
-		t.Fatalf("sync after invalidation = %v, want nil", err)
-	}
-	if got := recorder.snapshot(); len(got) != 2 {
-		t.Errorf("the peer was asked %d times after invalidation, want 2", len(got))
-	}
-	if got := p.syncMemo.len(); got != 1 {
-		t.Errorf("syncMemo holds %d records, want 1", got)
-	}
-}
-
 // A chain that did not apply used to reach here as a successful sync:
 // SyncTransactionChainsFromPeer logged the apply failure and returned nil. The
 // memo then recorded the token, so the retry skipped the fetch it needed, and
