@@ -160,11 +160,6 @@ func (c *Core) SubscribeNFTSetup(requestID string, topic string) error {
 
 func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 
-	// Skip self-echo: when the node publishes an NFT event, it may receive
-	// its own message back via pubsub. Syncing from ourselves would race
-	// with the ongoing transaction's persistence and potentially corrupt
-	// token state.
-
 	var newEvent models.EventNFTPublishInfo
 	err := json.Unmarshal(data, &newEvent)
 	if err != nil {
@@ -193,6 +188,17 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 	if initiatorDid == "" {
 		c.log.Error("NFTCallBack: Initiator DID is empty — cannot construct peer address",
 			"topic", topic, "peerID", peerID)
+		return
+	}
+
+	// Self-echo: this node published the event and already persisted the block, so do not sync from itself.
+	isLocalInitiator, localErr := c.w.IsLocalDID(initiatorDid)
+	if localErr != nil {
+		c.log.Warn("NFTCallBack: failed to check whether initiator DID is local, treating as remote", "nft_token", nft, "initiatorDID", initiatorDid, "err", localErr)
+		isLocalInitiator = false
+	}
+	if isLocalInitiator {
+		c.log.Debug("NFTCallBack: skipping chain sync for self-published event", "nft_token", nft, "topic", topic, "initiatorDID", initiatorDid)
 		return
 	}
 
