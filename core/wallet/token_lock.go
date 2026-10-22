@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	stdmath "math"
 	"math/rand"
 	"sort"
@@ -415,34 +414,60 @@ func SelectTokensFromTokenDenomForLocking(
 	denomArrForTokenSelection = make(map[types.DenomValue]types.DenomCount)
 
 	remaining := rubixmath.FloatPrecision(transferAmount)
+	if remaining <= 0 {
+		return nil, fmt.Errorf("SelectTokensFromTokenDenomForLocking: amount %v must be positive at %d decimal places", transferAmount, constants.MaxSupportedDecimalPlaces)
+	}
 
-	var denomsArr []types.DenomValue = make([]types.DenomValue, 0)
-	for denom := range inputTokenDenom {
+	// Local copy of usable counts; phantom denom=0 rows and negative counts are ignored.
+	available := make(map[types.DenomValue]types.DenomCount)
+	var denomsArr = make([]types.DenomValue, 0)
+	totalBalance := rubixmath.ZeroFloat()
+	for denom, count := range inputTokenDenom {
+		if denom <= 0 || count <= 0 {
+			continue
+		}
+		available[denom] = count
 		denomsArr = append(denomsArr, denom)
+		totalBalance = rubixmath.AddFloat(totalBalance, rubixmath.FloatPrecision(float64(count)*denom))
+	}
+	if totalBalance < remaining {
+		return nil, fmt.Errorf("SelectTokensFromTokenDenomForLocking: insufficient balance: have %v, need %v", totalBalance, remaining)
 	}
 	sort.Slice(denomsArr, func(i, j int) bool {
 		return denomsArr[i] > denomsArr[j]
 	})
 
+	// Exact-change pass: largest first, never overshooting the amount.
 	for _, denomValue := range denomsArr {
 		if remaining <= 0 {
 			break
 		}
 
-		denomCount := inputTokenDenom[denomValue]
+		maxByTarget := int(rubixmath.ScaledFloatDiv(remaining, denomValue))
 
-		maxByTarget := int(math.Ceil(rubixmath.ScaledFloatDiv(remaining, denomValue)))
-
-		canTake := rubixmath.Min(int(denomCount), maxByTarget)
+		canTake := rubixmath.Min(int(available[denomValue]), maxByTarget)
 
 		if canTake > 0 {
 			amount := rubixmath.FloatPrecision(float64(canTake) * denomValue)
 			denomArrForTokenSelection[denomValue] = int64(canTake)
+			available[denomValue] -= int64(canTake)
 			remaining = rubixmath.FloatPrecision(remaining - amount)
 		}
 	}
+	if remaining <= 0 {
+		return denomArrForTokenSelection, nil
+	}
 
-	return denomArrForTokenSelection, nil
+	// No exact change: add the smallest leftover token that covers the remainder, it will be split.
+	for i := len(denomsArr) - 1; i >= 0; i-- {
+		denomValue := denomsArr[i]
+		if available[denomValue] > 0 && denomValue > remaining {
+			denomArrForTokenSelection[denomValue] += 1
+			return denomArrForTokenSelection, nil
+		}
+	}
+
+	return nil, fmt.Errorf("SelectTokensFromTokenDenomForLocking: no token covers remaining %v", remaining)
 }
 
 // LockTokensForSplit selects and locks the minimum set of free RBT tokens needed
@@ -508,11 +533,6 @@ func (w *Wallet) lockTokensForSplitOnce(
 	amount float64,
 	referenceID string,
 ) ([]models.Token, error) {
-	tokenDenom, err := w.GetTokenDenomArray(ownerDID)
-	if err != nil {
-		return nil, fmt.Errorf("lockTokensForSplitOnce: failed to get token denom for DID: %v, err: %v", ownerDID, err)
-	}
-
 	tx, err := w.db.BeginTx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
@@ -523,6 +543,33 @@ func (w *Wallet) lockTokensForSplitOnce(
 		return nil, fmt.Errorf("set lock_timeout: %w", err)
 	}
 
+	// Count Free rows inside the tx; token_denom still counts Locked tokens so it over-reports here.
+	denomRows, err := tx.Query(ctx, `
+		SELECT token_value, COUNT(*)
+		FROM tokens
+		WHERE did = $1
+		  AND token_type = (SELECT id FROM token_type WHERE name = $2)
+		  AND token_status = $3
+		GROUP BY token_value
+	`, ownerDID, constants.TokenType_RBT, constants.TokenStatus_Free)
+	if err != nil {
+		return nil, fmt.Errorf("lockTokensForSplitOnce: denom query: %w", err)
+	}
+	tokenDenom := make(map[types.DenomValue]types.DenomCount)
+	for denomRows.Next() {
+		var denomValue float64
+		var denomCount int64
+		if err := denomRows.Scan(&denomValue, &denomCount); err != nil {
+			denomRows.Close()
+			return nil, fmt.Errorf("lockTokensForSplitOnce: denom scan: %w", err)
+		}
+		tokenDenom[denomValue] = denomCount
+	}
+	denomRows.Close()
+	if err := denomRows.Err(); err != nil {
+		return nil, fmt.Errorf("lockTokensForSplitOnce: denom rows: %w", err)
+	}
+
 	precAmount := rubixmath.FloatPrecision(amount)
 
 	denomArrayForTokenSelection, err := SelectTokensFromTokenDenomForLocking(tokenDenom, precAmount)
@@ -530,9 +577,19 @@ func (w *Wallet) lockTokensForSplitOnce(
 		return nil, err
 	}
 
+	// Deterministic, value-descending order; FT batching relies on it.
+	selectedDenoms := make([]types.DenomValue, 0, len(denomArrayForTokenSelection))
+	for denomValue := range denomArrayForTokenSelection {
+		selectedDenoms = append(selectedDenoms, denomValue)
+	}
+	sort.Slice(selectedDenoms, func(i, j int) bool {
+		return selectedDenoms[i] > selectedDenoms[j]
+	})
+
 	var tokensToLockForTransaction []models.Token
 
-	for denomValue, denomCount := range denomArrayForTokenSelection {
+	for _, denomValue := range selectedDenoms {
+		denomCount := denomArrayForTokenSelection[denomValue]
 		rows, err := tx.Query(ctx, `
 			SELECT token_id, parent_token_id, token_value, token_status, did,
 			       transaction_id, token_state_hash, token_type,
@@ -554,6 +611,11 @@ func (w *Wallet) lockTokensForSplitOnce(
 		if err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan collect: %w", err)
+		}
+
+		// Fewer rows than counted means a concurrent request locked them first; retry on a fresh snapshot.
+		if int64(len(denomTokens)) < denomCount {
+			return nil, fmt.Errorf("lockTokensForSplitOnce: short lock: got %d of %d tokens at denom %v", len(denomTokens), denomCount, denomValue)
 		}
 
 		tokensToLockForTransaction = append(tokensToLockForTransaction, denomTokens...)
@@ -623,7 +685,8 @@ func shouldRetryLockTokensForSplit(err error) bool {
 	}
 
 	msg := err.Error()
-	return strings.Contains(msg, "selectTokensForAmount: no candidate tokens available") ||
+	return strings.Contains(msg, "lockTokensForSplitOnce: short lock") ||
+		strings.Contains(msg, "selectTokensForAmount: no candidate tokens available") ||
 		strings.Contains(msg, "selectTokensForAmount: insufficient balance") ||
 		strings.Contains(msg, "LockTokensForSplit: candidate query:") ||
 		strings.Contains(msg, "lock timeout") ||

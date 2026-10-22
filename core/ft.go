@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -251,6 +252,14 @@ func (c *Core) createFTs(reqID string, req types.CreateFTReq) (err error) {
 func (c *Core) BatchRBTs(rbtTokens []*models.TokenInfo) (rbtBatches [][]*models.TokenInfo, err error) {
 	var currentBatch []*models.TokenInfo
 	currentSum := 0.0
+
+	// Largest first: with divisible denominations a descending running sum lands exactly on 1.0.
+	sort.SliceStable(rbtTokens, func(i, j int) bool {
+		if rbtTokens[i].TokenValue != rbtTokens[j].TokenValue {
+			return rbtTokens[i].TokenValue > rbtTokens[j].TokenValue
+		}
+		return rbtTokens[i].TokenID < rbtTokens[j].TokenID
+	})
 
 	for _, token := range rbtTokens {
 		currentBatch = append(currentBatch, token)

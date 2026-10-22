@@ -33,7 +33,11 @@ func BuildDenomTree(tokens []models.Token, ownerDID string) (*DenomTree, error) 
 		denomTree.Leaves = append(denomTree.Leaves, node)
 	}
 
+	// Smallest value first so the caller splits the smallest token that covers the remainder.
 	sort.Slice(denomTree.Leaves, func(i, j int) bool {
+		if denomTree.Leaves[i].Token.TokenValue != denomTree.Leaves[j].Token.TokenValue {
+			return denomTree.Leaves[i].Token.TokenValue < denomTree.Leaves[j].Token.TokenValue
+		}
 		return denomTree.Leaves[i].TokenID.LexicalCompare(
 			denomTree.Leaves[j].TokenID,
 		) < 0

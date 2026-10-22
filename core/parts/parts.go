@@ -64,13 +64,13 @@ func CollectRBTTokens(
 		internalDenomMap[tok.TokenValue] += 1
 	}
 
-	// In-memory balance check from the caller-provided denomMap (no DB read).
-	var totalBalance float64
+	// In-memory balance check over the locked tokens; precision-safe since exact change makes the sum equal the amount.
+	totalBalance := rubixmath.ZeroFloat()
 	for denom, count := range internalDenomMap {
-		totalBalance += float64(denom) * float64(count)
+		totalBalance = rubixmath.AddFloat(totalBalance, rubixmath.FloatPrecision(float64(denom)*float64(count)))
 	}
 	log.Info("CollectRBTTokens: Balance check", "totalBalance", totalBalance, "transferAmount", transferAmount)
-	if totalBalance < transferAmount {
+	if totalBalance < rubixmath.FloatPrecision(transferAmount) {
 		log.Error("CollectRBTTokens: Insufficient balance", "totalBalance", totalBalance, "transferAmount", transferAmount)
 		return nil, nil, nil, nil, fmt.Errorf(
 			"CollectRBTTokens: insufficient balance: current balance %v, transfer amount %v",
