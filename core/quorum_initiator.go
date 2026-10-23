@@ -321,7 +321,13 @@ func (c *Core) initiateConsensusHandler(request *ensweb.Request) *ensweb.Result 
 	fetchGenesisTx := func(peerDID, tokenID string) (*models.Transactions, error) {
 		return c.FetchGenesisTransactionFromPeer(peerDID, tokenID)
 	}
-	isTransactionInfoValidated, err := consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, nil, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains, syncAuthoritative, getTxByID, getParentBurnTx, fetchGenesisTx, consensusRequest.TransferNFTOwnership)
+	// Persist a burnt ancestor's chain so the next part of the same whole token
+	// resolves its minter locally. Applies only to terminal chains — see
+	// Core.SyncBurntTokenChainFromPeer.
+	syncBurntChain := func(peerDID, tokenID string) error {
+		return c.SyncBurntTokenChainFromPeer(peerDID, tokenID)
+	}
+	isTransactionInfoValidated, err := consensus.ValidateTransaction(txn, c.fullNode, c.w, c.log, initiatorDIDCrypto, nil, c.testnet, c.mainnet, c.localnet, c.checkTokenStateHashPinned, syncTxChains, syncAuthoritative, getTxByID, getParentBurnTx, fetchGenesisTx, syncBurntChain, c.verifyGenesisSignature, consensusRequest.TransferNFTOwnership)
 	if err != nil || !isTransactionInfoValidated {
 		c.log.Error("initiateConsensusHandler: transaction info validation failed", "err", err)
 		if err != nil {

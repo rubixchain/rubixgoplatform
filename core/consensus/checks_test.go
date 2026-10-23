@@ -466,6 +466,8 @@ func TestValidateTransaction_FailsOnInvalidInfoFields(t *testing.T) {
 		func(string) (*models.TransactionInfo, error) { return nil, nil },             // getTxByID
 		func(string) (string, bool, error) { return "", false, nil },                  // getParentBurnTx
 		func(string, string) (*models.Transactions, error) { return nil, nil },
+		func(string, string) error { return nil }, // syncBurntChain
+		nil, // verifyGenesisSig — not reached in this failure path
 		false, // transferNFTOwnership
 	)
 	if err == nil {
@@ -498,6 +500,8 @@ func TestValidateTransaction_FailsOnTxIDMismatch(t *testing.T) {
 		func(string) (*models.TransactionInfo, error) { return nil, nil },             // getTxByID
 		func(string) (string, bool, error) { return "", false, nil },                  // getParentBurnTx
 		func(string, string) (*models.Transactions, error) { return nil, nil },
+		func(string, string) error { return nil }, // syncBurntChain
+		nil, // verifyGenesisSig — not reached in this failure path
 		false, // transferNFTOwnership
 	)
 	if err == nil || !strings.Contains(err.Error(), "transaction ID mismatch") {

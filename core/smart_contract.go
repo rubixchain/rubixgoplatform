@@ -309,11 +309,6 @@ func (c *Core) SubsribeContractSetup(requestID string, topic string) error {
 // and silently breaking the sync flow.
 func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 
-	// Skip self-echo: when the node publishes a smart contract event, it may
-	// receive its own message back via pubsub. Syncing from ourselves would
-	// race with the ongoing transaction's persistence and potentially corrupt
-	// token state.
-
 	var newEvent models.EventSmartContractPublishInfo
 
 	err := json.Unmarshal(data, &newEvent)
@@ -344,30 +339,29 @@ func (c *Core) ContractCallBack(peerID string, topic string, data []byte) {
 		return
 	}
 
-	// Skip self-echo (see comment at function top): if the initiator DID belongs
-	// to this node, we published this event ourselves. Syncing from ourselves
-	// would race with the ongoing transaction's persistence.
-	if isLocal, err := c.w.IsLocalDID(initiatorDID); err != nil {
-		c.log.Warn("ContractCallBack: failed to check whether initiator DID is local (continuing)",
-			"token", smartContractToken, "initiatorDID", initiatorDID, "err", err)
-	} else if isLocal {
-		c.log.Debug("ContractCallBack: ignoring self-published event",
-			"token", smartContractToken, "topic", topic, "initiatorDID", initiatorDID)
-		return
+	// Self-echo: this node published the event and already persisted the block, so do not sync from itself.
+	isLocalInitiator, localErr := c.w.IsLocalDID(initiatorDID)
+	if localErr != nil {
+		c.log.Warn("ContractCallBack: failed to check whether initiator DID is local, treating as remote", "token", smartContractToken, "initiatorDID", initiatorDID, "err", localErr)
+		isLocalInitiator = false
 	}
 
-	address := peerID + "." + initiatorDID
+	if isLocalInitiator {
+		c.log.Debug("ContractCallBack: skipping chain sync for self-published event", "token", smartContractToken, "topic", topic, "initiatorDID", initiatorDID)
+	} else {
+		address := peerID + "." + initiatorDID
 
-	if err := c.SyncTransactionChainsFromPeer(address, []string{smartContractToken}, nil, nil, false, false); err != nil {
-		c.log.Error("ContractCallBack: Failed to sync transaction chain",
-			"token", smartContractToken,
-			"peerAddress", address,
-			"err", err,
-		)
-		return
+		if err := c.SyncTransactionChainsFromPeer(address, []string{smartContractToken}, nil, nil, false, false); err != nil {
+			c.log.Error("ContractCallBack: Failed to sync transaction chain",
+				"token", smartContractToken,
+				"peerAddress", address,
+				"err", err,
+			)
+			return
+		}
+
+		c.log.Info("ContractCallBack: Transaction chain synced successfully", "token", smartContractToken)
 	}
-
-	c.log.Info("ContractCallBack: Transaction chain synced successfully", "token", smartContractToken)
 
 	curlUrl, err := c.w.GetCallbackURL(smartContractToken)
 	if err != nil {
