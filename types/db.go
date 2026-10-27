@@ -6,6 +6,10 @@ type CoreConfig struct {
 	NodeIndex            int    `toml:"node_index"`
 	NetworkMode          string `toml:"network_mode"`
 	EnableTrustedNetwork bool   `toml:"enable_trusted_network"`
+	// LogRotation enables size-based rotation of log.txt (default true).
+	LogRotation bool `toml:"log_rotation"`
+	// LogRotationMaxSize is the size in MiB at which log.txt is rotated (default 30).
+	LogRotationMaxSize int `toml:"log_rotation_max_size"`
 }
 
 type DBParams struct {

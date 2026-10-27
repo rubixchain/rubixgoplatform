@@ -18,6 +18,8 @@ const userConfigTemplate = `
 node_index = 0
 network_mode = "mainnet|testnet|localnet"
 enable_trusted_network = false
+log_rotation = true
+log_rotation_max_size = 30
 
 [db]
 host = "localhost"
@@ -94,13 +96,27 @@ func ParseConfigFromPath(configPath string) (types.UserConfig, error) {
 		return types.UserConfig{}, fmt.Errorf("failed to read config.toml file from path: %v, err: %v", configFilePath, err)
 	}
 
-	var rubixConfig types.UserConfig
+	// Defaults for fields that older config files may not have
+	rubixConfig := types.UserConfig{
+		Core: types.CoreConfig{
+			LogRotation:        DefaultLogRotation,
+			LogRotationMaxSize: DefaultLogRotationMaxSize,
+		},
+	}
 	if err := toml.Unmarshal(configDataBytes, &rubixConfig); err != nil {
 		return types.UserConfig{}, fmt.Errorf("failed to marshal config, err: %v", err)
+	}
+	if rubixConfig.Core.LogRotationMaxSize <= 0 {
+		return types.UserConfig{}, fmt.Errorf("invalid log_rotation_max_size %d, expected a positive size in MiB", rubixConfig.Core.LogRotationMaxSize)
 	}
 
 	return rubixConfig, nil
 }
+
+const (
+	DefaultLogRotation        = true
+	DefaultLogRotationMaxSize = 30 // MiB
+)
 
 func CreateConfigFileFromTemplate(configPath string) error {
 	configFilePath := path.Join(configPath, "config.toml")

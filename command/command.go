@@ -391,6 +391,19 @@ func (cmd *Command) validateOptions() bool {
 	return false
 }
 
+// openLogFile opens the log file for appending. With rotation on, the file is
+// rotated once it reaches maxSize MiB.
+func openLogFile(path string, rotation bool, maxSize int) (io.WriteCloser, error) {
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil || !rotation {
+		return f, err
+	}
+	// lumberjack would create a missing file as 0600; it keeps the mode of the
+	// existing file across rotations, so creating it here keeps logs at 0644.
+	f.Close()
+	return logger.NewRotatingFile(path, maxSize), nil
+}
+
 func Run(args []string) {
 
 	cmd := &Command{}
@@ -522,11 +535,24 @@ func Run(args []string) {
 
 	level := logger.Debug
 
-	fp, err := os.OpenFile(cmd.logFile,
-		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	// Only the running node rotates its log; other commands just append to it.
+	// Rotation is on by default, including on the first start before
+	// config.toml exists. A config error here is reported by runApp.
+	logRotation := false
+	logRotationMaxSize := config.DefaultLogRotationMaxSize
+	if cmdName == RunCmd {
+		logRotation = config.DefaultLogRotation
+		if userConfig, err := config.ParseConfigFromPath(cmd.nodeConfigPath); err == nil {
+			logRotation = userConfig.Core.LogRotation
+			logRotationMaxSize = userConfig.Core.LogRotationMaxSize
+		}
+	}
+
+	fp, err := openLogFile(cmd.logFile, logRotation, logRotationMaxSize)
 	if err != nil {
 		panic(err)
 	}
+	defer fp.Close()
 
 	switch strings.ToLower(cmd.logLevel) {
 	case "error":
