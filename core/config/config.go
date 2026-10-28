@@ -106,7 +106,8 @@ func ParseConfigFromPath(configPath string) (types.UserConfig, error) {
 	if err := toml.Unmarshal(configDataBytes, &rubixConfig); err != nil {
 		return types.UserConfig{}, fmt.Errorf("failed to marshal config, err: %v", err)
 	}
-	if rubixConfig.Core.LogRotationMaxSize <= 0 {
+	// The size is only used when rotation is on.
+	if rubixConfig.Core.LogRotation && rubixConfig.Core.LogRotationMaxSize <= 0 {
 		return types.UserConfig{}, fmt.Errorf("invalid log_rotation_max_size %d, expected a positive size in MiB", rubixConfig.Core.LogRotationMaxSize)
 	}
 

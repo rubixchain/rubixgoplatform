@@ -27,6 +27,8 @@ func TestLogRotationConfig(t *testing.T) {
 		{"disabled", "log_rotation = false\n", false, 30},
 		{"custom max size", "log_rotation_max_size = 100\n", true, 100},
 		{"disabled with custom max size", "log_rotation = false\nlog_rotation_max_size = 5\n", false, 5},
+		{"disabled with zero max size", "log_rotation = false\nlog_rotation_max_size = 0\n", false, 0},
+		{"disabled with negative max size", "log_rotation = false\nlog_rotation_max_size = -1\n", false, -1},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
