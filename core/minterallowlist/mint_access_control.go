@@ -35,6 +35,19 @@ var TestnetAllowedMinters = []MintAccessRange{
 	{DID: "bafybmicbaadhaa76j7jlft6vxfqyzisehbekmnpa7r5g2jwqbn6dikfp4y", Level: 50001, StartTokenNumber: 3000001, EndTokenNumber: 4300000},
 }
 
+// CustomNetAllowedMinters lists the DIDs allowed to mint on a custom testnet,
+// meaning a testnet whose swarm key is not the one Rubix operates. It applies
+// only on such a network, and is never consulted on mainnet or on the Rubix
+// testnet. Levels carry CustomNetRBT_Level_Offset, so level 1 of the series is
+// 60001 and it holds TokenMap[1] tokens.
+//
+// An empty list means the node processes every token whoever minted it, and it
+// warns about that at startup.
+var CustomNetAllowedMinters = []MintAccessRange{
+	{DID: "bafybmih6fkweeuo32t6bsgzt4wo4xtccurw3m7hzz7eo6b5c5k5rmrj2ii", Level: 60001, StartTokenNumber: 1, EndTokenNumber: 2150000},
+	{DID: "bafybmihpujtqxdfvymlrwmlzi4lbzs4ikdqyemiwvju5trn3lczrzju4ke", Level: 60001, StartTokenNumber: 2150001, EndTokenNumber: 4300000},
+}
+
 // ValidateMinterAuthorization returns true if (did, level, number) is in the
 // list.
 func ValidateMinterAuthorization(table []MintAccessRange, did string, level, number int) bool {

@@ -382,6 +382,9 @@ type GenerateLocalRBTRequest struct {
 type FaucetRBTGenerateRequest struct {
 	TokenCount int    `json:"token_count"`
 	DID        string `json:"did"`
+	// StartIndex numbers the tokens on a custom network, which has no faucet
+	// server to hold the counter. Ignored on a Rubix network.
+	StartIndex int `json:"start_index"`
 }
 
 type QuorumListResponse struct {

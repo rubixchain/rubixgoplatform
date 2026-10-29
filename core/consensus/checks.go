@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/core/minterallowlist"
 	"github.com/rubixchain/rubixgoplatform/core/parts"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
@@ -531,7 +532,18 @@ func ValidateNewTokenContent(tokenID string, isQuorum bool, testnet bool, mainne
 		mapLevel := level
 		network := constants.NetworkMode_Mainnet
 
-		if testnet {
+		// A custom network runs in testnet mode but carries its own level
+		// offset, so it is tested before testnet: testnet is true on both.
+		if testnet && minterallowlist.IsCustomNetwork() {
+			network = constants.NetworkMode_Testnet
+			if level < constants.CustomNetRBT_Level_Offset {
+				return fmt.Errorf(
+					"invalid custom network token level %d: custom network level must be >= %d",
+					level, constants.CustomNetRBT_Level_Offset,
+				)
+			}
+			mapLevel = level - constants.CustomNetRBT_Level_Offset
+		} else if testnet {
 			network = constants.NetworkMode_Testnet
 			if level < constants.TestnetRBT_Level_Offset {
 				return fmt.Errorf(

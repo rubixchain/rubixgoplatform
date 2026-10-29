@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/minterallowlist"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/types/models"
@@ -169,6 +170,15 @@ func validateMinterAllowlist(
 	case mainnet:
 		table = minterallowlist.AllowedMinters
 		expectedLevel = 1
+	// A custom network, meaning a testnet on a swarm key Rubix does not operate,
+	// brings its own minters. An empty list means the node was started without
+	// one, which is logged at startup as a warning.
+	case testnet && minterallowlist.IsCustomNetwork():
+		if len(minterallowlist.CustomNetAllowedMinters) == 0 {
+			return nil
+		}
+		table = minterallowlist.CustomNetAllowedMinters
+		expectedLevel = constants.CustomNetRBT_Level_Offset + 1
 	// Testnet enforcement is currently disabled. Re-enable by uncommenting
 	// the case below; TestnetAllowedMinters is still defined and tested.
 	case testnet:

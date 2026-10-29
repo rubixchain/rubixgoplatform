@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/core/minterallowlist"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
 	"github.com/rubixchain/rubixgoplatform/token"
 	tokenmap "github.com/rubixchain/rubixgoplatform/token"
@@ -224,12 +225,33 @@ func (c *Core) GetpinnedTokens(did string) ([]models.Token, error) {
 	return requiredTokens, nil
 }
 
-func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string) {
+func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string, startIndex int) {
+
+	// A custom network runs no faucet server, so it numbers tokens from a
+	// caller supplied index. The faucet path below is left as it is for every
+	// Rubix network.
+	if minterallowlist.IsCustomNetwork() {
+		c.generateCustomNetTokens(reqID, tokenCount, did, startIndex)
+		return
+	}
 
 	br := models.BasicResponse{
 		Status:  true,
 		Message: "",
 	}
+
+	// Latest: the caller blocks on OutChan with no timeout, so every exit from
+	// here has to answer it. Sending from a defer covers the error returns
+	// below, which filled br in and then returned without sending it, leaving
+	// the request hung and its goroutine and web request entry leaked.
+	defer func() {
+		dc := c.GetWebReq(reqID)
+		if dc == nil {
+			c.log.Error("Failed to get did channels")
+			return
+		}
+		dc.OutChan <- &br
+	}()
 
 	tokenDetails, err := c.generateTestRBT(reqID, tokenCount, did)
 	if err != nil {
@@ -276,6 +298,30 @@ func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string
 		br.Status = false
 		br.Message = br.Message + ",  " + "Failed to update token details. Status code:" + strconv.Itoa(resp.StatusCode)
 	}
+}
+
+func (c *Core) getTestTokensID(tokenLevel int, tokenNumber int) (string, error) {
+	idStrVal := fmt.Sprintf("%d_%d", tokenLevel, tokenNumber)
+	return idStrVal, nil
+}
+
+// generateCustomNetTokens mints on a custom network and answers the caller. It
+// keeps its own response handling so the faucet path it replaces stays as it is.
+func (c *Core) generateCustomNetTokens(reqID string, tokenCount int, did string, startIndex int) {
+	br := models.BasicResponse{
+		Status:  true,
+		Message: "Successfully generated tokens.",
+	}
+
+	if c.faucetURL != "" {
+		c.log.Warn("faucetURL is ignored on a custom network, tokens are numbered from startIndex")
+	}
+	if err := c.generateCustomNetRBT(reqID, tokenCount, did, startIndex); err != nil {
+		c.log.Error("Failed to generate custom network tokens", "err", err)
+		br.Status = false
+		br.Message = err.Error()
+	}
+
 	dc := c.GetWebReq(reqID)
 	if dc == nil {
 		c.log.Error("Failed to get did channels")
@@ -284,9 +330,56 @@ func (c *Core) GenerateFaucetTestTokens(reqID string, tokenCount int, did string
 	dc.OutChan <- &br
 }
 
-func (c *Core) getTestTokensID(tokenLevel int, tokenNumber int) (string, error) {
-	idStrVal := fmt.Sprintf("%d_%d", tokenLevel, tokenNumber)
-	return idStrVal, nil
+// generateCustomNetRBT mints tokens on a custom network, where there is no
+// faucet server to hold the counter. Ids come from startIndex and run to
+// startIndex+num-1, carrying the custom network level offset so they cannot be
+// mistaken for a mainnet, testnet or localnet token.
+//
+// The caller owns the numbering. Two DIDs minting from the same index produce
+// the same ids, which breaks chain integrity once a shared quorum sees both, so
+// each minter needs its own range. startIndex is required for that reason: the
+// node's own counter would restart at 1 on every node.
+func (c *Core) generateCustomNetRBT(reqID string, num int, did string, startIndex int) error {
+	// A custom network is always a testnet one, but the flag this path keys on
+	// lives in another package, so the mode is checked here too rather than
+	// trusted from a distance.
+	if !c.testnet {
+		return fmt.Errorf("generate test token is available in test net")
+	}
+	if startIndex < 1 {
+		return fmt.Errorf("startIndex is required on a custom network and must be 1 or more, got %d", startIndex)
+	}
+
+	dc, err := c.SetupDID(reqID, did)
+	if err != nil {
+		return fmt.Errorf("DID does not exist")
+	}
+
+	for globalIndex := startIndex; globalIndex < startIndex+num; globalIndex++ {
+		currentTime := int(time.Now().Unix())
+
+		mapLevel, numInLevel, err := tokenmap.GetMainnetTokenLevelAndNumber(globalIndex)
+		if err != nil {
+			return fmt.Errorf("GetMainnetTokenLevelAndNumber(%d): %w", globalIndex, err)
+		}
+		tokenID := fmt.Sprintf("%d_%d", constants.CustomNetRBT_Level_Offset+mapLevel, numInLevel)
+
+		tx, err := c.w.BeginTx(c.w.Ctx)
+		if err != nil {
+			return fmt.Errorf("PersistGenesisTokenRecord: begin tx: %w", err)
+		}
+
+		// PersistGenesisTokenRecord commits on success, so the rollback is only
+		// needed on its error path. A deferred rollback would pile up one
+		// record per token for the whole run, and a run here mints millions.
+		if _, err = c.w.PersistGenesisTokenRecord(tx, dc, c.ps, tokenID, did, constants.NetworkMode_Testnet, currentTime); err != nil {
+			tx.Rollback(c.w.Ctx) //nolint:errcheck
+			c.log.Error("Failed to persist genesis token record", "err", err, "tokenID", tokenID)
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (c *Core) generateTestRBT(reqID string, numTokens int, did string) (*token.FaucetToken, error) {
@@ -313,11 +406,26 @@ func (c *Core) generateTestRBT(reqID string, numTokens int, did string) (*token.
 	var tokendetail token.FaucetToken
 
 	body, err := io.ReadAll(resp.Body)
-	//Populating the tokendetail with current token number and current token level received from Faucet.
-	json.Unmarshal(body, &tokendetail)
 	if err != nil {
 		return nil, err
 	}
+
+	//Populating the tokendetail with current token number and current token level received from Faucet.
+	// Latest: the unmarshal error used to be discarded, and the check under it
+	// read the ReadAll error instead. A reply that is not the expected JSON left
+	// tokendetail at zero, and the level arithmetic below then minted ids from
+	// the mainnet series, 1_1 onwards.
+	if err := json.Unmarshal(body, &tokendetail); err != nil {
+		return nil, fmt.Errorf("faucet returned an unreadable token value: %w", err)
+	}
+
+	// Latest: a reply that parses but carries no usable level, an empty object
+	// for instance, would reach the same arithmetic. Validate the level against
+	// TokenMap before minting from it.
+	if _, ok := token.TokenMap[tokendetail.TokenLevel-constants.TestnetRBT_Level_Offset]; !ok {
+		return nil, fmt.Errorf("faucet returned token level %d, which is not a testnet level", tokendetail.TokenLevel)
+	}
+
 	//Updating the Faucet token details with each new token
 	for i := 0; i < numTokens; i++ {
 		currentTime := int(time.Now().Unix())
