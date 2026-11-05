@@ -103,6 +103,7 @@ func (s *Server) APIGetRbtByDid(req *ensweb.Request) *ensweb.Result {
 // @Param 		input body types.SignRespData true "Send input for requested signature"
 // @Success      200      {object}  models.BasicResponse
 // @Failure      400      {object}  models.BasicResponse
+// @Security NodeAPIKey
 // @Router /rubix/v1/signature [post]
 func (s *Server) APISignatureResponse(req *ensweb.Request) *ensweb.Result {
 	var resp types.SignRespData

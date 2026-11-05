@@ -349,6 +349,11 @@ const docTemplate = `{
         },
         "/rubix/v1/fts/mint": {
             "post": {
+                "security": [
+                    {
+                        "NodeAPIKey": []
+                    }
+                ],
                 "description": "Mints a named fungible token (FT) for a DID, backed by the requested number of RBT tokens.",
                 "consumes": [
                     "application/json"
@@ -383,6 +388,11 @@ const docTemplate = `{
         },
         "/rubix/v1/nfts/generate": {
             "post": {
+                "security": [
+                    {
+                        "NodeAPIKey": []
+                    }
+                ],
                 "description": "This API will create new NFT",
                 "consumes": [
                     "multipart/form-data"
@@ -786,6 +796,11 @@ const docTemplate = `{
         },
         "/rubix/v1/signature": {
             "post": {
+                "security": [
+                    {
+                        "NodeAPIKey": []
+                    }
+                ],
                 "description": "This API is used to supply the password for the node along with the ID generated when Initiate RBT transfer is called.",
                 "consumes": [
                     "application/json"
@@ -941,6 +956,11 @@ const docTemplate = `{
         },
         "/rubix/v1/smart_contracts/generate": {
             "post": {
+                "security": [
+                    {
+                        "NodeAPIKey": []
+                    }
+                ],
                 "description": "Generates a smart contract token for a DID from the uploaded binary and raw code files.",
                 "consumes": [
                     "multipart/form-data"
@@ -1208,6 +1228,11 @@ const docTemplate = `{
                 }
             },
             "post": {
+                "security": [
+                    {
+                        "NodeAPIKey": []
+                    }
+                ],
                 "description": "Submits a transfer request (RBT, FT, NFT or smart contract) and runs it through quorum consensus. Returns a request ID that must be passed to the signature API (POST /rubix/v1/signature) to sign and complete the transaction.",
                 "consumes": [
                     "application/json"
@@ -1607,6 +1632,12 @@ const docTemplate = `{
         }
     },
     "securityDefinitions": {
+        "NodeAPIKey": {
+            "description": "Node API key; view it on the node with ` + "`" + `rubixgoplatform getapikey -p \u003cnodeDir\u003e` + "`" + `.",
+            "type": "apiKey",
+            "name": "X-API-Key",
+            "in": "header"
+        },
         "SessionToken": {
             "type": "apiKey",
             "name": "Session-Token",

@@ -10,6 +10,14 @@
   "password": "mypassword",
   "output_dir": "test/docker/data/stress/logs",
 
+  "_comment_dirs": "Node -p dirs (native_env.py work_dir); the harness reads each node's .api_key from here.",
+  "node_a_dir": "test/native/data/nodeA/app",
+  "node_b_dir": "test/native/data/nodeB/app",
+  "quorum_dir": "test/native/data/quorum/app",
+  "node_a_container": "",
+  "node_b_container": "",
+  "quorum_container": "",
+
   "_comment_callback": "Native nodes are host processes, so the SC callback receiver is reachable at 127.0.0.1 (not host.docker.internal).",
   "callback_url_mode": "host",
 

@@ -21,11 +21,13 @@ type Server struct {
 	log logger.Logger
 	c   *core.Core
 	sc  chan bool
+	// apiKeys guards value-moving routes; see requireAPIKey.
+	apiKeys *apiKeyStore
 }
 
 // NewServer create new server instances
 func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan bool, timeout time.Duration) (*Server, error) {
-	s := &Server{cfg: cfg, sc: sc, c: c}
+	s := &Server{cfg: cfg, sc: sc, c: c, apiKeys: &apiKeyStore{path: cfg.APIKeyPath}}
 	var err error
 	s.log = log.Named("Rubixplatform")
 	if err != nil {
@@ -42,9 +44,6 @@ func NewServer(c *core.Core, cfg *Config, log logger.Logger, start bool, sc chan
 	s.SetDebugMode()
 
 	if cfg.EnableAuth {
-		if cfg.APIKey == "" {
-			cfg.APIKey = "TestAPIKey"
-		}
 		if cfg.AuthMethod == "" {
 			cfg.AuthMethod = BasicAuthMethod
 		}
@@ -102,11 +101,11 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APISetupQuorum, "POST", s.AuthHandle(s.APISetupQuorum, true, s.AuthError, true))
 	s.AddRoute(setup.APIGenerateLocalRBT, "POST", s.AuthHandle(s.APIGenerateLocalRBT, true, s.AuthError, false))
 	s.AddRoute(setup.APIGetRbtByDid, "GET", s.AuthHandle(s.APIGetRbtByDid, true, s.AuthError, false))
-	s.AddRoute(setup.APISignatureResponse, "POST", s.AuthHandle(s.APISignatureResponse, true, s.AuthError, false))
+	s.AddRoute(setup.APISignatureResponse, "POST", s.requireAPIKey(s.AuthHandle(s.APISignatureResponse, true, s.AuthError, false)))
 	s.AddRoute(setup.APIRegisterDID, "POST", s.AuthHandle(s.APIRegisterDID, true, s.AuthError, false))
 	s.AddRoute(setup.APISetupDID, "POST", s.AuthHandle(s.APISetupDID, true, s.AuthError, false))
-	s.AddRoute(setup.APICreateNFT, "POST", s.AuthHandle(s.APICreateNFT, true, s.AuthError, false))
-	s.AddRoute(setup.APIGenerateSmartContract, "POST", s.AuthHandle(s.APIGenerateSmartContract, true, s.AuthError, false))
+	s.AddRoute(setup.APICreateNFT, "POST", s.requireAPIKey(s.AuthHandle(s.APICreateNFT, true, s.AuthError, false)))
+	s.AddRoute(setup.APIGenerateSmartContract, "POST", s.requireAPIKey(s.AuthHandle(s.APIGenerateSmartContract, true, s.AuthError, false)))
 	s.AddRoute(setup.APIFetchSmartContract, "GET", s.AuthHandle(s.APIFetchSmartContract, true, s.AuthError, false))
 	s.AddRoute(setup.APISubscribecontract, "GET", s.AuthHandle(s.APISubscribecontract, true, s.AuthError, false))
 	s.AddRoute(setup.APIRegisterCallBackURL, "POST", s.AuthHandle(s.APIRegisterCallbackURL, true, s.AuthError, false))
@@ -131,7 +130,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIGetSmartContractChain, "GET", s.AuthHandle(s.APIGetSmartContractChain, true, s.AuthError, false))
 
 	// Transactions
-	s.AddRoute(setup.APITransaction, "POST", s.AuthHandle(s.APIInitiateTransaction, true, s.AuthError, false))
+	s.AddRoute(setup.APITransaction, "POST", s.requireAPIKey(s.AuthHandle(s.APIInitiateTransaction, true, s.AuthError, false)))
 	s.AddRoute(setup.APITransaction, "GET", s.APIGetTransactions)
 	s.AddRoute(setup.APIGetTransactionByID, "GET", s.APIGetTransactionByID)
 	s.AddRoute(setup.APISyncTransactionChain, "POST", s.AuthHandle(s.APISyncTransactionChain, true, s.AuthError, false))
@@ -143,7 +142,7 @@ func (s *Server) RegisterRoutes() {
 	s.AddRoute(setup.APIRecoverWalletFromFullnode, "POST", s.APIRecoverWalletFromFullnode)
 
 	// FTs
-	s.AddRoute(setup.APICreateFT, "POST", s.AuthHandle(s.APICreateFT, true, s.AuthError, false))
+	s.AddRoute(setup.APICreateFT, "POST", s.requireAPIKey(s.AuthHandle(s.APICreateFT, true, s.AuthError, false)))
 	s.AddRoute(setup.APIListFT, "GET", s.APIListFTs)
 
 	s.AddRoute(setup.APIGetDIDBalance, "GET", s.AuthHandle(s.APIGetDIDBalance, true, s.AuthError, false))
