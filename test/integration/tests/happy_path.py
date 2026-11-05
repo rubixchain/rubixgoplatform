@@ -68,13 +68,13 @@ class StressRunner:
         self.cfg = config
 
         self.node_a = NodeClient(
-            f"http://localhost:{config.node_a_port}", "nodeA", config.password
+            f"http://localhost:{config.node_a_port}", "nodeA", config.password, config.node_a_dir
         )
         self.node_b = NodeClient(
-            f"http://localhost:{config.node_b_port}", "nodeB", config.password
+            f"http://localhost:{config.node_b_port}", "nodeB", config.password, config.node_b_dir
         )
         self.quorum = NodeClient(
-            f"http://localhost:{config.quorum_port}", "quorum", config.password
+            f"http://localhost:{config.quorum_port}", "quorum", config.password, config.quorum_dir
         )
 
         self.db_a = DBValidator(
