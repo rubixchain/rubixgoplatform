@@ -24,6 +24,7 @@ import (
 // @Param        metadata       formData      file  true  "JSON file which contains information about the NFT"
 // @Param        artifact       formData      file    true  "File which is meant to be an NFT"
 // @Success      200  {object}  model.BasicResponse
+// @Security     NodeAPIKey
 // @Router       /rubix/v1/nfts/generate [post]
 func (s *Server) APICreateNFT(req *ensweb.Request) *ensweb.Result {
 	var createNFT core.NFTReq

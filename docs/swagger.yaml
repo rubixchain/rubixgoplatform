@@ -412,6 +412,8 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/models.BasicResponse'
+      security:
+      - NodeAPIKey: []
       summary: Create FT
       tags:
       - FT
@@ -514,6 +516,8 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/models.BasicResponse'
+      security:
+      - NodeAPIKey: []
       summary: Create NFT
       tags:
       - NFT
@@ -709,6 +713,8 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/models.BasicResponse'
+      security:
+      - NodeAPIKey: []
       summary: Signature Response
       tags:
       - Signature
@@ -837,6 +843,8 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/models.BasicResponse'
+      security:
+      - NodeAPIKey: []
       summary: Generate Smart Contract
       tags:
       - Smart Contract
@@ -991,6 +999,8 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/models.BasicResponse'
+      security:
+      - NodeAPIKey: []
       summary: Initiates a transaction
       tags:
       - Transactions
@@ -1069,6 +1079,12 @@ paths:
       tags:
       - Transactions
 securityDefinitions:
+  NodeAPIKey:
+    description: Node API key; view it on the node with `rubixgoplatform getapikey
+      -p <nodeDir>`.
+    in: header
+    name: X-API-Key
+    type: apiKey
   SessionToken:
     in: header
     name: Session-Token

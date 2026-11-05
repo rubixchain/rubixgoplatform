@@ -22,6 +22,7 @@ import (
 // @Param 		 binaryCodePath	   formData      file    true  "location of binary code hash"
 // @Param 		 rawCodePath	   formData      file    true  "location of raw code hash"
 // @Success      200  {object}  models.BasicResponse
+// @Security     NodeAPIKey
 // @Router       /rubix/v1/smart_contracts/generate [post]
 func (s *Server) APIGenerateSmartContract(req *ensweb.Request) *ensweb.Result {
 	var deploySC core.GenerateSmartContractRequest
