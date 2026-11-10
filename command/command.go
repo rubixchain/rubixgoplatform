@@ -65,6 +65,9 @@ const (
 	ArbitrarySignCmd             string = "sign"
 	VerifySignatureCmd           string = "verify-signature"
 	InitCmd                      string = "init"
+	GetAPIKeyCmd                 string = "getapikey"
+	RegenerateAPIKeyCmd          string = "regenerateapikey"
+	RevokeAPIKeyCmd              string = "revokeapikey"
 
 	// balance commands
 	GetDIDBalanceCmd string = "getdidbalance"
@@ -111,6 +114,9 @@ var commands = []string{
 	GetDIDBalanceCmd,
 	GetNftsByDidCmd,
 	InitCmd,
+	GetAPIKeyCmd,
+	RegenerateAPIKeyCmd,
+	RevokeAPIKeyCmd,
 }
 
 var commandsHelp = []string{
@@ -151,6 +157,9 @@ var commandsHelp = []string{
 	"This command will give the DID balance",
 	"This command will give the NFT balance of a DID",
 	"This command will initialise the node",
+	"This command will show the node API key, its status and expiry (reads the -p dir)",
+	"This command will replace the node API key; use -apiKeyValidity (e.g. 720h, default unlimited)",
+	"This command will revoke the node API key until it is regenerated",
 }
 
 type Command struct {
@@ -191,6 +200,8 @@ type Command struct {
 	numTokens                    int
 	startIndex                   int
 	enableAuth                   bool
+	apiKey                       string
+	apiKeyValidity               time.Duration
 	did                          string
 	token                        string
 	arbitaryMode                 bool
@@ -341,6 +352,10 @@ func (cmd *Command) runApp() {
 			DBPassword: cmd.cfg.DBConfig.Password,
 		},
 		EnableAuth: cmd.enableAuth,
+		APIKeyPath: server.APIKeyPath(cmd.nodeConfigPath),
+	}
+	if !cmd.ensureAPIKey(serverConfig.APIKeyPath) {
+		return
 	}
 
 	s, err := server.NewServer(rubixCore, serverConfig, cmd.log, cmd.start, sc, cmd.timeout)
@@ -435,6 +450,8 @@ func Run(args []string) {
 	flag.IntVar(&cmd.startIndex, "startIndex", 0, "startIndex to generate test rbt tokens locally")
 	flag.StringVar(&cmd.did, "did", "", "DID")
 	flag.BoolVar(&cmd.enableAuth, "enableAuth", false, "Enable authentication")
+	flag.StringVar(&cmd.apiKey, "apiKey", "", "Node API key (default: read from the -p dir)")
+	flag.DurationVar(&cmd.apiKeyValidity, "apiKeyValidity", 0, "Validity of a newly created API key, e.g. 720h (0 = unlimited)")
 	flag.BoolVar(&cmd.arbitaryMode, "arbitaryMode", false, "Enable arbitary mode")
 	flag.StringVar(&cmd.tokenList, "tokenList", "tokens.txt", "Token lis")
 	flag.StringVar(&cmd.token, "token", "", "Token name")
@@ -553,6 +570,7 @@ func Run(args []string) {
 		cmd.log.Error("Failed to create client")
 		return
 	}
+	cmd.setClientAPIKey()
 
 	switch cmdName {
 	case VersionCmd:
@@ -629,6 +647,12 @@ func Run(args []string) {
 		cmd.getNFTsByDid()
 	case InitCmd:
 		cmd.init()
+	case GetAPIKeyCmd:
+		cmd.getAPIKey()
+	case RegenerateAPIKeyCmd:
+		cmd.regenerateAPIKey()
+	case RevokeAPIKeyCmd:
+		cmd.revokeAPIKey()
 
 	default:
 		cmd.log.Error("Invalid command")

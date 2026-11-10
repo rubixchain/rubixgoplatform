@@ -16,6 +16,11 @@ import (
 // @securityDefinitions.apikey SessionToken
 // @in header
 // @name Session-Token
+
+// @securityDefinitions.apikey NodeAPIKey
+// @in header
+// @name X-API-Key
+// @description Node API key; view it on the node with `rubixgoplatform getapikey -p <nodeDir>`.
 func main() {
 	command.Run(os.Args)
 }

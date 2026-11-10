@@ -22,6 +22,7 @@ type syncTransactionChainRequest struct {
 // @Produce json
 // @Param   input body models.TransactionRequest true "transaction"
 // @Success 200 {object} models.BasicResponse
+// @Security NodeAPIKey
 // @Router /rubix/v1/tx [post]
 func (s *Server) APIInitiateTransaction(req *ensweb.Request) *ensweb.Result {
 	var transactionreq models.TransactionRequest
