@@ -54,7 +54,7 @@ _IS_WINDOWS = os.name == "nt"
 # Kubo version vendored for Docker (test/docker/rubix/kubo_v0.19.1_linux-amd64.tar.gz).
 # Native mode fetches the matching host build on demand.
 _KUBO_VERSION = "v0.19.1"
-_KUBO_DIST = "https://dist.ipfs.tech/kubo/{ver}/kubo_{ver}_{plat}.{ext}"
+_KUBO_DIST = "https://github.com/ipfs/kubo/releases/download/{ver}/kubo_{ver}_{plat}.{ext}"
 
 # Swarm key shared by all localnet nodes (same file the Docker swarm mount uses).
 _SWARM_KEY_SRC = os.path.join("test", "docker", "swarm", "localnetswarm.key")
