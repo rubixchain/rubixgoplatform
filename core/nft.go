@@ -219,6 +219,32 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 	}
 
 	c.log.Info("NFTCallBack: Transaction chain synced successfully", "nft_token", nft)
+
+	// For a burn, the synced chain carries a TokenRole_Burn tail entry, which
+	// applyTokenChainFromSync maps to TokenStatus_Burnt (see core/sync.go — the
+	// role switch runs for pre-existing tokens too, so a re-sync cannot revert a
+	// burnt token to Free). Assert that here rather than trusting it: if the
+	// mapping is ever missed, this subscriber would keep treating a destroyed
+	// NFT as live, and a silent wrong balance is worse than a loud log line.
+	if newEvent.IsBurn {
+		token, err := c.w.GetTokenByTokenID(nft)
+		if err != nil {
+			c.log.Error("NFTCallBack: burn event synced but NFT lookup failed",
+				"nft_token", nft, "err", err)
+			return
+		}
+		if token.TokenStatus != int16(constants.TokenStatus_Burnt) {
+			c.log.Error("NFTCallBack: burn event synced but NFT is not marked Burnt locally",
+				"nft_token", nft,
+				"localStatus", token.TokenStatus,
+				"expectedStatus", int16(constants.TokenStatus_Burnt),
+				"burnTxID", newEvent.TransactionID,
+			)
+			return
+		}
+		c.log.Info("NFTCallBack: NFT burn recorded locally",
+			"nft_token", nft, "burnTxID", newEvent.TransactionID)
+	}
 }
 
 func (c *Core) FetchNFT(fetchNFTRequest *FetchNFTRequest) *models.BasicResponse {
@@ -398,9 +424,18 @@ func (c *Core) GetNFTsByDid(did string) ([]types.NFTBalance, error) {
 		c.log.Error("Failed to get nfts", "err", err)
 		return []types.NFTBalance{}, fmt.Errorf("failed to get nfts, error: %w", err)
 	}
-	// List out all nft ids and their values, and return the list
+	// List out all nft ids and their values, and return the list.
+	// Burnt and transferred-away NFTs are excluded: the tokens row survives an
+	// outgoing transfer and a burn (it is the chain's anchor), so without this
+	// filter a DID keeps reporting NFTs it no longer owns.
 	var nftInfo []types.NFTBalance
 	for _, nft := range nftInfoList {
+		switch nft.TokenStatus {
+		case int16(constants.TokenStatus_Burnt),
+			int16(constants.TokenStatus_BurntForFT),
+			int16(constants.TokenStatus_Transferred):
+			continue
+		}
 		nftInfo = append(nftInfo, types.NFTBalance{
 			NFTId:    nft.TokenID,
 			NFTValue: nft.TokenValue,
