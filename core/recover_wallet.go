@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/core/fullnode"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	"github.com/rubixchain/rubixgoplatform/setup"
@@ -43,14 +44,6 @@ const (
 	// any stream state change.
 	recoveryInterPageDelay = 50 * time.Millisecond
 )
-
-// recoveryNonceHash builds the digest the recovering node signs to prove DID
-// ownership: SHA3-256 over the fullnode-issued single-use nonce. Both client
-// and fullnode MUST build it identically. SHA3-256 matches the hash the rest
-// of the DID-signing flow uses.
-func recoveryNonceHash(nonce string) []byte {
-	return util.CalculateHash([]byte("recover-from-fullnode:"+nonce), constants.HashAlgorithm_SHA3_256)
-}
 
 // fullnodeEntry mirrors one element of the JSON list at fullnodesListURL.
 type fullnodeEntry struct {
@@ -167,7 +160,7 @@ func (c *Core) RecoverWalletFromFullnode(reqID string, ctx context.Context, did 
 	if err != nil {
 		return nil, fmt.Errorf("RecoverWalletFromFullnode: obtain recovery nonce: %w", err)
 	}
-	authSigBytes, err := signer.Sign(recoveryNonceHash(nonce))
+	authSigBytes, err := signer.Sign(fullnode.RecoveryNonceHash(nonce))
 	if err != nil {
 		return nil, fmt.Errorf("RecoverWalletFromFullnode: sign recovery nonce: %w", err)
 	}
@@ -395,9 +388,9 @@ func (c *Core) fetchRecoveryPageWithDiag(
 			continue
 		}
 		// Ownership proof travels in headers (not the body) — see
-		// headerRecoveryNonce / headerRecoverySignature.
-		httpReq.Header.Set(headerRecoveryNonce, nonce)
-		httpReq.Header.Set(headerRecoverySignature, signature)
+		// fullnode.HeaderRecoveryNonce / fullnode.HeaderRecoverySignature.
+		httpReq.Header.Set(fullnode.HeaderRecoveryNonce, nonce)
+		httpReq.Header.Set(fullnode.HeaderRecoverySignature, signature)
 		// Intentionally NOT setting httpReq.Close = true.
 		//
 		// Each page used to open a fresh TCP conn + a fresh libp2p stream

@@ -13,6 +13,7 @@ import (
 
 	ipfsnode "github.com/ipfs/go-ipfs-api"
 	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/core/fullnode"
 	"github.com/rubixchain/rubixgoplatform/core/ipfsport"
 	"github.com/rubixchain/rubixgoplatform/core/storage"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
@@ -93,7 +94,7 @@ type Core struct {
 	ipfsProviderStore    *IPFSProviderStore
 	perfTracker          *PerformanceTracker
 	fullNode             bool
-	txnProcessor         *DynamicTxnProcessor
+	txnProcessor         *fullnode.DynamicTxnProcessor
 	RetryTokenSyncTicker *time.Ticker
 	faucetURL            string // for faucet url
 	mainnet              bool
@@ -104,10 +105,6 @@ type Core struct {
 	unpledgeAuditLog     *os.File
 	unpledgeAuditLogOnce sync.Once
 	unpledgeAuditLogMu   sync.Mutex
-	// recoverySessions holds the live, single-use ownership-proof nonces issued
-	// to recovering nodes. Populated only on a fullnode (initialised in
-	// registerRecoveryRoute). See core/fullnode_recovery.go.
-	recoverySessions *recoverySessionStore
 }
 
 func newRubixContext() context.Context {
