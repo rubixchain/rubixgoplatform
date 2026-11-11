@@ -27,6 +27,9 @@ Cases (4 families):
   - locked-NFT release: a child-mint on a SUBSCRIBED parent fails at pledge
     ("Quorum is not setup"); the parent must return to Deployed with no
     lock reference, and the retry against the real quorum must succeed.
+  - duplicate token in request: the same smart contract listed twice in one
+    request must be refused before consensus, and a normal execute afterwards
+    must still succeed (no fork between owner and quorum).
 """
 
 from __future__ import annotations
@@ -56,6 +59,7 @@ _REASON_FT_INSUFFICIENT = ["insufficient", "queryandlockfts", "ft lock failed", 
 _REASON_INVALID_DID = ["did", "invalid", "not found", "peer", "unknown"]
 _REASON_BAD_AMOUNT = ["amount", "invalid", "must be", "greater than", "positive"]
 _REASON_QUORUM_NOT_SETUP = ["quorum is not setup"]
+_REASON_DUPLICATE = ["more than once", "duplicate"]
 
 
 class NegativeEngine:
@@ -164,6 +168,7 @@ class NegativeEngine:
         results.extend(self._ft_over_transfer())
         results.extend(self._invalid_inputs())
         results.extend(self._locked_nft_release_on_quorum_failure())
+        results.extend(self._duplicate_token_in_request())
         passed = sum(1 for r in results if r["status"] == "PASS")
         log.info("=== NEGATIVE TESTS: %d/%d passed ===", passed, len(results))
         return results
@@ -250,6 +255,73 @@ class NegativeEngine:
         except Exception as exc:  # noqa: BLE001
             out.append({"check": retry_check, "status": "FAIL",
                         "detail": f"retry after quorum fix was rejected: {str(exc)[:160]}"})
+        return out
+
+    def _duplicate_token_in_request(self) -> List[Dict[str, str]]:
+        # The same token listed twice in one request must be refused before consensus.
+        # If it slips through, the quorum commits a block the initiator never persists and the chain forks.
+        from test.integration.engines.file_selector import select_smart_contract_files
+
+        out: List[Dict[str, str]] = []
+        check = "NEG_DUPLICATE_TOKEN_IN_REQUEST"
+        try:
+            wasm_path, source_path = select_smart_contract_files()
+            sc_id = self.node_a.create_smart_contract(self.did_a, wasm_path, source_path).get("smartContractId")
+            if not sc_id:
+                raise RuntimeError("smart contract generation returned no smartContractId")
+            self.node_a.deploy_smart_contract(
+                initiator_did=self.did_a, sc_id=sc_id, data="neg-dup-deploy", password=self.password,
+            )
+        except Exception as exc:  # noqa: BLE001
+            out.append({"check": check, "status": "FAIL", "detail": f"setup failed: {exc}"[:200]})
+            return out
+
+        chain_len = lambda: len(self.node_a.get_smart_contract_chain(sc_id))  # noqa: E731
+        chain_before = chain_len()
+
+        sc_entry = {"smartContractId": sc_id, "value": 1.0, "data": "neg-dup-execute"}
+        payload = {
+            "initiator": self.did_a,
+            "owner": "",
+            "tokens": {
+                "rbt": 0,
+                "ft": [],
+                "nft": [],
+                "smartContract": [sc_entry, dict(sc_entry)],
+                "transferNftOwnership": False,
+            },
+            "memo": "negative: same smart contract twice in one request",
+        }
+
+        def submit_duplicate() -> None:
+            req_id = self.node_a.initiate_transaction_payload(payload)
+            self.node_a.complete_transaction(req_id, self.password)
+
+        out.append(self._expect_rejection(
+            check,
+            submit_duplicate,
+            _REASON_DUPLICATE,
+            unchanged={"sc_chain_len": (chain_len, chain_before)},
+        ))
+
+        # A normal execute must still go through: proves the rejection left owner and quorum in step.
+        try:
+            self.node_a.execute_smart_contract(
+                executor_did=self.did_a, sc_id=sc_id, data="neg-dup-followup", password=self.password,
+            )
+            chain_after = chain_len()
+            ok = chain_after == chain_before + 1
+            out.append({
+                "check": "NEG_DUPLICATE_TOKEN_NO_FORK",
+                "status": "PASS" if ok else "FAIL",
+                "detail": f"execute after rejection: chain {chain_before} -> {chain_after}",
+            })
+        except Exception as exc:  # noqa: BLE001
+            out.append({
+                "check": "NEG_DUPLICATE_TOKEN_NO_FORK",
+                "status": "FAIL",
+                "detail": f"execute after rejection failed: {exc}"[:200],
+            })
         return out
 
     def _balance_violations(self) -> List[Dict[str, str]]:

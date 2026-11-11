@@ -16,6 +16,31 @@ import (
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
 )
 
+// validateRequestTokenIDs rejects malformed or repeated NFT and smart contract IDs in a request.
+func validateRequestTokenIDs(req *models.TransactionRequest) error {
+	seenNFT := make(map[string]struct{})
+	for _, n := range req.GetAllNFTs() {
+		if err := util.ValidateCIDFormat(n.NFTId); err != nil {
+			return fmt.Errorf("NFT %w", err)
+		}
+		if _, dup := seenNFT[n.NFTId]; dup {
+			return fmt.Errorf("NFT %s is listed more than once in the request", n.NFTId)
+		}
+		seenNFT[n.NFTId] = struct{}{}
+	}
+	seenSC := make(map[string]struct{})
+	for _, sc := range req.GetAllSmartContracts() {
+		if err := util.ValidateCIDFormat(sc.SmartContractId); err != nil {
+			return fmt.Errorf("SmartContract %w", err)
+		}
+		if _, dup := seenSC[sc.SmartContractId]; dup {
+			return fmt.Errorf("SmartContract %s is listed more than once in the request", sc.SmartContractId)
+		}
+		seenSC[sc.SmartContractId] = struct{}{}
+	}
+	return nil
+}
+
 // BuildTransactionInfoFromRequest prepares a transaction by collecting and locking tokens
 // for a multi-asset transfer request. This is the single entry point for all token types:
 //
@@ -39,18 +64,9 @@ func BuildTransactionInfoFromRequest(
 ) (*models.TransactionInfo, float64, error) {
 	log.Debug("Initating BuildTransactionInfoFromRequest")
 
-	// Reject NFT and SmartContract entries with badly-shaped IDs up front.
-	// Callers must subscribe to obtain a real CID; this catches empty strings
-	// and typos before any work begins.
-	for _, n := range req.GetAllNFTs() {
-		if err := util.ValidateCIDFormat(n.NFTId); err != nil {
-			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: NFT %w", err)
-		}
-	}
-	for _, sc := range req.GetAllSmartContracts() {
-		if err := util.ValidateCIDFormat(sc.SmartContractId); err != nil {
-			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: SmartContract %w", err)
-		}
+	// Reject badly-shaped or repeated NFT/SC IDs before any token is locked.
+	if err := validateRequestTokenIDs(req); err != nil {
+		return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: %w", err)
 	}
 
 	txTokens := &models.TransactionTokens{}
