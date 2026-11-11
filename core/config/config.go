@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -9,6 +10,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/wrapper/logrotate"
 )
 
 // ---------------------------------------------------------------------------------------------------------- //
@@ -18,6 +20,8 @@ const userConfigTemplate = `
 node_index = 0
 network_mode = "mainnet|testnet|localnet"
 enable_trusted_network = false
+log_rotation = false
+log_rotation_period = "7d"
 
 [db]
 host = "localhost"
@@ -99,7 +103,36 @@ func ParseConfigFromPath(configPath string) (types.UserConfig, error) {
 		return types.UserConfig{}, fmt.Errorf("failed to marshal config, err: %v", err)
 	}
 
+	// Applies the defaults of the optional fields and rejects the invalid ones
+	// so that a misconfigured node never runs on an unexpected setting.
+	if _, err := ResolveLogConfig(rubixConfig); err != nil {
+		return types.UserConfig{}, fmt.Errorf("failed to parse config.toml, err: %w", err)
+	}
+
 	return rubixConfig, nil
+}
+
+// ErrInvalidLogConfig marks a config.toml whose log rotation settings cannot
+// be used, so that the callers can tell it apart from a config file which is
+// merely absent.
+var ErrInvalidLogConfig = errors.New("invalid log rotation configuration")
+
+// ResolveLogConfig validates the log rotation settings of config.toml and
+// resolves them into their runtime form.
+//
+// Both fields are optional: a missing `log_rotation` disables the rotation and
+// a missing `log_rotation_period` falls back to "7d", so the config.toml files
+// of the existing deployments keep working unchanged.
+func ResolveLogConfig(userConfig types.UserConfig) (types.LogConfig, error) {
+	period, err := logrotate.ParsePeriod(userConfig.Core.LogRotationPeriod)
+	if err != nil {
+		return types.LogConfig{}, fmt.Errorf("%w: %v", ErrInvalidLogConfig, err)
+	}
+
+	return types.LogConfig{
+		Rotation:       userConfig.Core.LogRotation,
+		RotationPeriod: period,
+	}, nil
 }
 
 func CreateConfigFileFromTemplate(configPath string) error {
@@ -151,6 +184,12 @@ func CreateRubixConfigFromUserConfig(userConfig types.UserConfig, nodeDir string
 	} else {
 		rubixConfig.DBConfig.Port = (int(constants.PostgresBasePort) + int(userConfig.Core.NodeIndex))
 	}
+
+	logConfig, err := ResolveLogConfig(userConfig)
+	if err != nil {
+		return types.RubixConfig{}, err
+	}
+	rubixConfig.LogConfig = logConfig
 
 	rubixConfig.MainnetBootstrap = userConfig.Ipfs.MainnetBootstrapNodes
 	rubixConfig.TestnetBootstrap = userConfig.Ipfs.TestnetBootstrapNodes

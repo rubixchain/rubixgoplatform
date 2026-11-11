@@ -59,12 +59,12 @@ func VerifySignature(dc types.DIDCrypto, txInfo *models.TransactionInfo, signatu
 	return nil
 }
 
+// PublishTransaction announces a transaction on the constants.Event_RubixTxns
+// topic. It is network-agnostic: mainnet, testnet and localnet all publish the
+// same models.EventTransaction envelope on the same topic, so subscribers
+// (fullnodes and quorums, see Core.SubscribeTxnSetup) handle every network
+// through one code path.
 func PublishTransaction(pubsub *types.PubSub, tx *models.TransactionInfo, signature *models.Signature, isTxSuccess bool, message string) (*models.Transactions, error) {
-	// Skip publishing transactions on localnet
-	if tx.Network == constants.NetworkMode_Localnet {
-		return nil, nil
-	}
-
 	txID, err := GetTransactionID(tx)
 	if err != nil {
 		return nil, fmt.Errorf("PublishTransaction: failed to get transaction ID: %v", err)

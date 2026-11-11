@@ -1,6 +1,7 @@
 package command
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -22,6 +23,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/types"
 	srvcfg "github.com/rubixchain/rubixgoplatform/wrapper/config"
 	"github.com/rubixchain/rubixgoplatform/wrapper/logger"
+	"github.com/rubixchain/rubixgoplatform/wrapper/logrotate"
 	"golang.org/x/term"
 )
 
@@ -242,6 +244,7 @@ type Command struct {
 	deExpURL                     string
 	operationType                int
 	faucetURL                    string
+	logRotator                   *logrotate.Writer
 }
 
 func showVersion() {
@@ -296,6 +299,55 @@ func (cmd *Command) init() {
 	if err := config.CreateConfigFileFromTemplate(cmd.nodeConfigPath); err != nil {
 		cmd.log.Error(fmt.Sprintf("failed to create config.toml file at path: %v, err: %v", cmd.nodeConfigPath, err))
 		return
+	}
+}
+
+// openLogFile opens the node log file, wrapping it into a rotating writer when
+// `log_rotation` is enabled in config.toml.
+//
+// The config file is optional here, since it does not exist before the node is
+// initialised: a missing or unreadable config.toml simply keeps the plain
+// log.txt of the earlier releases. Invalid log rotation settings, on the other
+// hand, are reported to the user instead of falling back to an unexpected
+// rotation interval.
+func (cmd *Command) openLogFile() (io.Writer, error) {
+	userConfig, err := config.ParseConfigFromPath(cmd.nodeConfigPath)
+	if err != nil && errors.Is(err, config.ErrInvalidLogConfig) {
+		return nil, err
+	}
+
+	if err == nil && userConfig.Core.LogRotation {
+		logConfig, err := config.ResolveLogConfig(userConfig)
+		if err != nil {
+			return nil, err
+		}
+
+		rotator, err := logrotate.New(logrotate.Config{
+			Dir:      filepath.Dir(cmd.logFile),
+			FileName: filepath.Base(cmd.logFile),
+			Period:   logConfig.RotationPeriod,
+			OnError: func(err error) {
+				fmt.Printf("log rotation failed, err: %v\n", err)
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		cmd.logRotator = rotator
+		return rotator, nil
+	}
+
+	return os.OpenFile(cmd.logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+}
+
+// closeLogFile flushes the log file and completes any pending archival.
+func (cmd *Command) closeLogFile() {
+	if cmd.logRotator == nil {
+		return
+	}
+	if err := cmd.logRotator.Close(); err != nil {
+		fmt.Printf("failed to close log file, err: %v\n", err)
 	}
 }
 
@@ -517,16 +569,17 @@ func Run(args []string) {
 	}
 
 	if cmd.logFile == "" {
-		cmd.logFile = filepath.Join(cmd.nodeConfigPath, "log.txt")
+		cmd.logFile = filepath.Join(cmd.nodeConfigPath, logrotate.DefaultFileName)
 	}
 
 	level := logger.Debug
 
-	fp, err := os.OpenFile(cmd.logFile,
-		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	fp, err := cmd.openLogFile()
 	if err != nil {
-		panic(err)
+		fmt.Printf("Failed to set up the log file, err: %v\n", err)
+		return
 	}
+	defer cmd.closeLogFile()
 
 	switch strings.ToLower(cmd.logLevel) {
 	case "error":
