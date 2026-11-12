@@ -96,3 +96,33 @@ func collectRecoveryChains(rows pgx.Rows) (map[string][]recoverycommit.ChainEntr
 	}
 	return chains, nil
 }
+
+// GetFullNodeRecoveryTipChains returns, from the fullnode tables, the full
+// tokenchain of every token whose latest transaction names receiverDID as
+// owner, in position order. Rows are shaped as in GetRecoveryTokenChains.
+func (w *Wallet) GetFullNodeRecoveryTipChains(receiverDID string) (map[string][]recoverycommit.ChainEntry, error) {
+	rows, err := w.db.Pool().Query(w.Ctx, `
+		WITH tips AS (
+			SELECT tc.token_id
+			FROM fullnode_transactions t
+			JOIN fullnode_tokenchain tc ON tc.transaction_id = t.id
+			WHERE t.info->>'owner' = $1
+			  AND NOT EXISTS (
+				SELECT 1 FROM fullnode_tokenchain n
+				WHERE n.token_id = tc.token_id AND n.position > tc.position)
+		)
+		SELECT tc.token_id, tc.transaction_id, tc.previous_transaction_id, tc.position, tc.role, t.info::text
+		FROM fullnode_tokenchain tc
+		JOIN tips USING (token_id)
+		LEFT JOIN fullnode_transactions t ON t.id = tc.transaction_id
+		ORDER BY tc.token_id, tc.position
+	`, receiverDID)
+	if err != nil {
+		return nil, fmt.Errorf("GetFullNodeRecoveryTipChains: %w", err)
+	}
+	chains, err := collectRecoveryChains(rows)
+	if err != nil {
+		return nil, fmt.Errorf("GetFullNodeRecoveryTipChains: %w", err)
+	}
+	return chains, nil
+}
