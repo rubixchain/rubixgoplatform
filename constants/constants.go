@@ -29,6 +29,10 @@ const (
 	DefaultPostgresHost     string = "localhost"
 )
 
+// DefaultServerHost is the address the node API server binds to when
+// config.toml does not specify [server] host.
+const DefaultServerHost string = "localhost"
+
 // Network mode
 const (
 	NetworkMode_Mainnet  string = "mainnet"
