@@ -141,3 +141,44 @@ func TestGetRecoveryTokenChains(t *testing.T) {
 		t.Fatalf("T1 chain = %+v", t1)
 	}
 }
+
+func TestGetFullNodeRecoveryTipChains(t *testing.T) {
+	w := newPGTestWallet(t)
+	ns := fmt.Sprintf("rc%d-", time.Now().UnixNano())
+	id := func(s string) string { return ns + s }
+	user := id("user")
+	xfer := int16(models.GetTokenRoleID(constants.TokenRole_Transfer))
+
+	addTx := func(txID, owner string) {
+		if _, err := w.db.Pool().Exec(w.Ctx, `INSERT INTO fullnode_transactions (id, info, signature) VALUES ($1, json_build_object('owner', $2::text), '{}')`, txID, owner); err != nil {
+			t.Fatal(err)
+		}
+	}
+	addChain := func(token string, txs ...string) {
+		var prev *string
+		for i, tx := range txs {
+			if _, err := w.db.Pool().Exec(w.Ctx, `
+				INSERT INTO fullnode_tokenchain (token_id, transaction_id, previous_transaction_id, role, position)
+				VALUES ($1, $2, $3, $4, $5)`, token, tx, prev, xfer, i); err != nil {
+				t.Fatal(err)
+			}
+			p := tx
+			prev = &p
+		}
+	}
+	addTx(id("m"), id("alice"))
+	addTx(id("x1"), user)
+	addTx(id("y1"), id("bob"))
+	addChain(id("T1"), id("m"), id("x1"))           // tip owned by user
+	addChain(id("T2"), id("m"), id("x1"), id("y1")) // moved on to bob
+	addChain(id("T3"), id("m"))                     // never the user's
+
+	got, err := w.GetFullNodeRecoveryTipChains(user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t1 := got[id("T1")]
+	if len(got) != 1 || len(t1) != 2 || t1[0].TransactionID != id("m") || t1[1].PreviousTransactionID != id("m") || len(t1[1].Info) == 0 {
+		t.Fatalf("got %+v, want only T1's full chain", got)
+	}
+}
