@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -96,6 +97,14 @@ func (w *Wallet) PersistFullNodeTransaction(ctx context.Context, req *FullNodePe
 		return err
 	}
 
+	// Release the previous transactions' collateral before applying current
+	// token updates. Both changes must commit together.
+	unpledgedTokenIDs, err := w.persistFullNodeUnpledges(ctx, tx, req.Transaction.ID, inputs)
+	if err != nil {
+		return err
+	}
+	affectedTokenIDs = append(affectedTokenIDs, unpledgedTokenIDs...)
+
 	tokenChainRows := make([]models.TokenChain, 0, len(inputs))
 	for _, input := range inputs {
 		roleName := input.roleName
@@ -165,6 +174,113 @@ func (w *Wallet) PersistFullNodeTransaction(ctx context.Context, req *FullNodePe
 		return fmt.Errorf("fullnode persistence: commit: %w", err)
 	}
 	return nil
+}
+
+// persistFullNodeUnpledges uses the validated successor as proof of release.
+// Only a collateral chain still ending at the predecessor's pledge is eligible;
+// a replay must not release a later pledge or append a second unpledge.
+func (w *Wallet) persistFullNodeUnpledges(ctx context.Context, tx pgx.Tx, transactionID string, inputs []fullNodeTokenInput) ([]string, error) {
+	predecessors := make(map[string]map[string]bool)
+	for _, input := range inputs {
+		previousID := input.tokenInfo.PreviousTransactionID
+		if input.roleName == constants.TokenRole_Pledge || previousID == "" {
+			continue
+		}
+		if predecessors[previousID] == nil {
+			predecessors[previousID] = make(map[string]bool)
+		}
+		predecessors[previousID][input.tokenInfo.TokenID] = true
+	}
+
+	// Sort collateral IDs before locking so concurrent successors of a bundled
+	// transaction acquire shared collateral locks in the same order.
+	collateral := make(map[string]map[string]bool)
+	for previousID, movedTokens := range predecessors {
+		var infoJSON []byte
+		if err := tx.QueryRow(ctx, `SELECT info FROM fullnode_transactions WHERE id = $1`, previousID).Scan(&infoJSON); err != nil {
+			return nil, fmt.Errorf("fullnode unpledge: read predecessor %q: %w", previousID, err)
+		}
+		var info models.TransactionInfo
+		if err := json.Unmarshal(infoJSON, &info); err != nil {
+			return nil, fmt.Errorf("fullnode unpledge: decode predecessor %q: %w", previousID, err)
+		}
+		// An unpledge proof may be a token's predecessor without actually
+		// transferring that token. Its own collateral must not be released.
+		if !fullNodePredecessorMovedToken(&info, movedTokens) {
+			continue
+		}
+		for _, quorum := range info.Quorums {
+			if quorum == nil {
+				continue
+			}
+			for _, token := range quorum.Tokens {
+				if token == nil || token.TokenID == "" {
+					return nil, fmt.Errorf("fullnode unpledge: invalid collateral in predecessor %q", previousID)
+				}
+				if collateral[token.TokenID] == nil {
+					collateral[token.TokenID] = make(map[string]bool)
+				}
+				collateral[token.TokenID][previousID] = true
+			}
+		}
+	}
+	ids := make([]string, 0, len(collateral))
+	for tokenID := range collateral {
+		ids = append(ids, tokenID)
+	}
+	sort.Strings(ids)
+	updated := make([]string, 0, len(ids))
+	pledgeRole := int16(models.GetTokenRoleID(constants.TokenRole_Pledge))
+	unpledgeRole := int16(models.GetTokenRoleID(constants.TokenRole_Unpledge))
+	for _, tokenID := range ids {
+		var lockedID string
+		if err := tx.QueryRow(ctx, `SELECT token_id FROM fullnode_rbt WHERE token_id = $1 FOR UPDATE`, tokenID).Scan(&lockedID); err != nil {
+			return nil, fmt.Errorf("fullnode unpledge: lock collateral %q: %w", tokenID, err)
+		}
+		latest, err := w.readLatestFullNodeTokenChainRowTx(ctx, tx, tokenID)
+		if err != nil {
+			return nil, err
+		}
+		if latest == nil {
+			return nil, fmt.Errorf("fullnode unpledge: missing collateral chain %q", tokenID)
+		}
+		if !collateral[tokenID][latest.TransactionID] || latest.Role != pledgeRole {
+			continue
+		}
+		state, err := w.readFullNodeTokenStateTx(ctx, tx, constants.TokenType_RBT, tokenID)
+		if err != nil {
+			return nil, err
+		}
+		row, position := buildFullNodeTokenChainRow(transactionID, latest, latest.TransactionID, unpledgeRole, tokenID)
+		if err := w.insertFullNodeTokenChainRows(ctx, tx, []models.TokenChain{row}); err != nil {
+			return nil, err
+		}
+		// Preserve the collateral's quorum owner, value, parent and state hash.
+		state.tokenStatus = int16(constants.TokenStatus_Free)
+		state.transactionID = transactionID
+		state.latestRole = unpledgeRole
+		state.latestPosition = position
+		if err := w.upsertFullNodeTokenStateTx(ctx, tx, constants.TokenType_RBT, state); err != nil {
+			return nil, err
+		}
+		updated = append(updated, tokenID)
+	}
+	return updated, nil
+}
+
+func fullNodePredecessorMovedToken(info *models.TransactionInfo, tokens map[string]bool) bool {
+	lists := [][]*models.TokenInfo{info.CommittedTokens}
+	if info.Tokens != nil {
+		lists = append(lists, info.Tokens.RBT, info.Tokens.FT, info.Tokens.NFT, info.Tokens.SmartContract)
+	}
+	for _, list := range lists {
+		for _, token := range list {
+			if token != nil && tokens[token.TokenID] {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func collectFullNodeTokenInputs(txInfo *models.TransactionInfo) ([]fullNodeTokenInput, []string, error) {
