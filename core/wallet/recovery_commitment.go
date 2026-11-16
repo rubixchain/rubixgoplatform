@@ -1,10 +1,13 @@
 package wallet
 
 import (
+	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/core/recoverycommit"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
 // GetRecoveryPledgedTokens returns the tokens quorumDID is still pledged for
@@ -24,6 +27,7 @@ func (w *Wallet) GetRecoveryPledgedTokens(quorumDID, receiverDID string) (map[st
 		CROSS JOIN LATERAL unnest(u.transaction_tokens) AS tok
 		WHERE u.quorum_did = $1
 		  AND t.info->>'owner' = $2
+		  AND t.info::jsonb->'tokens'->'rbt' @> jsonb_build_array(jsonb_build_object('tokenId', tok))
 		ORDER BY tok, u.tx_id
 	`, quorumDID, receiverDID)
 	if err != nil {
@@ -107,6 +111,7 @@ func (w *Wallet) GetFullNodeRecoveryTipChains(receiverDID string) (map[string][]
 			FROM fullnode_transactions t
 			JOIN fullnode_tokenchain tc ON tc.transaction_id = t.id
 			WHERE t.info->>'owner' = $1
+			  AND t.info::jsonb->'tokens'->'rbt' @> jsonb_build_array(jsonb_build_object('tokenId', tc.token_id))
 			  AND NOT EXISTS (
 				SELECT 1 FROM fullnode_tokenchain n
 				WHERE n.token_id = tc.token_id AND n.position > tc.position)
@@ -123,6 +128,92 @@ func (w *Wallet) GetFullNodeRecoveryTipChains(receiverDID string) (map[string][]
 	chains, err := collectRecoveryChains(rows)
 	if err != nil {
 		return nil, fmt.Errorf("GetFullNodeRecoveryTipChains: %w", err)
+	}
+	return chains, nil
+}
+
+// GetFullNodeRecoveryChains reads user RBT chains, then their collateral.
+// Both reads use the same snapshot while new transactions arrive.
+func (w *Wallet) GetFullNodeRecoveryChains(userDID string) (map[string][]recoverycommit.ChainEntry, error) {
+	tx, err := w.db.Pool().BeginTx(w.Ctx, pgx.TxOptions{
+		IsoLevel:   pgx.RepeatableRead,
+		AccessMode: pgx.ReadOnly,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("GetFullNodeRecoveryChains: begin: %w", err)
+	}
+	defer tx.Rollback(w.Ctx) //nolint:errcheck
+
+	rows, err := tx.Query(w.Ctx, `
+		WITH user_tokens AS (
+			SELECT token_id FROM fullnode_rbt WHERE did = $1
+			UNION
+			SELECT tc.token_id FROM fullnode_tokenchain tc
+			JOIN fullnode_transactions t ON t.id = tc.transaction_id
+			WHERE t.info->>'owner' = $1
+			  AND t.info::jsonb->'tokens'->'rbt' @> jsonb_build_array(jsonb_build_object('tokenId', tc.token_id))
+			  AND NOT EXISTS (
+				SELECT 1 FROM fullnode_tokenchain n
+				WHERE n.token_id = tc.token_id AND n.position > tc.position)
+		)
+		SELECT tc.token_id, tc.transaction_id, tc.previous_transaction_id, tc.position, tc.role, t.info::text
+		FROM fullnode_tokenchain tc JOIN user_tokens USING (token_id)
+		LEFT JOIN fullnode_transactions t ON t.id = tc.transaction_id
+		ORDER BY tc.token_id, tc.position
+	`, userDID)
+	if err != nil {
+		return nil, fmt.Errorf("GetFullNodeRecoveryChains: read user chains: %w", err)
+	}
+	chains, err := collectRecoveryChains(rows)
+	if err != nil {
+		return nil, fmt.Errorf("GetFullNodeRecoveryChains: read user chains: %w", err)
+	}
+
+	collateralIDs := make(map[string]bool)
+	for _, chain := range chains {
+		var info models.TransactionInfo
+		if err := json.Unmarshal(chain[len(chain)-1].Info, &info); err != nil {
+			continue // The caller reports the broken chain in the excluded list.
+		}
+		for _, quorum := range info.Quorums {
+			if quorum == nil {
+				continue
+			}
+			for _, token := range quorum.Tokens {
+				if token != nil && token.TokenID != "" {
+					if _, loaded := chains[token.TokenID]; !loaded {
+						collateralIDs[token.TokenID] = true
+					}
+				}
+			}
+		}
+	}
+	if len(collateralIDs) > 0 {
+		ids := make([]string, 0, len(collateralIDs))
+		for id := range collateralIDs {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		rows, err := tx.Query(w.Ctx, `
+			SELECT tc.token_id, tc.transaction_id, tc.previous_transaction_id, tc.position, tc.role, t.info::text
+			FROM fullnode_tokenchain tc
+			LEFT JOIN fullnode_transactions t ON t.id = tc.transaction_id
+			WHERE tc.token_id = ANY($1::TEXT[])
+			ORDER BY tc.token_id, tc.position
+		`, ids)
+		if err != nil {
+			return nil, fmt.Errorf("GetFullNodeRecoveryChains: read collateral chains: %w", err)
+		}
+		collateral, err := collectRecoveryChains(rows)
+		if err != nil {
+			return nil, fmt.Errorf("GetFullNodeRecoveryChains: read collateral chains: %w", err)
+		}
+		for id, chain := range collateral {
+			chains[id] = chain
+		}
+	}
+	if err := tx.Commit(w.Ctx); err != nil {
+		return nil, fmt.Errorf("GetFullNodeRecoveryChains: commit: %w", err)
 	}
 	return chains, nil
 }

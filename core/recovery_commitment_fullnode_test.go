@@ -84,3 +84,75 @@ func TestVerifyQuorumCommitments(t *testing.T) {
 		}
 	}
 }
+
+func TestSelectUnpledgedTokens(t *testing.T) {
+	info := rcRBT("T", "alice", "user")
+	info.Quorums = []*models.QuorumInfo{{Did: "q", Tokens: []*models.TokenInfo{{TokenID: "P"}}}}
+	transfer := rcChain(t, rcTx{"x", constants.TokenRole_Transfer, info})
+	pledge := rcChain(t, rcTx{"x", constants.TokenRole_Pledge, info})
+	release := rcRBT("sibling", "user", "other")
+	collateral := rcChain(t, rcTx{"x", constants.TokenRole_Pledge, info}, rcTx{"y", constants.TokenRole_Unpledge, release})
+	for _, tc := range []struct {
+		name                     string
+		collateral               []recoverycommit.ChainEntry
+		wantTokens, wantExcluded int
+	}{
+		{"released collateral", collateral, 1, 0},
+		{"live pledge", pledge, 0, 0},
+		{"unknown pledge state", nil, 0, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			chains := map[string][]recoverycommit.ChainEntry{"T": transfer}
+			if tc.collateral != nil {
+				chains["P"] = tc.collateral
+			}
+			tokens, excluded := selectUnpledgedTokens("user", chains)
+			if len(tokens) != tc.wantTokens || len(excluded) != tc.wantExcluded {
+				t.Fatalf("tokens=%v excluded=%v", tokens, excluded)
+			}
+		})
+	}
+	// A quorum can recover its own collateral after its pledge is released.
+	got, excluded := selectUnpledgedTokens("q", map[string][]recoverycommit.ChainEntry{"P": collateral})
+	if len(got) != 1 || got[0].TokenID != "P" || len(excluded) != 0 {
+		t.Fatalf("released quorum collateral: tokens=%v excluded=%v", got, excluded)
+	}
+}
+
+func TestRecoveryCommitmentsOnlyIncludeRBTs(t *testing.T) {
+	info := rcRBT("R", "alice", "user")
+	info.Tokens.FT = []*models.TokenInfo{{TokenID: "F"}}
+	info.Tokens.NFT = []*models.TokenInfo{{TokenID: "N"}}
+	info.Tokens.SmartContract = []*models.TokenInfo{{TokenID: "S"}}
+	chains := make(map[string][]recoverycommit.ChainEntry)
+	pledged := make(map[string][]string)
+	for _, tokenID := range []string{"R", "F", "N", "S"} {
+		chains[tokenID] = rcChain(t, rcTx{"x", constants.TokenRole_Transfer, info})
+		pledged[tokenID] = []string{"x"}
+	}
+	for name, selectTokens := range map[string]func() []recoverycommit.TokenCommitment{
+		"quorum": func() []recoverycommit.TokenCommitment {
+			tokens, _ := selectQuorumPledgedTokens(pledged, chains)
+			return tokens
+		},
+		"fullnode": func() []recoverycommit.TokenCommitment {
+			tokens, _ := selectUnpledgedTokens("user", chains)
+			return tokens
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := selectTokens()
+			if len(got) != 1 || got[0].TokenID != "R" {
+				t.Fatalf("expected only RBT, got %v", got)
+			}
+		})
+	}
+	info.Quorums = []*models.QuorumInfo{{Did: "q", Tokens: []*models.TokenInfo{{TokenID: "P"}}}}
+	for tokenID := range chains {
+		chains[tokenID] = rcChain(t, rcTx{"x", constants.TokenRole_Transfer, info})
+	}
+	expected, _ := expectedPledgedTokens("user", chains)
+	if len(expected["q"]) != 1 || expected["q"][0].TokenID != "R" {
+		t.Fatalf("quorum reproduction included other assets: %v", expected)
+	}
+}

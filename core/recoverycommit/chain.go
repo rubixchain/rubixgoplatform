@@ -3,6 +3,7 @@ package recoverycommit
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/types/models"
@@ -121,6 +122,97 @@ func ContainsToken(list []*models.TokenInfo, tokenID string) bool {
 	for _, t := range list {
 		if t != nil && t.TokenID == tokenID {
 			return true
+		}
+	}
+	return false
+}
+
+// IsLatestTxnPledged follows each quorum's collateral after the latest txn.
+// Missing chains or a missing unpledge entry return an error.
+func IsLatestTxnPledged(tokenID string, chain []ChainEntry, collateral map[string][]ChainEntry) ([]string, error) {
+	if err := ValidateChain(chain); err != nil {
+		return nil, err
+	}
+	latest := chain[len(chain)-1]
+	var info models.TransactionInfo
+	if err := json.Unmarshal(latest.Info, &info); err != nil {
+		return nil, err
+	}
+	pledgeRole := int16(models.GetTokenRoleID(constants.TokenRole_Pledge))
+	unpledgeRole := int16(models.GetTokenRoleID(constants.TokenRole_Unpledge))
+	if latest.Role == unpledgeRole {
+		return nil, nil
+	}
+	if latest.Role == pledgeRole {
+		for _, q := range info.Quorums {
+			if q != nil && q.Did != "" && ContainsToken(q.Tokens, tokenID) {
+				return []string{q.Did}, nil
+			}
+		}
+		return nil, fmt.Errorf("token %s: pledge owner is missing", tokenID)
+	}
+	var pledgedBy []string
+	seen := make(map[string]bool)
+	for _, q := range info.Quorums {
+		if q == nil || len(q.Tokens) == 0 {
+			continue
+		}
+		if q.Did == "" {
+			return nil, fmt.Errorf("token %s: missing quorum DID", tokenID)
+		}
+		live := false
+		for _, token := range q.Tokens {
+			if token == nil || token.TokenID == "" {
+				return nil, fmt.Errorf("token %s: missing collateral ID", tokenID)
+			}
+			entries := collateral[token.TokenID]
+			if err := ValidateChain(entries); err != nil {
+				return nil, fmt.Errorf("collateral %s: %w", token.TokenID, err)
+			}
+			found := false
+			for i, entry := range entries {
+				if entry.TransactionID != latest.TransactionID {
+					continue
+				}
+				found = true
+				if entry.Role != pledgeRole {
+					return nil, fmt.Errorf("collateral %s: transaction %s is not a pledge", token.TokenID, latest.TransactionID)
+				}
+				if i == len(entries)-1 {
+					live = true
+				} else if entries[i+1].Role != unpledgeRole {
+					return nil, fmt.Errorf("collateral %s: missing unpledge after %s", token.TokenID, latest.TransactionID)
+				}
+				break
+			}
+			if !found {
+				return nil, fmt.Errorf("collateral %s: pledge %s is missing", token.TokenID, latest.TransactionID)
+			}
+		}
+		if live && !seen[q.Did] {
+			pledgedBy = append(pledgedBy, q.Did)
+			seen[q.Did] = true
+		}
+	}
+	sort.Strings(pledgedBy)
+	return pledgedBy, nil
+}
+
+// IsRBTChain checks whether this chain names the token as RBT or collateral.
+// Quorum collateral tokens are RBTs.
+func IsRBTChain(tokenID string, chain []ChainEntry) bool {
+	for _, entry := range chain {
+		var info models.TransactionInfo
+		if json.Unmarshal(entry.Info, &info) != nil {
+			continue
+		}
+		if info.Tokens != nil && ContainsToken(info.Tokens.RBT, tokenID) {
+			return true
+		}
+		for _, q := range info.Quorums {
+			if q != nil && ContainsToken(q.Tokens, tokenID) {
+				return true
+			}
 		}
 	}
 	return false

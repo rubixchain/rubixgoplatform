@@ -112,6 +112,9 @@ func expectedPledgedTokens(userDID string, chains map[string][]recoverycommit.Ch
 	}
 
 	for tokenID, chain := range chains {
+		if !recoverycommit.IsRBTChain(tokenID, chain) {
+			continue
+		}
 		tip := chain[len(chain)-1]
 		var info models.TransactionInfo
 		if err := json.Unmarshal(tip.Info, &info); err != nil {
@@ -122,10 +125,8 @@ func expectedPledgedTokens(userDID string, chains map[string][]recoverycommit.Ch
 			continue
 		}
 		moved := [][]*models.TokenInfo{info.Tokens.RBT, info.Tokens.FT, info.Tokens.NFT, info.Tokens.SmartContract}
-		isMoved := false
 		live := true
 		for _, list := range moved {
-			isMoved = isMoved || recoverycommit.ContainsToken(list, tokenID)
 			for _, t := range list {
 				if t == nil {
 					continue
@@ -135,6 +136,7 @@ func expectedPledgedTokens(userDID string, chains map[string][]recoverycommit.Ch
 				}
 			}
 		}
+		isMoved := recoverycommit.ContainsToken(info.Tokens.RBT, tokenID)
 		if !isMoved {
 			continue // a pledge or committed token, not the user's
 		}
@@ -163,4 +165,60 @@ func expectedPledgedTokens(userDID string, chains map[string][]recoverycommit.Ch
 	}
 	sort.Slice(excluded, func(i, j int) bool { return excluded[i].TokenID < excluded[j].TokenID })
 	return expected, excluded
+}
+
+// ComputeUnpledgedCommitment builds this fullnode's root for free user tokens.
+// Excluded tokens have missing or broken history and are not in the root.
+func (c *Core) ComputeUnpledgedCommitment(requestID, userDID, fullnodeDID string) (*recoverycommit.CommitmentTree, []recoverycommit.ExcludedToken, error) {
+	if !c.fullNode {
+		return nil, nil, fmt.Errorf("ComputeUnpledgedCommitment: only a fullnode can build this commitment")
+	}
+	if requestID == "" || userDID == "" || fullnodeDID == "" {
+		return nil, nil, fmt.Errorf("ComputeUnpledgedCommitment: request ID, user DID and fullnode DID are required")
+	}
+	chains, err := c.w.GetFullNodeRecoveryChains(userDID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("ComputeUnpledgedCommitment: %w", err)
+	}
+	tokens, excluded := selectUnpledgedTokens(userDID, chains)
+	tree, err := recoverycommit.BuildUnpledgedCommitment(requestID, userDID, fullnodeDID, tokens)
+	return tree, excluded, err
+}
+
+func selectUnpledgedTokens(userDID string, chains map[string][]recoverycommit.ChainEntry) ([]recoverycommit.TokenCommitment, []recoverycommit.ExcludedToken) {
+	var tokens []recoverycommit.TokenCommitment
+	var excluded []recoverycommit.ExcludedToken
+	for tokenID, chain := range chains {
+		if !recoverycommit.IsRBTChain(tokenID, chain) {
+			continue
+		}
+		var err error
+		if err = recoverycommit.ValidateChain(chain); err == nil {
+			var owner string
+			owner, err = recoverycommit.CurrentOwner(tokenID, chain)
+			if err == nil && owner != userDID {
+				continue
+			}
+		}
+		if err == nil {
+			var pledgedBy []string
+			pledgedBy, err = recoverycommit.IsLatestTxnPledged(tokenID, chain, chains)
+			if err == nil && len(pledgedBy) != 0 {
+				continue
+			}
+		}
+		if err == nil {
+			var token recoverycommit.TokenCommitment
+			token, err = recoverycommit.BuildTokenCommitment(tokenID, recoverycommit.TransactionIDs(chain))
+			if err == nil {
+				tokens = append(tokens, token)
+			}
+		}
+		if err != nil {
+			excluded = append(excluded, recoverycommit.ExcludedToken{TokenID: tokenID, Reason: err.Error()})
+		}
+	}
+	sort.Slice(tokens, func(i, j int) bool { return tokens[i].TokenID < tokens[j].TokenID })
+	sort.Slice(excluded, func(i, j int) bool { return excluded[i].TokenID < excluded[j].TokenID })
+	return tokens, excluded
 }
