@@ -7,14 +7,20 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-// Commitment is what a quorum publishes for one recovery request: the
-// user-level Merkle root over every token it holds for UserDID.
+const (
+	CommitterTypeQuorum   = "quorum"
+	CommitterTypeFullnode = "fullnode"
+)
+
+// Commitment is the token-chain root a quorum or fullnode publishes.
+// CommitterType tells the receiver which token set it covers.
 type Commitment struct {
-	RequestID  string `json:"request_id"`
-	UserDID    string `json:"user_did"`
-	QuorumDID  string `json:"quorum_did"`
-	TokenCount int    `json:"token_count"`
-	Root       string `json:"root"` // hex SHA3-256
+	RequestID     string `json:"request_id"`
+	UserDID       string `json:"user_did"`
+	CommitterDID  string `json:"committer_did"`
+	CommitterType string `json:"committer_type"`
+	TokenCount    int    `json:"token_count"`
+	Root          string `json:"root"` // hex SHA3-256
 }
 
 // TokenCommitment is one token's layer-1 result.
@@ -71,20 +77,41 @@ func BuildQuorumCommitment(requestID, userDID, quorumDID string, tokens []TokenC
 	if requestID == "" || userDID == "" || quorumDID == "" {
 		return nil, fmt.Errorf("BuildQuorumCommitment: request ID, user DID and quorum DID are required")
 	}
-	sorted := append([]TokenCommitment(nil), tokens...)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i].TokenID < sorted[j].TokenID })
-
-	leaves, err := tokenLeaves(sorted)
+	tree, err := buildCommitment(requestID, userDID, quorumDID, CommitterTypeQuorum, tokens)
 	if err != nil {
 		return nil, fmt.Errorf("BuildQuorumCommitment: %w", err)
 	}
+	return tree, nil
+}
+
+// BuildUnpledgedCommitment builds the fullnode commitment for unpledged tokens.
+// Token selection and pledge-state checks belong to the caller.
+func BuildUnpledgedCommitment(requestID, userDID, fullnodeDID string, tokens []TokenCommitment) (*CommitmentTree, error) {
+	if requestID == "" || userDID == "" || fullnodeDID == "" {
+		return nil, fmt.Errorf("BuildUnpledgedCommitment: request ID, user DID and fullnode DID are required")
+	}
+	tree, err := buildCommitment(requestID, userDID, fullnodeDID, CommitterTypeFullnode, tokens)
+	if err != nil {
+		return nil, fmt.Errorf("BuildUnpledgedCommitment: %w", err)
+	}
+	return tree, nil
+}
+
+func buildCommitment(requestID, userDID, committerDID, committerType string, tokens []TokenCommitment) (*CommitmentTree, error) {
+	sorted := append([]TokenCommitment(nil), tokens...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].TokenID < sorted[j].TokenID })
+	leaves, err := tokenLeaves(sorted)
+	if err != nil {
+		return nil, err
+	}
 	return &CommitmentTree{
 		Commitment: Commitment{
-			RequestID:  requestID,
-			UserDID:    userDID,
-			QuorumDID:  quorumDID,
-			TokenCount: len(sorted),
-			Root:       util.HexToStr(MerkleRoot(leaves)),
+			RequestID:     requestID,
+			UserDID:       userDID,
+			CommitterDID:  committerDID,
+			CommitterType: committerType,
+			TokenCount:    len(sorted),
+			Root:          util.HexToStr(MerkleRoot(leaves)),
 		},
 		Tokens: sorted,
 	}, nil
@@ -182,7 +209,8 @@ func CompareCommitments(expected, submitted Commitment) []string {
 	}
 	check("request_id", expected.RequestID, submitted.RequestID)
 	check("user_did", expected.UserDID, submitted.UserDID)
-	check("quorum_did", expected.QuorumDID, submitted.QuorumDID)
+	check("committer_did", expected.CommitterDID, submitted.CommitterDID)
+	check("committer_type", expected.CommitterType, submitted.CommitterType)
 	if expected.TokenCount != submitted.TokenCount {
 		diffs = append(diffs, fmt.Sprintf("token_count: expected %d, got %d", expected.TokenCount, submitted.TokenCount))
 	}

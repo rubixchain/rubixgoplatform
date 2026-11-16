@@ -68,15 +68,17 @@ func verifyQuorumCommitments(requestID, userDID string, chains map[string][]reco
 
 	seen := make(map[string]bool, len(submitted))
 	for _, sub := range submitted {
-		chk := RecoveryCommitmentCheck{QuorumDID: sub.QuorumDID, Submitted: sub}
+		chk := RecoveryCommitmentCheck{QuorumDID: sub.CommitterDID, Submitted: sub}
 		switch {
-		case sub.QuorumDID == "":
-			chk.Mismatches = []string{"quorum_did is empty"}
-		case seen[sub.QuorumDID]:
+		case sub.CommitterDID == "":
+			chk.Mismatches = []string{"committer_did is empty"}
+		case sub.CommitterType != recoverycommit.CommitterTypeQuorum:
+			chk.Mismatches = []string{"committer_type must be quorum"}
+		case seen[sub.CommitterDID]:
 			chk.Mismatches = []string{"duplicate commitment from this quorum"}
 		default:
-			seen[sub.QuorumDID] = true
-			tree, err := recoverycommit.BuildQuorumCommitment(requestID, userDID, sub.QuorumDID, expected[sub.QuorumDID])
+			seen[sub.CommitterDID] = true
+			tree, err := recoverycommit.BuildQuorumCommitment(requestID, userDID, sub.CommitterDID, expected[sub.CommitterDID])
 			if err != nil {
 				return nil, err
 			}
