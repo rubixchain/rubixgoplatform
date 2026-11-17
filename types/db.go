@@ -6,6 +6,8 @@ type CoreConfig struct {
 	NodeIndex            int    `toml:"node_index"`
 	NetworkMode          string `toml:"network_mode"`
 	EnableTrustedNetwork bool   `toml:"enable_trusted_network"`
+	// Used on localnet only. Mainnet and testnet use fixed IDs.
+	LocalnetRecoveryNFTID string `toml:"localnet_recovery_nft_id"`
 }
 
 type DBParams struct {
@@ -95,6 +97,7 @@ type RubixConfig struct {
 	MainnetBootstrap        []string
 	TestnetBootstrap        []string
 	LocalnetBootStrap       []string
+	LocalnetRecoveryNFTID   string
 	EnableOptimizedUnpledge bool
 	AsyncFTResponse         bool
 	NodePort                int
