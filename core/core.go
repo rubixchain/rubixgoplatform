@@ -264,6 +264,8 @@ func (c *Core) SetupCore() error {
 		}
 	}
 
+	c.SubscribeRecoveryNFT()
+
 	c.w.SetupWallet(c.ipfs)
 	// Set health-managed IPFS operations for the wallet
 	if c.ipfsOps != nil {

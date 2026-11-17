@@ -36,6 +36,13 @@ const (
 	NetworkMode_Localnet string = "localnet"
 )
 
+// Recovery NFT IDs for mainnet and testnet. Both are placeholders for now.
+// Update them by hand once the real Recovery NFTs are deployed.
+const (
+	RecoveryNFTID_Mainnet string = "QmbKP6dLYpD8LH9bjjztQGFMhpQULBZYZkCxVSwTqpAhPm"
+	RecoveryNFTID_Testnet string = "QmbKP6dLYpD8LH9bjjztQGFMhpQULBZYZkCxVSwTqpAhPm"
+)
+
 // Supported crypto algorithms for DID (Address)
 const DidAlgo_SECP256K1 = "secp256k1"
 
