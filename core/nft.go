@@ -220,9 +220,9 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 
 	c.log.Info("NFTCallBack: Transaction chain synced successfully", "nft_token", nft)
 
-	// A request on the Recovery NFT: subscribe to its child NFT.
+	// A request on the Recovery NFT: subscribe to its ephemeral NFT.
 	if recoveryNFTID := c.RecoveryNFTID(); recoveryNFTID != "" && topic == recoveryNFTID {
-		c.subscribeRecoveryChild(newEvent.TransactionID)
+		c.subscribeEphemeralNFT(newEvent.TransactionID)
 	}
 }
 

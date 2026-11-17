@@ -11,9 +11,9 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-// recoveryChildSuffixLen is how many characters of the request
-// transaction ID go into the child NFT ID (96 bits).
-const recoveryChildSuffixLen = 24
+// ephemeralSuffixLen is how many characters of the request
+// transaction ID go into the ephemeral NFT ID (96 bits).
+const ephemeralSuffixLen = 24
 
 // RecoveryNFTID returns the Recovery NFT ID for this node's network.
 // On localnet it comes from config; an empty result means recovery is off.
@@ -29,19 +29,19 @@ func (c *Core) RecoveryNFTID() string {
 	return ""
 }
 
-// RecoveryChildNFTID builds the child NFT ID for a recovery request.
+// EphemeralNFTID builds the ephemeral NFT ID for a recovery request.
 // It keeps the first 22 characters of the Recovery NFT ID and adds the
 // last 24 characters of the request transaction ID, so the result is
 // still a 46-character CID that every node can work out on its own.
-func RecoveryChildNFTID(recoveryNFTID, requestTxID string) (string, error) {
+func EphemeralNFTID(recoveryNFTID, requestTxID string) (string, error) {
 	if err := util.ValidateCIDFormat(recoveryNFTID); err != nil {
 		return "", fmt.Errorf("invalid recovery NFT ID: %w", err)
 	}
 	if _, err := hex.DecodeString(requestTxID); err != nil || len(requestTxID) != 64 {
 		return "", fmt.Errorf("invalid request transaction ID: %s", requestTxID)
 	}
-	keep := len(recoveryNFTID) - recoveryChildSuffixLen
-	return recoveryNFTID[:keep] + requestTxID[len(requestTxID)-recoveryChildSuffixLen:], nil
+	keep := len(recoveryNFTID) - ephemeralSuffixLen
+	return recoveryNFTID[:keep] + requestTxID[len(requestTxID)-ephemeralSuffixLen:], nil
 }
 
 // ExecuteRecoveryNFT puts a signed recovery request on the Recovery NFT.
@@ -63,36 +63,36 @@ func (c *Core) ExecuteRecoveryNFT(reqID string, request *types.RecoveryRequest) 
 		return "", err
 	}
 	// This node gets no callback for its own execution, so subscribe here.
-	c.subscribeRecoveryChild(txID)
+	c.subscribeEphemeralNFT(txID)
 	return txID, nil
 }
 
-// DeployRecoveryChild deploys the child NFT for a recovery request.
-// It does nothing if the child already exists on this node.
+// DeployEphemeralNFT deploys the ephemeral NFT for a recovery request.
+// It does nothing if the ephemeral NFT already exists on this node.
 // It is a plain deploy, so the Recovery NFT is not run again.
-func (c *Core) DeployRecoveryChild(reqID, did, requestTxID string) error {
-	childID, err := RecoveryChildNFTID(c.RecoveryNFTID(), requestTxID)
+func (c *Core) DeployEphemeralNFT(reqID, did, requestTxID string) error {
+	ephemeralID, err := EphemeralNFTID(c.RecoveryNFTID(), requestTxID)
 	if err != nil {
 		return err
 	}
-	exists, err := c.w.TokenExists(c.Ctx, nil, childID)
+	exists, err := c.w.TokenExists(c.Ctx, nil, ephemeralID)
 	if err != nil {
-		return fmt.Errorf("failed to check child NFT %s: %w", childID, err)
+		return fmt.Errorf("failed to check ephemeral NFT %s: %w", ephemeralID, err)
 	}
 	if exists {
 		return nil
 	}
-	_, err = c.runRecoveryNFT(reqID, did, childID, "")
+	_, err = c.runRecoveryNFT(reqID, did, ephemeralID, "")
 	return err
 }
 
-// ExecuteRecoveryChild puts a recovery message on the child NFT of the
+// ExecuteEphemeralNFT puts a recovery message on the ephemeral NFT of the
 // request named in msg.RequestID. The sender DID runs the transaction.
-func (c *Core) ExecuteRecoveryChild(reqID string, msg *types.RecoveryMessage) (string, error) {
+func (c *Core) ExecuteEphemeralNFT(reqID string, msg *types.RecoveryMessage) (string, error) {
 	if msg == nil {
 		return "", fmt.Errorf("recovery message is required")
 	}
-	childID, err := RecoveryChildNFTID(c.RecoveryNFTID(), msg.RequestID)
+	ephemeralID, err := EphemeralNFTID(c.RecoveryNFTID(), msg.RequestID)
 	if err != nil {
 		return "", err
 	}
@@ -100,7 +100,7 @@ func (c *Core) ExecuteRecoveryChild(reqID string, msg *types.RecoveryMessage) (s
 	if err != nil {
 		return "", fmt.Errorf("failed to encode recovery message: %w", err)
 	}
-	return c.runRecoveryNFT(reqID, msg.SenderDID, childID, string(data))
+	return c.runRecoveryNFT(reqID, msg.SenderDID, ephemeralID, string(data))
 }
 
 // runRecoveryNFT runs one NFT transaction and returns its transaction ID.
@@ -130,18 +130,18 @@ func (c *Core) SubscribeRecoveryNFT() {
 	}
 }
 
-// subscribeRecoveryChild subscribes to the child NFT of a recovery request.
-func (c *Core) subscribeRecoveryChild(requestTxID string) {
-	childID, err := RecoveryChildNFTID(c.RecoveryNFTID(), requestTxID)
+// subscribeEphemeralNFT subscribes to the ephemeral NFT of a recovery request.
+func (c *Core) subscribeEphemeralNFT(requestTxID string) {
+	ephemeralID, err := EphemeralNFTID(c.RecoveryNFTID(), requestTxID)
 	if err != nil {
-		c.log.Error("Failed to derive recovery child NFT ID", "request_txn_id", requestTxID, "err", err)
+		c.log.Error("Failed to derive ephemeral NFT ID", "request_txn_id", requestTxID, "err", err)
 		return
 	}
-	c.subscribeRecoveryTopic(childID)
+	c.subscribeRecoveryTopic(ephemeralID)
 }
 
 // subscribeRecoveryTopic subscribes to a recovery NFT topic. It only
-// subscribes; the child may not be deployed yet, so nothing is fetched.
+// subscribes; the ephemeral NFT may not be deployed yet, so nothing is fetched.
 func (c *Core) subscribeRecoveryTopic(topic string) {
 	if c.ps.IsSubscribed(topic) {
 		return

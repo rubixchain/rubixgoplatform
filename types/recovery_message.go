@@ -12,7 +12,7 @@ const (
 	RecoveryMessageCompletion = "completion"
 )
 
-// RecoveryMessage carries recovery data in the child NFT's nft_data.
+// RecoveryMessage carries recovery data in the ephemeral NFT's nft_data.
 // Type tells the receiver how to read Body.
 type RecoveryMessage struct {
 	Version   int             `json:"version"`
