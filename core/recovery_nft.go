@@ -2,9 +2,12 @@ package core
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/types"
+	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
@@ -39,4 +42,76 @@ func RecoveryChildNFTID(recoveryNFTID, requestTxID string) (string, error) {
 	}
 	keep := len(recoveryNFTID) - recoveryChildSuffixLen
 	return recoveryNFTID[:keep] + requestTxID[len(requestTxID)-recoveryChildSuffixLen:], nil
+}
+
+// ExecuteRecoveryNFT puts a signed recovery request on the Recovery NFT.
+// It returns the transaction ID, which is the recovery request ID.
+func (c *Core) ExecuteRecoveryNFT(reqID string, request *types.RecoveryRequest) (string, error) {
+	nftID := c.RecoveryNFTID()
+	if nftID == "" {
+		return "", fmt.Errorf("recovery is off: no Recovery NFT ID is set for this network")
+	}
+	if request == nil {
+		return "", fmt.Errorf("recovery request is required")
+	}
+	data, err := json.Marshal(request)
+	if err != nil {
+		return "", fmt.Errorf("failed to encode recovery request: %w", err)
+	}
+	return c.runRecoveryNFT(reqID, request.DID, nftID, string(data))
+}
+
+// DeployRecoveryChild deploys the child NFT for a recovery request.
+// It does nothing if the child already exists on this node.
+// It is a plain deploy, so the Recovery NFT is not run again.
+func (c *Core) DeployRecoveryChild(reqID, did, requestTxID string) error {
+	childID, err := RecoveryChildNFTID(c.RecoveryNFTID(), requestTxID)
+	if err != nil {
+		return err
+	}
+	exists, err := c.w.TokenExists(c.Ctx, nil, childID)
+	if err != nil {
+		return fmt.Errorf("failed to check child NFT %s: %w", childID, err)
+	}
+	if exists {
+		return nil
+	}
+	_, err = c.runRecoveryNFT(reqID, did, childID, "")
+	return err
+}
+
+// ExecuteRecoveryChild puts a recovery message on the child NFT of the
+// request named in msg.RequestID. The sender DID runs the transaction.
+func (c *Core) ExecuteRecoveryChild(reqID string, msg *types.RecoveryMessage) (string, error) {
+	if msg == nil {
+		return "", fmt.Errorf("recovery message is required")
+	}
+	childID, err := RecoveryChildNFTID(c.RecoveryNFTID(), msg.RequestID)
+	if err != nil {
+		return "", err
+	}
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return "", fmt.Errorf("failed to encode recovery message: %w", err)
+	}
+	return c.runRecoveryNFT(reqID, msg.SenderDID, childID, string(data))
+}
+
+// runRecoveryNFT runs one NFT transaction and returns its transaction ID.
+// The NFT is deployed if this node does not have it, else it is executed.
+func (c *Core) runRecoveryNFT(reqID, did, nftID, data string) (string, error) {
+	resp := c.initiateTransaction(reqID, &models.TransactionRequest{
+		Initiator: did,
+		Tokens: models.TransactionTokenDetails{
+			NFT: []models.NFTInfo{{NFTId: nftID, Data: data}},
+		},
+	})
+	if !resp.Status {
+		return "", fmt.Errorf("recovery NFT %s: %s", nftID, resp.Message)
+	}
+	result, ok := resp.Result.(models.TransactionResult)
+	if !ok {
+		return "", fmt.Errorf("recovery NFT %s: no transaction ID in the result", nftID)
+	}
+	return result.TransactionID, nil
 }
