@@ -58,7 +58,13 @@ func (c *Core) ExecuteRecoveryNFT(reqID string, request *types.RecoveryRequest) 
 	if err != nil {
 		return "", fmt.Errorf("failed to encode recovery request: %w", err)
 	}
-	return c.runRecoveryNFT(reqID, request.DID, nftID, string(data))
+	txID, err := c.runRecoveryNFT(reqID, request.DID, nftID, string(data))
+	if err != nil {
+		return "", err
+	}
+	// This node gets no callback for its own execution, so subscribe here.
+	c.subscribeRecoveryChild(txID)
+	return txID, nil
 }
 
 // DeployRecoveryChild deploys the child NFT for a recovery request.
@@ -114,4 +120,35 @@ func (c *Core) runRecoveryNFT(reqID, did, nftID, data string) (string, error) {
 		return "", fmt.Errorf("recovery NFT %s: no transaction ID in the result", nftID)
 	}
 	return result.TransactionID, nil
+}
+
+// SubscribeRecoveryNFT subscribes to the Recovery NFT topic at startup.
+// It does nothing when recovery is off on this network.
+func (c *Core) SubscribeRecoveryNFT() {
+	if nftID := c.RecoveryNFTID(); nftID != "" {
+		c.subscribeRecoveryTopic(nftID)
+	}
+}
+
+// subscribeRecoveryChild subscribes to the child NFT of a recovery request.
+func (c *Core) subscribeRecoveryChild(requestTxID string) {
+	childID, err := RecoveryChildNFTID(c.RecoveryNFTID(), requestTxID)
+	if err != nil {
+		c.log.Error("Failed to derive recovery child NFT ID", "request_txn_id", requestTxID, "err", err)
+		return
+	}
+	c.subscribeRecoveryTopic(childID)
+}
+
+// subscribeRecoveryTopic subscribes to a recovery NFT topic. It only
+// subscribes; the child may not be deployed yet, so nothing is fetched.
+func (c *Core) subscribeRecoveryTopic(topic string) {
+	if c.ps.IsSubscribed(topic) {
+		return
+	}
+	if err := c.ps.SubscribeTopic(topic, c.NFTCallBack); err != nil && !c.ps.IsSubscribed(topic) {
+		c.log.Error("Failed to subscribe to recovery NFT topic", "topic", topic, "err", err)
+		return
+	}
+	c.log.Info("Subscribed to recovery NFT topic", "topic", topic)
 }
