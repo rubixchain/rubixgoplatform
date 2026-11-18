@@ -54,6 +54,8 @@ const (
 	RecoveryState_SyncOpen
 	// The sync window closed.
 	RecoveryState_SyncClosed
+	// Someone other than the user deployed the ephemeral NFT. This is final.
+	RecoveryState_Blocked
 )
 
 // Recovery request rules.

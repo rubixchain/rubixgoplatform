@@ -70,7 +70,8 @@ func (c *Core) ExecuteRecoveryNFT(reqID string, request *types.RecoveryRequest) 
 }
 
 // DeployEphemeralNFT deploys the ephemeral NFT for a recovery request.
-// It does nothing if the ephemeral NFT already exists on this node.
+// If the ephemeral NFT already exists on this node, it does nothing when did
+// deployed it, and fails when another DID did, because that blocks the recovery.
 // It is a plain deploy, so the Recovery NFT is not run again.
 func (c *Core) DeployEphemeralNFT(reqID, did, requestTxID string) error {
 	ephemeralID, err := c.EphemeralNFTID(requestTxID)
@@ -82,6 +83,13 @@ func (c *Core) DeployEphemeralNFT(reqID, did, requestTxID string) error {
 		return fmt.Errorf("failed to check ephemeral NFT %s: %w", ephemeralID, err)
 	}
 	if exists {
+		chain, err := c.recoveryChain(ephemeralID)
+		if err != nil {
+			return fmt.Errorf("failed to read ephemeral NFT %s: %w", ephemeralID, err)
+		}
+		if len(chain) > 0 && chain[0].Info.Initiator != did {
+			return fmt.Errorf("recovery blocked: ephemeral NFT %s was deployed by %s", ephemeralID, chain[0].Info.Initiator)
+		}
 		return nil
 	}
 	txID, err := c.runRecoveryNFT(reqID, did, ephemeralID, "")

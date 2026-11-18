@@ -192,17 +192,27 @@ func (c *Core) handleEphemeralEvent(ephemeralID, txID string) error {
 	if session == nil {
 		return nil // not a recovery topic, or this node does not take part
 	}
+	if session.State == constants.RecoveryState_Blocked {
+		return fmt.Errorf("recovery is blocked")
+	}
 	chain, err := c.recoveryChain(ephemeralID)
 	if err != nil {
 		return fmt.Errorf("failed to read the ephemeral NFT chain: %w", err)
 	}
 
 	// The commit window opens once the user has deployed the ephemeral NFT.
+	// Consensus checks the initiator's signature, so a deploy by any other
+	// DID was not signed with the user's key, and the recovery is blocked.
+	// Executions by other DIDs only drop that message (parseRecoveryMessage).
 	deployRole := int16(models.GetTokenRoleID(constants.TokenRole_Deploy))
 	if len(chain) == 0 || chain[0].Role != deployRole {
 		return fmt.Errorf("ephemeral NFT is not deployed")
 	}
 	if chain[0].Info.Initiator != session.UserDID {
+		if _, err := c.w.AdvanceRecoverySession(session.RequestID, constants.RecoveryState_Blocked); err != nil {
+			return err
+		}
+		c.log.Error("Recovery blocked: ephemeral NFT was not deployed by the user", "request_txn_id", session.RequestID, "deployer", chain[0].Info.Initiator)
 		return fmt.Errorf("ephemeral NFT was deployed by %s, not the user", chain[0].Info.Initiator)
 	}
 	if _, err := c.w.AdvanceRecoverySession(session.RequestID, constants.RecoveryState_CommitOpen); err != nil {
