@@ -2,8 +2,6 @@ package types
 
 import "encoding/json"
 
-const RecoveryRequestPurpose = "account recovery"
-
 type RecoveryRequest struct {
 	DID       string `json:"did"`
 	Network   string `json:"network"`

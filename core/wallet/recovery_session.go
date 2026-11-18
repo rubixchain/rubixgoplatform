@@ -6,25 +6,13 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/types"
 )
-
-// RecoverySession is this node's view of one recovery request.
-type RecoverySession struct {
-	RequestID string
-	// EphemeralNFTID is the topic of the request's ephemeral NFT. It is a
-	// hash, so events on that topic find their session through it.
-	EphemeralNFTID string
-	UserDID        string
-	Role           string // constants.RecoveryRole_*
-	State          int    // constants.RecoveryState_*
-	// RequestEpoch is the request transaction's epoch. Deadlines count from it.
-	RequestEpoch int64
-}
 
 // CreateRecoverySession stores a new session in the REQUESTED state.
 // It returns false if a session for the request already exists, so a
 // duplicate request event is ignored.
-func (w *Wallet) CreateRecoverySession(s *RecoverySession) (bool, error) {
+func (w *Wallet) CreateRecoverySession(s *types.RecoverySession) (bool, error) {
 	tag, err := w.db.Pool().Exec(w.Ctx,
 		`INSERT INTO recovery_sessions
 		     (request_id, ephemeral_nft_id, user_did, role, state, request_epoch)
@@ -39,19 +27,19 @@ func (w *Wallet) CreateRecoverySession(s *RecoverySession) (bool, error) {
 }
 
 // GetRecoverySession returns the session for a request, or nil if none.
-func (w *Wallet) GetRecoverySession(requestID string) (*RecoverySession, error) {
+func (w *Wallet) GetRecoverySession(requestID string) (*types.RecoverySession, error) {
 	return w.getRecoverySession("request_id", requestID)
 }
 
 // GetRecoverySessionByEphemeralNFT returns the session whose ephemeral NFT is
 // the given topic, or nil if none.
-func (w *Wallet) GetRecoverySessionByEphemeralNFT(ephemeralNFTID string) (*RecoverySession, error) {
+func (w *Wallet) GetRecoverySessionByEphemeralNFT(ephemeralNFTID string) (*types.RecoverySession, error) {
 	return w.getRecoverySession("ephemeral_nft_id", ephemeralNFTID)
 }
 
 // getRecoverySession looks a session up by one of its unique columns.
-func (w *Wallet) getRecoverySession(column, value string) (*RecoverySession, error) {
-	var s RecoverySession
+func (w *Wallet) getRecoverySession(column, value string) (*types.RecoverySession, error) {
+	var s types.RecoverySession
 	err := w.db.Pool().QueryRow(w.Ctx,
 		`SELECT request_id, ephemeral_nft_id, user_did, role, state, request_epoch
 		 FROM recovery_sessions WHERE `+column+` = $1`,

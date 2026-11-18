@@ -33,7 +33,7 @@ func TestRecoveryRequestSignAndVerify(t *testing.T) {
 	}
 	signer := did.InitDIDLiteWithPassword("user-did", dir, "test-password")
 	verifier := did.InitDIDLite("user-did", dir, nil)
-	request := types.RecoveryRequest{DID: "user-did", Network: "testnet", Purpose: types.RecoveryRequestPurpose, Epoch: 1794700800}
+	request := types.RecoveryRequest{DID: "user-did", Network: "testnet", Purpose: constants.RecoveryRequest_Purpose, Epoch: 1794700800}
 	if err := util.SignRecoveryRequest(signer, &request); err != nil {
 		t.Fatal(err)
 	}

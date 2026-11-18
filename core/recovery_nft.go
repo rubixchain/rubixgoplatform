@@ -64,8 +64,8 @@ func (c *Core) ExecuteRecoveryNFT(reqID string, request *types.RecoveryRequest) 
 	if err != nil {
 		return "", err
 	}
-	// This node gets no callback for its own execution, so subscribe here.
-	c.subscribeEphemeralNFT(txID)
+	// This node gets no callback for its own execution, so dispatch here.
+	c.dispatchRecoveryEvent(nftID, txID, "")
 	return txID, nil
 }
 
@@ -84,8 +84,12 @@ func (c *Core) DeployEphemeralNFT(reqID, did, requestTxID string) error {
 	if exists {
 		return nil
 	}
-	_, err = c.runRecoveryNFT(reqID, did, ephemeralID, "")
-	return err
+	txID, err := c.runRecoveryNFT(reqID, did, ephemeralID, "")
+	if err != nil {
+		return err
+	}
+	c.dispatchRecoveryEvent(ephemeralID, txID, "")
+	return nil
 }
 
 // ExecuteEphemeralNFT puts a recovery message on the ephemeral NFT of the
@@ -102,7 +106,12 @@ func (c *Core) ExecuteEphemeralNFT(reqID, requestTxID string, msg *types.Recover
 	if err != nil {
 		return "", fmt.Errorf("failed to encode recovery message: %w", err)
 	}
-	return c.runRecoveryNFT(reqID, msg.SenderDID, ephemeralID, string(data))
+	txID, err := c.runRecoveryNFT(reqID, msg.SenderDID, ephemeralID, string(data))
+	if err != nil {
+		return "", err
+	}
+	c.dispatchRecoveryEvent(ephemeralID, txID, "")
+	return txID, nil
 }
 
 // runRecoveryNFT runs one NFT transaction and returns its transaction ID.
@@ -130,16 +139,6 @@ func (c *Core) SubscribeRecoveryNFT() {
 	if nftID := c.RecoveryNFTID(); nftID != "" {
 		c.subscribeRecoveryTopic(nftID)
 	}
-}
-
-// subscribeEphemeralNFT subscribes to the ephemeral NFT of a recovery request.
-func (c *Core) subscribeEphemeralNFT(requestTxID string) {
-	ephemeralID, err := c.EphemeralNFTID(requestTxID)
-	if err != nil {
-		c.log.Error("Failed to derive ephemeral NFT ID", "request_txn_id", requestTxID, "err", err)
-		return
-	}
-	c.subscribeRecoveryTopic(ephemeralID)
 }
 
 // subscribeRecoveryTopic subscribes to a recovery NFT topic. It only

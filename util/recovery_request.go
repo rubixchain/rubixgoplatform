@@ -63,8 +63,8 @@ func checkRecoveryRequest(dc types.DIDCrypto, request *types.RecoveryRequest) er
 	if request.Network == "" {
 		return fmt.Errorf("recovery request: network is required")
 	}
-	if request.Purpose != types.RecoveryRequestPurpose {
-		return fmt.Errorf("recovery request: purpose must be %q", types.RecoveryRequestPurpose)
+	if request.Purpose != constants.RecoveryRequest_Purpose {
+		return fmt.Errorf("recovery request: purpose must be %q", constants.RecoveryRequest_Purpose)
 	}
 	if request.Epoch <= 0 {
 		return fmt.Errorf("recovery request: epoch must be a positive Unix time in seconds")

@@ -56,6 +56,26 @@ const (
 	RecoveryState_SyncClosed
 )
 
+// Recovery request rules.
+const (
+	RecoveryRequest_Purpose = "account recovery"
+	// How old a request transaction may be, in seconds, when it reaches a node (Q6).
+	RecoveryRequest_MaxAgeSeconds = 2 * 60
+	// Minimum time, in seconds, between two requests from the same DID (Q10).
+	RecoveryRequest_CooldownSeconds = 48 * 60 * 60
+)
+
+// Recovery message version and types, sent on the ephemeral NFT.
+const (
+	RecoveryMessage_Version = 1
+
+	RecoveryMessageType_Commitment = "commitment"
+	RecoveryMessageType_Unpledged  = "unpledged"
+	RecoveryMessageType_Challenge  = "challenge"
+	RecoveryMessageType_Mismatch   = "mismatch"
+	RecoveryMessageType_Completion = "completion"
+)
+
 // Roles a node can have in a recovery session.
 const (
 	RecoveryRole_User     = "user"
