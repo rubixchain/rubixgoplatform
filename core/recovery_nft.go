@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -10,10 +11,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
-
-// ephemeralSuffixLen is how many characters of the request
-// transaction ID go into the ephemeral NFT ID (96 bits).
-const ephemeralSuffixLen = 24
 
 // RecoveryNFTID returns the Recovery NFT ID for this node's network.
 // On localnet it comes from config; an empty result means recovery is off.
@@ -30,18 +27,23 @@ func (c *Core) RecoveryNFTID() string {
 }
 
 // EphemeralNFTID builds the ephemeral NFT ID for a recovery request.
-// It keeps the first 22 characters of the Recovery NFT ID and adds the
-// last 24 characters of the request transaction ID, so the result is
-// still a 46-character CID that every node can work out on its own.
-func EphemeralNFTID(recoveryNFTID, requestTxID string) (string, error) {
+// Like a core child NFT (nft_child_mint.go), it is the IPFS hash of the
+// parent NFT ID followed by a suffix; here the parent is the Recovery NFT
+// and the suffix is the request transaction ID, so every node gets the same ID.
+func (c *Core) EphemeralNFTID(requestTxID string) (string, error) {
+	recoveryNFTID := c.RecoveryNFTID()
 	if err := util.ValidateCIDFormat(recoveryNFTID); err != nil {
 		return "", fmt.Errorf("invalid recovery NFT ID: %w", err)
 	}
 	if _, err := hex.DecodeString(requestTxID); err != nil || len(requestTxID) != 64 {
 		return "", fmt.Errorf("invalid request transaction ID: %s", requestTxID)
 	}
-	keep := len(recoveryNFTID) - ephemeralSuffixLen
-	return recoveryNFTID[:keep] + requestTxID[len(requestTxID)-ephemeralSuffixLen:], nil
+	payload := []byte(recoveryNFTID + requestTxID)
+	ephemeralID, err := IpfsAddWithBackoff(c.ipfs, bytes.NewReader(payload))
+	if err != nil {
+		return "", fmt.Errorf("failed to IPFS-add ephemeral NFT payload for request %s: %w", requestTxID, err)
+	}
+	return ephemeralID, nil
 }
 
 // ExecuteRecoveryNFT puts a signed recovery request on the Recovery NFT.
@@ -71,7 +73,7 @@ func (c *Core) ExecuteRecoveryNFT(reqID string, request *types.RecoveryRequest) 
 // It does nothing if the ephemeral NFT already exists on this node.
 // It is a plain deploy, so the Recovery NFT is not run again.
 func (c *Core) DeployEphemeralNFT(reqID, did, requestTxID string) error {
-	ephemeralID, err := EphemeralNFTID(c.RecoveryNFTID(), requestTxID)
+	ephemeralID, err := c.EphemeralNFTID(requestTxID)
 	if err != nil {
 		return err
 	}
@@ -92,7 +94,7 @@ func (c *Core) ExecuteEphemeralNFT(reqID string, msg *types.RecoveryMessage) (st
 	if msg == nil {
 		return "", fmt.Errorf("recovery message is required")
 	}
-	ephemeralID, err := EphemeralNFTID(c.RecoveryNFTID(), msg.RequestID)
+	ephemeralID, err := c.EphemeralNFTID(msg.RequestID)
 	if err != nil {
 		return "", err
 	}
@@ -132,7 +134,7 @@ func (c *Core) SubscribeRecoveryNFT() {
 
 // subscribeEphemeralNFT subscribes to the ephemeral NFT of a recovery request.
 func (c *Core) subscribeEphemeralNFT(requestTxID string) {
-	ephemeralID, err := EphemeralNFTID(c.RecoveryNFTID(), requestTxID)
+	ephemeralID, err := c.EphemeralNFTID(requestTxID)
 	if err != nil {
 		c.log.Error("Failed to derive ephemeral NFT ID", "request_txn_id", requestTxID, "err", err)
 		return
