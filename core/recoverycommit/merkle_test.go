@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"testing"
+
+	"github.com/rubixchain/rubixgoplatform/constants"
 )
 
 func testLeaves(n int) [][]byte {
@@ -63,7 +65,7 @@ func TestDomainSeparation(t *testing.T) {
 		t.Fatal("internal node and token leaf must differ")
 	}
 	r := ChainHash([]string{"x"})
-	if bytes.Equal(TokenLeafHash("ab", r), TokenLeafHash("a", append([]byte("b"), r[:HashSize-1]...))) {
+	if bytes.Equal(TokenLeafHash("ab", r), TokenLeafHash("a", append([]byte("b"), r[:constants.RecoveryCommit_HashSize-1]...))) {
 		t.Fatal("token ID / chain root boundary must be unambiguous")
 	}
 }

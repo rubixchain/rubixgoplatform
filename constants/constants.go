@@ -78,6 +78,16 @@ const (
 	RecoveryMessageType_Completion = "completion"
 )
 
+// Recovery commitment Merkle tree. The leaf and node prefixes separate the two
+// hash domains, as in RFC 6962 (Certificate Transparency), so a token leaf and
+// an internal node can never be reinterpreted as one another.
+const (
+	RecoveryCommit_PrefixLeaf byte = 0x00
+	RecoveryCommit_PrefixNode byte = 0x01
+	// Length in bytes of every hash and root (SHA3-256).
+	RecoveryCommit_HashSize = 32
+)
+
 // Roles a node can have in a recovery session.
 const (
 	RecoveryRole_User     = "user"

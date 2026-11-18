@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/rubixchain/rubixgoplatform/core/recoverycommit"
+	"github.com/rubixchain/rubixgoplatform/types"
 )
 
 // GetRecoveryPledgedTokens returns the tokens quorumDID is still pledged for
@@ -50,7 +50,7 @@ func (w *Wallet) GetRecoveryPledgedTokens(quorumDID, receiverDID string) (map[st
 // no local tokenchain are absent from the result. A tokenchain row whose
 // transaction is missing comes back with nil Info, so the caller can treat
 // the chain as incomplete.
-func (w *Wallet) GetRecoveryTokenChains(tokenIDs []string) (map[string][]recoverycommit.ChainEntry, error) {
+func (w *Wallet) GetRecoveryTokenChains(tokenIDs []string) (map[string][]types.RecoveryChainEntry, error) {
 	rows, err := w.db.Pool().Query(w.Ctx, `
 		SELECT tc.token_id, tc.transaction_id, tc.previous_transaction_id, tc.position, tc.role, t.info::text
 		FROM tokenchain tc
@@ -70,15 +70,15 @@ func (w *Wallet) GetRecoveryTokenChains(tokenIDs []string) (map[string][]recover
 
 // collectRecoveryChains groups rows of (token_id, transaction_id,
 // previous_transaction_id, position, role, info) by token, keeping row order.
-func collectRecoveryChains(rows pgx.Rows) (map[string][]recoverycommit.ChainEntry, error) {
+func collectRecoveryChains(rows pgx.Rows) (map[string][]types.RecoveryChainEntry, error) {
 	defer rows.Close()
-	chains := make(map[string][]recoverycommit.ChainEntry)
+	chains := make(map[string][]types.RecoveryChainEntry)
 	for rows.Next() {
 		var (
 			tokenID string
 			prevTx  *string
 			info    *string
-			e       recoverycommit.ChainEntry
+			e       types.RecoveryChainEntry
 		)
 		if err := rows.Scan(&tokenID, &e.TransactionID, &prevTx, &e.Position, &e.Role, &info); err != nil {
 			return nil, fmt.Errorf("scan tokenchain row: %w", err)
@@ -100,7 +100,7 @@ func collectRecoveryChains(rows pgx.Rows) (map[string][]recoverycommit.ChainEntr
 // GetFullNodeRecoveryTipChains returns, from the fullnode tables, the full
 // tokenchain of every token whose latest transaction names receiverDID as
 // owner, in position order. Rows are shaped as in GetRecoveryTokenChains.
-func (w *Wallet) GetFullNodeRecoveryTipChains(receiverDID string) (map[string][]recoverycommit.ChainEntry, error) {
+func (w *Wallet) GetFullNodeRecoveryTipChains(receiverDID string) (map[string][]types.RecoveryChainEntry, error) {
 	rows, err := w.db.Pool().Query(w.Ctx, `
 		WITH tips AS (
 			SELECT tc.token_id

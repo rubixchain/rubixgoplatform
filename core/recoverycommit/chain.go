@@ -5,22 +5,12 @@ import (
 	"fmt"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
-// ChainEntry is one tokenchain row joined with its transaction's info JSON.
-// Info is nil when the tokenchain row points at a transaction the node does
-// not have.
-type ChainEntry struct {
-	TransactionID         string
-	PreviousTransactionID string // "" at position 0
-	Position              int64
-	Role                  int16
-	Info                  json.RawMessage
-}
-
 // TransactionIDs returns the chain's transaction IDs in the order given.
-func TransactionIDs(chain []ChainEntry) []string {
+func TransactionIDs(chain []types.RecoveryChainEntry) []string {
 	ids := make([]string, len(chain))
 	for i, e := range chain {
 		ids[i] = e.TransactionID
@@ -31,7 +21,7 @@ func TransactionIDs(chain []ChainEntry) []string {
 // ValidateChain checks that chain is complete and linked: positions 0..n-1,
 // each entry points to the previous one, no repeated transaction, and every
 // transaction's info is present locally.
-func ValidateChain(chain []ChainEntry) error {
+func ValidateChain(chain []types.RecoveryChainEntry) error {
 	if len(chain) == 0 {
 		return fmt.Errorf("empty tokenchain")
 	}
@@ -76,7 +66,7 @@ var (
 //   - NFT: Owner, else Initiator, only at deploy or when it is the sole asset
 //     (otherwise the owner is not recorded)
 //   - not named: genesis Owner/Initiator, or carried over from the previous entry
-func CurrentOwner(tokenID string, chain []ChainEntry) (string, error) {
+func CurrentOwner(tokenID string, chain []types.RecoveryChainEntry) (string, error) {
 	for i := len(chain) - 1; i >= 0; i-- {
 		e := chain[i]
 		if e.Role == roleBurn || e.Role == roleCommit {

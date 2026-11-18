@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -28,11 +29,11 @@ func tokens(ids ...string) []*models.TokenInfo {
 }
 
 // chainOf links infos into a valid chain with the given roles.
-func chainOf(t *testing.T, roles []string, infos ...models.TransactionInfo) []ChainEntry {
+func chainOf(t *testing.T, roles []string, infos ...models.TransactionInfo) []types.RecoveryChainEntry {
 	t.Helper()
-	chain := make([]ChainEntry, len(infos))
+	chain := make([]types.RecoveryChainEntry, len(infos))
 	for i, info := range infos {
-		e := ChainEntry{TransactionID: "tx" + string(rune('0'+i)), Position: int64(i), Role: roleID(roles[i]), Info: infoJSON(t, info)}
+		e := types.RecoveryChainEntry{TransactionID: "tx" + string(rune('0'+i)), Position: int64(i), Role: roleID(roles[i]), Info: infoJSON(t, info)}
 		if i > 0 {
 			e.PreviousTransactionID = chain[i-1].TransactionID
 		}
@@ -48,19 +49,25 @@ func TestValidateChain(t *testing.T) {
 		t.Fatalf("valid chain rejected: %v", err)
 	}
 
-	mutate := func(f func(c []ChainEntry) []ChainEntry) []ChainEntry {
-		c := append([]ChainEntry(nil), good...)
+	mutate := func(f func(c []types.RecoveryChainEntry) []types.RecoveryChainEntry) []types.RecoveryChainEntry {
+		c := append([]types.RecoveryChainEntry(nil), good...)
 		return f(c)
 	}
-	bad := map[string][]ChainEntry{
-		"empty":             nil,
-		"missing genesis":   good[1:],
-		"position gap":      mutate(func(c []ChainEntry) []ChainEntry { return append(c[:1], c[2:]...) }),
-		"broken link":       mutate(func(c []ChainEntry) []ChainEntry { c[2].PreviousTransactionID = "other"; return c }),
-		"genesis with prev": mutate(func(c []ChainEntry) []ChainEntry { c[0].PreviousTransactionID = "x"; return c }),
-		"missing tx info":   mutate(func(c []ChainEntry) []ChainEntry { c[1].Info = nil; return c }),
-		"empty tx ID":       mutate(func(c []ChainEntry) []ChainEntry { c[1].TransactionID = ""; return c }),
-		"repeated tx": mutate(func(c []ChainEntry) []ChainEntry {
+	bad := map[string][]types.RecoveryChainEntry{
+		"empty":           nil,
+		"missing genesis": good[1:],
+		"position gap":    mutate(func(c []types.RecoveryChainEntry) []types.RecoveryChainEntry { return append(c[:1], c[2:]...) }),
+		"broken link": mutate(func(c []types.RecoveryChainEntry) []types.RecoveryChainEntry {
+			c[2].PreviousTransactionID = "other"
+			return c
+		}),
+		"genesis with prev": mutate(func(c []types.RecoveryChainEntry) []types.RecoveryChainEntry {
+			c[0].PreviousTransactionID = "x"
+			return c
+		}),
+		"missing tx info": mutate(func(c []types.RecoveryChainEntry) []types.RecoveryChainEntry { c[1].Info = nil; return c }),
+		"empty tx ID":     mutate(func(c []types.RecoveryChainEntry) []types.RecoveryChainEntry { c[1].TransactionID = ""; return c }),
+		"repeated tx": mutate(func(c []types.RecoveryChainEntry) []types.RecoveryChainEntry {
 			c[2].TransactionID = c[0].TransactionID
 			return c
 		}),
@@ -81,7 +88,7 @@ func TestCurrentOwner(t *testing.T) {
 
 	cases := []struct {
 		name  string
-		chain []ChainEntry
+		chain []types.RecoveryChainEntry
 		want  string
 	}{
 		{"genesis owner", chainOf(t, R(mintR), mint), "alice"},

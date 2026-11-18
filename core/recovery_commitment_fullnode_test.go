@@ -5,6 +5,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/recoverycommit"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -19,7 +20,7 @@ func TestVerifyQuorumCommitments(t *testing.T) {
 	x6.Tokens.RBT = append(x6.Tokens.RBT, &models.TokenInfo{TokenID: "T7"})
 
 	// Tokens whose fullnode tip names the user as owner.
-	chains := map[string][]recoverycommit.ChainEntry{
+	chains := map[string][]types.RecoveryChainEntry{
 		"T1": rcChain(t,
 			rcTx{"m1", mint, rcRBT("T1", "alice", "alice")},
 			rcTx{"x1", xfer, rcRBT("T1", "alice", user, "q1")},
@@ -37,7 +38,7 @@ func TestVerifyQuorumCommitments(t *testing.T) {
 			rcTx{"x6", xfer, x6},
 		),
 		// Gap in the fullnode chain.
-		"T8": func() []recoverycommit.ChainEntry {
+		"T8": func() []types.RecoveryChainEntry {
 			c := rcChain(t,
 				rcTx{"m8", mint, rcRBT("T8", "alice", "alice")},
 				rcTx{"a8", xfer, rcRBT("T8", "alice", "carol", "q2")},
@@ -47,7 +48,7 @@ func TestVerifyQuorumCommitments(t *testing.T) {
 		}(),
 	}
 
-	quorumCommit := func(quorum string, pledged map[string][]string) recoverycommit.Commitment {
+	quorumCommit := func(quorum string, pledged map[string][]string) types.RecoveryCommitment {
 		tokens, _ := selectQuorumPledgedTokens(pledged, chains)
 		tree, err := recoverycommit.BuildQuorumCommitment(req, user, quorum, tokens)
 		if err != nil {
@@ -57,7 +58,7 @@ func TestVerifyQuorumCommitments(t *testing.T) {
 	}
 	honestQ1 := quorumCommit("q1", map[string][]string{"T1": {"x1"}, "T3": {"a3", "c3"}})
 
-	report, err := verifyQuorumCommitments(req, user, chains, []recoverycommit.Commitment{honestQ1})
+	report, err := verifyQuorumCommitments(req, user, chains, []types.RecoveryCommitment{honestQ1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,10 +73,10 @@ func TestVerifyQuorumCommitments(t *testing.T) {
 	extraToken := quorumCommit("q2", map[string][]string{"T6": {"x6"}})
 	altered := honestQ1
 	altered.Root = missingToken.Root
-	for name, sub := range map[string]recoverycommit.Commitment{
+	for name, sub := range map[string]types.RecoveryCommitment{
 		"missing token": missingToken, "extra token": extraToken, "altered root": altered,
 	} {
-		report, err := verifyQuorumCommitments(req, user, chains, []recoverycommit.Commitment{sub})
+		report, err := verifyQuorumCommitments(req, user, chains, []types.RecoveryCommitment{sub})
 		if err != nil {
 			t.Fatal(err)
 		}
