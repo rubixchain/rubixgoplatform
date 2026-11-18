@@ -17,8 +17,6 @@ const (
 type RecoveryMessage struct {
 	Version   int             `json:"version"`
 	Type      string          `json:"type"`
-	RequestID string          `json:"request_id"`
 	Body      json.RawMessage `json:"body"`
 	SenderDID string          `json:"sender_did"`
-	Signature string          `json:"signature,omitempty"`
 }

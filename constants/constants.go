@@ -43,6 +43,26 @@ const (
 	RecoveryNFTID_Testnet string = "QmbKP6dLYpD8LH9bjjztQGFMhpQULBZYZkCxVSwTqpAhPm"
 )
 
+// Recovery session states. States only move forward, so a higher value is a
+// later state.
+const (
+	// The request was received and passed its checks.
+	RecoveryState_Requested = iota + 1
+	// The user deployed the ephemeral NFT, so commitments can be published.
+	RecoveryState_CommitOpen
+	// The commit window closed; quorums send chains.
+	RecoveryState_SyncOpen
+	// The sync window closed.
+	RecoveryState_SyncClosed
+)
+
+// Roles a node can have in a recovery session.
+const (
+	RecoveryRole_User     = "user"
+	RecoveryRole_Quorum   = "quorum"
+	RecoveryRole_Fullnode = "fullnode"
+)
+
 // Supported crypto algorithms for DID (Address)
 const DidAlgo_SECP256K1 = "secp256k1"
 

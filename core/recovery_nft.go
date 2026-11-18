@@ -89,12 +89,12 @@ func (c *Core) DeployEphemeralNFT(reqID, did, requestTxID string) error {
 }
 
 // ExecuteEphemeralNFT puts a recovery message on the ephemeral NFT of the
-// request named in msg.RequestID. The sender DID runs the transaction.
-func (c *Core) ExecuteEphemeralNFT(reqID string, msg *types.RecoveryMessage) (string, error) {
+// given request. The sender DID runs the transaction.
+func (c *Core) ExecuteEphemeralNFT(reqID, requestTxID string, msg *types.RecoveryMessage) (string, error) {
 	if msg == nil {
 		return "", fmt.Errorf("recovery message is required")
 	}
-	ephemeralID, err := c.EphemeralNFTID(msg.RequestID)
+	ephemeralID, err := c.EphemeralNFTID(requestTxID)
 	if err != nil {
 		return "", err
 	}
