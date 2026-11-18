@@ -837,9 +837,20 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.Transac
 
 	//dead code. not needed
 	lastEntry := entries[len(entries)-1]
-	lastOwnerDID := lastTxInfo.Owner
-	if lastOwnerDID == "" {
-		lastOwnerDID = lastTxInfo.Initiator
+	// Skip pledge and unpledge entries: the token's owner is set by the mint or transfer transactions before them.
+	ownerIdx := len(newTxs) - 1
+	for ownerIdx >= 0 && (newTxs[ownerIdx].role == int16(models.GetTokenRoleID(constants.TokenRole_Pledge)) ||
+		newTxs[ownerIdx].role == int16(models.GetTokenRoleID(constants.TokenRole_Unpledge))) {
+		ownerIdx--
+	}
+	var lastOwnerDID string
+	if ownerIdx >= 0 {
+		var ownerTxInfo models.TransactionInfo
+		_ = json.Unmarshal(newTxs[ownerIdx].tx.Info, &ownerTxInfo)
+		lastOwnerDID = ownerTxInfo.Owner
+		if lastOwnerDID == "" {
+			lastOwnerDID = ownerTxInfo.Initiator
+		}
 	}
 	// Derive final token status from the last chain entry's role so the
 	// token row matches what the originating node wrote.
@@ -860,7 +871,7 @@ func (c *Core) applyTokenChainFromSync(tokenID string, remoteTxs []types.Transac
 	}
 	// For NFT executions, ownership doesn't change
 	// in sync with the chain head when a non-owner subscriber executes an NFT.
-	if lastEntry.Role == int16(models.GetTokenRoleID(constants.TokenRole_Execute)) &&
+	if ownerIdx < 0 || lastEntry.Role == int16(models.GetTokenRoleID(constants.TokenRole_Execute)) &&
 		tokenForUpdate.TokenType != int16(models.GetTokenTypeID(constants.TokenType_SmartContract)) {
 		// Leave tokenForUpdate.DID at its existing value.
 	} else {
