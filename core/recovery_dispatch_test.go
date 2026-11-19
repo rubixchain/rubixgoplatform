@@ -74,3 +74,13 @@ func TestParseRecoveryMessage(t *testing.T) {
 		})
 	}
 }
+
+func TestRecoveryDeadline(t *testing.T) {
+	const epoch = 1_800_000_000
+	if got := recoveryDeadline(epoch, constants.RecoveryState_SyncOpen); got != epoch+10*60+60 {
+		t.Fatalf("commit deadline: got %d", got)
+	}
+	if got := recoveryDeadline(epoch, constants.RecoveryState_SyncClosed); got != epoch+40*60+60 {
+		t.Fatalf("sync deadline: got %d", got)
+	}
+}

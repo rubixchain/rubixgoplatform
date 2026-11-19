@@ -69,3 +69,30 @@ func (w *Wallet) AdvanceRecoverySession(requestID string, to int) (bool, error) 
 	}
 	return tag.RowsAffected() == 1, nil
 }
+
+// GetOpenRecoverySessions returns the sessions whose sync window has not
+// closed yet, so their topics and deadlines can be restored after a restart.
+// Blocked sessions are not returned.
+func (w *Wallet) GetOpenRecoverySessions() ([]*types.RecoverySession, error) {
+	rows, err := w.db.Pool().Query(w.Ctx,
+		`SELECT request_id, ephemeral_nft_id, user_did, role, state, request_epoch
+		 FROM recovery_sessions WHERE state < $1`,
+		constants.RecoveryState_SyncClosed,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list open recovery sessions: %w", err)
+	}
+	defer rows.Close()
+	var sessions []*types.RecoverySession
+	for rows.Next() {
+		var s types.RecoverySession
+		if err := rows.Scan(&s.RequestID, &s.EphemeralNFTID, &s.UserDID, &s.Role, &s.State, &s.RequestEpoch); err != nil {
+			return nil, fmt.Errorf("failed to read open recovery session: %w", err)
+		}
+		sessions = append(sessions, &s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to list open recovery sessions: %w", err)
+	}
+	return sessions, nil
+}
