@@ -18,6 +18,7 @@ const userConfigTemplate = `
 node_index = 0
 network_mode = "mainnet|testnet|localnet"
 enable_trusted_network = false
+localnet_recovery_nft_id = ""
 
 [db]
 host = "localhost"
@@ -155,6 +156,7 @@ func CreateRubixConfigFromUserConfig(userConfig types.UserConfig, nodeDir string
 	rubixConfig.MainnetBootstrap = userConfig.Ipfs.MainnetBootstrapNodes
 	rubixConfig.TestnetBootstrap = userConfig.Ipfs.TestnetBootstrapNodes
 	rubixConfig.LocalnetBootStrap = userConfig.Ipfs.LocalnetBootstrapNodes
+	rubixConfig.LocalnetRecoveryNFTID = userConfig.Core.LocalnetRecoveryNFTID
 
 	// Postgres DB Config
 	rubixConfig.DBConfig.DBName = userConfig.Db.DBName

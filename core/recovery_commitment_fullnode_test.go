@@ -5,6 +5,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/recoverycommit"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -18,8 +19,12 @@ func TestVerifyQuorumCommitments(t *testing.T) {
 	x6 := rcRBT("T6", "alice", user, "q2")
 	x6.Tokens.RBT = append(x6.Tokens.RBT, &models.TokenInfo{TokenID: "T7"})
 
+	// x9 moves FT F9 to the user, pledged by q2. Recovery covers RBTs only.
+	x9 := rcRBT("F9", "alice", user, "q2")
+	x9.Tokens.FT, x9.Tokens.RBT = x9.Tokens.RBT, nil
+
 	// Tokens whose fullnode tip names the user as owner.
-	chains := map[string][]recoverycommit.ChainEntry{
+	chains := map[string][]types.RecoveryChainEntry{
 		"T1": rcChain(t,
 			rcTx{"m1", mint, rcRBT("T1", "alice", "alice")},
 			rcTx{"x1", xfer, rcRBT("T1", "alice", user, "q1")},
@@ -37,7 +42,7 @@ func TestVerifyQuorumCommitments(t *testing.T) {
 			rcTx{"x6", xfer, x6},
 		),
 		// Gap in the fullnode chain.
-		"T8": func() []recoverycommit.ChainEntry {
+		"T8": func() []types.RecoveryChainEntry {
 			c := rcChain(t,
 				rcTx{"m8", mint, rcRBT("T8", "alice", "alice")},
 				rcTx{"a8", xfer, rcRBT("T8", "alice", "carol", "q2")},
@@ -45,9 +50,13 @@ func TestVerifyQuorumCommitments(t *testing.T) {
 			)
 			return append(c[:1], c[2:]...)
 		}(),
+		"F9": rcChain(t,
+			rcTx{"m9", mint, rcRBT("F9", "alice", "alice")},
+			rcTx{"x9", xfer, x9},
+		),
 	}
 
-	quorumCommit := func(quorum string, pledged map[string][]string) recoverycommit.Commitment {
+	quorumCommit := func(quorum string, pledged map[string][]string) types.RecoveryCommitment {
 		tokens, _ := selectQuorumPledgedTokens(pledged, chains)
 		tree, err := recoverycommit.BuildQuorumCommitment(req, user, quorum, tokens)
 		if err != nil {
@@ -57,7 +66,7 @@ func TestVerifyQuorumCommitments(t *testing.T) {
 	}
 	honestQ1 := quorumCommit("q1", map[string][]string{"T1": {"x1"}, "T3": {"a3", "c3"}})
 
-	report, err := verifyQuorumCommitments(req, user, chains, []recoverycommit.Commitment{honestQ1})
+	report, err := verifyQuorumCommitments(req, user, chains, []types.RecoveryCommitment{honestQ1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,12 +79,14 @@ func TestVerifyQuorumCommitments(t *testing.T) {
 
 	missingToken := quorumCommit("q1", map[string][]string{"T1": {"x1"}})
 	extraToken := quorumCommit("q2", map[string][]string{"T6": {"x6"}})
+	empty := quorumCommit("q2", nil)
 	altered := honestQ1
 	altered.Root = missingToken.Root
-	for name, sub := range map[string]recoverycommit.Commitment{
+	for name, sub := range map[string]types.RecoveryCommitment{
 		"missing token": missingToken, "extra token": extraToken, "altered root": altered,
+		"empty commitment from a quorum holding nothing": empty,
 	} {
-		report, err := verifyQuorumCommitments(req, user, chains, []recoverycommit.Commitment{sub})
+		report, err := verifyQuorumCommitments(req, user, chains, []types.RecoveryCommitment{sub})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -94,7 +105,7 @@ func TestSelectUnpledgedTokens(t *testing.T) {
 	collateral := rcChain(t, rcTx{"x", constants.TokenRole_Pledge, info}, rcTx{"y", constants.TokenRole_Unpledge, release})
 	for _, tc := range []struct {
 		name                     string
-		collateral               []recoverycommit.ChainEntry
+		collateral               []types.RecoveryChainEntry
 		wantTokens, wantExcluded int
 	}{
 		{"released collateral", collateral, 1, 0},
@@ -102,7 +113,7 @@ func TestSelectUnpledgedTokens(t *testing.T) {
 		{"unknown pledge state", nil, 0, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			chains := map[string][]recoverycommit.ChainEntry{"T": transfer}
+			chains := map[string][]types.RecoveryChainEntry{"T": transfer}
 			if tc.collateral != nil {
 				chains["P"] = tc.collateral
 			}
@@ -113,7 +124,7 @@ func TestSelectUnpledgedTokens(t *testing.T) {
 		})
 	}
 	// A quorum can recover its own collateral after its pledge is released.
-	got, excluded := selectUnpledgedTokens("q", map[string][]recoverycommit.ChainEntry{"P": collateral})
+	got, excluded := selectUnpledgedTokens("q", map[string][]types.RecoveryChainEntry{"P": collateral})
 	if len(got) != 1 || got[0].TokenID != "P" || len(excluded) != 0 {
 		t.Fatalf("released quorum collateral: tokens=%v excluded=%v", got, excluded)
 	}
@@ -124,18 +135,18 @@ func TestRecoveryCommitmentsOnlyIncludeRBTs(t *testing.T) {
 	info.Tokens.FT = []*models.TokenInfo{{TokenID: "F"}}
 	info.Tokens.NFT = []*models.TokenInfo{{TokenID: "N"}}
 	info.Tokens.SmartContract = []*models.TokenInfo{{TokenID: "S"}}
-	chains := make(map[string][]recoverycommit.ChainEntry)
+	chains := make(map[string][]types.RecoveryChainEntry)
 	pledged := make(map[string][]string)
 	for _, tokenID := range []string{"R", "F", "N", "S"} {
 		chains[tokenID] = rcChain(t, rcTx{"x", constants.TokenRole_Transfer, info})
 		pledged[tokenID] = []string{"x"}
 	}
-	for name, selectTokens := range map[string]func() []recoverycommit.TokenCommitment{
-		"quorum": func() []recoverycommit.TokenCommitment {
+	for name, selectTokens := range map[string]func() []types.RecoveryTokenCommitment{
+		"quorum": func() []types.RecoveryTokenCommitment {
 			tokens, _ := selectQuorumPledgedTokens(pledged, chains)
 			return tokens
 		},
-		"fullnode": func() []recoverycommit.TokenCommitment {
+		"fullnode": func() []types.RecoveryTokenCommitment {
 			tokens, _ := selectUnpledgedTokens("user", chains)
 			return tokens
 		},

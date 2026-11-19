@@ -6,7 +6,7 @@ import (
 	"sort"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/rubixchain/rubixgoplatform/core/recoverycommit"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -16,7 +16,7 @@ import (
 //
 // A token qualifies if an unpledge_sequence_info row owned by quorumDID lists
 // it in transaction_tokens and that row's transaction names receiverDID as
-// owner. The row is the live pledge: unpledging deletes it, which releases
+// owner and moves the token as an RBT (recovery covers RBTs only). The row is the live pledge: unpledging deletes it, which releases
 // every token of the transaction at once. A row whose transaction is not in
 // the local transactions table cannot be attributed and is skipped.
 func (w *Wallet) GetRecoveryPledgedTokens(quorumDID, receiverDID string) (map[string][]string, error) {
@@ -27,7 +27,7 @@ func (w *Wallet) GetRecoveryPledgedTokens(quorumDID, receiverDID string) (map[st
 		CROSS JOIN LATERAL unnest(u.transaction_tokens) AS tok
 		WHERE u.quorum_did = $1
 		  AND t.info->>'owner' = $2
-		  AND t.info::jsonb->'tokens'->'rbt' @> jsonb_build_array(jsonb_build_object('tokenId', tok))
+		  AND (t.info->'tokens'->'rbt')::jsonb @> jsonb_build_array(jsonb_build_object('tokenId', tok))
 		ORDER BY tok, u.tx_id
 	`, quorumDID, receiverDID)
 	if err != nil {
@@ -54,7 +54,7 @@ func (w *Wallet) GetRecoveryPledgedTokens(quorumDID, receiverDID string) (map[st
 // no local tokenchain are absent from the result. A tokenchain row whose
 // transaction is missing comes back with nil Info, so the caller can treat
 // the chain as incomplete.
-func (w *Wallet) GetRecoveryTokenChains(tokenIDs []string) (map[string][]recoverycommit.ChainEntry, error) {
+func (w *Wallet) GetRecoveryTokenChains(tokenIDs []string) (map[string][]types.RecoveryChainEntry, error) {
 	rows, err := w.db.Pool().Query(w.Ctx, `
 		SELECT tc.token_id, tc.transaction_id, tc.previous_transaction_id, tc.position, tc.role, t.info::text
 		FROM tokenchain tc
@@ -74,15 +74,15 @@ func (w *Wallet) GetRecoveryTokenChains(tokenIDs []string) (map[string][]recover
 
 // collectRecoveryChains groups rows of (token_id, transaction_id,
 // previous_transaction_id, position, role, info) by token, keeping row order.
-func collectRecoveryChains(rows pgx.Rows) (map[string][]recoverycommit.ChainEntry, error) {
+func collectRecoveryChains(rows pgx.Rows) (map[string][]types.RecoveryChainEntry, error) {
 	defer rows.Close()
-	chains := make(map[string][]recoverycommit.ChainEntry)
+	chains := make(map[string][]types.RecoveryChainEntry)
 	for rows.Next() {
 		var (
 			tokenID string
 			prevTx  *string
 			info    *string
-			e       recoverycommit.ChainEntry
+			e       types.RecoveryChainEntry
 		)
 		if err := rows.Scan(&tokenID, &e.TransactionID, &prevTx, &e.Position, &e.Role, &info); err != nil {
 			return nil, fmt.Errorf("scan tokenchain row: %w", err)
@@ -104,7 +104,7 @@ func collectRecoveryChains(rows pgx.Rows) (map[string][]recoverycommit.ChainEntr
 // GetFullNodeRecoveryTipChains returns, from the fullnode tables, the full
 // tokenchain of every token whose latest transaction names receiverDID as
 // owner, in position order. Rows are shaped as in GetRecoveryTokenChains.
-func (w *Wallet) GetFullNodeRecoveryTipChains(receiverDID string) (map[string][]recoverycommit.ChainEntry, error) {
+func (w *Wallet) GetFullNodeRecoveryTipChains(receiverDID string) (map[string][]types.RecoveryChainEntry, error) {
 	rows, err := w.db.Pool().Query(w.Ctx, `
 		WITH tips AS (
 			SELECT tc.token_id
@@ -134,7 +134,7 @@ func (w *Wallet) GetFullNodeRecoveryTipChains(receiverDID string) (map[string][]
 
 // GetFullNodeRecoveryChains reads user RBT chains, then their collateral.
 // Both reads use the same snapshot while new transactions arrive.
-func (w *Wallet) GetFullNodeRecoveryChains(userDID string) (map[string][]recoverycommit.ChainEntry, error) {
+func (w *Wallet) GetFullNodeRecoveryChains(userDID string) (map[string][]types.RecoveryChainEntry, error) {
 	tx, err := w.db.Pool().BeginTx(w.Ctx, pgx.TxOptions{
 		IsoLevel:   pgx.RepeatableRead,
 		AccessMode: pgx.ReadOnly,

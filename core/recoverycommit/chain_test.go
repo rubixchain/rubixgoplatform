@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -28,11 +29,11 @@ func tokens(ids ...string) []*models.TokenInfo {
 }
 
 // chainOf links infos into a valid chain with the given roles.
-func chainOf(t *testing.T, roles []string, infos ...models.TransactionInfo) []ChainEntry {
+func chainOf(t *testing.T, roles []string, infos ...models.TransactionInfo) []types.RecoveryChainEntry {
 	t.Helper()
-	chain := make([]ChainEntry, len(infos))
+	chain := make([]types.RecoveryChainEntry, len(infos))
 	for i, info := range infos {
-		e := ChainEntry{TransactionID: "tx" + string(rune('0'+i)), Position: int64(i), Role: roleID(roles[i]), Info: infoJSON(t, info)}
+		e := types.RecoveryChainEntry{TransactionID: "tx" + string(rune('0'+i)), Position: int64(i), Role: roleID(roles[i]), Info: infoJSON(t, info)}
 		if i > 0 {
 			e.PreviousTransactionID = chain[i-1].TransactionID
 		}
@@ -48,19 +49,25 @@ func TestValidateChain(t *testing.T) {
 		t.Fatalf("valid chain rejected: %v", err)
 	}
 
-	mutate := func(f func(c []ChainEntry) []ChainEntry) []ChainEntry {
-		c := append([]ChainEntry(nil), good...)
+	mutate := func(f func(c []types.RecoveryChainEntry) []types.RecoveryChainEntry) []types.RecoveryChainEntry {
+		c := append([]types.RecoveryChainEntry(nil), good...)
 		return f(c)
 	}
-	bad := map[string][]ChainEntry{
-		"empty":             nil,
-		"missing genesis":   good[1:],
-		"position gap":      mutate(func(c []ChainEntry) []ChainEntry { return append(c[:1], c[2:]...) }),
-		"broken link":       mutate(func(c []ChainEntry) []ChainEntry { c[2].PreviousTransactionID = "other"; return c }),
-		"genesis with prev": mutate(func(c []ChainEntry) []ChainEntry { c[0].PreviousTransactionID = "x"; return c }),
-		"missing tx info":   mutate(func(c []ChainEntry) []ChainEntry { c[1].Info = nil; return c }),
-		"empty tx ID":       mutate(func(c []ChainEntry) []ChainEntry { c[1].TransactionID = ""; return c }),
-		"repeated tx": mutate(func(c []ChainEntry) []ChainEntry {
+	bad := map[string][]types.RecoveryChainEntry{
+		"empty":           nil,
+		"missing genesis": good[1:],
+		"position gap":    mutate(func(c []types.RecoveryChainEntry) []types.RecoveryChainEntry { return append(c[:1], c[2:]...) }),
+		"broken link": mutate(func(c []types.RecoveryChainEntry) []types.RecoveryChainEntry {
+			c[2].PreviousTransactionID = "other"
+			return c
+		}),
+		"genesis with prev": mutate(func(c []types.RecoveryChainEntry) []types.RecoveryChainEntry {
+			c[0].PreviousTransactionID = "x"
+			return c
+		}),
+		"missing tx info": mutate(func(c []types.RecoveryChainEntry) []types.RecoveryChainEntry { c[1].Info = nil; return c }),
+		"empty tx ID":     mutate(func(c []types.RecoveryChainEntry) []types.RecoveryChainEntry { c[1].TransactionID = ""; return c }),
+		"repeated tx": mutate(func(c []types.RecoveryChainEntry) []types.RecoveryChainEntry {
 			c[2].TransactionID = c[0].TransactionID
 			return c
 		}),
@@ -81,7 +88,7 @@ func TestCurrentOwner(t *testing.T) {
 
 	cases := []struct {
 		name  string
-		chain []ChainEntry
+		chain []types.RecoveryChainEntry
 		want  string
 	}{
 		{"genesis owner", chainOf(t, R(mintR), mint), "alice"},
@@ -135,11 +142,11 @@ func TestIsLatestTxnPledged(t *testing.T) {
 	chain := chainOf(t, []string{constants.TokenRole_Transfer}, info)
 	pledged := chainOf(t, []string{constants.TokenRole_Pledge}, info)
 	released := chainOf(t, []string{constants.TokenRole_Pledge, constants.TokenRole_Unpledge}, info, models.TransactionInfo{Owner: "other"})
-	repledged := append([]ChainEntry(nil), released...)
-	repledged = append(repledged, ChainEntry{TransactionID: "tx2", PreviousTransactionID: "tx1", Position: 2, Role: roleID(constants.TokenRole_Pledge), Info: infoJSON(t, info)})
+	repledged := append([]types.RecoveryChainEntry(nil), released...)
+	repledged = append(repledged, types.RecoveryChainEntry{TransactionID: "tx2", PreviousTransactionID: "tx1", Position: 2, Role: roleID(constants.TokenRole_Pledge), Info: infoJSON(t, info)})
 	for _, tc := range []struct {
 		name                string
-		collateral          []ChainEntry
+		collateral          []types.RecoveryChainEntry
 		wantLive, wantError bool
 	}{
 		{"still pledged", pledged, true, false},
@@ -151,7 +158,7 @@ func TestIsLatestTxnPledged(t *testing.T) {
 		{"no unpledge entry", chainOf(t, []string{constants.TokenRole_Pledge, constants.TokenRole_Transfer}, info, info), false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := IsLatestTxnPledged("T", chain, map[string][]ChainEntry{"P": tc.collateral})
+			got, err := IsLatestTxnPledged("T", chain, map[string][]types.RecoveryChainEntry{"P": tc.collateral})
 			if (err != nil) != tc.wantError || (len(got) > 0) != tc.wantLive {
 				t.Fatalf("pledgedBy=%v error=%v", got, err)
 			}

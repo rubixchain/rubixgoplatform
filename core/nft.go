@@ -219,6 +219,8 @@ func (c *Core) NFTCallBack(peerID string, topic string, data []byte) {
 	}
 
 	c.log.Info("NFTCallBack: Transaction chain synced successfully", "nft_token", nft)
+
+	c.dispatchRecoveryEvent(topic, newEvent.TransactionID, peerID)
 }
 
 func (c *Core) FetchNFT(fetchNFTRequest *FetchNFTRequest) *models.BasicResponse {

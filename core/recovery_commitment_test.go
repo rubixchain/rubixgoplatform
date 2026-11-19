@@ -6,6 +6,7 @@ import (
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/recoverycommit"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
 
@@ -28,15 +29,15 @@ func rcRBT(tokenID, initiator, owner string, quorums ...string) models.Transacti
 	return info
 }
 
-func rcChain(t *testing.T, txs ...rcTx) []recoverycommit.ChainEntry {
+func rcChain(t *testing.T, txs ...rcTx) []types.RecoveryChainEntry {
 	t.Helper()
-	chain := make([]recoverycommit.ChainEntry, len(txs))
+	chain := make([]types.RecoveryChainEntry, len(txs))
 	for i, tx := range txs {
 		b, err := json.Marshal(tx.info)
 		if err != nil {
 			t.Fatal(err)
 		}
-		chain[i] = recoverycommit.ChainEntry{
+		chain[i] = types.RecoveryChainEntry{
 			TransactionID: tx.id,
 			Position:      int64(i),
 			Role:          int16(models.GetTokenRoleID(tx.role)),
@@ -49,7 +50,7 @@ func rcChain(t *testing.T, txs ...rcTx) []recoverycommit.ChainEntry {
 	return chain
 }
 
-func rcIDs(tokens []recoverycommit.TokenCommitment) map[string]string {
+func rcIDs(tokens []types.RecoveryTokenCommitment) map[string]string {
 	out := make(map[string]string, len(tokens))
 	for _, tc := range tokens {
 		out[tc.TokenID] = tc.ChainRoot
@@ -61,7 +62,7 @@ func TestSelectQuorumPledgedTokens(t *testing.T) {
 	const user = "user"
 	mint, xfer := constants.TokenRole_Mint, constants.TokenRole_Transfer
 
-	chains := map[string][]recoverycommit.ChainEntry{
+	chains := map[string][]types.RecoveryChainEntry{
 		// Pledged transaction is the local tip.
 		"T1": rcChain(t,
 			rcTx{"m1", mint, rcRBT("T1", "alice", "alice")},
@@ -81,7 +82,7 @@ func TestSelectQuorumPledgedTokens(t *testing.T) {
 			rcTx{"c3", xfer, rcRBT("T3", "carol", user, "q1")},
 		),
 		// Gap before the pledged transaction.
-		"T5": func() []recoverycommit.ChainEntry {
+		"T5": func() []types.RecoveryChainEntry {
 			c := rcChain(t,
 				rcTx{"m5", mint, rcRBT("T5", "alice", "alice")},
 				rcTx{"a5", xfer, rcRBT("T5", "alice", "carol", "q2")},

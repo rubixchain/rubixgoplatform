@@ -368,6 +368,17 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
         );
         CREATE INDEX IF NOT EXISTS idx_ipfs_providers_cid ON ipfs_providers(cid);
         CREATE INDEX IF NOT EXISTS idx_ipfs_providers_did ON ipfs_providers(did);
+
+        CREATE TABLE IF NOT EXISTS recovery_sessions (
+            request_id       TEXT PRIMARY KEY,
+            ephemeral_nft_id TEXT NOT NULL UNIQUE,
+            user_did         TEXT NOT NULL,
+            role             TEXT NOT NULL,
+            state            SMALLINT NOT NULL,
+            request_epoch    BIGINT NOT NULL,
+            created_at       TIMESTAMPTZ DEFAULT NOW(),
+            updated_at       TIMESTAMPTZ DEFAULT NOW()
+        );
     `)
 	return err
 }

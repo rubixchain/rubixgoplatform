@@ -152,4 +152,3 @@ func TestGetRecoveryTokenChains(t *testing.T) {
 		t.Fatalf("T1 chain = %+v", t1)
 	}
 }
-

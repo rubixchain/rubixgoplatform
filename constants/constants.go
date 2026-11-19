@@ -36,6 +36,81 @@ const (
 	NetworkMode_Localnet string = "localnet"
 )
 
+// Recovery NFT IDs for mainnet and testnet. Both are placeholders for now.
+// Update them by hand once the real Recovery NFTs are deployed.
+const (
+	RecoveryNFTID_Mainnet string = "QmbKP6dLYpD8LH9bjjztQGFMhpQULBZYZkCxVSwTqpAhPm"
+	RecoveryNFTID_Testnet string = "QmbKP6dLYpD8LH9bjjztQGFMhpQULBZYZkCxVSwTqpAhPm"
+)
+
+// Recovery session states. States only move forward, so a higher value is a
+// later state.
+const (
+	// The request was received and passed its checks.
+	RecoveryState_Requested = iota + 1
+	// The user deployed the ephemeral NFT, so commitments can be published.
+	RecoveryState_CommitOpen
+	// The commit window closed; quorums send chains.
+	RecoveryState_SyncOpen
+	// The sync window closed.
+	RecoveryState_SyncClosed
+	// Someone other than the user deployed the ephemeral NFT. This is final.
+	RecoveryState_Blocked
+)
+
+// Recovery request rules.
+const (
+	RecoveryRequest_Purpose = "account recovery"
+	// How old a request transaction may be, in seconds, when it reaches a node (Q6).
+	RecoveryRequest_MaxAgeSeconds = 2 * 60
+	// Minimum time, in seconds, between two requests from the same DID (Q10).
+	RecoveryRequest_CooldownSeconds = 48 * 60 * 60
+)
+
+// Recovery windows (Q6), in seconds, counted from the request transaction
+// epoch. They are the same on every node and network. The sync window starts
+// when the commit window ends. A node acts on a deadline only after the grace
+// period, to allow for clock drift.
+const (
+	RecoveryWindow_CommitSeconds = 10 * 60
+	RecoveryWindow_SyncSeconds   = 30 * 60
+	RecoveryWindow_GraceSeconds  = 60
+)
+
+// Recovery message version and types, sent on the ephemeral NFT.
+const (
+	RecoveryMessage_Version = 1
+
+	RecoveryMessageType_Commitment = "commitment"
+	RecoveryMessageType_Unpledged  = "unpledged"
+	RecoveryMessageType_Challenge  = "challenge"
+	RecoveryMessageType_Mismatch   = "mismatch"
+	RecoveryMessageType_Completion = "completion"
+)
+
+// Recovery commitment Merkle tree. The leaf and node prefixes separate the two
+// hash domains, as in RFC 6962 (Certificate Transparency), so a token leaf and
+// an internal node can never be reinterpreted as one another.
+const (
+	RecoveryCommit_PrefixLeaf byte = 0x00
+	RecoveryCommit_PrefixNode byte = 0x01
+	// Length in bytes of every hash and root (SHA3-256).
+	RecoveryCommit_HashSize = 32
+)
+
+// Recovery commitment committer types: which token set a commitment covers.
+const (
+	RecoveryCommitterType_Quorum   = "quorum"
+	RecoveryCommitterType_Fullnode = "fullnode"
+)
+
+// Roles a node can have in a recovery session.
+const (
+	RecoveryRole_User     = "user"
+	RecoveryRole_Quorum   = "quorum"
+	RecoveryRole_Fullnode = "fullnode"
+)
+
 // Supported crypto algorithms for DID (Address)
 const DidAlgo_SECP256K1 = "secp256k1"
 

@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/rubixchain/rubixgoplatform/core/recoverycommit"
+	"github.com/rubixchain/rubixgoplatform/types"
 )
 
 // GenerateRecoveryCommitment is the quorum side of the account-recovery
@@ -17,8 +18,9 @@ import (
 // The returned tree keeps the per-token chain roots so that token proofs can
 // be produced later. The excluded list names pledged tokens whose local chain
 // is missing, incomplete or has moved past the pledge; they are not part of
-// the root.
-func (c *Core) GenerateRecoveryCommitment(requestID, userDID, quorumDID string) (*recoverycommit.CommitmentTree, []recoverycommit.ExcludedToken, error) {
+// the root. The tree is nil when no token is left: a quorum holding nothing
+// for the user does not publish a commitment (Q11).
+func (c *Core) GenerateRecoveryCommitment(requestID, userDID, quorumDID string) (*types.RecoveryCommitmentTree, []types.RecoveryExcludedToken, error) {
 	if requestID == "" || userDID == "" || quorumDID == "" {
 		return nil, nil, fmt.Errorf("GenerateRecoveryCommitment: request ID, user DID and quorum DID are required")
 	}
@@ -42,14 +44,19 @@ func (c *Core) GenerateRecoveryCommitment(requestID, userDID, quorumDID string) 
 		return nil, nil, fmt.Errorf("GenerateRecoveryCommitment: %w", err)
 	}
 	tokens, excluded := selectQuorumPledgedTokens(pledged, chains)
+	for _, x := range excluded {
+		c.log.Info("GenerateRecoveryCommitment: token left out of commitment",
+			"requestID", requestID, "userDID", userDID, "tokenID", x.TokenID, "reason", x.Reason)
+	}
+	if len(tokens) == 0 {
+		c.log.Info("GenerateRecoveryCommitment: quorum holds no pledged tokens for the user, no commitment",
+			"requestID", requestID, "userDID", userDID, "quorumDID", quorumDID)
+		return nil, excluded, nil
+	}
 
 	tree, err := recoverycommit.BuildQuorumCommitment(requestID, userDID, quorumDID, tokens)
 	if err != nil {
 		return nil, nil, fmt.Errorf("GenerateRecoveryCommitment: %w", err)
-	}
-	for _, x := range excluded {
-		c.log.Info("GenerateRecoveryCommitment: token left out of commitment",
-			"requestID", requestID, "userDID", userDID, "tokenID", x.TokenID, "reason", x.Reason)
 	}
 	c.log.Info("GenerateRecoveryCommitment: commitment built",
 		"requestID", requestID, "userDID", userDID, "quorumDID", quorumDID,
@@ -67,30 +74,30 @@ func (c *Core) GenerateRecoveryCommitment(requestID, userDID, quorumDID string) 
 // is not a live pledge (the chain moved on, so the row is stale, see
 // recovery-architecture §5.7), or its chain fails
 // recoverycommit.ValidateChain. Excluded is sorted by token ID.
-func selectQuorumPledgedTokens(pledged map[string][]string, chains map[string][]recoverycommit.ChainEntry) ([]recoverycommit.TokenCommitment, []recoverycommit.ExcludedToken) {
-	tokens := make([]recoverycommit.TokenCommitment, 0, len(pledged))
-	var excluded []recoverycommit.ExcludedToken
+func selectQuorumPledgedTokens(pledged map[string][]string, chains map[string][]types.RecoveryChainEntry) ([]types.RecoveryTokenCommitment, []types.RecoveryExcludedToken) {
+	tokens := make([]types.RecoveryTokenCommitment, 0, len(pledged))
+	var excluded []types.RecoveryExcludedToken
 
 	for tokenID, txIDs := range pledged {
 		chain := chains[tokenID]
 		if len(chain) == 0 {
-			excluded = append(excluded, recoverycommit.ExcludedToken{TokenID: tokenID, Reason: "no local tokenchain"})
+			excluded = append(excluded, types.RecoveryExcludedToken{TokenID: tokenID, Reason: "no local tokenchain"})
 			continue
 		}
 		if !recoverycommit.IsRBTChain(tokenID, chain) {
 			continue
 		}
 		if tip := chain[len(chain)-1].TransactionID; !slices.Contains(txIDs, tip) {
-			excluded = append(excluded, recoverycommit.ExcludedToken{TokenID: tokenID, Reason: "latest transaction " + tip + " is not a live pledge of this quorum"})
+			excluded = append(excluded, types.RecoveryExcludedToken{TokenID: tokenID, Reason: "latest transaction " + tip + " is not a live pledge of this quorum"})
 			continue
 		}
 		if err := recoverycommit.ValidateChain(chain); err != nil {
-			excluded = append(excluded, recoverycommit.ExcludedToken{TokenID: tokenID, Reason: "incomplete tokenchain: " + err.Error()})
+			excluded = append(excluded, types.RecoveryExcludedToken{TokenID: tokenID, Reason: "incomplete tokenchain: " + err.Error()})
 			continue
 		}
 		tc, err := recoverycommit.BuildTokenCommitment(tokenID, recoverycommit.TransactionIDs(chain))
 		if err != nil {
-			excluded = append(excluded, recoverycommit.ExcludedToken{TokenID: tokenID, Reason: err.Error()})
+			excluded = append(excluded, types.RecoveryExcludedToken{TokenID: tokenID, Reason: err.Error()})
 			continue
 		}
 		tokens = append(tokens, tc)

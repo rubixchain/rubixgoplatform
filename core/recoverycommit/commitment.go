@@ -4,68 +4,26 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-const (
-	CommitterTypeQuorum   = "quorum"
-	CommitterTypeFullnode = "fullnode"
-)
-
-// Commitment is the token-chain root a quorum or fullnode publishes.
-// CommitterType tells the receiver which token set it covers.
-type Commitment struct {
-	RequestID     string `json:"request_id"`
-	UserDID       string `json:"user_did"`
-	CommitterDID  string `json:"committer_did"`
-	CommitterType string `json:"committer_type"`
-	TokenCount    int    `json:"token_count"`
-	Root          string `json:"root"` // hex SHA3-256
-}
-
-// TokenCommitment is one token's layer-1 result.
-type TokenCommitment struct {
-	TokenID   string `json:"token_id"`
-	ChainRoot string `json:"chain_root"` // hex SHA3-256 chain hash
-}
-
-// CommitmentTree is a Commitment plus everything needed to prove any token
-// under it. Tokens is sorted by TokenID, which is the layer-2 leaf
-// order.
-type CommitmentTree struct {
-	Commitment Commitment        `json:"commitment"`
-	Tokens     []TokenCommitment `json:"tokens"`
-}
-
-// ExcludedToken records a candidate token that was left out of a commitment
-// and why. It is diagnostic only and is not part of the committed root.
-type ExcludedToken struct {
-	TokenID string `json:"token_id"`
-	Reason  string `json:"reason"`
-}
-
-// Proof is a Merkle audit path for the leaf at Index in a tree of Size leaves.
-type Proof struct {
-	Index int      `json:"index"`
-	Size  int      `json:"size"`
-	Path  []string `json:"path"` // hex hashes, leaf sibling first
-}
-
 // BuildTokenCommitment computes the layer-1 chain hash over txIDs, which must
 // be the token's complete chain in position order.
-func BuildTokenCommitment(tokenID string, txIDs []string) (TokenCommitment, error) {
+func BuildTokenCommitment(tokenID string, txIDs []string) (types.RecoveryTokenCommitment, error) {
 	if tokenID == "" {
-		return TokenCommitment{}, fmt.Errorf("BuildTokenCommitment: empty token ID")
+		return types.RecoveryTokenCommitment{}, fmt.Errorf("BuildTokenCommitment: empty token ID")
 	}
 	if len(txIDs) == 0 {
-		return TokenCommitment{}, fmt.Errorf("BuildTokenCommitment: token %s has no transactions", tokenID)
+		return types.RecoveryTokenCommitment{}, fmt.Errorf("BuildTokenCommitment: token %s has no transactions", tokenID)
 	}
 	for i, id := range txIDs {
 		if id == "" {
-			return TokenCommitment{}, fmt.Errorf("BuildTokenCommitment: token %s has an empty transaction ID at position %d", tokenID, i)
+			return types.RecoveryTokenCommitment{}, fmt.Errorf("BuildTokenCommitment: token %s has an empty transaction ID at position %d", tokenID, i)
 		}
 	}
-	return TokenCommitment{
+	return types.RecoveryTokenCommitment{
 		TokenID:   tokenID,
 		ChainRoot: util.HexToStr(ChainHash(txIDs)),
 	}, nil
@@ -73,11 +31,11 @@ func BuildTokenCommitment(tokenID string, txIDs []string) (TokenCommitment, erro
 
 // BuildQuorumCommitment sorts tokens by token ID and computes the layer-2
 // root over Hash(TokenID || ChainRoot). The input slice is not modified.
-func BuildQuorumCommitment(requestID, userDID, quorumDID string, tokens []TokenCommitment) (*CommitmentTree, error) {
+func BuildQuorumCommitment(requestID, userDID, quorumDID string, tokens []types.RecoveryTokenCommitment) (*types.RecoveryCommitmentTree, error) {
 	if requestID == "" || userDID == "" || quorumDID == "" {
 		return nil, fmt.Errorf("BuildQuorumCommitment: request ID, user DID and quorum DID are required")
 	}
-	tree, err := buildCommitment(requestID, userDID, quorumDID, CommitterTypeQuorum, tokens)
+	tree, err := buildCommitment(requestID, userDID, quorumDID, constants.RecoveryCommitterType_Quorum, tokens)
 	if err != nil {
 		return nil, fmt.Errorf("BuildQuorumCommitment: %w", err)
 	}
@@ -86,26 +44,26 @@ func BuildQuorumCommitment(requestID, userDID, quorumDID string, tokens []TokenC
 
 // BuildUnpledgedCommitment builds the fullnode commitment for unpledged tokens.
 // Token selection and pledge-state checks belong to the caller.
-func BuildUnpledgedCommitment(requestID, userDID, fullnodeDID string, tokens []TokenCommitment) (*CommitmentTree, error) {
+func BuildUnpledgedCommitment(requestID, userDID, fullnodeDID string, tokens []types.RecoveryTokenCommitment) (*types.RecoveryCommitmentTree, error) {
 	if requestID == "" || userDID == "" || fullnodeDID == "" {
 		return nil, fmt.Errorf("BuildUnpledgedCommitment: request ID, user DID and fullnode DID are required")
 	}
-	tree, err := buildCommitment(requestID, userDID, fullnodeDID, CommitterTypeFullnode, tokens)
+	tree, err := buildCommitment(requestID, userDID, fullnodeDID, constants.RecoveryCommitterType_Fullnode, tokens)
 	if err != nil {
 		return nil, fmt.Errorf("BuildUnpledgedCommitment: %w", err)
 	}
 	return tree, nil
 }
 
-func buildCommitment(requestID, userDID, committerDID, committerType string, tokens []TokenCommitment) (*CommitmentTree, error) {
-	sorted := append([]TokenCommitment(nil), tokens...)
+func buildCommitment(requestID, userDID, committerDID, committerType string, tokens []types.RecoveryTokenCommitment) (*types.RecoveryCommitmentTree, error) {
+	sorted := append([]types.RecoveryTokenCommitment(nil), tokens...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].TokenID < sorted[j].TokenID })
 	leaves, err := tokenLeaves(sorted)
 	if err != nil {
 		return nil, err
 	}
-	return &CommitmentTree{
-		Commitment: Commitment{
+	return &types.RecoveryCommitmentTree{
+		Commitment: types.RecoveryCommitment{
 			RequestID:     requestID,
 			UserDID:       userDID,
 			CommitterDID:  committerDID,
@@ -119,7 +77,7 @@ func buildCommitment(requestID, userDID, committerDID, committerType string, tok
 
 // tokenLeaves validates sorted (unique, non-empty IDs, well-formed chain
 // roots) and returns its layer-2 leaves.
-func tokenLeaves(sorted []TokenCommitment) ([][]byte, error) {
+func tokenLeaves(sorted []types.RecoveryTokenCommitment) ([][]byte, error) {
 	leaves := make([][]byte, len(sorted))
 	for i, t := range sorted {
 		if t.TokenID == "" {
@@ -129,7 +87,7 @@ func tokenLeaves(sorted []TokenCommitment) ([][]byte, error) {
 			return nil, fmt.Errorf("duplicate token %s", t.TokenID)
 		}
 		root := util.StrToHex(t.ChainRoot)
-		if len(root) != HashSize {
+		if len(root) != constants.RecoveryCommit_HashSize {
 			return nil, fmt.Errorf("token %s has malformed chain root %q", t.TokenID, t.ChainRoot)
 		}
 		leaves[i] = TokenLeafHash(t.TokenID, root)
@@ -137,7 +95,7 @@ func tokenLeaves(sorted []TokenCommitment) ([][]byte, error) {
 	return leaves, nil
 }
 
-func (t *CommitmentTree) tokenIndex(tokenID string) (int, error) {
+func tokenIndex(t *types.RecoveryCommitmentTree, tokenID string) (int, error) {
 	i := sort.Search(len(t.Tokens), func(i int) bool { return t.Tokens[i].TokenID >= tokenID })
 	if i == len(t.Tokens) || t.Tokens[i].TokenID != tokenID {
 		return 0, fmt.Errorf("token %s is not in the commitment", tokenID)
@@ -147,8 +105,8 @@ func (t *CommitmentTree) tokenIndex(tokenID string) (int, error) {
 
 // TokenProof proves that tokenID, with its ChainRoot, is a leaf under
 // Commitment.Root.
-func (t *CommitmentTree) TokenProof(tokenID string) (*Proof, error) {
-	i, err := t.tokenIndex(tokenID)
+func TokenProof(t *types.RecoveryCommitmentTree, tokenID string) (*types.RecoveryProof, error) {
+	i, err := tokenIndex(t, tokenID)
 	if err != nil {
 		return nil, err
 	}
@@ -159,12 +117,12 @@ func (t *CommitmentTree) TokenProof(tokenID string) (*Proof, error) {
 	return newProof(leaves, i)
 }
 
-func newProof(leaves [][]byte, index int) (*Proof, error) {
+func newProof(leaves [][]byte, index int) (*types.RecoveryProof, error) {
 	path, err := MerkleProof(leaves, index)
 	if err != nil {
 		return nil, err
 	}
-	p := &Proof{Index: index, Size: len(leaves), Path: make([]string, len(path))}
+	p := &types.RecoveryProof{Index: index, Size: len(leaves), Path: make([]string, len(path))}
 	for i, h := range path {
 		p.Path[i] = util.HexToStr(h)
 	}
@@ -173,25 +131,25 @@ func newProof(leaves [][]byte, index int) (*Proof, error) {
 
 // VerifyTokenProof checks that (tokenID, chainRoot) is the leaf p proves under
 // the user-level root.
-func VerifyTokenProof(root, tokenID, chainRoot string, p *Proof) bool {
+func VerifyTokenProof(root, tokenID, chainRoot string, p *types.RecoveryProof) bool {
 	cr := util.StrToHex(chainRoot)
-	if len(cr) != HashSize {
+	if len(cr) != constants.RecoveryCommit_HashSize {
 		return false
 	}
 	return verifyProof(TokenLeafHash(tokenID, cr), root, p)
 }
 
-func verifyProof(leaf []byte, root string, p *Proof) bool {
+func verifyProof(leaf []byte, root string, p *types.RecoveryProof) bool {
 	if p == nil {
 		return false
 	}
 	r := util.StrToHex(root)
-	if len(r) != HashSize {
+	if len(r) != constants.RecoveryCommit_HashSize {
 		return false
 	}
 	path := make([][]byte, len(p.Path))
 	for i, h := range p.Path {
-		if path[i] = util.StrToHex(h); len(path[i]) != HashSize {
+		if path[i] = util.StrToHex(h); len(path[i]) != constants.RecoveryCommit_HashSize {
 			return false
 		}
 	}
@@ -200,7 +158,7 @@ func verifyProof(leaf []byte, root string, p *Proof) bool {
 
 // CompareCommitments lists every field in which submitted differs from
 // expected. An empty result means the commitments match.
-func CompareCommitments(expected, submitted Commitment) []string {
+func CompareCommitments(expected, submitted types.RecoveryCommitment) []string {
 	var diffs []string
 	check := func(field, want, got string) {
 		if want != got {

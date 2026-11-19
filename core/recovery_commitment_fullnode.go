@@ -5,37 +5,17 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/recoverycommit"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
-
-// RecoveryCommitmentCheck is the fullnode's verdict on one quorum's
-// commitment. Expected is nil only if the fullnode could not reproduce it.
-type RecoveryCommitmentCheck struct {
-	QuorumDID  string                         `json:"quorum_did"`
-	Submitted  recoverycommit.Commitment      `json:"submitted"`
-	Expected   *recoverycommit.CommitmentTree `json:"expected,omitempty"`
-	Match      bool                           `json:"match"`
-	Mismatches []string                       `json:"mismatches,omitempty"`
-}
-
-// RecoveryCommitmentReport is the result of checking every submitted
-// commitment for one recovery request. MissingQuorums should have committed
-// at least one token but submitted nothing. Excluded tokens are in no
-// quorum's expected set.
-type RecoveryCommitmentReport struct {
-	RequestID      string                         `json:"request_id"`
-	UserDID        string                         `json:"user_did"`
-	Checks         []RecoveryCommitmentCheck      `json:"checks"`
-	MissingQuorums []string                       `json:"missing_quorums,omitempty"`
-	Excluded       []recoverycommit.ExcludedToken `json:"excluded,omitempty"`
-}
 
 // VerifyRecoveryCommitments is the fullnode side of the account-recovery
 // commitment. It rebuilds, from the fullnode's chains, the commitment each
 // quorum should have produced under the GenerateRecoveryCommitment rule and
 // compares it with the submitted one.
-func (c *Core) VerifyRecoveryCommitments(requestID, userDID string, submitted []recoverycommit.Commitment) (*RecoveryCommitmentReport, error) {
+func (c *Core) VerifyRecoveryCommitments(requestID, userDID string, submitted []types.RecoveryCommitment) (*types.RecoveryCommitmentReport, error) {
 	if !c.fullNode {
 		return nil, fmt.Errorf("VerifyRecoveryCommitments: only a fullnode can verify recovery commitments")
 	}
@@ -60,22 +40,25 @@ func (c *Core) VerifyRecoveryCommitments(requestID, userDID string, submitted []
 }
 
 // verifyQuorumCommitments checks each submitted commitment against the one
-// reproduced from chains. A quorum with no expected tokens is expected to
-// submit an empty commitment. Checks are sorted by quorum DID.
-func verifyQuorumCommitments(requestID, userDID string, chains map[string][]recoverycommit.ChainEntry, submitted []recoverycommit.Commitment) (*RecoveryCommitmentReport, error) {
+// reproduced from chains. A quorum with no expected tokens must not submit a
+// commitment (Q11). Checks are sorted by quorum DID.
+func verifyQuorumCommitments(requestID, userDID string, chains map[string][]types.RecoveryChainEntry, submitted []types.RecoveryCommitment) (*types.RecoveryCommitmentReport, error) {
 	expected, excluded := expectedPledgedTokens(userDID, chains)
-	report := &RecoveryCommitmentReport{RequestID: requestID, UserDID: userDID, Excluded: excluded}
+	report := &types.RecoveryCommitmentReport{RequestID: requestID, UserDID: userDID, Excluded: excluded}
 
 	seen := make(map[string]bool, len(submitted))
 	for _, sub := range submitted {
-		chk := RecoveryCommitmentCheck{QuorumDID: sub.CommitterDID, Submitted: sub}
+		chk := types.RecoveryCommitmentCheck{QuorumDID: sub.CommitterDID, Submitted: sub}
 		switch {
 		case sub.CommitterDID == "":
 			chk.Mismatches = []string{"committer_did is empty"}
-		case sub.CommitterType != recoverycommit.CommitterTypeQuorum:
+		case sub.CommitterType != constants.RecoveryCommitterType_Quorum:
 			chk.Mismatches = []string{"committer_type must be quorum"}
 		case seen[sub.CommitterDID]:
 			chk.Mismatches = []string{"duplicate commitment from this quorum"}
+		case len(expected[sub.CommitterDID]) == 0:
+			seen[sub.CommitterDID] = true
+			chk.Mismatches = []string{"quorum holds no pledged tokens for the user and must not commit"}
 		default:
 			seen[sub.CommitterDID] = true
 			tree, err := recoverycommit.BuildQuorumCommitment(requestID, userDID, sub.CommitterDID, expected[sub.CommitterDID])
@@ -101,20 +84,17 @@ func verifyQuorumCommitments(requestID, userDID string, chains map[string][]reco
 
 // expectedPledgedTokens maps each quorum to the tokens it should commit for
 // userDID. chains holds the tokens whose latest transaction X names userDID as
-// owner. A token goes to every quorum that pledged X, if X is still the tip of
+// owner. Only RBTs that X moved are considered. A token goes to every quorum that pledged X, if X is still the tip of
 // all tokens X moved (otherwise the quorums have unpledged X) and its chain is
 // valid. Excluded is sorted by token ID.
-func expectedPledgedTokens(userDID string, chains map[string][]recoverycommit.ChainEntry) (map[string][]recoverycommit.TokenCommitment, []recoverycommit.ExcludedToken) {
-	expected := make(map[string][]recoverycommit.TokenCommitment)
-	var excluded []recoverycommit.ExcludedToken
+func expectedPledgedTokens(userDID string, chains map[string][]types.RecoveryChainEntry) (map[string][]types.RecoveryTokenCommitment, []types.RecoveryExcludedToken) {
+	expected := make(map[string][]types.RecoveryTokenCommitment)
+	var excluded []types.RecoveryExcludedToken
 	exclude := func(tokenID, reason string) {
-		excluded = append(excluded, recoverycommit.ExcludedToken{TokenID: tokenID, Reason: reason})
+		excluded = append(excluded, types.RecoveryExcludedToken{TokenID: tokenID, Reason: reason})
 	}
 
 	for tokenID, chain := range chains {
-		if !recoverycommit.IsRBTChain(tokenID, chain) {
-			continue
-		}
 		tip := chain[len(chain)-1]
 		var info models.TransactionInfo
 		if err := json.Unmarshal(tip.Info, &info); err != nil {
@@ -124,6 +104,10 @@ func expectedPledgedTokens(userDID string, chains map[string][]recoverycommit.Ch
 		if info.Tokens == nil {
 			continue
 		}
+		if !recoverycommit.ContainsToken(info.Tokens.RBT, tokenID) {
+			continue // not an RBT the user received, or a pledge or committed token
+		}
+		// X is unpledged once any token it moved, of any type, moves on.
 		moved := [][]*models.TokenInfo{info.Tokens.RBT, info.Tokens.FT, info.Tokens.NFT, info.Tokens.SmartContract}
 		live := true
 		for _, list := range moved {
@@ -135,10 +119,6 @@ func expectedPledgedTokens(userDID string, chains map[string][]recoverycommit.Ch
 					live = false
 				}
 			}
-		}
-		isMoved := recoverycommit.ContainsToken(info.Tokens.RBT, tokenID)
-		if !isMoved {
-			continue // a pledge or committed token, not the user's
 		}
 		var pledgers []string
 		for _, q := range info.Quorums {
@@ -169,7 +149,7 @@ func expectedPledgedTokens(userDID string, chains map[string][]recoverycommit.Ch
 
 // ComputeUnpledgedCommitment builds this fullnode's root for free user tokens.
 // Excluded tokens have missing or broken history and are not in the root.
-func (c *Core) ComputeUnpledgedCommitment(requestID, userDID, fullnodeDID string) (*recoverycommit.CommitmentTree, []recoverycommit.ExcludedToken, error) {
+func (c *Core) ComputeUnpledgedCommitment(requestID, userDID, fullnodeDID string) (*types.RecoveryCommitmentTree, []types.RecoveryExcludedToken, error) {
 	if !c.fullNode {
 		return nil, nil, fmt.Errorf("ComputeUnpledgedCommitment: only a fullnode can build this commitment")
 	}
@@ -185,9 +165,9 @@ func (c *Core) ComputeUnpledgedCommitment(requestID, userDID, fullnodeDID string
 	return tree, excluded, err
 }
 
-func selectUnpledgedTokens(userDID string, chains map[string][]recoverycommit.ChainEntry) ([]recoverycommit.TokenCommitment, []recoverycommit.ExcludedToken) {
-	var tokens []recoverycommit.TokenCommitment
-	var excluded []recoverycommit.ExcludedToken
+func selectUnpledgedTokens(userDID string, chains map[string][]types.RecoveryChainEntry) ([]types.RecoveryTokenCommitment, []types.RecoveryExcludedToken) {
+	var tokens []types.RecoveryTokenCommitment
+	var excluded []types.RecoveryExcludedToken
 	for tokenID, chain := range chains {
 		if !recoverycommit.IsRBTChain(tokenID, chain) {
 			continue
@@ -208,14 +188,14 @@ func selectUnpledgedTokens(userDID string, chains map[string][]recoverycommit.Ch
 			}
 		}
 		if err == nil {
-			var token recoverycommit.TokenCommitment
+			var token types.RecoveryTokenCommitment
 			token, err = recoverycommit.BuildTokenCommitment(tokenID, recoverycommit.TransactionIDs(chain))
 			if err == nil {
 				tokens = append(tokens, token)
 			}
 		}
 		if err != nil {
-			excluded = append(excluded, recoverycommit.ExcludedToken{TokenID: tokenID, Reason: err.Error()})
+			excluded = append(excluded, types.RecoveryExcludedToken{TokenID: tokenID, Reason: err.Error()})
 		}
 	}
 	sort.Slice(tokens, func(i, j int) bool { return tokens[i].TokenID < tokens[j].TokenID })

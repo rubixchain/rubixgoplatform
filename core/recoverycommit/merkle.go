@@ -13,17 +13,6 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-// Domain-separation prefixes for the layer-2 Merkle tree, as in RFC 6962
-// (Certificate Transparency): a token leaf and an internal node can never be
-// reinterpreted as one another.
-const (
-	prefixLeaf byte = 0x00
-	prefixNode byte = 0x01
-)
-
-// HashSize is the length in bytes of every hash and root (SHA3-256).
-const HashSize = 32
-
 func hash(parts ...[]byte) []byte {
 	return util.CalculateHash(bytes.Join(parts, nil), constants.HashAlgorithm_SHA3_256)
 }
@@ -52,11 +41,11 @@ func ChainHash(txIDs []string) []byte {
 // H(0x00 || len(tokenID) || tokenID || chainRoot). chainRoot is fixed-size, so
 // only the token ID needs a length prefix.
 func TokenLeafHash(tokenID string, chainRoot []byte) []byte {
-	return hash([]byte{prefixLeaf}, lengthPrefixed(tokenID), chainRoot)
+	return hash([]byte{constants.RecoveryCommit_PrefixLeaf}, lengthPrefixed(tokenID), chainRoot)
 }
 
 func nodeHash(left, right []byte) []byte {
-	return hash([]byte{prefixNode}, left, right)
+	return hash([]byte{constants.RecoveryCommit_PrefixNode}, left, right)
 }
 
 // splitPoint returns the largest power of two strictly less than n (n >= 2).
