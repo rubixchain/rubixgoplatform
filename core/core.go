@@ -33,6 +33,7 @@ const (
 	APIGetPeerInfoPath       string = "/rubix/v1/internal/peer_info"
 	APIInitiateConsensus     string = "/rubix/v1/internal/initiate_consensus"
 	APISendTokens            string = "/rubix/v1/internal/send_tokens"
+	APIRecoverySendTokens    string = "/rubix/v1/internal/recovery_send_tokens"
 	APIRequestPledgeToken    string = "/rubix/v1/internal/request_pledge_token"
 )
 

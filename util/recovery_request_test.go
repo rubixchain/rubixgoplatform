@@ -12,7 +12,10 @@ import (
 	"github.com/rubixchain/rubixgoplatform/util"
 )
 
-func TestRecoveryRequestSignAndVerify(t *testing.T) {
+// testRecoveryDID creates a DID key pair named name and returns a signing and
+// a verifying handle for it.
+func testRecoveryDID(t *testing.T, name string) (signer, verifier types.DIDCrypto) {
+	t.Helper()
 	master, err := crypto.BIPGenerateMasterKeyFromMnemonic(crypto.BIPGenerateMnemonic())
 	if err != nil {
 		t.Fatal(err)
@@ -22,7 +25,7 @@ func TestRecoveryRequestSignAndVerify(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	keyDir := filepath.Join(dir, "user-did")
+	keyDir := filepath.Join(dir, name)
 	if err := os.Mkdir(keyDir, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -31,8 +34,11 @@ func TestRecoveryRequestSignAndVerify(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	signer := did.InitDIDLiteWithPassword("user-did", dir, "test-password")
-	verifier := did.InitDIDLite("user-did", dir, nil)
+	return did.InitDIDLiteWithPassword(name, dir, "test-password"), did.InitDIDLite(name, dir, nil)
+}
+
+func TestRecoveryRequestSignAndVerify(t *testing.T) {
+	signer, verifier := testRecoveryDID(t, "user-did")
 	request := types.RecoveryRequest{DID: "user-did", Network: "testnet", Purpose: constants.RecoveryRequest_Purpose, Epoch: 1794700800}
 	if err := util.SignRecoveryRequest(signer, &request); err != nil {
 		t.Fatal(err)
@@ -58,6 +64,41 @@ func TestRecoveryRequestSignAndVerify(t *testing.T) {
 			tc.change(&changed)
 			if err := util.VerifyRecoveryRequest(verifier, &changed, tc.network); err == nil {
 				t.Fatal("invalid request was accepted")
+			}
+		})
+	}
+}
+
+func TestRecoveryChainsNoticeSignAndVerify(t *testing.T) {
+	signer, verifier := testRecoveryDID(t, "quorum-did")
+	notice := types.RecoveryChainsNotice{
+		RequestID:    "req",
+		QuorumDID:    "quorum-did",
+		QuorumPeerID: "peer",
+		Tokens:       []types.RecoveryTokenCommitment{{TokenID: "T1", ChainRoot: "root"}},
+	}
+	if err := util.SignRecoveryChainsNotice(signer, &notice); err != nil {
+		t.Fatal(err)
+	}
+	if err := util.VerifyRecoveryChainsNotice(verifier, &notice); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name   string
+		change func(*types.RecoveryChainsNotice)
+	}{
+		{"changed peer", func(n *types.RecoveryChainsNotice) { n.QuorumPeerID = "attacker" }},
+		{"changed tokens", func(n *types.RecoveryChainsNotice) {
+			n.Tokens = []types.RecoveryTokenCommitment{{TokenID: "T2", ChainRoot: "root"}}
+		}},
+		{"other quorum DID", func(n *types.RecoveryChainsNotice) { n.QuorumDID = "other-did" }},
+		{"missing signature", func(n *types.RecoveryChainsNotice) { n.Signature = "" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			changed := notice
+			tc.change(&changed)
+			if err := util.VerifyRecoveryChainsNotice(verifier, &changed); err == nil {
+				t.Fatal("invalid notice was accepted")
 			}
 		})
 	}

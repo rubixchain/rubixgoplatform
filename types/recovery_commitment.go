@@ -76,3 +76,16 @@ type RecoveryCommitmentReport struct {
 	MissingQuorums []string                  `json:"missing_quorums,omitempty"`
 	Excluded       []RecoveryExcludedToken   `json:"excluded,omitempty"`
 }
+
+// RecoveryChainsNotice is what a quorum sends the user when the sync window
+// opens, the way send_tokens tells a receiver about a transfer. The user then
+// pulls the chains from the quorum with sync_transaction_chain and cuts each
+// one at its TipTxnID. Signature is the quorum DID's signature over the
+// notice with an empty Signature field.
+type RecoveryChainsNotice struct {
+	RequestID    string                    `json:"request_id"`
+	QuorumDID    string                    `json:"quorum_did"`
+	QuorumPeerID string                    `json:"quorum_peer_id"`
+	Tokens       []RecoveryTokenCommitment `json:"tokens"`
+	Signature    string                    `json:"signature"`
+}

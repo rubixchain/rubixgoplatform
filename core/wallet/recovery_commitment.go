@@ -238,6 +238,57 @@ func (w *Wallet) SaveRecoveryQuorumCommitment(quorumDID string, tree *types.Reco
 	return nil
 }
 
+// GetRecoveryQuorumCommitments returns the commitment trees the quorums on
+// this node published for a recovery request.
+func (w *Wallet) GetRecoveryQuorumCommitments(requestID string) ([]*types.RecoveryCommitmentTree, error) {
+	rows, err := w.db.Pool().Query(w.Ctx,
+		`SELECT tree FROM recovery_quorum_commitments WHERE request_id = $1 ORDER BY quorum_did`,
+		requestID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetRecoveryQuorumCommitments: request %s: %w", requestID, err)
+	}
+	defer rows.Close()
+	var trees []*types.RecoveryCommitmentTree
+	for rows.Next() {
+		var data []byte
+		if err := rows.Scan(&data); err != nil {
+			return nil, fmt.Errorf("GetRecoveryQuorumCommitments: scan: %w", err)
+		}
+		var tree types.RecoveryCommitmentTree
+		if err := json.Unmarshal(data, &tree); err != nil {
+			return nil, fmt.Errorf("GetRecoveryQuorumCommitments: decode: %w", err)
+		}
+		trees = append(trees, &tree)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("GetRecoveryQuorumCommitments: request %s: %w", requestID, err)
+	}
+	return trees, nil
+}
+
+// SaveRecoveryDelivery stores the chains one quorum delivered to the user for
+// a recovery request. Each quorum's chains are kept apart and are not merged
+// into the wallet, so the user can check them against that quorum's
+// commitment. The first delivery from a quorum is kept. It returns false if a
+// delivery from that quorum was already stored.
+func (w *Wallet) SaveRecoveryDelivery(requestID, quorumDID string, chains map[string][]types.TransactionWithRole) (bool, error) {
+	data, err := json.Marshal(chains)
+	if err != nil {
+		return false, fmt.Errorf("SaveRecoveryDelivery: %w", err)
+	}
+	tag, err := w.db.Pool().Exec(w.Ctx,
+		`INSERT INTO recovery_deliveries (request_id, quorum_did, chains)
+		 VALUES ($1, $2, $3)
+		 ON CONFLICT (request_id, quorum_did) DO NOTHING`,
+		requestID, quorumDID, data,
+	)
+	if err != nil {
+		return false, fmt.Errorf("SaveRecoveryDelivery: request %s, quorum %s: %w", requestID, quorumDID, err)
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
 // SaveRecoveryCommitmentReport stores a fullnode's audit of the commitments
 // submitted for a recovery request. The first report for a request is kept.
 func (w *Wallet) SaveRecoveryCommitmentReport(report *types.RecoveryCommitmentReport) error {
