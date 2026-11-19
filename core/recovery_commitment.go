@@ -87,6 +87,9 @@ func selectQuorumPledgedTokens(pledged map[string][]string, chains map[string][]
 			excluded = append(excluded, types.RecoveryExcludedToken{TokenID: tokenID, Reason: "no local tokenchain"})
 			continue
 		}
+		if !recoverycommit.IsRBTChain(tokenID, chain) {
+			continue
+		}
 		if tip := chain[len(chain)-1].TransactionID; !slices.Contains(txIDs, tip) {
 			excluded = append(excluded, types.RecoveryExcludedToken{TokenID: tokenID, Reason: "latest transaction " + tip + " is not a live pledge of this quorum"})
 			continue

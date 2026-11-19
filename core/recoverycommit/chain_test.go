@@ -136,3 +136,32 @@ func TestCurrentOwner(t *testing.T) {
 		t.Fatal("expected decode error")
 	}
 }
+
+func TestIsLatestTxnPledged(t *testing.T) {
+	info := models.TransactionInfo{Owner: "user", Tokens: &models.TransactionTokens{RBT: tokens("T")}, Quorums: []*models.QuorumInfo{{Did: "q", Tokens: tokens("P")}}}
+	chain := chainOf(t, []string{constants.TokenRole_Transfer}, info)
+	pledged := chainOf(t, []string{constants.TokenRole_Pledge}, info)
+	released := chainOf(t, []string{constants.TokenRole_Pledge, constants.TokenRole_Unpledge}, info, models.TransactionInfo{Owner: "other"})
+	repledged := append([]types.RecoveryChainEntry(nil), released...)
+	repledged = append(repledged, types.RecoveryChainEntry{TransactionID: "tx2", PreviousTransactionID: "tx1", Position: 2, Role: roleID(constants.TokenRole_Pledge), Info: infoJSON(t, info)})
+	for _, tc := range []struct {
+		name                string
+		collateral          []types.RecoveryChainEntry
+		wantLive, wantError bool
+	}{
+		{"still pledged", pledged, true, false},
+		{"released", released, false, false},
+		{"released by parent split", chainOf(t, []string{constants.TokenRole_Pledge, constants.TokenRole_Unpledge}, info, models.TransactionInfo{CommittedTokens: tokens("parent")}), false, false},
+		{"pledged again later", repledged, false, false},
+		{"missing chain", nil, false, true},
+		{"broken chain", released[1:], false, true},
+		{"no unpledge entry", chainOf(t, []string{constants.TokenRole_Pledge, constants.TokenRole_Transfer}, info, info), false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := IsLatestTxnPledged("T", chain, map[string][]types.RecoveryChainEntry{"P": tc.collateral})
+			if (err != nil) != tc.wantError || (len(got) > 0) != tc.wantLive {
+				t.Fatalf("pledgedBy=%v error=%v", got, err)
+			}
+		})
+	}
+}

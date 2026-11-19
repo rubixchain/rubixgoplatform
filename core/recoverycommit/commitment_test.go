@@ -3,6 +3,7 @@ package recoverycommit
 import (
 	"testing"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/util"
 )
@@ -51,7 +52,7 @@ func TestBuildQuorumCommitmentMatchesSpec(t *testing.T) {
 	if c.Root != want {
 		t.Fatalf("root = %s, want %s", c.Root, want)
 	}
-	if c.RequestID != "req-1" || c.UserDID != "user" || c.QuorumDID != "quorum" || c.TokenCount != 3 {
+	if c.RequestID != "req-1" || c.UserDID != "user" || c.CommitterDID != "quorum" || c.CommitterType != constants.RecoveryCommitterType_Quorum || c.TokenCount != 3 {
 		t.Fatalf("unexpected commitment fields: %+v", c)
 	}
 	if tree.Tokens[0].TokenID != "T1" || tree.Tokens[1].TokenID != "T2" || tree.Tokens[2].TokenID != "T3" {
@@ -169,5 +170,72 @@ func TestCommitmentProofs(t *testing.T) {
 	}
 	if VerifyTokenProof(root, "T1", tree.Tokens[0].ChainRoot, nil) {
 		t.Fatal("nil proof must be rejected")
+	}
+}
+
+func TestBuildUnpledgedCommitment(t *testing.T) {
+	t1 := mustToken(t, "T1", "tx1", "tx2")
+	t2 := mustToken(t, "T2", "tx3")
+	tokens := []types.RecoveryTokenCommitment{t2, t1}
+	tree, err := BuildUnpledgedCommitment("request", "user", "fullnode", tokens)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := tree.Commitment
+	if c.CommitterDID != "fullnode" || c.CommitterType != constants.RecoveryCommitterType_Fullnode || c.RequestID != "request" || c.UserDID != "user" || c.TokenCount != 2 {
+		t.Fatalf("wrong commitment: %+v", c)
+	}
+	want := util.HexToStr(MerkleRoot([][]byte{
+		TokenLeafHash(t1.TokenID, util.StrToHex(t1.ChainRoot)),
+		TokenLeafHash(t2.TokenID, util.StrToHex(t2.ChainRoot)),
+	}))
+	if c.Root != want || tree.Tokens[0] != t1 || tokens[0] != t2 {
+		t.Fatal("wrong root, wrong token order, or input changed")
+	}
+	reordered, err := BuildUnpledgedCommitment("request", "user", "fullnode", []types.RecoveryTokenCommitment{t1, t2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diffs := CompareCommitments(c, reordered.Commitment); len(diffs) != 0 {
+		t.Fatalf("same tokens gave different commitments: %v", diffs)
+	}
+	changed := c
+	changed.CommitterType = constants.RecoveryCommitterType_Quorum
+	if len(CompareCommitments(c, changed)) == 0 {
+		t.Fatal("changed committer type was not caught")
+	}
+	for _, token := range tokens {
+		proof, err := TokenProof(tree, token.TokenID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !VerifyTokenProof(c.Root, token.TokenID, token.ChainRoot, proof) {
+			t.Fatal("token proof failed")
+		}
+	}
+	if _, err := BuildUnpledgedCommitment("request", "user", "", tokens); err == nil {
+		t.Fatal("missing fullnode DID was accepted")
+	}
+	empty, err := BuildUnpledgedCommitment("request", "user", "fullnode", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if empty.Commitment.TokenCount != 0 || empty.Commitment.Root != util.HexToStr(MerkleRoot(nil)) {
+		t.Fatal("wrong empty commitment")
+	}
+	for _, tc := range []struct {
+		name, requestID, userDID string
+		tokens                   []types.RecoveryTokenCommitment
+	}{
+		{"missing request", "", "user", tokens},
+		{"missing user", "request", "", tokens},
+		{"duplicate token", "request", "user", []types.RecoveryTokenCommitment{t1, t1}},
+		{"bad chain root", "request", "user", []types.RecoveryTokenCommitment{{TokenID: "T1", ChainRoot: "bad"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := BuildUnpledgedCommitment(tc.requestID, tc.userDID, "fullnode", tc.tokens); err == nil {
+				t.Fatal("invalid commitment was accepted")
+			}
+		})
 	}
 }

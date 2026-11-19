@@ -96,6 +96,12 @@ const (
 	RecoveryCommit_HashSize = 32
 )
 
+// Recovery commitment committer types: which token set a commitment covers.
+const (
+	RecoveryCommitterType_Quorum   = "quorum"
+	RecoveryCommitterType_Fullnode = "fullnode"
+)
+
 // Roles a node can have in a recovery session.
 const (
 	RecoveryRole_User     = "user"

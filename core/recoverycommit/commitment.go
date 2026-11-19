@@ -35,20 +35,41 @@ func BuildQuorumCommitment(requestID, userDID, quorumDID string, tokens []types.
 	if requestID == "" || userDID == "" || quorumDID == "" {
 		return nil, fmt.Errorf("BuildQuorumCommitment: request ID, user DID and quorum DID are required")
 	}
-	sorted := append([]types.RecoveryTokenCommitment(nil), tokens...)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i].TokenID < sorted[j].TokenID })
-
-	leaves, err := tokenLeaves(sorted)
+	tree, err := buildCommitment(requestID, userDID, quorumDID, constants.RecoveryCommitterType_Quorum, tokens)
 	if err != nil {
 		return nil, fmt.Errorf("BuildQuorumCommitment: %w", err)
 	}
+	return tree, nil
+}
+
+// BuildUnpledgedCommitment builds the fullnode commitment for unpledged tokens.
+// Token selection and pledge-state checks belong to the caller.
+func BuildUnpledgedCommitment(requestID, userDID, fullnodeDID string, tokens []types.RecoveryTokenCommitment) (*types.RecoveryCommitmentTree, error) {
+	if requestID == "" || userDID == "" || fullnodeDID == "" {
+		return nil, fmt.Errorf("BuildUnpledgedCommitment: request ID, user DID and fullnode DID are required")
+	}
+	tree, err := buildCommitment(requestID, userDID, fullnodeDID, constants.RecoveryCommitterType_Fullnode, tokens)
+	if err != nil {
+		return nil, fmt.Errorf("BuildUnpledgedCommitment: %w", err)
+	}
+	return tree, nil
+}
+
+func buildCommitment(requestID, userDID, committerDID, committerType string, tokens []types.RecoveryTokenCommitment) (*types.RecoveryCommitmentTree, error) {
+	sorted := append([]types.RecoveryTokenCommitment(nil), tokens...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].TokenID < sorted[j].TokenID })
+	leaves, err := tokenLeaves(sorted)
+	if err != nil {
+		return nil, err
+	}
 	return &types.RecoveryCommitmentTree{
 		Commitment: types.RecoveryCommitment{
-			RequestID:  requestID,
-			UserDID:    userDID,
-			QuorumDID:  quorumDID,
-			TokenCount: len(sorted),
-			Root:       util.HexToStr(MerkleRoot(leaves)),
+			RequestID:     requestID,
+			UserDID:       userDID,
+			CommitterDID:  committerDID,
+			CommitterType: committerType,
+			TokenCount:    len(sorted),
+			Root:          util.HexToStr(MerkleRoot(leaves)),
 		},
 		Tokens: sorted,
 	}, nil
@@ -146,7 +167,8 @@ func CompareCommitments(expected, submitted types.RecoveryCommitment) []string {
 	}
 	check("request_id", expected.RequestID, submitted.RequestID)
 	check("user_did", expected.UserDID, submitted.UserDID)
-	check("quorum_did", expected.QuorumDID, submitted.QuorumDID)
+	check("committer_did", expected.CommitterDID, submitted.CommitterDID)
+	check("committer_type", expected.CommitterType, submitted.CommitterType)
 	if expected.TokenCount != submitted.TokenCount {
 		diffs = append(diffs, fmt.Sprintf("token_count: expected %d, got %d", expected.TokenCount, submitted.TokenCount))
 	}
