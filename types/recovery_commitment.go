@@ -13,14 +13,16 @@ type RecoveryChainEntry struct {
 	Info                  json.RawMessage
 }
 
-// RecoveryCommitment is what a quorum publishes for one recovery request: the
-// user-level Merkle root over every token it holds for UserDID.
+// RecoveryCommitment is the token-chain root a quorum or fullnode publishes
+// for one recovery request. CommitterType (constants.RecoveryCommitterType_*)
+// tells the receiver which token set it covers.
 type RecoveryCommitment struct {
-	RequestID  string `json:"request_id"`
-	UserDID    string `json:"user_did"`
-	QuorumDID  string `json:"quorum_did"`
-	TokenCount int    `json:"token_count"`
-	Root       string `json:"root"` // hex SHA3-256
+	RequestID     string `json:"request_id"`
+	UserDID       string `json:"user_did"`
+	CommitterDID  string `json:"committer_did"`
+	CommitterType string `json:"committer_type"`
+	TokenCount    int    `json:"token_count"`
+	Root          string `json:"root"` // hex SHA3-256
 }
 
 // RecoveryTokenCommitment is one token's layer-1 result.

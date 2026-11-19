@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/recoverycommit"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
@@ -47,18 +48,20 @@ func verifyQuorumCommitments(requestID, userDID string, chains map[string][]type
 
 	seen := make(map[string]bool, len(submitted))
 	for _, sub := range submitted {
-		chk := types.RecoveryCommitmentCheck{QuorumDID: sub.QuorumDID, Submitted: sub}
+		chk := types.RecoveryCommitmentCheck{QuorumDID: sub.CommitterDID, Submitted: sub}
 		switch {
-		case sub.QuorumDID == "":
-			chk.Mismatches = []string{"quorum_did is empty"}
-		case seen[sub.QuorumDID]:
+		case sub.CommitterDID == "":
+			chk.Mismatches = []string{"committer_did is empty"}
+		case sub.CommitterType != constants.RecoveryCommitterType_Quorum:
+			chk.Mismatches = []string{"committer_type must be quorum"}
+		case seen[sub.CommitterDID]:
 			chk.Mismatches = []string{"duplicate commitment from this quorum"}
-		case len(expected[sub.QuorumDID]) == 0:
-			seen[sub.QuorumDID] = true
+		case len(expected[sub.CommitterDID]) == 0:
+			seen[sub.CommitterDID] = true
 			chk.Mismatches = []string{"quorum holds no pledged tokens for the user and must not commit"}
 		default:
-			seen[sub.QuorumDID] = true
-			tree, err := recoverycommit.BuildQuorumCommitment(requestID, userDID, sub.QuorumDID, expected[sub.QuorumDID])
+			seen[sub.CommitterDID] = true
+			tree, err := recoverycommit.BuildQuorumCommitment(requestID, userDID, sub.CommitterDID, expected[sub.CommitterDID])
 			if err != nil {
 				return nil, err
 			}
@@ -142,4 +145,60 @@ func expectedPledgedTokens(userDID string, chains map[string][]types.RecoveryCha
 	}
 	sort.Slice(excluded, func(i, j int) bool { return excluded[i].TokenID < excluded[j].TokenID })
 	return expected, excluded
+}
+
+// ComputeUnpledgedCommitment builds this fullnode's root for free user tokens.
+// Excluded tokens have missing or broken history and are not in the root.
+func (c *Core) ComputeUnpledgedCommitment(requestID, userDID, fullnodeDID string) (*types.RecoveryCommitmentTree, []types.RecoveryExcludedToken, error) {
+	if !c.fullNode {
+		return nil, nil, fmt.Errorf("ComputeUnpledgedCommitment: only a fullnode can build this commitment")
+	}
+	if requestID == "" || userDID == "" || fullnodeDID == "" {
+		return nil, nil, fmt.Errorf("ComputeUnpledgedCommitment: request ID, user DID and fullnode DID are required")
+	}
+	chains, err := c.w.GetFullNodeRecoveryChains(userDID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("ComputeUnpledgedCommitment: %w", err)
+	}
+	tokens, excluded := selectUnpledgedTokens(userDID, chains)
+	tree, err := recoverycommit.BuildUnpledgedCommitment(requestID, userDID, fullnodeDID, tokens)
+	return tree, excluded, err
+}
+
+func selectUnpledgedTokens(userDID string, chains map[string][]types.RecoveryChainEntry) ([]types.RecoveryTokenCommitment, []types.RecoveryExcludedToken) {
+	var tokens []types.RecoveryTokenCommitment
+	var excluded []types.RecoveryExcludedToken
+	for tokenID, chain := range chains {
+		if !recoverycommit.IsRBTChain(tokenID, chain) {
+			continue
+		}
+		var err error
+		if err = recoverycommit.ValidateChain(chain); err == nil {
+			var owner string
+			owner, err = recoverycommit.CurrentOwner(tokenID, chain)
+			if err == nil && owner != userDID {
+				continue
+			}
+		}
+		if err == nil {
+			var pledgedBy []string
+			pledgedBy, err = recoverycommit.IsLatestTxnPledged(tokenID, chain, chains)
+			if err == nil && len(pledgedBy) != 0 {
+				continue
+			}
+		}
+		if err == nil {
+			var token types.RecoveryTokenCommitment
+			token, err = recoverycommit.BuildTokenCommitment(tokenID, recoverycommit.TransactionIDs(chain))
+			if err == nil {
+				tokens = append(tokens, token)
+			}
+		}
+		if err != nil {
+			excluded = append(excluded, types.RecoveryExcludedToken{TokenID: tokenID, Reason: err.Error()})
+		}
+	}
+	sort.Slice(tokens, func(i, j int) bool { return tokens[i].TokenID < tokens[j].TokenID })
+	sort.Slice(excluded, func(i, j int) bool { return excluded[i].TokenID < excluded[j].TokenID })
+	return tokens, excluded
 }
