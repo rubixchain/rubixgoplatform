@@ -1,6 +1,7 @@
 package wallet
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -126,4 +127,24 @@ func (w *Wallet) GetFullNodeRecoveryTipChains(receiverDID string) (map[string][]
 		return nil, fmt.Errorf("GetFullNodeRecoveryTipChains: %w", err)
 	}
 	return chains, nil
+}
+
+// SaveRecoveryQuorumCommitment stores the commitment tree a quorum published
+// for a recovery request. The tree is needed later to deliver the committed
+// chains and to answer challenges.
+func (w *Wallet) SaveRecoveryQuorumCommitment(quorumDID string, tree *types.RecoveryCommitmentTree) error {
+	data, err := json.Marshal(tree)
+	if err != nil {
+		return fmt.Errorf("SaveRecoveryQuorumCommitment: %w", err)
+	}
+	_, err = w.db.Pool().Exec(w.Ctx,
+		`INSERT INTO recovery_quorum_commitments (request_id, quorum_did, tree)
+		 VALUES ($1, $2, $3)
+		 ON CONFLICT (request_id, quorum_did) DO NOTHING`,
+		tree.Commitment.RequestID, quorumDID, data,
+	)
+	if err != nil {
+		return fmt.Errorf("SaveRecoveryQuorumCommitment: request %s, quorum %s: %w", tree.Commitment.RequestID, quorumDID, err)
+	}
+	return nil
 }

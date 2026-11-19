@@ -218,8 +218,15 @@ func (c *Core) handleEphemeralEvent(ephemeralID, txID string) error {
 		c.log.Error("Recovery blocked: ephemeral NFT was not deployed by the user", "request_txn_id", session.RequestID, "deployer", chain[0].Info.Initiator)
 		return fmt.Errorf("ephemeral NFT was deployed by %s, not the user", chain[0].Info.Initiator)
 	}
-	if _, err := c.w.AdvanceRecoverySession(session.RequestID, constants.RecoveryState_CommitOpen); err != nil {
+	opened, err := c.w.AdvanceRecoverySession(session.RequestID, constants.RecoveryState_CommitOpen)
+	if err != nil {
 		return err
+	}
+	// Only the event that opens the window publishes, so a repeated deploy
+	// event does not publish twice. Publishing runs a transaction, so it
+	// does not hold up this callback.
+	if opened && session.Role == constants.RecoveryRole_Quorum {
+		go c.publishQuorumCommitments(session)
 	}
 	if txID == "" || txID == chain[0].ID {
 		return nil

@@ -13,6 +13,7 @@ import (
 	"github.com/rubixchain/rubixgoplatform/core/consensus"
 	"github.com/rubixchain/rubixgoplatform/core/wallet"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
+	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 	"github.com/rubixchain/rubixgoplatform/util"
 	"github.com/rubixchain/rubixgoplatform/wrapper/ensweb"
@@ -29,6 +30,18 @@ func (c *Core) InitiateTransaction(reqID string, req *models.TransactionRequest)
 }
 
 func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequest) *models.BasicResponse {
+	dc, err := c.SetupDID(reqID, request.Initiator)
+	if err != nil {
+		c.log.Error("InitiateTransaction: Failed to setup DID", "err", err, "did", request.Initiator)
+		return &models.BasicResponse{Message: "InitiateTransaction:Failed to setup DID: " + err.Error()}
+	}
+	return c.initiateTransactionWithDID(reqID, dc, request)
+}
+
+// initiateTransactionWithDID runs a transaction signed by dc, which must be
+// the initiator's DID. Callers with no API request, such as a quorum
+// publishing a recovery commitment, pass a DID that can sign on its own.
+func (c *Core) initiateTransactionWithDID(reqID string, dc types.DIDCrypto, request *models.TransactionRequest) *models.BasicResponse {
 	c.log.Info("InitiateTransaction: Starting transaction",
 		"reqID", reqID,
 		"initiator", request.Initiator,
@@ -43,14 +56,6 @@ func (c *Core) initiateTransaction(reqID string, request *models.TransactionRequ
 	ctx := c.Ctx
 	initiatorDID := request.Initiator
 	nextOwnerDID := request.Owner
-
-	dc, err := c.SetupDID(reqID, initiatorDID)
-	if err != nil {
-		c.log.Error("InitiateTransaction: Failed to setup DID", "err", err, "did", initiatorDID)
-		resp.Message = "InitiateTransaction:Failed to setup DID: " + err.Error()
-		return resp
-	}
-	c.log.Debug("InitiateTransaction: DID setup complete", "did", initiatorDID)
 	// Fetch the list of dids from quorum_manager table
 	//  We then loop over that list and queried from did table and pfetch the peerid
 	c.log.Debug("InitiateTransaction: Fetching quorum addresses")

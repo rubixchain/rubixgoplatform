@@ -1,10 +1,13 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"sort"
 
+	"github.com/google/uuid"
+	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/recoverycommit"
 	"github.com/rubixchain/rubixgoplatform/types"
 )
@@ -101,4 +104,53 @@ func selectQuorumPledgedTokens(pledged map[string][]string, chains map[string][]
 	}
 	sort.Slice(excluded, func(i, j int) bool { return excluded[i].TokenID < excluded[j].TokenID })
 	return tokens, excluded
+}
+
+// publishQuorumCommitments runs when a quorum's session opens its commit
+// window, that is once the user has deployed the ephemeral NFT. Executing it
+// earlier would deploy it under the quorum's DID and block the recovery.
+// Every quorum DID on this node that holds pledged tokens for the user
+// publishes its commitment. They publish one after another, because each
+// execution locks the ephemeral NFT on this node.
+func (c *Core) publishQuorumCommitments(s *types.RecoverySession) {
+	for quorumDID := range c.qc {
+		if quorumDID == s.UserDID {
+			continue
+		}
+		if err := c.publishQuorumCommitment(s, quorumDID); err != nil {
+			c.log.Error("Failed to publish recovery commitment", "request_txn_id", s.RequestID, "quorum_did", quorumDID, "err", err)
+		}
+	}
+}
+
+// publishQuorumCommitment builds quorumDID's commitment, executes the
+// ephemeral NFT with it and stores the tree. It publishes nothing when the
+// quorum holds nothing for the user (Q11).
+func (c *Core) publishQuorumCommitment(s *types.RecoverySession, quorumDID string) error {
+	tree, _, err := c.GenerateRecoveryCommitment(s.RequestID, s.UserDID, quorumDID)
+	if err != nil {
+		return err
+	}
+	if tree == nil {
+		return nil
+	}
+	body, err := json.Marshal(tree.Commitment)
+	if err != nil {
+		return fmt.Errorf("failed to encode commitment: %w", err)
+	}
+	msg := &types.RecoveryMessage{
+		Type:      constants.RecoveryMessageType_Commitment,
+		Body:      body,
+		SenderDID: quorumDID,
+	}
+	txID, err := c.executeEphemeralNFT(uuid.New().String(), c.pqc[quorumDID], s.RequestID, msg)
+	if err != nil {
+		return err
+	}
+	if err := c.w.SaveRecoveryQuorumCommitment(quorumDID, tree); err != nil {
+		return err
+	}
+	c.log.Info("Recovery commitment published", "request_txn_id", s.RequestID, "quorum_did", quorumDID,
+		"txn_id", txID, "token_count", tree.Commitment.TokenCount, "root", tree.Commitment.Root)
+	return nil
 }

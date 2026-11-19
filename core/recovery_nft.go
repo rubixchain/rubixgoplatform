@@ -60,7 +60,11 @@ func (c *Core) ExecuteRecoveryNFT(reqID string, request *types.RecoveryRequest) 
 	if err != nil {
 		return "", fmt.Errorf("failed to encode recovery request: %w", err)
 	}
-	txID, err := c.runRecoveryNFT(reqID, request.DID, nftID, string(data))
+	dc, err := c.SetupDID(reqID, request.DID)
+	if err != nil {
+		return "", err
+	}
+	txID, err := c.runRecoveryNFT(reqID, dc, request.DID, nftID, string(data))
 	if err != nil {
 		return "", err
 	}
@@ -92,7 +96,11 @@ func (c *Core) DeployEphemeralNFT(reqID, did, requestTxID string) error {
 		}
 		return nil
 	}
-	txID, err := c.runRecoveryNFT(reqID, did, ephemeralID, "")
+	dc, err := c.SetupDID(reqID, did)
+	if err != nil {
+		return err
+	}
+	txID, err := c.runRecoveryNFT(reqID, dc, did, ephemeralID, "")
 	if err != nil {
 		return err
 	}
@@ -106,6 +114,16 @@ func (c *Core) ExecuteEphemeralNFT(reqID, requestTxID string, msg *types.Recover
 	if msg == nil {
 		return "", fmt.Errorf("recovery message is required")
 	}
+	dc, err := c.SetupDID(reqID, msg.SenderDID)
+	if err != nil {
+		return "", err
+	}
+	return c.executeEphemeralNFT(reqID, dc, requestTxID, msg)
+}
+
+// executeEphemeralNFT is ExecuteEphemeralNFT with the sender's DID already
+// set up, for senders that sign without an API request.
+func (c *Core) executeEphemeralNFT(reqID string, dc types.DIDCrypto, requestTxID string, msg *types.RecoveryMessage) (string, error) {
 	ephemeralID, err := c.EphemeralNFTID(requestTxID)
 	if err != nil {
 		return "", err
@@ -114,7 +132,7 @@ func (c *Core) ExecuteEphemeralNFT(reqID, requestTxID string, msg *types.Recover
 	if err != nil {
 		return "", fmt.Errorf("failed to encode recovery message: %w", err)
 	}
-	txID, err := c.runRecoveryNFT(reqID, msg.SenderDID, ephemeralID, string(data))
+	txID, err := c.runRecoveryNFT(reqID, dc, msg.SenderDID, ephemeralID, string(data))
 	if err != nil {
 		return "", err
 	}
@@ -122,10 +140,11 @@ func (c *Core) ExecuteEphemeralNFT(reqID, requestTxID string, msg *types.Recover
 	return txID, nil
 }
 
-// runRecoveryNFT runs one NFT transaction and returns its transaction ID.
-// The NFT is deployed if this node does not have it, else it is executed.
-func (c *Core) runRecoveryNFT(reqID, did, nftID, data string) (string, error) {
-	resp := c.initiateTransaction(reqID, &models.TransactionRequest{
+// runRecoveryNFT runs one NFT transaction signed by dc and returns its
+// transaction ID. The NFT is deployed if this node does not have it, else it
+// is executed.
+func (c *Core) runRecoveryNFT(reqID string, dc types.DIDCrypto, did, nftID, data string) (string, error) {
+	resp := c.initiateTransactionWithDID(reqID, dc, &models.TransactionRequest{
 		Initiator: did,
 		Tokens: models.TransactionTokenDetails{
 			NFT: []models.NFTInfo{{NFTId: nftID, Data: data}},
