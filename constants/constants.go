@@ -77,10 +77,8 @@ const (
 	RecoveryWindow_GraceSeconds  = 60
 )
 
-// Recovery message version and types, sent on the ephemeral NFT.
+// Recovery message types, sent on the ephemeral NFT.
 const (
-	RecoveryMessage_Version = 1
-
 	RecoveryMessageType_Commitment = "commitment"
 	RecoveryMessageType_Unpledged  = "unpledged"
 	RecoveryMessageType_Challenge  = "challenge"

@@ -257,9 +257,6 @@ func parseRecoveryMessage(data, initiator, userDID string) (*types.RecoveryMessa
 	if err := json.Unmarshal([]byte(data), &msg); err != nil {
 		return nil, fmt.Errorf("invalid message data: %w", err)
 	}
-	if msg.Version != constants.RecoveryMessage_Version {
-		return nil, fmt.Errorf("unsupported message version %d", msg.Version)
-	}
 	if msg.SenderDID != initiator {
 		return nil, fmt.Errorf("sender %s is not the transaction initiator %s", msg.SenderDID, initiator)
 	}

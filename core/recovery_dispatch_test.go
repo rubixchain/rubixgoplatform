@@ -45,7 +45,7 @@ func TestCheckRecoveryRequestTiming(t *testing.T) {
 
 func TestParseRecoveryMessage(t *testing.T) {
 	msg := func(typ, sender string) string {
-		return `{"version":1,"type":"` + typ + `","body":{},"sender_did":"` + sender + `"}`
+		return `{"type":"` + typ + `","body":{},"sender_did":"` + sender + `"}`
 	}
 	tests := []struct {
 		name      string
@@ -62,7 +62,6 @@ func TestParseRecoveryMessage(t *testing.T) {
 		{"mismatch from another DID", msg("mismatch", "q1"), "q1", false},
 		{"sender is not the initiator", msg("commitment", "q2"), "q1", false},
 		{"unknown type", msg("other", "q1"), "q1", false},
-		{"wrong version", `{"version":2,"type":"commitment","sender_did":"q1"}`, "q1", false},
 		{"not JSON", "x", "q1", false},
 	}
 	for _, tt := range tests {
