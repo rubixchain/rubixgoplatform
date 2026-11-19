@@ -67,6 +67,16 @@ const (
 	RecoveryRequest_CooldownSeconds = 48 * 60 * 60
 )
 
+// Recovery windows (Q6), in seconds, counted from the request transaction
+// epoch. They are the same on every node and network. The sync window starts
+// when the commit window ends. A node acts on a deadline only after the grace
+// period, to allow for clock drift.
+const (
+	RecoveryWindow_CommitSeconds = 10 * 60
+	RecoveryWindow_SyncSeconds   = 30 * 60
+	RecoveryWindow_GraceSeconds  = 60
+)
+
 // Recovery message version and types, sent on the ephemeral NFT.
 const (
 	RecoveryMessage_Version = 1

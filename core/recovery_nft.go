@@ -141,11 +141,13 @@ func (c *Core) runRecoveryNFT(reqID, did, nftID, data string) (string, error) {
 	return result.TransactionID, nil
 }
 
-// SubscribeRecoveryNFT subscribes to the Recovery NFT topic at startup.
-// It does nothing when recovery is off on this network.
+// SubscribeRecoveryNFT subscribes to the Recovery NFT topic at startup and
+// restores open recovery sessions. It does nothing when recovery is off on
+// this network.
 func (c *Core) SubscribeRecoveryNFT() {
 	if nftID := c.RecoveryNFTID(); nftID != "" {
 		c.subscribeRecoveryTopic(nftID)
+		c.restoreRecoverySessions()
 	}
 }
 

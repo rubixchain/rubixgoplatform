@@ -108,13 +108,15 @@ func (c *Core) acceptRecoveryRequest(txID, peerID string) error {
 	if err != nil {
 		return err
 	}
-	created, err := c.w.CreateRecoverySession(&types.RecoverySession{
+	session := &types.RecoverySession{
 		RequestID:      txID,
 		EphemeralNFTID: ephemeralID,
 		UserDID:        request.DID,
 		Role:           role,
+		State:          constants.RecoveryState_Requested,
 		RequestEpoch:   int64(tx.Info.Epoch),
-	})
+	}
+	created, err := c.w.CreateRecoverySession(session)
 	if err != nil {
 		return err
 	}
@@ -123,6 +125,7 @@ func (c *Core) acceptRecoveryRequest(txID, peerID string) error {
 	}
 	c.log.Info("Recovery session created", "request_txn_id", txID, "user_did", request.DID, "role", role)
 	c.subscribeRecoveryTopic(ephemeralID)
+	c.scheduleRecoveryDeadlines(session)
 
 	// The user may have deployed the ephemeral NFT before this node
 	// subscribed, and pubsub does not replay it. Fetch the chain once.
@@ -229,6 +232,11 @@ func (c *Core) handleEphemeralEvent(ephemeralID, txID string) error {
 	msg, err := parseRecoveryMessage(chain[i].Data, chain[i].Info.Initiator, session.UserDID)
 	if err != nil {
 		return err
+	}
+	// Commitments are accepted only until the commit window closes.
+	if session.State >= constants.RecoveryState_SyncOpen &&
+		(msg.Type == constants.RecoveryMessageType_Commitment || msg.Type == constants.RecoveryMessageType_Unpledged) {
+		return fmt.Errorf("%s from %s arrived after the commit window closed", msg.Type, msg.SenderDID)
 	}
 	// M7 and M9 act on accepted messages.
 	c.log.Info("Recovery message accepted", "request_txn_id", session.RequestID, "type", msg.Type, "sender_did", msg.SenderDID)
