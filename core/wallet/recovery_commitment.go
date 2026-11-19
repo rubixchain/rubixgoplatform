@@ -237,3 +237,22 @@ func (w *Wallet) SaveRecoveryQuorumCommitment(quorumDID string, tree *types.Reco
 	}
 	return nil
 }
+
+// SaveRecoveryCommitmentReport stores a fullnode's audit of the commitments
+// submitted for a recovery request. The first report for a request is kept.
+func (w *Wallet) SaveRecoveryCommitmentReport(report *types.RecoveryCommitmentReport) error {
+	data, err := json.Marshal(report)
+	if err != nil {
+		return fmt.Errorf("SaveRecoveryCommitmentReport: %w", err)
+	}
+	_, err = w.db.Pool().Exec(w.Ctx,
+		`INSERT INTO recovery_commitment_reports (request_id, report)
+		 VALUES ($1, $2)
+		 ON CONFLICT (request_id) DO NOTHING`,
+		report.RequestID, data,
+	)
+	if err != nil {
+		return fmt.Errorf("SaveRecoveryCommitmentReport: request %s: %w", report.RequestID, err)
+	}
+	return nil
+}

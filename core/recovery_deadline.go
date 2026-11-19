@@ -39,8 +39,14 @@ func (c *Core) scheduleRecoveryDeadlines(s *types.RecoverySession) {
 
 // closeRecoveryWindow moves a session to SyncOpen or SyncClosed when its
 // deadline passes. It changes nothing if the session is already at or past
-// that state, or is blocked.
+// that state, or is blocked. Closing the commit window starts the fullnode
+// audit.
 func (c *Core) closeRecoveryWindow(requestID string, to int) {
+	// After a restart both timers can fire at once. Close the commit window
+	// first, so the audit is not skipped when the sync deadline wins.
+	if to == constants.RecoveryState_SyncClosed {
+		c.closeRecoveryWindow(requestID, constants.RecoveryState_SyncOpen)
+	}
 	advanced, err := c.w.AdvanceRecoverySession(requestID, to)
 	if err != nil {
 		c.log.Error("Failed to close recovery window", "request_txn_id", requestID, "state", to, "err", err)
@@ -51,6 +57,7 @@ func (c *Core) closeRecoveryWindow(requestID string, to int) {
 	}
 	if to == constants.RecoveryState_SyncOpen {
 		c.log.Info("Recovery commit window closed", "request_txn_id", requestID)
+		c.auditRecoveryCommitments(requestID)
 	} else {
 		c.log.Info("Recovery sync window closed", "request_txn_id", requestID)
 	}

@@ -225,8 +225,13 @@ func (c *Core) handleEphemeralEvent(ephemeralID, txID string) error {
 	// Only the event that opens the window publishes, so a repeated deploy
 	// event does not publish twice. Publishing runs a transaction, so it
 	// does not hold up this callback.
-	if opened && session.Role == constants.RecoveryRole_Quorum {
-		go c.publishQuorumCommitments(session)
+	if opened {
+		switch session.Role {
+		case constants.RecoveryRole_Quorum:
+			go c.publishQuorumCommitments(session)
+		case constants.RecoveryRole_Fullnode:
+			go c.publishUnpledgedCommitment(session)
+		}
 	}
 	if txID == "" || txID == chain[0].ID {
 		return nil
@@ -245,7 +250,8 @@ func (c *Core) handleEphemeralEvent(ephemeralID, txID string) error {
 		(msg.Type == constants.RecoveryMessageType_Commitment || msg.Type == constants.RecoveryMessageType_Unpledged) {
 		return fmt.Errorf("%s from %s arrived after the commit window closed", msg.Type, msg.SenderDID)
 	}
-	// M7 and M9 act on accepted messages.
+	// A fullnode reads the commitments from the chain when the commit window
+	// closes (auditRecoveryCommitments). M9 acts on the user's messages.
 	c.log.Info("Recovery message accepted", "request_txn_id", session.RequestID, "type", msg.Type, "sender_did", msg.SenderDID)
 	return nil
 }

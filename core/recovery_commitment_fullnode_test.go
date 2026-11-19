@@ -167,3 +167,24 @@ func TestRecoveryCommitmentsOnlyIncludeRBTs(t *testing.T) {
 		t.Fatalf("quorum reproduction included other assets: %v", expected)
 	}
 }
+
+func TestCollectRecoveryCommitments(t *testing.T) {
+	tx := func(initiator, data string) types.RecoveryTx {
+		return types.RecoveryTx{Info: models.TransactionInfo{Initiator: initiator}, Data: data}
+	}
+	commitment := func(sender, committerDID string) string {
+		return `{"type":"commitment","body":{"request_id":"r","committer_did":"` + committerDID + `","committer_type":"quorum"},"sender_did":"` + sender + `"}`
+	}
+	chain := []types.RecoveryTx{
+		tx("user", ""),                   // deploy
+		tx("q1", commitment("q1", "q1")), // kept
+		tx("q2", commitment("q2", "q1")), // commits in q1's name
+		tx("q3", commitment("q1", "q1")), // sender is not the initiator
+		tx("x", `{"type":"challenge","body":{},"sender_did":"x"}`),
+		tx("q4", commitment("q4", "q4")), // kept
+	}
+	got := collectRecoveryCommitments(chain, "user")
+	if len(got) != 2 || got[0].CommitterDID != "q1" || got[1].CommitterDID != "q4" {
+		t.Fatalf("got %+v, want commitments from q1 and q4", got)
+	}
+}

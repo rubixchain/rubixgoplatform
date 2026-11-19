@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/google/uuid"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/recoverycommit"
 	"github.com/rubixchain/rubixgoplatform/did"
@@ -230,4 +231,107 @@ func (c *Core) RegisterFullnodeDID(didStr, privKeyPassword string) error {
 	c.fullnodeDCMu.Unlock()
 	c.log.Info("Fullnode recovery DID registered", "did", didStr)
 	return nil
+}
+
+// publishUnpledgedCommitment runs on a fullnode when a session opens its
+// commit window, so the message arrives while commitments are accepted. The
+// registered fullnode recovery DID builds the commitment over the user's
+// unpledged tokens and executes the ephemeral NFT with it. It publishes even
+// when the set is empty: that tells the user the fullnode found no free
+// tokens, which silence would not.
+func (c *Core) publishUnpledgedCommitment(s *types.RecoverySession) {
+	c.fullnodeDCMu.RLock()
+	dc := c.fullnodeDC
+	c.fullnodeDCMu.RUnlock()
+	if dc == nil {
+		c.log.Error("Unpledged commitment not published: no fullnode recovery DID is registered", "request_txn_id", s.RequestID)
+		return
+	}
+	if err := c.doPublishUnpledgedCommitment(s, dc); err != nil {
+		c.log.Error("Failed to publish unpledged commitment", "request_txn_id", s.RequestID, "fullnode_did", dc.GetDID(), "err", err)
+	}
+}
+
+func (c *Core) doPublishUnpledgedCommitment(s *types.RecoverySession, dc types.DIDCrypto) error {
+	fullnodeDID := dc.GetDID()
+	tree, excluded, err := c.ComputeUnpledgedCommitment(s.RequestID, s.UserDID, fullnodeDID)
+	if err != nil {
+		return err
+	}
+	for _, x := range excluded {
+		c.log.Info("Unpledged commitment: token left out", "request_txn_id", s.RequestID, "token_id", x.TokenID, "reason", x.Reason)
+	}
+	body, err := json.Marshal(tree.Commitment)
+	if err != nil {
+		return fmt.Errorf("failed to encode commitment: %w", err)
+	}
+	msg := &types.RecoveryMessage{
+		Type:      constants.RecoveryMessageType_Unpledged,
+		Body:      body,
+		SenderDID: fullnodeDID,
+	}
+	txID, err := c.executeEphemeralNFT(uuid.New().String(), dc, s.RequestID, msg)
+	if err != nil {
+		return err
+	}
+	c.log.Info("Unpledged commitment published", "request_txn_id", s.RequestID, "fullnode_did", fullnodeDID,
+		"txn_id", txID, "token_count", tree.Commitment.TokenCount, "root", tree.Commitment.Root)
+	return nil
+}
+
+// auditRecoveryCommitments runs on a fullnode when a session's commit window
+// closes. It collects the commitments on the local ephemeral NFT chain,
+// checks them with VerifyRecoveryCommitments and stores the report.
+// Challenges are not published yet (M12); mismatches are only logged.
+func (c *Core) auditRecoveryCommitments(requestID string) {
+	session, err := c.w.GetRecoverySession(requestID)
+	if err != nil || session == nil || session.Role != constants.RecoveryRole_Fullnode {
+		if err != nil {
+			c.log.Error("Recovery audit: failed to read session", "request_txn_id", requestID, "err", err)
+		}
+		return
+	}
+	chain, err := c.recoveryChain(session.EphemeralNFTID)
+	if err != nil {
+		c.log.Error("Recovery audit: failed to read the ephemeral NFT chain", "request_txn_id", requestID, "err", err)
+		return
+	}
+	submitted := collectRecoveryCommitments(chain, session.UserDID)
+	report, err := c.VerifyRecoveryCommitments(requestID, session.UserDID, submitted)
+	if err != nil {
+		c.log.Error("Recovery audit failed", "request_txn_id", requestID, "err", err)
+		return
+	}
+	if err := c.w.SaveRecoveryCommitmentReport(report); err != nil {
+		c.log.Error("Recovery audit: failed to store report", "request_txn_id", requestID, "err", err)
+		return
+	}
+	matched := 0
+	for _, chk := range report.Checks {
+		if chk.Match {
+			matched++
+		}
+	}
+	c.log.Info("Recovery commitments audited", "request_txn_id", requestID, "submitted", len(report.Checks),
+		"matched", matched, "missing_quorums", report.MissingQuorums)
+}
+
+// collectRecoveryCommitments returns the commitments in an ephemeral NFT
+// chain. Messages that fail the sender rules are skipped, and so is a
+// commitment whose committer_did is not its sender, so no DID can commit in
+// another quorum's name.
+func collectRecoveryCommitments(chain []types.RecoveryTx, userDID string) []types.RecoveryCommitment {
+	var commitments []types.RecoveryCommitment
+	for _, tx := range chain {
+		msg, err := parseRecoveryMessage(tx.Data, tx.Info.Initiator, userDID)
+		if err != nil || msg.Type != constants.RecoveryMessageType_Commitment {
+			continue
+		}
+		var cm types.RecoveryCommitment
+		if err := json.Unmarshal(msg.Body, &cm); err != nil || cm.CommitterDID != msg.SenderDID {
+			continue
+		}
+		commitments = append(commitments, cm)
+	}
+	return commitments
 }
