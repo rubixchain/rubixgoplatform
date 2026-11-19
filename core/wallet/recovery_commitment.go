@@ -13,7 +13,7 @@ import (
 //
 // A token qualifies if an unpledge_sequence_info row owned by quorumDID lists
 // it in transaction_tokens and that row's transaction names receiverDID as
-// owner. The row is the live pledge: unpledging deletes it, which releases
+// owner and moves the token as an RBT (recovery covers RBTs only). The row is the live pledge: unpledging deletes it, which releases
 // every token of the transaction at once. A row whose transaction is not in
 // the local transactions table cannot be attributed and is skipped.
 func (w *Wallet) GetRecoveryPledgedTokens(quorumDID, receiverDID string) (map[string][]string, error) {
@@ -24,6 +24,7 @@ func (w *Wallet) GetRecoveryPledgedTokens(quorumDID, receiverDID string) (map[st
 		CROSS JOIN LATERAL unnest(u.transaction_tokens) AS tok
 		WHERE u.quorum_did = $1
 		  AND t.info->>'owner' = $2
+		  AND (t.info->'tokens'->'rbt')::jsonb @> jsonb_build_array(jsonb_build_object('tokenId', tok))
 		ORDER BY tok, u.tx_id
 	`, quorumDID, receiverDID)
 	if err != nil {

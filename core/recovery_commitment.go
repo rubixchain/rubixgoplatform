@@ -18,7 +18,8 @@ import (
 // The returned tree keeps the per-token chain roots so that token proofs can
 // be produced later. The excluded list names pledged tokens whose local chain
 // is missing, incomplete or has moved past the pledge; they are not part of
-// the root.
+// the root. The tree is nil when no token is left: a quorum holding nothing
+// for the user does not publish a commitment (Q11).
 func (c *Core) GenerateRecoveryCommitment(requestID, userDID, quorumDID string) (*types.RecoveryCommitmentTree, []types.RecoveryExcludedToken, error) {
 	if requestID == "" || userDID == "" || quorumDID == "" {
 		return nil, nil, fmt.Errorf("GenerateRecoveryCommitment: request ID, user DID and quorum DID are required")
@@ -43,14 +44,19 @@ func (c *Core) GenerateRecoveryCommitment(requestID, userDID, quorumDID string) 
 		return nil, nil, fmt.Errorf("GenerateRecoveryCommitment: %w", err)
 	}
 	tokens, excluded := selectQuorumPledgedTokens(pledged, chains)
+	for _, x := range excluded {
+		c.log.Info("GenerateRecoveryCommitment: token left out of commitment",
+			"requestID", requestID, "userDID", userDID, "tokenID", x.TokenID, "reason", x.Reason)
+	}
+	if len(tokens) == 0 {
+		c.log.Info("GenerateRecoveryCommitment: quorum holds no pledged tokens for the user, no commitment",
+			"requestID", requestID, "userDID", userDID, "quorumDID", quorumDID)
+		return nil, excluded, nil
+	}
 
 	tree, err := recoverycommit.BuildQuorumCommitment(requestID, userDID, quorumDID, tokens)
 	if err != nil {
 		return nil, nil, fmt.Errorf("GenerateRecoveryCommitment: %w", err)
-	}
-	for _, x := range excluded {
-		c.log.Info("GenerateRecoveryCommitment: token left out of commitment",
-			"requestID", requestID, "userDID", userDID, "tokenID", x.TokenID, "reason", x.Reason)
 	}
 	c.log.Info("GenerateRecoveryCommitment: commitment built",
 		"requestID", requestID, "userDID", userDID, "quorumDID", quorumDID,

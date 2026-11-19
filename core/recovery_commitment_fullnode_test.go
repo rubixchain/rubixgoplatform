@@ -19,6 +19,10 @@ func TestVerifyQuorumCommitments(t *testing.T) {
 	x6 := rcRBT("T6", "alice", user, "q2")
 	x6.Tokens.RBT = append(x6.Tokens.RBT, &models.TokenInfo{TokenID: "T7"})
 
+	// x9 moves FT F9 to the user, pledged by q2. Recovery covers RBTs only.
+	x9 := rcRBT("F9", "alice", user, "q2")
+	x9.Tokens.FT, x9.Tokens.RBT = x9.Tokens.RBT, nil
+
 	// Tokens whose fullnode tip names the user as owner.
 	chains := map[string][]types.RecoveryChainEntry{
 		"T1": rcChain(t,
@@ -46,6 +50,10 @@ func TestVerifyQuorumCommitments(t *testing.T) {
 			)
 			return append(c[:1], c[2:]...)
 		}(),
+		"F9": rcChain(t,
+			rcTx{"m9", mint, rcRBT("F9", "alice", "alice")},
+			rcTx{"x9", xfer, x9},
+		),
 	}
 
 	quorumCommit := func(quorum string, pledged map[string][]string) types.RecoveryCommitment {
@@ -71,10 +79,12 @@ func TestVerifyQuorumCommitments(t *testing.T) {
 
 	missingToken := quorumCommit("q1", map[string][]string{"T1": {"x1"}})
 	extraToken := quorumCommit("q2", map[string][]string{"T6": {"x6"}})
+	empty := quorumCommit("q2", nil)
 	altered := honestQ1
 	altered.Root = missingToken.Root
 	for name, sub := range map[string]types.RecoveryCommitment{
 		"missing token": missingToken, "extra token": extraToken, "altered root": altered,
+		"empty commitment from a quorum holding nothing": empty,
 	} {
 		report, err := verifyQuorumCommitments(req, user, chains, []types.RecoveryCommitment{sub})
 		if err != nil {

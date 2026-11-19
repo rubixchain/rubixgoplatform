@@ -39,8 +39,8 @@ func (c *Core) VerifyRecoveryCommitments(requestID, userDID string, submitted []
 }
 
 // verifyQuorumCommitments checks each submitted commitment against the one
-// reproduced from chains. A quorum with no expected tokens is expected to
-// submit an empty commitment. Checks are sorted by quorum DID.
+// reproduced from chains. A quorum with no expected tokens must not submit a
+// commitment (Q11). Checks are sorted by quorum DID.
 func verifyQuorumCommitments(requestID, userDID string, chains map[string][]types.RecoveryChainEntry, submitted []types.RecoveryCommitment) (*types.RecoveryCommitmentReport, error) {
 	expected, excluded := expectedPledgedTokens(userDID, chains)
 	report := &types.RecoveryCommitmentReport{RequestID: requestID, UserDID: userDID, Excluded: excluded}
@@ -53,6 +53,9 @@ func verifyQuorumCommitments(requestID, userDID string, chains map[string][]type
 			chk.Mismatches = []string{"quorum_did is empty"}
 		case seen[sub.QuorumDID]:
 			chk.Mismatches = []string{"duplicate commitment from this quorum"}
+		case len(expected[sub.QuorumDID]) == 0:
+			seen[sub.QuorumDID] = true
+			chk.Mismatches = []string{"quorum holds no pledged tokens for the user and must not commit"}
 		default:
 			seen[sub.QuorumDID] = true
 			tree, err := recoverycommit.BuildQuorumCommitment(requestID, userDID, sub.QuorumDID, expected[sub.QuorumDID])
@@ -78,7 +81,7 @@ func verifyQuorumCommitments(requestID, userDID string, chains map[string][]type
 
 // expectedPledgedTokens maps each quorum to the tokens it should commit for
 // userDID. chains holds the tokens whose latest transaction X names userDID as
-// owner. A token goes to every quorum that pledged X, if X is still the tip of
+// owner. Only RBTs that X moved are considered. A token goes to every quorum that pledged X, if X is still the tip of
 // all tokens X moved (otherwise the quorums have unpledged X) and its chain is
 // valid. Excluded is sorted by token ID.
 func expectedPledgedTokens(userDID string, chains map[string][]types.RecoveryChainEntry) (map[string][]types.RecoveryTokenCommitment, []types.RecoveryExcludedToken) {
@@ -98,11 +101,13 @@ func expectedPledgedTokens(userDID string, chains map[string][]types.RecoveryCha
 		if info.Tokens == nil {
 			continue
 		}
+		if !recoverycommit.ContainsToken(info.Tokens.RBT, tokenID) {
+			continue // not an RBT the user received, or a pledge or committed token
+		}
+		// X is unpledged once any token it moved, of any type, moves on.
 		moved := [][]*models.TokenInfo{info.Tokens.RBT, info.Tokens.FT, info.Tokens.NFT, info.Tokens.SmartContract}
-		isMoved := false
 		live := true
 		for _, list := range moved {
-			isMoved = isMoved || recoverycommit.ContainsToken(list, tokenID)
 			for _, t := range list {
 				if t == nil {
 					continue
@@ -111,9 +116,6 @@ func expectedPledgedTokens(userDID string, chains map[string][]types.RecoveryCha
 					live = false
 				}
 			}
-		}
-		if !isMoved {
-			continue // a pledge or committed token, not the user's
 		}
 		var pledgers []string
 		for _, q := range info.Quorums {
