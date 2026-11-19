@@ -381,6 +381,40 @@ const docTemplate = `{
                 }
             }
         },
+        "/rubix/v1/fullnode/register_did": {
+            "post": {
+                "description": "Registers the local DID a fullnode uses to publish recovery messages. The password is kept in memory only, so register again after a restart.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Fullnode"
+                ],
+                "summary": "Register fullnode recovery DID",
+                "parameters": [
+                    {
+                        "description": "Fullnode recovery DID",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.FullnodeDIDSetup"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/rubix/v1/nfts/generate": {
             "post": {
                 "description": "This API will create new NFT",
@@ -1399,6 +1433,17 @@ const docTemplate = `{
                 },
                 "numberOfFts": {
                     "type": "number"
+                }
+            }
+        },
+        "models.FullnodeDIDSetup": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                },
+                "priv_password": {
+                    "type": "string"
                 }
             }
         },

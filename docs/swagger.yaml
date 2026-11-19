@@ -35,6 +35,13 @@ definitions:
       numberOfFts:
         type: number
     type: object
+  models.FullnodeDIDSetup:
+    properties:
+      did:
+        type: string
+      priv_password:
+        type: string
+    type: object
   models.GenerateLocalRBTRequest:
     properties:
       did:
@@ -415,6 +422,29 @@ paths:
       summary: Create FT
       tags:
       - FT
+  /rubix/v1/fullnode/register_did:
+    post:
+      consumes:
+      - application/json
+      description: Registers the local DID a fullnode uses to publish recovery messages.
+        The password is kept in memory only, so register again after a restart.
+      parameters:
+      - description: Fullnode recovery DID
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/models.FullnodeDIDSetup'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Register fullnode recovery DID
+      tags:
+      - Fullnode
   /rubix/v1/nfts/{nft_id}/chain:
     get:
       description: This API will return the nft chain for a given nft token ID

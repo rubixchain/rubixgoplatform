@@ -40,6 +40,28 @@ func (cmd *Command) RemoveAllQuorum() {
 	cmd.log.Info(msg)
 }
 
+func (cmd *Command) RegisterFullnodeDID() {
+	if cmd.forcePWD {
+		pwd, err := getpassword("Enter private key password: ")
+		if err != nil {
+			cmd.log.Error("Failed to get password")
+			return
+		}
+		cmd.privPWD = pwd
+	}
+	isAlphanumeric := regexp.MustCompile(`^[a-zA-Z0-9]*$`).MatchString(cmd.did)
+	if !strings.HasPrefix(cmd.did, "bafybmi") || len(cmd.did) != 59 || !isAlphanumeric {
+		cmd.log.Error("Invalid DID")
+		return
+	}
+	msg, status := cmd.c.RegisterFullnodeDID(cmd.did, cmd.privPWD)
+	if !status {
+		cmd.log.Error("Failed to register fullnode recovery DID", "msg", msg)
+		return
+	}
+	cmd.log.Info(msg)
+}
+
 func (cmd *Command) SetupQuorum() {
 	if cmd.forcePWD {
 		pwd, err := getpassword("Enter quorum key password: ")

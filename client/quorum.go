@@ -46,6 +46,16 @@ func (c *Client) RemoveAllQuorum() (string, bool) {
 	return rm.Message, rm.Status
 }
 
+func (c *Client) RegisterFullnodeDID(did string, privPwd string) (string, bool) {
+	m := models.FullnodeDIDSetup{DID: did, PrivKeyPassword: privPwd}
+	var rm models.BasicResponse
+	err := c.sendJSONRequest("POST", setup.APIRegisterFullnodeDID, nil, &m, &rm)
+	if err != nil {
+		return "Failed to register fullnode recovery DID, " + err.Error(), false
+	}
+	return rm.Message, rm.Status
+}
+
 func (c *Client) SetupQuorum(did string, pwd string, privPwd string) (string, bool) {
 	m := models.QuorumSetup{
 		DID:             did,

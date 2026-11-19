@@ -362,6 +362,13 @@ type TokenResponse struct {
 	TokenDetails []TokenDetail `json:"token_details"`
 }
 
+// FullnodeDIDSetup registers the local DID a fullnode uses to
+// publish recovery messages, with its private key password.
+type FullnodeDIDSetup struct {
+	DID             string `json:"did"`
+	PrivKeyPassword string `json:"priv_password"`
+}
+
 type QuorumSetup struct {
 	DID             string `json:"did"`
 	Password        string `json:"password"`

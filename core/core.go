@@ -108,6 +108,11 @@ type Core struct {
 	// to recovering nodes. Populated only on a fullnode (initialised in
 	// registerRecoveryRoute). See core/fullnode_recovery.go.
 	recoverySessions *recoverySessionStore
+
+	// fullnodeDC signs the fullnode's recovery messages. It is kept
+	// in memory only, so it must be registered again after a restart.
+	fullnodeDCMu sync.RWMutex
+	fullnodeDC   types.DIDCrypto
 }
 
 func newRubixContext() context.Context {

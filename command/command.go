@@ -71,6 +71,8 @@ const (
 	GetFTBalanceCmd  string = "getftbalance"
 	GetRBTBalanceCmd string = "getrbtbalance"
 	GetNftsByDidCmd  string = "getnftbalance"
+
+	RegisterFullnodeDIDCmd string = "registerfullnodedid"
 )
 
 var commands = []string{
@@ -88,6 +90,7 @@ var commands = []string{
 	GetAllQuorumCmd,
 	RemoveAllQuorumCmd,
 	SetupQuorumCmd,
+	RegisterFullnodeDIDCmd,
 	GenerateLocalRBTCmd,
 	GetRBTBalanceCmd,
 	RegsiterDIDCmd,
@@ -583,6 +586,8 @@ func Run(args []string) {
 		cmd.RemoveAllQuorum()
 	case SetupQuorumCmd:
 		cmd.SetupQuorum()
+	case RegisterFullnodeDIDCmd:
+		cmd.RegisterFullnodeDID()
 	case GenerateLocalRBTCmd:
 		cmd.GenerateLocalRBT()
 	case GetRBTBalanceCmd:

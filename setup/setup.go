@@ -87,6 +87,8 @@ const (
 	// a fullnode over libp2p, calling APIRecoverFromFullnode in a paginated
 	// loop, and persisting results locally).
 	APIRecoverWalletFromFullnode string = "/rubix/v1/sync"
+
+	APIRegisterFullnodeDID string = "/rubix/v1/fullnode/register_did"
 )
 
 // jwt.RegisteredClaims

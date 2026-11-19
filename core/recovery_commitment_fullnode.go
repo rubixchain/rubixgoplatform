@@ -1,12 +1,14 @@
 package core
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"sort"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/recoverycommit"
+	"github.com/rubixchain/rubixgoplatform/did"
 	"github.com/rubixchain/rubixgoplatform/types"
 	"github.com/rubixchain/rubixgoplatform/types/models"
 )
@@ -201,4 +203,31 @@ func selectUnpledgedTokens(userDID string, chains map[string][]types.RecoveryCha
 	sort.Slice(tokens, func(i, j int) bool { return tokens[i].TokenID < tokens[j].TokenID })
 	sort.Slice(excluded, func(i, j int) bool { return excluded[i].TokenID < excluded[j].TokenID })
 	return tokens, excluded
+}
+
+// RegisterFullnodeDID sets the local DID this fullnode uses to
+// publish recovery messages. The DID is an ordinary DID created on this node.
+// A test signature checks the password, which is kept in memory only, so
+// the DID must be registered again after a restart.
+func (c *Core) RegisterFullnodeDID(didStr, privKeyPassword string) error {
+	if !c.fullNode {
+		return fmt.Errorf("only a fullnode can register a fullnode recovery DID")
+	}
+	local, err := c.w.IsLocalDID(didStr)
+	if err != nil {
+		return err
+	}
+	if !local {
+		return fmt.Errorf("DID %s is not a local DID on this node", didStr)
+	}
+	dc := did.InitDIDLiteWithPassword(didStr, c.didDir, privKeyPassword)
+	hash := sha256.Sum256([]byte(didStr))
+	if _, err := dc.Sign(hash[:]); err != nil {
+		return fmt.Errorf("failed to sign with DID %s: %w", didStr, err)
+	}
+	c.fullnodeDCMu.Lock()
+	c.fullnodeDC = dc
+	c.fullnodeDCMu.Unlock()
+	c.log.Info("Fullnode recovery DID registered", "did", didStr)
+	return nil
 }
