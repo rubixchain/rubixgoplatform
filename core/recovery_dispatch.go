@@ -78,6 +78,10 @@ func (c *Core) acceptRecoveryRequest(txID, peerID string) error {
 		return fmt.Errorf("request transaction is not in the local Recovery NFT chain")
 	}
 	tx := chain[i]
+	// The deploy creates the Recovery NFT and carries no request.
+	if tx.Role == int16(models.GetTokenRoleID(constants.TokenRole_Deploy)) {
+		return nil
+	}
 
 	var request types.RecoveryRequest
 	if err := json.Unmarshal([]byte(tx.Data), &request); err != nil {
