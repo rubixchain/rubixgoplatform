@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -287,6 +288,49 @@ func (w *Wallet) SaveRecoveryDelivery(requestID, quorumDID string, chains map[st
 		return false, fmt.Errorf("SaveRecoveryDelivery: request %s, quorum %s: %w", requestID, quorumDID, err)
 	}
 	return tag.RowsAffected() == 1, nil
+}
+
+// GetRecoveryDeliveries lists the chain deliveries stored for a recovery
+// request, one per quorum, sorted by quorum DID.
+func (w *Wallet) GetRecoveryDeliveries(requestID string) ([]types.RecoveryDeliverySummary, error) {
+	rows, err := w.db.Pool().Query(w.Ctx,
+		`SELECT quorum_did, (SELECT count(*) FROM jsonb_object_keys(chains))
+		 FROM recovery_deliveries WHERE request_id = $1 ORDER BY quorum_did`,
+		requestID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetRecoveryDeliveries: request %s: %w", requestID, err)
+	}
+	defer rows.Close()
+	var deliveries []types.RecoveryDeliverySummary
+	for rows.Next() {
+		var d types.RecoveryDeliverySummary
+		if err := rows.Scan(&d.QuorumDID, &d.TokenCount); err != nil {
+			return nil, fmt.Errorf("GetRecoveryDeliveries: scan: %w", err)
+		}
+		deliveries = append(deliveries, d)
+	}
+	return deliveries, rows.Err()
+}
+
+// GetRecoveryCommitmentReport returns the fullnode's audit of a recovery
+// request, or nil if it has not run.
+func (w *Wallet) GetRecoveryCommitmentReport(requestID string) (*types.RecoveryCommitmentReport, error) {
+	var data []byte
+	err := w.db.Pool().QueryRow(w.Ctx,
+		`SELECT report FROM recovery_commitment_reports WHERE request_id = $1`, requestID,
+	).Scan(&data)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("GetRecoveryCommitmentReport: request %s: %w", requestID, err)
+	}
+	var report types.RecoveryCommitmentReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		return nil, fmt.Errorf("GetRecoveryCommitmentReport: request %s: %w", requestID, err)
+	}
+	return &report, nil
 }
 
 // SaveRecoveryCommitmentReport stores a fullnode's audit of the commitments

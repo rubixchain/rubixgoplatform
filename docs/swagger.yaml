@@ -92,6 +92,11 @@ definitions:
       value:
         type: number
     type: object
+  models.StartRecoveryRequest:
+    properties:
+      did:
+        type: string
+    type: object
   models.TransactionRequest:
     properties:
       initiator:
@@ -166,6 +171,139 @@ definitions:
       private_key:
         type: string
       public_key:
+        type: string
+    type: object
+  types.RecoveryCommitment:
+    properties:
+      committer_did:
+        type: string
+      committer_type:
+        type: string
+      request_id:
+        type: string
+      root:
+        description: hex SHA3-256
+        type: string
+      token_count:
+        type: integer
+      user_did:
+        type: string
+    type: object
+  types.RecoveryCommitmentCheck:
+    properties:
+      expected:
+        $ref: '#/definitions/types.RecoveryCommitmentTree'
+      match:
+        type: boolean
+      mismatches:
+        items:
+          type: string
+        type: array
+      quorum_did:
+        type: string
+      submitted:
+        $ref: '#/definitions/types.RecoveryCommitment'
+    type: object
+  types.RecoveryCommitmentReport:
+    properties:
+      checks:
+        items:
+          $ref: '#/definitions/types.RecoveryCommitmentCheck'
+        type: array
+      excluded:
+        items:
+          $ref: '#/definitions/types.RecoveryExcludedToken'
+        type: array
+      missing_quorums:
+        items:
+          type: string
+        type: array
+      request_id:
+        type: string
+      user_did:
+        type: string
+    type: object
+  types.RecoveryCommitmentTree:
+    properties:
+      commitment:
+        $ref: '#/definitions/types.RecoveryCommitment'
+      tokens:
+        items:
+          $ref: '#/definitions/types.RecoveryTokenCommitment'
+        type: array
+    type: object
+  types.RecoveryDeliverySummary:
+    properties:
+      quorum_did:
+        type: string
+      token_count:
+        type: integer
+    type: object
+  types.RecoveryExcludedToken:
+    properties:
+      reason:
+        type: string
+      token_id:
+        type: string
+    type: object
+  types.RecoveryMessageEntry:
+    properties:
+      body:
+        type: object
+      sender_did:
+        type: string
+      txn_id:
+        type: string
+      type:
+        type: string
+    type: object
+  types.RecoverySessionResponse:
+    properties:
+      message:
+        type: string
+      result:
+        $ref: '#/definitions/types.RecoverySessionStatus'
+      status:
+        type: boolean
+    type: object
+  types.RecoverySessionStatus:
+    properties:
+      commit_closes_at:
+        type: integer
+      deliveries:
+        description: user only
+        items:
+          $ref: '#/definitions/types.RecoveryDeliverySummary'
+        type: array
+      ephemeral_nft_id:
+        type: string
+      messages:
+        items:
+          $ref: '#/definitions/types.RecoveryMessageEntry'
+        type: array
+      report:
+        allOf:
+        - $ref: '#/definitions/types.RecoveryCommitmentReport'
+        description: fullnode only
+      request_epoch:
+        type: integer
+      request_txn_id:
+        type: string
+      role:
+        type: string
+      state:
+        type: string
+      sync_closes_at:
+        type: integer
+      user_did:
+        type: string
+    type: object
+  types.RecoveryTokenCommitment:
+    properties:
+      chain_root:
+        description: hex SHA3-256 chain hash
+        type: string
+      token_id:
         type: string
     type: object
   types.SignRespData:
@@ -714,6 +852,53 @@ paths:
       summary: Check quorum status
       tags:
       - Quorum
+  /rubix/v1/recovery/sessions/{request_txn_id}:
+    get:
+      description: 'Returns this node''s view of a recovery: its role, state and window
+        deadlines, the messages on the ephemeral NFT, the commitment audit (fullnode)
+        and the chains received (user).'
+      parameters:
+      - description: Request transaction ID returned by start recovery
+        in: path
+        name: request_txn_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/types.RecoverySessionResponse'
+      summary: Get recovery session status
+      tags:
+      - Recovery
+  /rubix/v1/recovery/start:
+    post:
+      consumes:
+      - application/json
+      description: 'Signs a recovery request for the DID, puts it on the Recovery
+        NFT and deploys the request''s ephemeral NFT, which opens the commit window.
+        Runs through the signature flow: answer "Password needed" with POST /rubix/v1/signature.
+        The final result is the request transaction ID. A DID can start one recovery
+        every 48 hours.'
+      parameters:
+      - description: DID to recover
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/models.StartRecoveryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Start account recovery
+      tags:
+      - Recovery
   /rubix/v1/signature:
     post:
       consumes:

@@ -89,6 +89,10 @@ const (
 	APIRecoverWalletFromFullnode string = "/rubix/v1/sync"
 
 	APIRegisterFullnodeDID string = "/rubix/v1/fullnode/register_did"
+
+	// Account recovery through the Recovery NFT.
+	APIStartRecovery      string = "/rubix/v1/recovery/start"
+	APIGetRecoverySession string = "/rubix/v1/recovery/sessions/{request_txn_id}"
 )
 
 // jwt.RegisteredClaims
