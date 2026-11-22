@@ -1796,10 +1796,33 @@ const docTemplate = `{
                 }
             }
         },
+        "types.RecoveryDeliveryCheck": {
+            "type": "object",
+            "properties": {
+                "committer_did": {
+                    "type": "string"
+                },
+                "match": {
+                    "type": "boolean"
+                },
+                "mismatches": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "published": {
+                    "$ref": "#/definitions/types.RecoveryCommitment"
+                },
+                "recomputed": {
+                    "$ref": "#/definitions/types.RecoveryCommitment"
+                }
+            }
+        },
         "types.RecoveryDeliverySummary": {
             "type": "object",
             "properties": {
-                "quorum_did": {
+                "committer_did": {
                     "type": "string"
                 },
                 "token_count": {
@@ -1896,6 +1919,14 @@ const docTemplate = `{
                 },
                 "user_did": {
                     "type": "string"
+                },
+                "verification": {
+                    "description": "user only, after the sync window",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.RecoveryVerification"
+                        }
+                    ]
                 }
             }
         },
@@ -1907,6 +1938,23 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "token_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.RecoveryVerification": {
+            "type": "object",
+            "properties": {
+                "checks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.RecoveryDeliveryCheck"
+                    }
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "user_did": {
                     "type": "string"
                 }
             }

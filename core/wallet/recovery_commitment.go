@@ -219,83 +219,117 @@ func (w *Wallet) GetFullNodeRecoveryChains(userDID string) (map[string][]types.R
 	return chains, nil
 }
 
-// SaveRecoveryQuorumCommitment stores the commitment tree a quorum published
-// for a recovery request. The tree is needed later to deliver the committed
-// chains and to answer challenges.
-func (w *Wallet) SaveRecoveryQuorumCommitment(quorumDID string, tree *types.RecoveryCommitmentTree) error {
+// GetFullNodeTransactionChains returns the chains of tokenIDs from the
+// fullnode tables, each in chain order, in the form sync_transaction_chain
+// returns a node's own chains. A token the fullnode does not hold is left out.
+func (w *Wallet) GetFullNodeTransactionChains(tokenIDs []string) (map[string][]types.TransactionWithRole, error) {
+	rows, err := w.db.Pool().Query(w.Ctx, `
+		SELECT tc.token_id, t.id, t.info, t.signature, tc.role
+		FROM fullnode_tokenchain tc
+		JOIN fullnode_transactions t ON t.id = tc.transaction_id
+		WHERE tc.token_id = ANY($1::TEXT[])
+		ORDER BY tc.token_id, tc.position
+	`, tokenIDs)
+	if err != nil {
+		return nil, fmt.Errorf("GetFullNodeTransactionChains: %w", err)
+	}
+	defer rows.Close()
+	chains := make(map[string][]types.TransactionWithRole)
+	for rows.Next() {
+		var (
+			tokenID string
+			tx      models.Transactions
+			role    int16
+		)
+		if err := rows.Scan(&tokenID, &tx.ID, &tx.Info, &tx.Signature, &role); err != nil {
+			return nil, fmt.Errorf("GetFullNodeTransactionChains: scan: %w", err)
+		}
+		chains[tokenID] = append(chains[tokenID], types.TransactionWithRole{Tx: tx, Role: role})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("GetFullNodeTransactionChains: %w", err)
+	}
+	return chains, nil
+}
+
+// SaveRecoveryCommitmentTree stores the commitment tree a committer on this
+// node, a quorum or the fullnode, published for a recovery request. The tree
+// is needed later to deliver the committed chains and to answer challenges.
+func (w *Wallet) SaveRecoveryCommitmentTree(tree *types.RecoveryCommitmentTree) error {
 	data, err := json.Marshal(tree)
 	if err != nil {
-		return fmt.Errorf("SaveRecoveryQuorumCommitment: %w", err)
+		return fmt.Errorf("SaveRecoveryCommitmentTree: %w", err)
 	}
 	_, err = w.db.Pool().Exec(w.Ctx,
-		`INSERT INTO recovery_quorum_commitments (request_id, quorum_did, tree)
+		`INSERT INTO recovery_commitment_trees (request_id, committer_did, tree)
 		 VALUES ($1, $2, $3)
-		 ON CONFLICT (request_id, quorum_did) DO NOTHING`,
-		tree.Commitment.RequestID, quorumDID, data,
+		 ON CONFLICT (request_id, committer_did) DO NOTHING`,
+		tree.Commitment.RequestID, tree.Commitment.CommitterDID, data,
 	)
 	if err != nil {
-		return fmt.Errorf("SaveRecoveryQuorumCommitment: request %s, quorum %s: %w", tree.Commitment.RequestID, quorumDID, err)
+		return fmt.Errorf("SaveRecoveryCommitmentTree: request %s, committer %s: %w", tree.Commitment.RequestID, tree.Commitment.CommitterDID, err)
 	}
 	return nil
 }
 
-// GetRecoveryQuorumCommitments returns the commitment trees the quorums on
+// GetRecoveryCommitmentTrees returns the commitment trees the committers on
 // this node published for a recovery request.
-func (w *Wallet) GetRecoveryQuorumCommitments(requestID string) ([]*types.RecoveryCommitmentTree, error) {
+func (w *Wallet) GetRecoveryCommitmentTrees(requestID string) ([]*types.RecoveryCommitmentTree, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
-		`SELECT tree FROM recovery_quorum_commitments WHERE request_id = $1 ORDER BY quorum_did`,
+		`SELECT tree FROM recovery_commitment_trees WHERE request_id = $1 ORDER BY committer_did`,
 		requestID,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("GetRecoveryQuorumCommitments: request %s: %w", requestID, err)
+		return nil, fmt.Errorf("GetRecoveryCommitmentTrees: request %s: %w", requestID, err)
 	}
 	defer rows.Close()
 	var trees []*types.RecoveryCommitmentTree
 	for rows.Next() {
 		var data []byte
 		if err := rows.Scan(&data); err != nil {
-			return nil, fmt.Errorf("GetRecoveryQuorumCommitments: scan: %w", err)
+			return nil, fmt.Errorf("GetRecoveryCommitmentTrees: scan: %w", err)
 		}
 		var tree types.RecoveryCommitmentTree
 		if err := json.Unmarshal(data, &tree); err != nil {
-			return nil, fmt.Errorf("GetRecoveryQuorumCommitments: decode: %w", err)
+			return nil, fmt.Errorf("GetRecoveryCommitmentTrees: decode: %w", err)
 		}
 		trees = append(trees, &tree)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("GetRecoveryQuorumCommitments: request %s: %w", requestID, err)
+		return nil, fmt.Errorf("GetRecoveryCommitmentTrees: request %s: %w", requestID, err)
 	}
 	return trees, nil
 }
 
-// SaveRecoveryDelivery stores the chains one quorum delivered to the user for
-// a recovery request. Each quorum's chains are kept apart and are not merged
-// into the wallet, so the user can check them against that quorum's
-// commitment. The first delivery from a quorum is kept. It returns false if a
-// delivery from that quorum was already stored.
-func (w *Wallet) SaveRecoveryDelivery(requestID, quorumDID string, chains map[string][]types.TransactionWithRole) (bool, error) {
+// SaveRecoveryDelivery stores the chains one committer, a quorum or a
+// fullnode, delivered to the user for a recovery request. Each committer's
+// chains are kept apart and are not merged into the wallet, so the user can
+// check them against that committer's commitment. The first delivery from a
+// committer is kept. It returns false if a delivery from that committer was
+// already stored.
+func (w *Wallet) SaveRecoveryDelivery(requestID, committerDID string, chains map[string][]types.TransactionWithRole) (bool, error) {
 	data, err := json.Marshal(chains)
 	if err != nil {
 		return false, fmt.Errorf("SaveRecoveryDelivery: %w", err)
 	}
 	tag, err := w.db.Pool().Exec(w.Ctx,
-		`INSERT INTO recovery_deliveries (request_id, quorum_did, chains)
+		`INSERT INTO recovery_deliveries (request_id, committer_did, chains)
 		 VALUES ($1, $2, $3)
-		 ON CONFLICT (request_id, quorum_did) DO NOTHING`,
-		requestID, quorumDID, data,
+		 ON CONFLICT (request_id, committer_did) DO NOTHING`,
+		requestID, committerDID, data,
 	)
 	if err != nil {
-		return false, fmt.Errorf("SaveRecoveryDelivery: request %s, quorum %s: %w", requestID, quorumDID, err)
+		return false, fmt.Errorf("SaveRecoveryDelivery: request %s, committer %s: %w", requestID, committerDID, err)
 	}
 	return tag.RowsAffected() == 1, nil
 }
 
 // GetRecoveryDeliveries lists the chain deliveries stored for a recovery
-// request, one per quorum, sorted by quorum DID.
+// request, one per committer, sorted by committer DID.
 func (w *Wallet) GetRecoveryDeliveries(requestID string) ([]types.RecoveryDeliverySummary, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
-		`SELECT quorum_did, (SELECT count(*) FROM jsonb_object_keys(chains))
-		 FROM recovery_deliveries WHERE request_id = $1 ORDER BY quorum_did`,
+		`SELECT committer_did, (SELECT count(*) FROM jsonb_object_keys(chains))
+		 FROM recovery_deliveries WHERE request_id = $1 ORDER BY committer_did`,
 		requestID,
 	)
 	if err != nil {
@@ -305,7 +339,7 @@ func (w *Wallet) GetRecoveryDeliveries(requestID string) ([]types.RecoveryDelive
 	var deliveries []types.RecoveryDeliverySummary
 	for rows.Next() {
 		var d types.RecoveryDeliverySummary
-		if err := rows.Scan(&d.QuorumDID, &d.TokenCount); err != nil {
+		if err := rows.Scan(&d.CommitterDID, &d.TokenCount); err != nil {
 			return nil, fmt.Errorf("GetRecoveryDeliveries: scan: %w", err)
 		}
 		deliveries = append(deliveries, d)
@@ -314,10 +348,10 @@ func (w *Wallet) GetRecoveryDeliveries(requestID string) ([]types.RecoveryDelive
 }
 
 // GetRecoveryDeliveryChains returns the chains stored for a recovery request,
-// by quorum DID and then token ID.
+// by committer DID and then token ID.
 func (w *Wallet) GetRecoveryDeliveryChains(requestID string) (map[string]map[string][]types.TransactionWithRole, error) {
 	rows, err := w.db.Pool().Query(w.Ctx,
-		`SELECT quorum_did, chains FROM recovery_deliveries WHERE request_id = $1`, requestID,
+		`SELECT committer_did, chains FROM recovery_deliveries WHERE request_id = $1`, requestID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("GetRecoveryDeliveryChains: request %s: %w", requestID, err)
@@ -326,17 +360,17 @@ func (w *Wallet) GetRecoveryDeliveryChains(requestID string) (map[string]map[str
 	deliveries := make(map[string]map[string][]types.TransactionWithRole)
 	for rows.Next() {
 		var (
-			quorumDID string
-			data      []byte
-			chains    map[string][]types.TransactionWithRole
+			committerDID string
+			data         []byte
+			chains       map[string][]types.TransactionWithRole
 		)
-		if err := rows.Scan(&quorumDID, &data); err != nil {
+		if err := rows.Scan(&committerDID, &data); err != nil {
 			return nil, fmt.Errorf("GetRecoveryDeliveryChains: scan: %w", err)
 		}
 		if err := json.Unmarshal(data, &chains); err != nil {
-			return nil, fmt.Errorf("GetRecoveryDeliveryChains: quorum %s: %w", quorumDID, err)
+			return nil, fmt.Errorf("GetRecoveryDeliveryChains: committer %s: %w", committerDID, err)
 		}
-		deliveries[quorumDID] = chains
+		deliveries[committerDID] = chains
 	}
 	return deliveries, rows.Err()
 }

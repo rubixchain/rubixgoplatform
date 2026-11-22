@@ -232,9 +232,24 @@ definitions:
           $ref: '#/definitions/types.RecoveryTokenCommitment'
         type: array
     type: object
+  types.RecoveryDeliveryCheck:
+    properties:
+      committer_did:
+        type: string
+      match:
+        type: boolean
+      mismatches:
+        items:
+          type: string
+        type: array
+      published:
+        $ref: '#/definitions/types.RecoveryCommitment'
+      recomputed:
+        $ref: '#/definitions/types.RecoveryCommitment'
+    type: object
   types.RecoveryDeliverySummary:
     properties:
-      quorum_did:
+      committer_did:
         type: string
       token_count:
         type: integer
@@ -297,6 +312,10 @@ definitions:
         type: integer
       user_did:
         type: string
+      verification:
+        allOf:
+        - $ref: '#/definitions/types.RecoveryVerification'
+        description: user only, after the sync window
     type: object
   types.RecoveryTokenCommitment:
     properties:
@@ -304,6 +323,17 @@ definitions:
         description: hex SHA3-256 chain hash
         type: string
       token_id:
+        type: string
+    type: object
+  types.RecoveryVerification:
+    properties:
+      checks:
+        items:
+          $ref: '#/definitions/types.RecoveryDeliveryCheck'
+        type: array
+      request_id:
+        type: string
+      user_did:
         type: string
     type: object
   types.SignRespData:

@@ -176,7 +176,7 @@ func (c *Core) publishQuorumCommitment(s *types.RecoverySession, quorumDID strin
 	if err != nil {
 		return err
 	}
-	if err := c.w.SaveRecoveryQuorumCommitment(quorumDID, tree); err != nil {
+	if err := c.w.SaveRecoveryCommitmentTree(tree); err != nil {
 		return err
 	}
 	c.log.Info("Recovery commitment published", "request_txn_id", s.RequestID, "quorum_did", quorumDID,

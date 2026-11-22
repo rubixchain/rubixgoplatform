@@ -235,9 +235,9 @@ func (c *Core) RegisterFullnodeDID(didStr, privKeyPassword string) error {
 // publishUnpledgedCommitment runs on a fullnode when a session opens its
 // commit window, so the message arrives while commitments are accepted. The
 // registered fullnode recovery DID builds the commitment over the user's
-// unpledged tokens and executes the ephemeral NFT with it. It publishes even
-// when the set is empty: that tells the user the fullnode found no free
-// tokens, which silence would not.
+// unpledged tokens, executes the ephemeral NFT with it and stores the tree for
+// delivery. It publishes even when the set is empty: that tells the user the
+// fullnode found no free tokens, which silence would not.
 func (c *Core) publishUnpledgedCommitment(s *types.RecoverySession) {
 	c.fullnodeDCMu.RLock()
 	dc := c.fullnodeDC
@@ -271,6 +271,9 @@ func (c *Core) doPublishUnpledgedCommitment(s *types.RecoverySession, dc types.D
 	}
 	txID, err := c.publishRecoveryMessage(s, dc, msg)
 	if err != nil {
+		return err
+	}
+	if err := c.w.SaveRecoveryCommitmentTree(tree); err != nil {
 		return err
 	}
 	c.log.Info("Unpledged commitment published", "request_txn_id", s.RequestID, "fullnode_did", fullnodeDID,

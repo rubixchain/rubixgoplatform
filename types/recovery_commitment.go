@@ -109,15 +109,18 @@ type RecoveryCompletionNotice struct {
 	RequestID string `json:"request_id"`
 }
 
-// RecoveryChainsNotice is what a quorum sends the user when the sync window
-// opens, the way send_tokens tells a receiver about a transfer. The user then
-// pulls the chains from the quorum with sync_transaction_chain and cuts each
-// one at its TipTxnID. Signature is the quorum DID's signature over the
-// notice with an empty Signature field.
+// RecoveryChainsNotice is what a committer, a quorum or a fullnode, sends the
+// user when the sync window opens, the way send_tokens tells a receiver about
+// a transfer. The user then pulls the chains from the committer: from a
+// quorum with sync_transaction_chain, from a fullnode with
+// recovery_fullnode_chains. CommitterType is "quorum" or "fullnode".
+// Signature is the committer DID's signature over the notice with an empty
+// Signature field.
 type RecoveryChainsNotice struct {
-	RequestID    string                    `json:"request_id"`
-	QuorumDID    string                    `json:"quorum_did"`
-	QuorumPeerID string                    `json:"quorum_peer_id"`
-	Tokens       []RecoveryTokenCommitment `json:"tokens"`
-	Signature    string                    `json:"signature"`
+	RequestID       string                    `json:"request_id"`
+	CommitterDID    string                    `json:"committer_did"`
+	CommitterType   string                    `json:"committer_type"`
+	CommitterPeerID string                    `json:"committer_peer_id"`
+	Tokens          []RecoveryTokenCommitment `json:"tokens"`
+	Signature       string                    `json:"signature"`
 }
