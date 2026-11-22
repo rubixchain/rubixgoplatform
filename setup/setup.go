@@ -93,6 +93,7 @@ const (
 	// Account recovery through the Recovery NFT.
 	APIStartRecovery      string = "/rubix/v1/recovery/start"
 	APIGetRecoverySession string = "/rubix/v1/recovery/sessions/{request_txn_id}"
+	APIRecoveryOutcome    string = "/rubix/v1/recovery/outcome"
 )
 
 // jwt.RegisteredClaims

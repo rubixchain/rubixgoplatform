@@ -374,6 +374,11 @@ type StartRecoveryRequest struct {
 	DID string `json:"did"`
 }
 
+// RecoveryOutcomeRequest publishes the user's outcome of a recovery.
+type RecoveryOutcomeRequest struct {
+	RequestTxnID string `json:"request_txn_id"`
+}
+
 type QuorumSetup struct {
 	DID             string `json:"did"`
 	Password        string `json:"password"`

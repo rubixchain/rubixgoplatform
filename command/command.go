@@ -76,6 +76,7 @@ const (
 
 	StartRecoveryCmd      string = "startrecovery"
 	GetRecoverySessionCmd string = "recoverystatus"
+	RecoveryOutcomeCmd    string = "recoveryoutcome"
 )
 
 var commands = []string{
@@ -96,6 +97,7 @@ var commands = []string{
 	RegisterFullnodeDIDCmd,
 	StartRecoveryCmd,
 	GetRecoverySessionCmd,
+	RecoveryOutcomeCmd,
 	GenerateLocalRBTCmd,
 	GetRBTBalanceCmd,
 	RegsiterDIDCmd,
@@ -597,6 +599,8 @@ func Run(args []string) {
 		cmd.StartRecovery()
 	case GetRecoverySessionCmd:
 		cmd.GetRecoverySession()
+	case RecoveryOutcomeCmd:
+		cmd.PublishRecoveryOutcome()
 	case GenerateLocalRBTCmd:
 		cmd.GenerateLocalRBT()
 	case GetRBTBalanceCmd:
