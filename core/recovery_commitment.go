@@ -130,13 +130,20 @@ func (c *Core) publishQuorumCommitments(s *types.RecoverySession) {
 }
 
 // publishRecoveryMessage executes the ephemeral NFT of s with msg, signed by
-// dc. Every participant publishes when the commit window opens, so their
-// executions build on the same chain tip and all but the first are rejected
-// with a chain mismatch. A rejected execution is retried after a random
-// pause, by which time this node has synced the winning one, until the
-// commit window closes.
+// dc. Every participant learns of the request at the same moment. Executions
+// started at once build on the same chain tip, and the quorum can accept all
+// of them, which forks the ephemeral NFT. So each publisher first waits a
+// random time within the publish spread. An execution rejected with a chain
+// mismatch is retried after a random pause, by which time this node has
+// synced the winning one, until the commit window closes.
 func (c *Core) publishRecoveryMessage(s *types.RecoverySession, dc types.DIDCrypto, msg *types.RecoveryMessage) (string, error) {
 	closes := time.Unix(s.RequestEpoch+constants.RecoveryWindow_CommitSeconds, 0)
+	if left := time.Until(time.Unix(s.RequestEpoch+constants.RecoveryWindow_PublishSpreadSeconds, 0)); left > 0 {
+		wait := time.Duration(rand.Int63n(int64(left)))
+		c.log.Info("Recovery message scheduled", "request_txn_id", s.RequestID, "sender_did", msg.SenderDID,
+			"type", msg.Type, "in", wait.Round(time.Second))
+		time.Sleep(wait)
+	}
 	for {
 		txID, err := c.executeEphemeralNFT(uuid.New().String(), dc, s.RequestID, msg)
 		if err == nil || !strings.Contains(err.Error(), "chain mismatch") {

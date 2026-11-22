@@ -75,6 +75,10 @@ const (
 	RecoveryWindow_CommitSeconds = 10 * 60
 	RecoveryWindow_SyncSeconds   = 30 * 60
 	RecoveryWindow_GraceSeconds  = 60
+	// Commitments are published at a random time in the first part of the
+	// commit window, so that publishers do not execute the ephemeral NFT on
+	// the same tip at once.
+	RecoveryWindow_PublishSpreadSeconds = 5 * 60
 )
 
 // Recovery message types, sent on the ephemeral NFT.
