@@ -110,8 +110,10 @@ func (c *Core) PublishRecoveryOutcome(reqID, requestID string) {
 
 // publishRecoveryOutcome executes the ephemeral NFT with a mismatch report if
 // any check of the user's verification failed, else with a completion notice
-// [R13]. It runs the verification first if it has not run. It refuses before
-// the sync window closes, and if an outcome is already on the chain.
+// [R13]. It runs the verification first if it has not run. After completion
+// it writes the delivered chains into the wallet. It refuses before the sync
+// window closes and after a mismatch; if completion is already on the chain
+// it only writes the wallet again.
 func (c *Core) publishRecoveryOutcome(reqID, requestID string) *models.BasicResponse {
 	resp := &models.BasicResponse{}
 	session, err := c.w.GetRecoverySession(requestID)
@@ -140,8 +142,15 @@ func (c *Core) publishRecoveryOutcome(reqID, requestID string) *models.BasicResp
 	}
 	for _, tx := range chain {
 		msg, err := parseRecoveryMessage(tx.Data, tx.Info.Initiator, session.UserDID)
-		if err == nil && (msg.Type == constants.RecoveryMessageType_Mismatch || msg.Type == constants.RecoveryMessageType_Completion) {
-			resp.Message = fmt.Sprintf("the outcome is already published: %s in transaction %s", msg.Type, tx.ID)
+		if err != nil {
+			continue
+		}
+		switch msg.Type {
+		case constants.RecoveryMessageType_Completion:
+			// Writing the wallet is idempotent, so a repeated call retries it.
+			return c.completeRecovery(session, tx.ID, "Recovery completion already published")
+		case constants.RecoveryMessageType_Mismatch:
+			resp.Message = fmt.Sprintf("the outcome is already published: mismatch in transaction %s", tx.ID)
 			return resp
 		}
 	}
@@ -174,15 +183,29 @@ func (c *Core) publishRecoveryOutcome(reqID, requestID string) *models.BasicResp
 	}
 	c.log.Info("Recovery outcome published", "request_txn_id", requestID, "type", msg.Type,
 		"failed_checks", len(failed), "txn_id", txID)
-	resp.Status = true
-	if len(failed) > 0 {
-		resp.Message = fmt.Sprintf("Recovery mismatch published: %d of %d commitments failed, transaction %s", len(failed), len(v.Checks), txID)
-	} else {
-		resp.Message = fmt.Sprintf("Recovery completion published: %d commitments matched, transaction %s", len(v.Checks), txID)
+	if len(failed) == 0 {
+		return c.completeRecovery(session, txID, fmt.Sprintf("Recovery completion published: %d commitments matched", len(v.Checks)))
 	}
+	resp.Status = true
+	resp.Message = fmt.Sprintf("Recovery mismatch published: %d of %d commitments failed, transaction %s", len(failed), len(v.Checks), txID)
 	// A string result tells the CLI signature loop that no more signatures
 	// are needed.
 	resp.Result = txID
+	return resp
+}
+
+// completeRecovery writes the delivered chains into the wallet once the
+// completion in transaction txID is on the chain, and reports it after done.
+func (c *Core) completeRecovery(session *types.RecoverySession, txID, done string) *models.BasicResponse {
+	resp := &models.BasicResponse{Result: txID}
+	persisted, skipped, err := c.persistRecoveredChains(session)
+	if err != nil {
+		resp.Message = fmt.Sprintf("%s in transaction %s, but writing the wallet failed: %v; call the outcome API again to retry", done, txID, err)
+		return resp
+	}
+	c.log.Info("Recovered chains written to the wallet", "request_txn_id", session.RequestID, "tokens", persisted, "skipped", skipped)
+	resp.Status = true
+	resp.Message = fmt.Sprintf("%s in transaction %s; %d tokens written to the wallet, %d skipped (see the node log)", done, txID, persisted, skipped)
 	return resp
 }
 

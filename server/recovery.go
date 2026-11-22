@@ -56,7 +56,7 @@ func (s *Server) APIGetRecoverySession(req *ensweb.Request) *ensweb.Result {
 
 // APIRecoveryOutcome godoc
 // @Summary      Publish the recovery outcome
-// @Description  Publishes the user's outcome of a recovery on its ephemeral NFT, after the sync window closes: a mismatch report listing every quorum or fullnode commitment that did not match the chains delivered, or a completion notice if all matched. Runs the verification first if it has not run. Refused if an outcome is already published. Runs through the signature flow: answer "Password needed" with POST /rubix/v1/signature. The final result is the outcome's transaction ID.
+// @Description  Publishes the user's outcome of a recovery on its ephemeral NFT, after the sync window closes: a mismatch report listing every quorum or fullnode commitment that did not match the chains delivered, or a completion notice if all matched. Runs the verification first if it has not run. After completion it writes the delivered chains into the wallet. Refused after a mismatch is published; if completion is already published, it only writes the wallet again. Runs through the signature flow: answer "Password needed" with POST /rubix/v1/signature. The final result is the outcome's transaction ID.
 // @Tags         Recovery
 // @Accept       json
 // @Produce      json
