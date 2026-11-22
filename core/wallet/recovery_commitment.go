@@ -313,6 +313,73 @@ func (w *Wallet) GetRecoveryDeliveries(requestID string) ([]types.RecoveryDelive
 	return deliveries, rows.Err()
 }
 
+// GetRecoveryDeliveryChains returns the chains stored for a recovery request,
+// by quorum DID and then token ID.
+func (w *Wallet) GetRecoveryDeliveryChains(requestID string) (map[string]map[string][]types.TransactionWithRole, error) {
+	rows, err := w.db.Pool().Query(w.Ctx,
+		`SELECT quorum_did, chains FROM recovery_deliveries WHERE request_id = $1`, requestID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetRecoveryDeliveryChains: request %s: %w", requestID, err)
+	}
+	defer rows.Close()
+	deliveries := make(map[string]map[string][]types.TransactionWithRole)
+	for rows.Next() {
+		var (
+			quorumDID string
+			data      []byte
+			chains    map[string][]types.TransactionWithRole
+		)
+		if err := rows.Scan(&quorumDID, &data); err != nil {
+			return nil, fmt.Errorf("GetRecoveryDeliveryChains: scan: %w", err)
+		}
+		if err := json.Unmarshal(data, &chains); err != nil {
+			return nil, fmt.Errorf("GetRecoveryDeliveryChains: quorum %s: %w", quorumDID, err)
+		}
+		deliveries[quorumDID] = chains
+	}
+	return deliveries, rows.Err()
+}
+
+// SaveRecoveryVerification stores the user's check of the quorum
+// commitments. The first verification for a request is kept.
+func (w *Wallet) SaveRecoveryVerification(v *types.RecoveryVerification) error {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Errorf("SaveRecoveryVerification: %w", err)
+	}
+	_, err = w.db.Pool().Exec(w.Ctx,
+		`INSERT INTO recovery_verifications (request_id, verification)
+		 VALUES ($1, $2)
+		 ON CONFLICT (request_id) DO NOTHING`,
+		v.RequestID, data,
+	)
+	if err != nil {
+		return fmt.Errorf("SaveRecoveryVerification: request %s: %w", v.RequestID, err)
+	}
+	return nil
+}
+
+// GetRecoveryVerification returns the user's check of the quorum
+// commitments, or nil if it has not run.
+func (w *Wallet) GetRecoveryVerification(requestID string) (*types.RecoveryVerification, error) {
+	var data []byte
+	err := w.db.Pool().QueryRow(w.Ctx,
+		`SELECT verification FROM recovery_verifications WHERE request_id = $1`, requestID,
+	).Scan(&data)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("GetRecoveryVerification: request %s: %w", requestID, err)
+	}
+	var v types.RecoveryVerification
+	if err := json.Unmarshal(data, &v); err != nil {
+		return nil, fmt.Errorf("GetRecoveryVerification: request %s: %w", requestID, err)
+	}
+	return &v, nil
+}
+
 // GetRecoveryCommitmentReport returns the fullnode's audit of a recovery
 // request, or nil if it has not run.
 func (w *Wallet) GetRecoveryCommitmentReport(requestID string) (*types.RecoveryCommitmentReport, error) {

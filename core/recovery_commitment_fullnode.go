@@ -315,15 +315,25 @@ func (c *Core) auditRecoveryCommitments(requestID string) {
 		"matched", matched, "missing_quorums", report.MissingQuorums)
 }
 
-// collectRecoveryCommitments returns the commitments in an ephemeral NFT
-// chain. Messages that fail the sender rules are skipped, and so is a
+// collectRecoveryCommitments returns the quorum commitments in an ephemeral
+// NFT chain. Messages that fail the sender rules are skipped, and so is a
 // commitment whose committer_did is not its sender, so no DID can commit in
 // another quorum's name.
 func collectRecoveryCommitments(chain []types.RecoveryTx, userDID string) []types.RecoveryCommitment {
+	return collectCommitmentMessages(chain, userDID, constants.RecoveryMessageType_Commitment)
+}
+
+// collectUnpledgedCommitments returns the fullnode unpledged commitments in an
+// ephemeral NFT chain, under the same rules as collectRecoveryCommitments.
+func collectUnpledgedCommitments(chain []types.RecoveryTx, userDID string) []types.RecoveryCommitment {
+	return collectCommitmentMessages(chain, userDID, constants.RecoveryMessageType_Unpledged)
+}
+
+func collectCommitmentMessages(chain []types.RecoveryTx, userDID, msgType string) []types.RecoveryCommitment {
 	var commitments []types.RecoveryCommitment
 	for _, tx := range chain {
 		msg, err := parseRecoveryMessage(tx.Data, tx.Info.Initiator, userDID)
-		if err != nil || msg.Type != constants.RecoveryMessageType_Commitment {
+		if err != nil || msg.Type != msgType {
 			continue
 		}
 		var cm types.RecoveryCommitment

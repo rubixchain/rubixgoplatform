@@ -401,6 +401,12 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             created_at TIMESTAMPTZ DEFAULT NOW(),
             PRIMARY KEY (request_id, quorum_did)
         );
+
+        CREATE TABLE IF NOT EXISTS recovery_verifications (
+            request_id   TEXT PRIMARY KEY REFERENCES recovery_sessions(request_id),
+            verification JSONB NOT NULL,
+            created_at   TIMESTAMPTZ DEFAULT NOW()
+        );
     `)
 	return err
 }

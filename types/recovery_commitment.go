@@ -77,6 +77,38 @@ type RecoveryCommitmentReport struct {
 	Excluded       []RecoveryExcludedToken   `json:"excluded,omitempty"`
 }
 
+// RecoveryDeliveryCheck is the user's verdict on one committer, a quorum or a
+// fullnode: the commitment it published, and the one the user rebuilt from
+// the chains it delivered. Recomputed is nil when nothing was delivered or
+// the chains could not be hashed.
+type RecoveryDeliveryCheck struct {
+	CommitterDID string              `json:"committer_did"`
+	Published    RecoveryCommitment  `json:"published"`
+	Recomputed   *RecoveryCommitment `json:"recomputed,omitempty"`
+	Match        bool                `json:"match"`
+	Mismatches   []string            `json:"mismatches,omitempty"`
+}
+
+// RecoveryVerification is the user's check of every published quorum and
+// unpledged commitment after the sync window closes [R12].
+type RecoveryVerification struct {
+	RequestID string                  `json:"request_id"`
+	UserDID   string                  `json:"user_did"`
+	Checks    []RecoveryDeliveryCheck `json:"checks"`
+}
+
+// RecoveryMismatchReport is the body of a mismatch message [R13]: the
+// failing checks of the user's verification.
+type RecoveryMismatchReport struct {
+	RequestID  string                  `json:"request_id"`
+	Mismatches []RecoveryDeliveryCheck `json:"mismatches"`
+}
+
+// RecoveryCompletionNotice is the body of a completion message [R13].
+type RecoveryCompletionNotice struct {
+	RequestID string `json:"request_id"`
+}
+
 // RecoveryChainsNotice is what a quorum sends the user when the sync window
 // opens, the way send_tokens tells a receiver about a transfer. The user then
 // pulls the chains from the quorum with sync_transaction_chain and cuts each

@@ -134,6 +134,9 @@ func (c *Core) GetRecoverySessionStatus(requestID string) (*types.RecoverySessio
 		if status.Deliveries, err = c.w.GetRecoveryDeliveries(requestID); err != nil {
 			return nil, err
 		}
+		if status.Verification, err = c.w.GetRecoveryVerification(requestID); err != nil {
+			return nil, err
+		}
 	}
 	return status, nil
 }
