@@ -19,6 +19,18 @@ func (c *Client) StartRecovery(did string) (*model.BasicResponse, error) {
 	return &rm, nil
 }
 
+// PublishRecoveryOutcome publishes the user's outcome of the recovery started
+// by requestID. The response asks for the DID password, so the caller drives
+// the signature flow on it (cmd.SignatureResponse).
+func (c *Client) PublishRecoveryOutcome(requestID string) (*model.BasicResponse, error) {
+	req := model.RecoveryOutcomeRequest{RequestTxnID: requestID}
+	var rm model.BasicResponse
+	if err := c.sendJSONRequest("POST", setup.APIRecoveryOutcome, nil, &req, &rm); err != nil {
+		return nil, err
+	}
+	return &rm, nil
+}
+
 // GetRecoverySession returns the node's view of the recovery started by
 // requestID.
 func (c *Client) GetRecoverySession(requestID string) (*types.RecoverySessionResponse, error) {

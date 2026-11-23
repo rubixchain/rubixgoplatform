@@ -40,7 +40,8 @@ func (c *Core) scheduleRecoveryDeadlines(s *types.RecoverySession) {
 // closeRecoveryWindow moves a session to SyncOpen or SyncClosed when its
 // deadline passes. It changes nothing if the session is already at or past
 // that state, or is blocked. Closing the commit window starts the fullnode
-// audit and the quorum's chain delivery.
+// audit and the quorum's chain delivery; closing the sync window starts the
+// user's verification.
 func (c *Core) closeRecoveryWindow(requestID string, to int) {
 	// After a restart both timers can fire at once. Close the commit window
 	// first, so the audit is not skipped when the sync deadline wins.
@@ -61,6 +62,7 @@ func (c *Core) closeRecoveryWindow(requestID string, to int) {
 		c.deliverRecoveryChains(requestID)
 	} else {
 		c.log.Info("Recovery sync window closed", "request_txn_id", requestID)
+		c.verifyRecovery(requestID)
 	}
 }
 

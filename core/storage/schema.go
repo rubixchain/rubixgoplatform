@@ -380,12 +380,12 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
             updated_at       TIMESTAMPTZ DEFAULT NOW()
         );
 
-        CREATE TABLE IF NOT EXISTS recovery_quorum_commitments (
-            request_id TEXT NOT NULL REFERENCES recovery_sessions(request_id),
-            quorum_did TEXT NOT NULL,
-            tree       JSONB NOT NULL,
-            created_at TIMESTAMPTZ DEFAULT NOW(),
-            PRIMARY KEY (request_id, quorum_did)
+        CREATE TABLE IF NOT EXISTS recovery_commitment_trees (
+            request_id    TEXT NOT NULL REFERENCES recovery_sessions(request_id),
+            committer_did TEXT NOT NULL,
+            tree          JSONB NOT NULL,
+            created_at    TIMESTAMPTZ DEFAULT NOW(),
+            PRIMARY KEY (request_id, committer_did)
         );
 
         CREATE TABLE IF NOT EXISTS recovery_commitment_reports (
@@ -395,11 +395,17 @@ func (r *RubixDB) InitSchema(ctx context.Context) error {
         );
 
         CREATE TABLE IF NOT EXISTS recovery_deliveries (
-            request_id TEXT NOT NULL REFERENCES recovery_sessions(request_id),
-            quorum_did TEXT NOT NULL,
-            chains     JSONB NOT NULL,
-            created_at TIMESTAMPTZ DEFAULT NOW(),
-            PRIMARY KEY (request_id, quorum_did)
+            request_id    TEXT NOT NULL REFERENCES recovery_sessions(request_id),
+            committer_did TEXT NOT NULL,
+            chains        JSONB NOT NULL,
+            created_at    TIMESTAMPTZ DEFAULT NOW(),
+            PRIMARY KEY (request_id, committer_did)
+        );
+
+        CREATE TABLE IF NOT EXISTS recovery_verifications (
+            request_id   TEXT PRIMARY KEY REFERENCES recovery_sessions(request_id),
+            verification JSONB NOT NULL,
+            created_at   TIMESTAMPTZ DEFAULT NOW()
         );
     `)
 	return err

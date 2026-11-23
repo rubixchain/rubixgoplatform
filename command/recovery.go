@@ -47,3 +47,21 @@ func (cmd *Command) GetRecoverySession() {
 	}
 	fmt.Println(string(out))
 }
+
+func (cmd *Command) PublishRecoveryOutcome() {
+	if cmd.txnID == "" {
+		cmd.log.Error("Request transaction ID is required (-txnID)")
+		return
+	}
+	br, err := cmd.c.PublishRecoveryOutcome(cmd.txnID)
+	if err != nil {
+		cmd.log.Error("Failed to publish recovery outcome", "err", err)
+		return
+	}
+	msg, status := cmd.SignatureResponse(br)
+	if !status {
+		cmd.log.Error("Failed to publish recovery outcome, " + msg)
+		return
+	}
+	cmd.log.Info(msg)
+}

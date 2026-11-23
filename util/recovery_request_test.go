@@ -72,10 +72,11 @@ func TestRecoveryRequestSignAndVerify(t *testing.T) {
 func TestRecoveryChainsNoticeSignAndVerify(t *testing.T) {
 	signer, verifier := testRecoveryDID(t, "quorum-did")
 	notice := types.RecoveryChainsNotice{
-		RequestID:    "req",
-		QuorumDID:    "quorum-did",
-		QuorumPeerID: "peer",
-		Tokens:       []types.RecoveryTokenCommitment{{TokenID: "T1", ChainRoot: "root"}},
+		RequestID:       "req",
+		CommitterDID:    "quorum-did",
+		CommitterType:   "quorum",
+		CommitterPeerID: "peer",
+		Tokens:          []types.RecoveryTokenCommitment{{TokenID: "T1", ChainRoot: "root"}},
 	}
 	if err := util.SignRecoveryChainsNotice(signer, &notice); err != nil {
 		t.Fatal(err)
@@ -87,11 +88,12 @@ func TestRecoveryChainsNoticeSignAndVerify(t *testing.T) {
 		name   string
 		change func(*types.RecoveryChainsNotice)
 	}{
-		{"changed peer", func(n *types.RecoveryChainsNotice) { n.QuorumPeerID = "attacker" }},
+		{"changed peer", func(n *types.RecoveryChainsNotice) { n.CommitterPeerID = "attacker" }},
 		{"changed tokens", func(n *types.RecoveryChainsNotice) {
 			n.Tokens = []types.RecoveryTokenCommitment{{TokenID: "T2", ChainRoot: "root"}}
 		}},
-		{"other quorum DID", func(n *types.RecoveryChainsNotice) { n.QuorumDID = "other-did" }},
+		{"other committer DID", func(n *types.RecoveryChainsNotice) { n.CommitterDID = "other-did" }},
+		{"changed committer type", func(n *types.RecoveryChainsNotice) { n.CommitterType = "fullnode" }},
 		{"missing signature", func(n *types.RecoveryChainsNotice) { n.Signature = "" }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

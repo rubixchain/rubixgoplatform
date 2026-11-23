@@ -25,16 +25,17 @@ import (
 )
 
 const (
-	APIPingPath              string = "/rubix/v1/internal/ping"
-	APIPeerStatus            string = "/rubix/v1/internal/peer_status"
-	APISyncTransactionChain  string = "/rubix/v1/internal/sync_transaction_chain"
-	APIFetchGenesisTxn       string = "/rubix/v1/internal/fetch_genesis_transaction"
-	APICheckQuorumStatusPath string = "/rubix/v1/internal/quorum_status"
-	APIGetPeerInfoPath       string = "/rubix/v1/internal/peer_info"
-	APIInitiateConsensus     string = "/rubix/v1/internal/initiate_consensus"
-	APISendTokens            string = "/rubix/v1/internal/send_tokens"
-	APIRecoverySendTokens    string = "/rubix/v1/internal/recovery_send_tokens"
-	APIRequestPledgeToken    string = "/rubix/v1/internal/request_pledge_token"
+	APIPingPath               string = "/rubix/v1/internal/ping"
+	APIPeerStatus             string = "/rubix/v1/internal/peer_status"
+	APISyncTransactionChain   string = "/rubix/v1/internal/sync_transaction_chain"
+	APIFetchGenesisTxn        string = "/rubix/v1/internal/fetch_genesis_transaction"
+	APICheckQuorumStatusPath  string = "/rubix/v1/internal/quorum_status"
+	APIGetPeerInfoPath        string = "/rubix/v1/internal/peer_info"
+	APIInitiateConsensus      string = "/rubix/v1/internal/initiate_consensus"
+	APISendTokens             string = "/rubix/v1/internal/send_tokens"
+	APIRecoverySendTokens     string = "/rubix/v1/internal/recovery_send_tokens"
+	APIRecoveryFullnodeChains string = "/rubix/v1/internal/recovery_fullnode_chains"
+	APIRequestPledgeToken     string = "/rubix/v1/internal/request_pledge_token"
 )
 
 const (

@@ -76,6 +76,11 @@ definitions:
       priv_password:
         type: string
     type: object
+  models.RecoveryOutcomeRequest:
+    properties:
+      request_txn_id:
+        type: string
+    type: object
   models.RegisterCallBackUrlReq:
     properties:
       callBackURL:
@@ -232,9 +237,24 @@ definitions:
           $ref: '#/definitions/types.RecoveryTokenCommitment'
         type: array
     type: object
+  types.RecoveryDeliveryCheck:
+    properties:
+      committer_did:
+        type: string
+      match:
+        type: boolean
+      mismatches:
+        items:
+          type: string
+        type: array
+      published:
+        $ref: '#/definitions/types.RecoveryCommitment'
+      recomputed:
+        $ref: '#/definitions/types.RecoveryCommitment'
+    type: object
   types.RecoveryDeliverySummary:
     properties:
-      quorum_did:
+      committer_did:
         type: string
       token_count:
         type: integer
@@ -297,6 +317,10 @@ definitions:
         type: integer
       user_did:
         type: string
+      verification:
+        allOf:
+        - $ref: '#/definitions/types.RecoveryVerification'
+        description: user only, after the sync window
     type: object
   types.RecoveryTokenCommitment:
     properties:
@@ -304,6 +328,17 @@ definitions:
         description: hex SHA3-256 chain hash
         type: string
       token_id:
+        type: string
+    type: object
+  types.RecoveryVerification:
+    properties:
+      checks:
+        items:
+          $ref: '#/definitions/types.RecoveryDeliveryCheck'
+        type: array
+      request_id:
+        type: string
+      user_did:
         type: string
     type: object
   types.SignRespData:
@@ -852,6 +887,35 @@ paths:
       summary: Check quorum status
       tags:
       - Quorum
+  /rubix/v1/recovery/outcome:
+    post:
+      consumes:
+      - application/json
+      description: 'Publishes the user''s outcome of a recovery on its ephemeral NFT,
+        after the sync window closes: a mismatch report listing every quorum or fullnode
+        commitment that did not match the chains delivered, or a completion notice
+        if all matched. Runs the verification first if it has not run. After completion
+        it writes the delivered chains into the wallet. Refused after a mismatch is
+        published; if completion is already published, it only writes the wallet again.
+        Runs through the signature flow: answer "Password needed" with POST /rubix/v1/signature.
+        The final result is the outcome''s transaction ID.'
+      parameters:
+      - description: Request transaction ID returned by start recovery
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/models.RecoveryOutcomeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BasicResponse'
+      summary: Publish the recovery outcome
+      tags:
+      - Recovery
   /rubix/v1/recovery/sessions/{request_txn_id}:
     get:
       description: 'Returns this node''s view of a recovery: its role, state and window

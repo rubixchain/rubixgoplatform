@@ -53,3 +53,25 @@ func (s *Server) APIGetRecoverySession(req *ensweb.Request) *ensweb.Result {
 	}
 	return s.BasicResponse(req, true, "Recovery session retrieved", status)
 }
+
+// APIRecoveryOutcome godoc
+// @Summary      Publish the recovery outcome
+// @Description  Publishes the user's outcome of a recovery on its ephemeral NFT, after the sync window closes: a mismatch report listing every quorum or fullnode commitment that did not match the chains delivered, or a completion notice if all matched. Runs the verification first if it has not run. After completion it writes the delivered chains into the wallet. Refused after a mismatch is published; if completion is already published, it only writes the wallet again. Runs through the signature flow: answer "Password needed" with POST /rubix/v1/signature. The final result is the outcome's transaction ID.
+// @Tags         Recovery
+// @Accept       json
+// @Produce      json
+// @Param        input  body      models.RecoveryOutcomeRequest  true  "Request transaction ID returned by start recovery"
+// @Success      200    {object}  models.BasicResponse
+// @Router       /rubix/v1/recovery/outcome [post]
+func (s *Server) APIRecoveryOutcome(req *ensweb.Request) *ensweb.Result {
+	var rr models.RecoveryOutcomeRequest
+	if err := s.ParseJSON(req, &rr); err != nil {
+		return s.BasicResponse(req, false, "Failed to parse the input", nil)
+	}
+	if rr.RequestTxnID == "" {
+		return s.BasicResponse(req, false, "request_txn_id is required", nil)
+	}
+	s.c.AddWebReq(req)
+	go s.c.PublishRecoveryOutcome(req.ID, rr.RequestTxnID)
+	return s.didResponse(req, req.ID)
+}

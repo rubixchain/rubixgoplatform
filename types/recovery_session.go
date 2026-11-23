@@ -19,8 +19,9 @@ type RecoverySessionStatus struct {
 	CommitClosesAt int64                     `json:"commit_closes_at"`
 	SyncClosesAt   int64                     `json:"sync_closes_at"`
 	Messages       []RecoveryMessageEntry    `json:"messages"`
-	Report         *RecoveryCommitmentReport `json:"report,omitempty"`     // fullnode only
-	Deliveries     []RecoveryDeliverySummary `json:"deliveries,omitempty"` // user only
+	Report         *RecoveryCommitmentReport `json:"report,omitempty"`       // fullnode only
+	Deliveries     []RecoveryDeliverySummary `json:"deliveries,omitempty"`   // user only
+	Verification   *RecoveryVerification     `json:"verification,omitempty"` // user only, after the sync window
 }
 
 // RecoveryMessageEntry is one message on the ephemeral NFT that passed the
@@ -32,11 +33,11 @@ type RecoveryMessageEntry struct {
 	Body      json.RawMessage `json:"body" swaggertype:"object"`
 }
 
-// RecoveryDeliverySummary is one quorum's chain delivery stored on the user's
-// node.
+// RecoveryDeliverySummary is one committer's chain delivery, from a quorum or
+// a fullnode, stored on the user's node.
 type RecoveryDeliverySummary struct {
-	QuorumDID  string `json:"quorum_did"`
-	TokenCount int    `json:"token_count"`
+	CommitterDID string `json:"committer_did"`
+	TokenCount   int    `json:"token_count"`
 }
 
 // RecoverySessionResponse is the session status API response.

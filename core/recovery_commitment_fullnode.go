@@ -235,9 +235,9 @@ func (c *Core) RegisterFullnodeDID(didStr, privKeyPassword string) error {
 // publishUnpledgedCommitment runs on a fullnode when a session opens its
 // commit window, so the message arrives while commitments are accepted. The
 // registered fullnode recovery DID builds the commitment over the user's
-// unpledged tokens and executes the ephemeral NFT with it. It publishes even
-// when the set is empty: that tells the user the fullnode found no free
-// tokens, which silence would not.
+// unpledged tokens, executes the ephemeral NFT with it and stores the tree for
+// delivery. It publishes even when the set is empty: that tells the user the
+// fullnode found no free tokens, which silence would not.
 func (c *Core) publishUnpledgedCommitment(s *types.RecoverySession) {
 	c.fullnodeDCMu.RLock()
 	dc := c.fullnodeDC
@@ -271,6 +271,9 @@ func (c *Core) doPublishUnpledgedCommitment(s *types.RecoverySession, dc types.D
 	}
 	txID, err := c.publishRecoveryMessage(s, dc, msg)
 	if err != nil {
+		return err
+	}
+	if err := c.w.SaveRecoveryCommitmentTree(tree); err != nil {
 		return err
 	}
 	c.log.Info("Unpledged commitment published", "request_txn_id", s.RequestID, "fullnode_did", fullnodeDID,
@@ -315,15 +318,25 @@ func (c *Core) auditRecoveryCommitments(requestID string) {
 		"matched", matched, "missing_quorums", report.MissingQuorums)
 }
 
-// collectRecoveryCommitments returns the commitments in an ephemeral NFT
-// chain. Messages that fail the sender rules are skipped, and so is a
+// collectRecoveryCommitments returns the quorum commitments in an ephemeral
+// NFT chain. Messages that fail the sender rules are skipped, and so is a
 // commitment whose committer_did is not its sender, so no DID can commit in
 // another quorum's name.
 func collectRecoveryCommitments(chain []types.RecoveryTx, userDID string) []types.RecoveryCommitment {
+	return collectCommitmentMessages(chain, userDID, constants.RecoveryMessageType_Commitment)
+}
+
+// collectUnpledgedCommitments returns the fullnode unpledged commitments in an
+// ephemeral NFT chain, under the same rules as collectRecoveryCommitments.
+func collectUnpledgedCommitments(chain []types.RecoveryTx, userDID string) []types.RecoveryCommitment {
+	return collectCommitmentMessages(chain, userDID, constants.RecoveryMessageType_Unpledged)
+}
+
+func collectCommitmentMessages(chain []types.RecoveryTx, userDID, msgType string) []types.RecoveryCommitment {
 	var commitments []types.RecoveryCommitment
 	for _, tx := range chain {
 		msg, err := parseRecoveryMessage(tx.Data, tx.Info.Initiator, userDID)
-		if err != nil || msg.Type != constants.RecoveryMessageType_Commitment {
+		if err != nil || msg.Type != msgType {
 			continue
 		}
 		var cm types.RecoveryCommitment

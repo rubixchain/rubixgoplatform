@@ -818,6 +818,40 @@ const docTemplate = `{
                 }
             }
         },
+        "/rubix/v1/recovery/outcome": {
+            "post": {
+                "description": "Publishes the user's outcome of a recovery on its ephemeral NFT, after the sync window closes: a mismatch report listing every quorum or fullnode commitment that did not match the chains delivered, or a completion notice if all matched. Runs the verification first if it has not run. After completion it writes the delivered chains into the wallet. Refused after a mismatch is published; if completion is already published, it only writes the wallet again. Runs through the signature flow: answer \"Password needed\" with POST /rubix/v1/signature. The final result is the outcome's transaction ID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Recovery"
+                ],
+                "summary": "Publish the recovery outcome",
+                "parameters": [
+                    {
+                        "description": "Request transaction ID returned by start recovery",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.RecoveryOutcomeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/rubix/v1/recovery/sessions/{request_txn_id}": {
             "get": {
                 "description": "Returns this node's view of a recovery: its role, state and window deadlines, the messages on the ephemeral NFT, the commitment audit (fullnode) and the chains received (user).",
@@ -1556,6 +1590,14 @@ const docTemplate = `{
                 }
             }
         },
+        "models.RecoveryOutcomeRequest": {
+            "type": "object",
+            "properties": {
+                "request_txn_id": {
+                    "type": "string"
+                }
+            }
+        },
         "models.RegisterCallBackUrlReq": {
             "type": "object",
             "properties": {
@@ -1796,10 +1838,33 @@ const docTemplate = `{
                 }
             }
         },
+        "types.RecoveryDeliveryCheck": {
+            "type": "object",
+            "properties": {
+                "committer_did": {
+                    "type": "string"
+                },
+                "match": {
+                    "type": "boolean"
+                },
+                "mismatches": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "published": {
+                    "$ref": "#/definitions/types.RecoveryCommitment"
+                },
+                "recomputed": {
+                    "$ref": "#/definitions/types.RecoveryCommitment"
+                }
+            }
+        },
         "types.RecoveryDeliverySummary": {
             "type": "object",
             "properties": {
-                "quorum_did": {
+                "committer_did": {
                     "type": "string"
                 },
                 "token_count": {
@@ -1896,6 +1961,14 @@ const docTemplate = `{
                 },
                 "user_did": {
                     "type": "string"
+                },
+                "verification": {
+                    "description": "user only, after the sync window",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.RecoveryVerification"
+                        }
+                    ]
                 }
             }
         },
@@ -1907,6 +1980,23 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "token_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.RecoveryVerification": {
+            "type": "object",
+            "properties": {
+                "checks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.RecoveryDeliveryCheck"
+                    }
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "user_did": {
                     "type": "string"
                 }
             }

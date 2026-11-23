@@ -693,6 +693,7 @@ func (c *Core) TransactionSetup() {
 	c.l.AddRoute(APISyncTransactionChain, "POST", c.SyncTransactionChain)
 	c.l.AddRoute(APIFetchGenesisTxn, "POST", c.FetchGenesisTransaction)
 	c.l.AddRoute(APIRecoverySendTokens, "POST", c.RecoverySendTokens)
+	c.l.AddRoute(APIRecoveryFullnodeChains, "POST", c.RecoveryFullnodeChains)
 }
 
 func (c *Core) SendTokens(request *ensweb.Request) *ensweb.Result {
