@@ -73,6 +73,9 @@ const (
 	GetNftsByDidCmd  string = "getnftbalance"
 
 	RegisterFullnodeDIDCmd string = "registerfullnodedid"
+
+	StartRecoveryCmd      string = "startrecovery"
+	GetRecoverySessionCmd string = "recoverystatus"
 )
 
 var commands = []string{
@@ -91,6 +94,8 @@ var commands = []string{
 	RemoveAllQuorumCmd,
 	SetupQuorumCmd,
 	RegisterFullnodeDIDCmd,
+	StartRecoveryCmd,
+	GetRecoverySessionCmd,
 	GenerateLocalRBTCmd,
 	GetRBTBalanceCmd,
 	RegsiterDIDCmd,
@@ -588,6 +593,10 @@ func Run(args []string) {
 		cmd.SetupQuorum()
 	case RegisterFullnodeDIDCmd:
 		cmd.RegisterFullnodeDID()
+	case StartRecoveryCmd:
+		cmd.StartRecovery()
+	case GetRecoverySessionCmd:
+		cmd.GetRecoverySession()
 	case GenerateLocalRBTCmd:
 		cmd.GenerateLocalRBT()
 	case GetRBTBalanceCmd:

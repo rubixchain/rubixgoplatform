@@ -369,6 +369,11 @@ type FullnodeDIDSetup struct {
 	PrivKeyPassword string `json:"priv_password"`
 }
 
+// StartRecoveryRequest starts the account recovery of a DID on this node.
+type StartRecoveryRequest struct {
+	DID string `json:"did"`
+}
+
 type QuorumSetup struct {
 	DID             string `json:"did"`
 	Password        string `json:"password"`

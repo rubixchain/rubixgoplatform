@@ -152,13 +152,19 @@ func checkRecoveryRequestTiming(chain []types.RecoveryTx, i int, now int64) erro
 	if now-int64(req.Epoch) > constants.RecoveryRequest_MaxAgeSeconds {
 		return fmt.Errorf("request is older than %d seconds", constants.RecoveryRequest_MaxAgeSeconds)
 	}
+	return checkRecoveryCooldown(chain[:i], req.Initiator, int64(req.Epoch))
+}
+
+// checkRecoveryCooldown fails if did made one of the earlier requests less
+// than 48 hours before epoch (Q10).
+func checkRecoveryCooldown(earlier []types.RecoveryTx, did string, epoch int64) error {
 	deployRole := int16(models.GetTokenRoleID(constants.TokenRole_Deploy))
-	for _, prev := range chain[:i] {
-		if prev.Role == deployRole || prev.Info.Initiator != req.Initiator {
+	for _, prev := range earlier {
+		if prev.Role == deployRole || prev.Info.Initiator != did {
 			continue
 		}
-		if req.Epoch-prev.Info.Epoch < constants.RecoveryRequest_CooldownSeconds {
-			return fmt.Errorf("DID %s made a request less than 48 hours earlier (%s)", req.Initiator, prev.ID)
+		if epoch-int64(prev.Info.Epoch) < constants.RecoveryRequest_CooldownSeconds {
+			return fmt.Errorf("DID %s made a request less than 48 hours earlier (%s)", did, prev.ID)
 		}
 	}
 	return nil

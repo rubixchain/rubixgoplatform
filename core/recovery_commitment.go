@@ -3,8 +3,11 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"slices"
 	"sort"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/rubixchain/rubixgoplatform/constants"
@@ -126,6 +129,29 @@ func (c *Core) publishQuorumCommitments(s *types.RecoverySession) {
 	}
 }
 
+// publishRecoveryMessage executes the ephemeral NFT of s with msg, signed by
+// dc. Every participant publishes when the commit window opens, so their
+// executions build on the same chain tip and all but the first are rejected
+// with a chain mismatch. A rejected execution is retried after a random
+// pause, by which time this node has synced the winning one, until the
+// commit window closes.
+func (c *Core) publishRecoveryMessage(s *types.RecoverySession, dc types.DIDCrypto, msg *types.RecoveryMessage) (string, error) {
+	closes := time.Unix(s.RequestEpoch+constants.RecoveryWindow_CommitSeconds, 0)
+	for {
+		txID, err := c.executeEphemeralNFT(uuid.New().String(), dc, s.RequestID, msg)
+		if err == nil || !strings.Contains(err.Error(), "chain mismatch") {
+			return txID, err
+		}
+		pause := time.Second + time.Duration(rand.Int63n(int64(4*time.Second)))
+		if time.Now().Add(pause).After(closes) {
+			return "", fmt.Errorf("commit window closes before a retry: %w", err)
+		}
+		c.log.Info("Recovery message lost a race on the ephemeral NFT, retrying", "request_txn_id", s.RequestID,
+			"sender_did", msg.SenderDID, "type", msg.Type, "retry_in", pause.Round(time.Millisecond))
+		time.Sleep(pause)
+	}
+}
+
 // publishQuorumCommitment builds quorumDID's commitment, executes the
 // ephemeral NFT with it and stores the tree. It publishes nothing when the
 // quorum holds nothing for the user (Q11).
@@ -146,7 +172,7 @@ func (c *Core) publishQuorumCommitment(s *types.RecoverySession, quorumDID strin
 		Body:      body,
 		SenderDID: quorumDID,
 	}
-	txID, err := c.executeEphemeralNFT(uuid.New().String(), c.pqc[quorumDID], s.RequestID, msg)
+	txID, err := c.publishRecoveryMessage(s, c.pqc[quorumDID], msg)
 	if err != nil {
 		return err
 	}

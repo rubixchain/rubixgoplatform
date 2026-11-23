@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/google/uuid"
 	"github.com/rubixchain/rubixgoplatform/constants"
 	"github.com/rubixchain/rubixgoplatform/core/recoverycommit"
 	"github.com/rubixchain/rubixgoplatform/did"
@@ -270,7 +269,7 @@ func (c *Core) doPublishUnpledgedCommitment(s *types.RecoverySession, dc types.D
 		Body:      body,
 		SenderDID: fullnodeDID,
 	}
-	txID, err := c.executeEphemeralNFT(uuid.New().String(), dc, s.RequestID, msg)
+	txID, err := c.publishRecoveryMessage(s, dc, msg)
 	if err != nil {
 		return err
 	}

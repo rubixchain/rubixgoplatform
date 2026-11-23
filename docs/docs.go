@@ -818,6 +818,69 @@ const docTemplate = `{
                 }
             }
         },
+        "/rubix/v1/recovery/sessions/{request_txn_id}": {
+            "get": {
+                "description": "Returns this node's view of a recovery: its role, state and window deadlines, the messages on the ephemeral NFT, the commitment audit (fullnode) and the chains received (user).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Recovery"
+                ],
+                "summary": "Get recovery session status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Request transaction ID returned by start recovery",
+                        "name": "request_txn_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/types.RecoverySessionResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/rubix/v1/recovery/start": {
+            "post": {
+                "description": "Signs a recovery request for the DID, puts it on the Recovery NFT and deploys the request's ephemeral NFT, which opens the commit window. Runs through the signature flow: answer \"Password needed\" with POST /rubix/v1/signature. The final result is the request transaction ID. A DID can start one recovery every 48 hours.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Recovery"
+                ],
+                "summary": "Start account recovery",
+                "parameters": [
+                    {
+                        "description": "DID to recover",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.StartRecoveryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BasicResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/rubix/v1/signature": {
             "post": {
                 "description": "This API is used to supply the password for the node along with the ID generated when Initiate RBT transfer is called.",
@@ -1518,6 +1581,14 @@ const docTemplate = `{
                 }
             }
         },
+        "models.StartRecoveryRequest": {
+            "type": "object",
+            "properties": {
+                "did": {
+                    "type": "string"
+                }
+            }
+        },
         "models.TransactionRequest": {
             "type": "object",
             "properties": {
@@ -1631,6 +1702,211 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "public_key": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.RecoveryCommitment": {
+            "type": "object",
+            "properties": {
+                "committer_did": {
+                    "type": "string"
+                },
+                "committer_type": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "root": {
+                    "description": "hex SHA3-256",
+                    "type": "string"
+                },
+                "token_count": {
+                    "type": "integer"
+                },
+                "user_did": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.RecoveryCommitmentCheck": {
+            "type": "object",
+            "properties": {
+                "expected": {
+                    "$ref": "#/definitions/types.RecoveryCommitmentTree"
+                },
+                "match": {
+                    "type": "boolean"
+                },
+                "mismatches": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "quorum_did": {
+                    "type": "string"
+                },
+                "submitted": {
+                    "$ref": "#/definitions/types.RecoveryCommitment"
+                }
+            }
+        },
+        "types.RecoveryCommitmentReport": {
+            "type": "object",
+            "properties": {
+                "checks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.RecoveryCommitmentCheck"
+                    }
+                },
+                "excluded": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.RecoveryExcludedToken"
+                    }
+                },
+                "missing_quorums": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "user_did": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.RecoveryCommitmentTree": {
+            "type": "object",
+            "properties": {
+                "commitment": {
+                    "$ref": "#/definitions/types.RecoveryCommitment"
+                },
+                "tokens": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.RecoveryTokenCommitment"
+                    }
+                }
+            }
+        },
+        "types.RecoveryDeliverySummary": {
+            "type": "object",
+            "properties": {
+                "quorum_did": {
+                    "type": "string"
+                },
+                "token_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "types.RecoveryExcludedToken": {
+            "type": "object",
+            "properties": {
+                "reason": {
+                    "type": "string"
+                },
+                "token_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.RecoveryMessageEntry": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "object"
+                },
+                "sender_did": {
+                    "type": "string"
+                },
+                "txn_id": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.RecoverySessionResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "result": {
+                    "$ref": "#/definitions/types.RecoverySessionStatus"
+                },
+                "status": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "types.RecoverySessionStatus": {
+            "type": "object",
+            "properties": {
+                "commit_closes_at": {
+                    "type": "integer"
+                },
+                "deliveries": {
+                    "description": "user only",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.RecoveryDeliverySummary"
+                    }
+                },
+                "ephemeral_nft_id": {
+                    "type": "string"
+                },
+                "messages": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.RecoveryMessageEntry"
+                    }
+                },
+                "report": {
+                    "description": "fullnode only",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.RecoveryCommitmentReport"
+                        }
+                    ]
+                },
+                "request_epoch": {
+                    "type": "integer"
+                },
+                "request_txn_id": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "sync_closes_at": {
+                    "type": "integer"
+                },
+                "user_did": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.RecoveryTokenCommitment": {
+            "type": "object",
+            "properties": {
+                "chain_root": {
+                    "description": "hex SHA3-256 chain hash",
+                    "type": "string"
+                },
+                "token_id": {
                     "type": "string"
                 }
             }
