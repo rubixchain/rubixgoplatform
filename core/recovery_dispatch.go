@@ -90,7 +90,7 @@ func (c *Core) acceptRecoveryRequest(txID, peerID string) error {
 	if tx.Info.Initiator != request.DID {
 		return fmt.Errorf("transaction initiator %s is not the request DID %s", tx.Info.Initiator, request.DID)
 	}
-	if err := checkRecoveryRequestTiming(chain, i, time.Now().Unix()); err != nil {
+	if err := checkRecoveryRequestTiming(chain, i, time.Now().Unix(), c.recoveryMismatched); err != nil {
 		return err
 	}
 	dc, err := c.SetupForienDID(request.DID, "")
@@ -147,27 +147,49 @@ func (c *Core) acceptRecoveryRequest(txID, peerID string) error {
 // checkRecoveryRequestTiming applies the age rule (Q6) and the 48-hour rule
 // (Q10) to the request at chain[i]. now is this node's Unix time in seconds.
 // Earlier requests come from the shared chain, so every node agrees.
-func checkRecoveryRequestTiming(chain []types.RecoveryTx, i int, now int64) error {
+func checkRecoveryRequestTiming(chain []types.RecoveryTx, i int, now int64, mismatched func(requestID, did string) bool) error {
 	req := chain[i].Info
 	if now-int64(req.Epoch) > constants.RecoveryRequest_MaxAgeSeconds {
 		return fmt.Errorf("request is older than %d seconds", constants.RecoveryRequest_MaxAgeSeconds)
 	}
-	return checkRecoveryCooldown(chain[:i], req.Initiator, int64(req.Epoch))
+	return checkRecoveryCooldown(chain[:i], req.Initiator, int64(req.Epoch), mismatched)
 }
 
 // checkRecoveryCooldown fails if did made one of the earlier requests less
-// than 48 hours before epoch (Q10).
-func checkRecoveryCooldown(earlier []types.RecoveryTx, did string, epoch int64) error {
+// than 48 hours before epoch (Q10). A request whose recovery ended in a
+// mismatch does not count, so the user can try again at once.
+func checkRecoveryCooldown(earlier []types.RecoveryTx, did string, epoch int64, mismatched func(requestID, did string) bool) error {
 	deployRole := int16(models.GetTokenRoleID(constants.TokenRole_Deploy))
 	for _, prev := range earlier {
 		if prev.Role == deployRole || prev.Info.Initiator != did {
 			continue
 		}
-		if epoch-int64(prev.Info.Epoch) < constants.RecoveryRequest_CooldownSeconds {
+		if epoch-int64(prev.Info.Epoch) < constants.RecoveryRequest_CooldownSeconds && !mismatched(prev.ID, did) {
 			return fmt.Errorf("DID %s made a request less than 48 hours earlier (%s)", did, prev.ID)
 		}
 	}
 	return nil
+}
+
+// recoveryMismatched reports whether the user did published a mismatch on the
+// ephemeral NFT of request requestID. It reads this node's copy of that NFT,
+// so a node that never synced it treats the request as not mismatched.
+func (c *Core) recoveryMismatched(requestID, did string) bool {
+	ephemeralID, err := c.EphemeralNFTID(requestID)
+	if err != nil {
+		return false
+	}
+	chain, err := c.recoveryChain(ephemeralID)
+	if err != nil {
+		return false
+	}
+	for _, tx := range chain {
+		msg, err := parseRecoveryMessage(tx.Data, tx.Info.Initiator, did)
+		if err == nil && msg.Type == constants.RecoveryMessageType_Mismatch {
+			return true
+		}
+	}
+	return false
 }
 
 // recoveryRole returns this node's role in a recovery of userDID, or "" if

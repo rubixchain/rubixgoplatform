@@ -43,15 +43,16 @@ func (c *Core) startRecovery(reqID, did string) *models.BasicResponse {
 		resp.Message = fmt.Sprintf("Recovery NFT %s is not on this node; sync it before starting a recovery", nftID)
 		return resp
 	}
-	// Every node drops a request made within 48 hours of the last one, so
-	// refuse it here instead of putting it on the chain.
+	// Every node drops a request made within 48 hours of the last one, unless
+	// that one ended in a mismatch, so refuse it here instead of putting it
+	// on the chain.
 	chain, err := c.recoveryChain(nftID)
 	if err != nil {
 		resp.Message = "failed to read the Recovery NFT chain: " + err.Error()
 		return resp
 	}
 	now := time.Now().Unix()
-	if err := checkRecoveryCooldown(chain, did, now); err != nil {
+	if err := checkRecoveryCooldown(chain, did, now, c.recoveryMismatched); err != nil {
 		resp.Message = err.Error()
 		return resp
 	}

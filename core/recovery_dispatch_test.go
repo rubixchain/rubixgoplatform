@@ -26,13 +26,16 @@ func TestCheckRecoveryRequestTiming(t *testing.T) {
 		{"first request", []types.RecoveryTx{tx("d", "deployer", deploy, now-3*day), tx("r", "alice", execute, now)}, ""},
 		{"older than 2 minutes", []types.RecoveryTx{tx("r", "alice", execute, now-121)}, "older than"},
 		{"same DID within 48 hours", []types.RecoveryTx{tx("p", "alice", execute, now-47*60*60), tx("r", "alice", execute, now)}, "48 hours"},
+		{"same DID within 48 hours after a mismatch", []types.RecoveryTx{tx("m", "alice", execute, now-60*60), tx("r", "alice", execute, now)}, ""},
 		{"same DID after 48 hours", []types.RecoveryTx{tx("p", "alice", execute, now-2*day), tx("r", "alice", execute, now)}, ""},
 		{"other DID within 48 hours", []types.RecoveryTx{tx("p", "bob", execute, now-60), tx("r", "alice", execute, now)}, ""},
 		{"user deployed the Recovery NFT", []types.RecoveryTx{tx("d", "alice", deploy, now-60), tx("r", "alice", execute, now)}, ""},
 	}
+	// Request "m" ended in a mismatch.
+	mismatched := func(requestID, did string) bool { return requestID == "m" }
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := checkRecoveryRequestTiming(tt.chain, len(tt.chain)-1, now)
+			err := checkRecoveryRequestTiming(tt.chain, len(tt.chain)-1, now, mismatched)
 			if tt.wantErr == "" && err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
