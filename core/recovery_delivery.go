@@ -138,13 +138,15 @@ func (c *Core) receiveRecoveryChains(notice *types.RecoveryChainsNotice) error {
 	default:
 		return fmt.Errorf("unknown committer type %q", notice.CommitterType)
 	}
-	dc, err := c.SetupForienDID(notice.CommitterDID, "")
+	dc, err := c.InitialiseDID(notice.CommitterDID)
 	if err != nil {
 		return fmt.Errorf("failed to set up committer DID %s: %w", notice.CommitterDID, err)
 	}
 	if err := util.VerifyRecoveryChainsNotice(dc, notice); err != nil {
 		return err
 	}
+	// The signature covers the peer ID, so record it for later communication.
+	c.AddPeerDetails(models.DID{DID: notice.CommitterDID, PeerID: notice.CommitterPeerID})
 	committerAddr := notice.CommitterPeerID + "." + notice.CommitterDID
 	if err := c.checkRecoveryNoticeCommitment(session, notice, committerAddr); err != nil {
 		return err
