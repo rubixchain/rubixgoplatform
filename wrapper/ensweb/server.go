@@ -148,8 +148,13 @@ func (s *Server) Start() error {
 	s.log.Info(fmt.Sprintf("Starting Server at %s", s.s.Addr))
 	ln, err := net.Listen("tcp", s.s.Addr)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to listen on %s: %w", s.s.Addr, err)
 	}
+	listenAddr := ln.Addr().String()
+	if tcpAddr, ok := ln.Addr().(*net.TCPAddr); ok && tcpAddr.IP.IsUnspecified() {
+		listenAddr += " (all network interfaces)"
+	}
+	s.log.Info(fmt.Sprintf("Listening on %s", listenAddr))
 	connPort := fmt.Sprintf("%d", ln.Addr().(*net.TCPAddr).Port)
 	if connPort != s.cfg.HostPort {
 		s.log.Info("Requested port is not available, using the other port", "port", connPort)

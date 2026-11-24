@@ -300,6 +300,13 @@ func (cmd *Command) init() {
 }
 
 func (cmd *Command) runApp() {
+	added, err := config.EnsureServerSection(cmd.nodeConfigPath)
+	if err != nil {
+		cmd.log.Error(fmt.Sprintf("failed to add [server] section to config.toml, err: %v", err))
+	} else if added {
+		cmd.log.Info(fmt.Sprintf("added [server] host = %q to config.toml", constants.DefaultServerHost))
+	}
+
 	userConfig, err := config.ParseConfigFromPath(cmd.nodeConfigPath)
 	if err != nil {
 		cmd.log.Error(fmt.Sprintf("failed to parse config.toml, err: %v", err))
@@ -309,6 +316,7 @@ func (cmd *Command) runApp() {
 	rubixConfig, err := config.CreateRubixConfigFromUserConfig(userConfig, cmd.nodeConfigPath)
 	if err != nil {
 		cmd.log.Error(fmt.Sprintf("failed to get rubix config, err: %v", err))
+		return
 	}
 	cmd.cfg = rubixConfig
 	cmd.cfg.CfgData.Ports = cmd.cfg.PortConfig
@@ -330,7 +338,7 @@ func (cmd *Command) runApp() {
 
 	serverConfig := &server.Config{
 		Config: srvcfg.Config{
-			HostAddress: "0.0.0.0",
+			HostAddress: cmd.cfg.ServerHost,
 			HostPort:    fmt.Sprintf("%d", cmd.cfg.PortConfig.RubixServerPort),
 			Production:  "false",
 
@@ -351,7 +359,12 @@ func (cmd *Command) runApp() {
 	s.EnableSWagger(cmd.getURL(s.GetServerURL()))
 	cmd.log.Info("Core version : " + version)
 	cmd.log.Info("Starting server...")
-	go s.Start()
+	// Start is non-blocking; call it directly so a bind failure is not dropped.
+	if err := s.Start(); err != nil {
+		cmd.log.Error(fmt.Sprintf("failed to start server, err: %v", err))
+		s.Shutdown()
+		return
+	}
 
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM)

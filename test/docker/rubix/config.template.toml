@@ -2,6 +2,11 @@
 node_index = 0
 network_mode = "${NETWORK_MODE}"
 
+[server]
+# Listen on all interfaces inside the container so Docker's published ports
+# can reach the API; host exposure is controlled by the compose port mapping.
+host = "0.0.0.0"
+
 [db]
 host = "${DB_HOST}"
 port = ${DB_PORT}

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/rubixchain/rubixgoplatform/constants"
@@ -13,12 +14,21 @@ import (
 
 // ---------------------------------------------------------------------------------------------------------- //
 
+// serverConfigSection is the [server] table written into new config files and
+// appended to existing config files that predate it.
+const serverConfigSection = `
+[server]
+# Address the node API listens on. "localhost" = local only (default).
+# Use "0.0.0.0" to listen on all interfaces, or a specific IP.
+host = "` + constants.DefaultServerHost + `"
+`
+
 const userConfigTemplate = `
 [core]
 node_index = 0
 network_mode = "mainnet|testnet|localnet"
 enable_trusted_network = false
-
+` + serverConfigSection + `
 [db]
 host = "localhost"
 username = "rubix"
@@ -116,10 +126,56 @@ func CreateConfigFileFromTemplate(configPath string) error {
 	return nil
 }
 
+// EnsureServerSection appends the default [server] table to an existing
+// config.toml that does not define one, so nodes upgraded from older versions
+// get an explicit, editable bind address. The file is appended to rather than
+// re-encoded so the operator's comments and formatting are preserved. It
+// reports whether the file was modified.
+func EnsureServerSection(configPath string) (bool, error) {
+	configFilePath := path.Join(configPath, "config.toml")
+	data, err := os.ReadFile(configFilePath)
+	if err != nil {
+		return false, fmt.Errorf("failed to read config.toml file from path: %v, err: %v", configFilePath, err)
+	}
+
+	var userConfig types.UserConfig
+	md, err := toml.Decode(string(data), &userConfig)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse config.toml, err: %v", err)
+	}
+	if md.IsDefined("server") {
+		return false, nil
+	}
+
+	section := serverConfigSection
+	if len(data) > 0 && data[len(data)-1] != '\n' {
+		section = "\n" + section
+	}
+
+	f, err := os.OpenFile(configFilePath, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		return false, fmt.Errorf("failed to open config.toml for update, err: %v", err)
+	}
+	if _, err := f.WriteString(section); err != nil {
+		f.Close()
+		return false, fmt.Errorf("failed to add [server] section to config.toml, err: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		return false, fmt.Errorf("failed to close config.toml, err: %v", err)
+	}
+	return true, nil
+}
+
 func CreateRubixConfigFromUserConfig(userConfig types.UserConfig, nodeDir string) (types.RubixConfig, error) {
 	var rubixConfig types.RubixConfig
 
 	rubixConfig.NodeDir = nodeDir
+
+	// An empty host would bind every interface, so fall back to localhost.
+	rubixConfig.ServerHost = strings.TrimSpace(userConfig.Server.Host)
+	if rubixConfig.ServerHost == "" {
+		rubixConfig.ServerHost = constants.DefaultServerHost
+	}
 
 	// Set DID Directory based on the network
 	var networkDirName string

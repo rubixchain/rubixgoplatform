@@ -31,10 +31,18 @@ type IPFSUserConfig struct {
 	LocalnetBootstrapNodes []string `toml:"localnet_bootstrap_nodes"`
 }
 
+// ServerUserConfig holds the node API server settings from config.toml.
+type ServerUserConfig struct {
+	// Host is the address the node API server listens on, e.g. "localhost",
+	// "127.0.0.1" or "0.0.0.0".
+	Host string `toml:"host"`
+}
+
 type UserConfig struct {
-	Core CoreConfig     `toml:"core"`
-	Db   DBConfig       `toml:"db"`
-	Ipfs IPFSUserConfig `toml:"ipfs"`
+	Core   CoreConfig       `toml:"core"`
+	Server ServerUserConfig `toml:"server"`
+	Db     DBConfig         `toml:"db"`
+	Ipfs   IPFSUserConfig   `toml:"ipfs"`
 }
 
 // IPFSRecoveryConfig defines IPFS recovery configuration
@@ -98,4 +106,6 @@ type RubixConfig struct {
 	EnableOptimizedUnpledge bool
 	AsyncFTResponse         bool
 	NodePort                int
+	// ServerHost is the address the node API server binds to.
+	ServerHost string
 }
