@@ -19,6 +19,7 @@ type Config struct {
 	config.Config
 	EnableAuth  bool   `json:"enable_auth"`
 	APIKey      string `json:"api_key"`
+	APIKeyPath  string `json:"api_key_path"`
 	AuthMethod  string `json:"auth_method"`
 	SessionName string `json:"session_name"`
 	SessionKey  string `json:"session_key"`

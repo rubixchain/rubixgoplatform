@@ -67,6 +67,16 @@ class StressConfig:
     password: str = "mypassword"
     output_dir: str = "test/docker/data/stress/logs"
 
+    # Node -p dirs on the host; each holds the .api_key the harness sends as X-API-Key.
+    node_a_dir: str = "test/docker/data/stress/nodeA/app"
+    node_b_dir: str = "test/docker/data/stress/nodeB/app"
+    quorum_dir: str = "test/docker/data/stress/quorum/app"
+
+    # Docker container names, for reading the root-owned .api_key via docker exec; "" = native.
+    node_a_container: str = "rubix-stress-nodeA"
+    node_b_container: str = "rubix-stress-nodeB"
+    quorum_container: str = "rubix-stress-quorum"
+
     # Minting configuration
     node_a_mint: MintConfig = field(
         default_factory=lambda: MintConfig(100_000, 200_000, 10_000)
@@ -157,6 +167,12 @@ class StressConfig:
             db_q_port=int(d.get("db_q_port", 5438)),
             password=str(d.get("password", "mypassword")),
             output_dir=str(d.get("output_dir", "test/docker/data/stress/logs")),
+            node_a_dir=str(d.get("node_a_dir", "test/docker/data/stress/nodeA/app")),
+            node_b_dir=str(d.get("node_b_dir", "test/docker/data/stress/nodeB/app")),
+            quorum_dir=str(d.get("quorum_dir", "test/docker/data/stress/quorum/app")),
+            node_a_container=str(d.get("node_a_container", "rubix-stress-nodeA")),
+            node_b_container=str(d.get("node_b_container", "rubix-stress-nodeB")),
+            quorum_container=str(d.get("quorum_container", "rubix-stress-quorum")),
             node_a_mint=MintConfig.from_dict(d["node_a_mint"]),
             quorum_mint=MintConfig.from_dict(d["quorum_mint"]),
             min_balance_buffer=int(d.get("min_balance_buffer", 500)),

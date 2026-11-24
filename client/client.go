@@ -17,6 +17,12 @@ type Client struct {
 	log       logger.Logger
 	setAuth   bool
 	authToken string
+	apiKey    string
+}
+
+// SetAPIKey sends the node API key on every request; the node requires it for value-moving routes.
+func (c *Client) SetAPIKey(key string) {
+	c.apiKey = key
 }
 
 func NewClient(cfg *srvcfg.Config, log logger.Logger, timeout ...time.Duration) (*Client, error) {
@@ -41,6 +47,9 @@ func (c *Client) basicRequest(method string, path string, model interface{}) (*h
 	if err != nil {
 		return nil, fmt.Errorf("failed to create http request, " + err.Error())
 	}
+	if c.apiKey != "" {
+		r.Header.Set(ensweb.APIKeyHeader, c.apiKey)
+	}
 	if c.setAuth {
 		c.SetAuthorization(r, c.authToken)
 	}
@@ -51,6 +60,9 @@ func (c *Client) multiFormRequest(method string, path string, field map[string]s
 	r, err := c.MultiFormRequest(method, path, field, files)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create http request, " + err.Error())
+	}
+	if c.apiKey != "" {
+		r.Header.Set(ensweb.APIKeyHeader, c.apiKey)
 	}
 	if c.setAuth {
 		c.SetAuthorization(r, c.authToken)

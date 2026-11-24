@@ -5,8 +5,10 @@ All methods raise RuntimeError on non-200 responses or when the server
 returns {"status": false, ...}.
 """
 
+import json
 import logging
 import os
+import subprocess
 import time
 from typing import Any, Dict, Optional
 
@@ -23,10 +25,57 @@ class NodeClient:
         name:     Label used in log messages.
     """
 
-    def __init__(self, base_url: str, name: str = "node", password: str = "mypassword") -> None:
+    def __init__(
+        self,
+        base_url: str,
+        name: str = "node",
+        password: str = "mypassword",
+        node_dir: Optional[str] = None,
+        container: Optional[str] = None,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.name = name
         self.password = password
+        # Node -p dir; its .api_key is required by /tx, /signature, FT/NFT/SC create.
+        self.node_dir = node_dir
+        # Docker container name; used when the bind-mounted key is root-owned 0600 (Linux CI).
+        self.container = container
+        self._container_key = ""
+
+    def _read_key(self) -> str:
+        """Node API key: host file first (re-read per call), else cached `docker exec` read."""
+        if self.node_dir:
+            try:
+                with open(os.path.join(self.node_dir, ".api_key")) as f:
+                    key = json.load(f).get("key", "")
+                if key:
+                    return key
+            except (OSError, ValueError):
+                pass
+        if not self.container:
+            return ""
+        if not self._container_key:
+            try:
+                out = subprocess.run(
+                    ["docker", "exec", self.container, "cat", "/app/data/.api_key"],
+                    capture_output=True, text=True, timeout=30, check=True,
+                ).stdout
+                self._container_key = json.loads(out).get("key", "")
+            except (OSError, ValueError, subprocess.SubprocessError) as exc:
+                log.debug("[%s] docker exec key read failed: %s", self.name, exc)
+        return self._container_key
+
+    def _headers(self) -> Dict[str, str]:
+        key = self._read_key()
+        return {"X-API-Key": key} if key else {}
+
+    def _send(self, method: str, url: str, **kwargs: Any) -> requests.Response:
+        """Send with X-API-Key; on 401 drop the cached container key and retry once (key regenerated)."""
+        resp = requests.request(method, url, headers=self._headers(), **kwargs)
+        if resp.status_code == 401 and self._container_key:
+            self._container_key = ""
+            resp = requests.request(method, url, headers=self._headers(), **kwargs)
+        return resp
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -44,7 +93,7 @@ class NodeClient:
         """POST to *path*, return parsed JSON.  Does NOT handle password challenges."""
         url = self.base_url + path
         log.debug("[%s] POST %s  body=%s", self.name, url, json_data)
-        resp = requests.post(url, json=json_data, timeout=self._POST_TIMEOUT)
+        resp = self._send("POST", url, json=json_data, timeout=self._POST_TIMEOUT)
         if resp.status_code != 200:
             raise RuntimeError(
                 f"{self.name}: POST {path} returned HTTP {resp.status_code}: {resp.text}"
@@ -75,7 +124,7 @@ class NodeClient:
         """GET *path* (relative), return parsed JSON.  Raises on failure."""
         url = self.base_url + path
         log.debug("[%s] GET %s", self.name, url)
-        resp = requests.get(url, timeout=self._GET_TIMEOUT)
+        resp = self._send("GET", url, timeout=self._GET_TIMEOUT)
         if resp.status_code != 200:
             raise RuntimeError(
                 f"{self.name}: GET {path} returned HTTP {resp.status_code}: {resp.text}"
@@ -100,7 +149,7 @@ class NodeClient:
         """
         url = self.base_url + path
         log.debug("[%s] POST %s (multipart)  data=%s", self.name, url, data)
-        resp = requests.post(url, files=files, data=data, timeout=60)
+        resp = self._send("POST", url, files=files, data=data, timeout=60)
         if resp.status_code != 200:
             raise RuntimeError(
                 f"{self.name}: POST {path} returned HTTP {resp.status_code}: {resp.text}"

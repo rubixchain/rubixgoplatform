@@ -19,6 +19,7 @@ import (
 // @Produce      json
 // @Param        input body types.CreateFTReq true "Create FT"
 // @Success      200  {object}  model.BasicResponse
+// @Security     NodeAPIKey
 // @Router       /rubix/v1/fts/mint [post]
 func (s *Server) APICreateFT(req *ensweb.Request) *ensweb.Result {
 	var createFTReq types.CreateFTReq
