@@ -305,7 +305,8 @@ func ValidateTokenOwnershipByPrevTxn(txnInfo *models.TransactionInfo, isFullnode
 				//now ensure that initiator is same as the guy who has pledged this token previously.
 				//we have to get the quorum DID which has pledged this token from the list of quorumDIDs.
 				//check whether that quorumDID is same as the initiatorDID or not
-				quorumDID, err := wallet.FindDIDByTokenID(txnInfo.Quorums, tokenID)
+				// An unpledged token belongs to the quorum that pledged it, which only the pledged transaction records.
+				quorumDID, err := wallet.FindDIDByTokenID(pledgedTxnInfo.Quorums, tokenID)
 				if err != nil {
 					return fmt.Errorf("failed to get quorum DID for token %s: %w", tokenID, err)
 				}
