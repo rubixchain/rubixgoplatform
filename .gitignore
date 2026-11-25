@@ -69,6 +69,9 @@ core/storage/.migration
 # Re-ignore runtime/generated state under the harness (must come AFTER the
 # negations above so it wins).
 test/docker/data/
+# `!test/integration/**` above re-includes everything under the harness, which
+# would otherwise defeat the global __pycache__ ignore for those directories.
+test/integration/**/__pycache__/
 # Native (no-Docker) harness runtime state: per-node data dirs, Postgres data,
 # rendered configs, and the on-demand kubo download cache (test/native/.kubo).
 test/native/
