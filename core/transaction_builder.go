@@ -82,16 +82,8 @@ func BuildTransactionInfoFromRequest(
 		}
 		log.Debug("BuildTransactionInfoFromRequest: RBT tokens locked", "count", len(ownedRBTTokens), "did", ownerDID)
 
-		log.Debug("BuildTransactionInfoFromRequest: Getting token denom array", "did", ownerDID)
-		denomMap, err := w.GetTokenDenomArray(ownerDID)
-		if err != nil {
-			log.Error("BuildTransactionInfoFromRequest: Failed to get denom array", "err", err, "did", ownerDID)
-			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: get denom array: %w", err)
-		}
-		log.Debug("BuildTransactionInfoFromRequest: Denom map retrieved", "denomCount", len(denomMap))
-
 		log.Debug("BuildTransactionInfoFromRequest: Collecting RBT tokens", "amount", req.GetRBTAmount(), "lockedTokens", len(ownedRBTTokens))
-		rbtTokens, childTokensKept, burntParentToken, mintTokensBeingBurnt, err := parts.CollectRBTTokens(dc, w, req.GetRBTAmount(), ownedRBTTokens, denomMap, networkMode, log)
+		rbtTokens, childTokensKept, burntParentToken, mintTokensBeingBurnt, err := parts.CollectRBTTokens(dc, w, req.GetRBTAmount(), ownedRBTTokens, networkMode, log)
 		if err != nil {
 			log.Error("BuildTransactionInfoFromRequest: RBT collection failed", "err", err, "amount", req.GetRBTAmount())
 			return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: RBT collection failed: %w", err)
@@ -202,14 +194,8 @@ func BuildTransactionInfoFromRequest(
 			}
 			log.Info("BuildTransactionInfoFromRequest: RBT tokens locked for SC commitment", "scID", scInfo.SmartContractId, "tokenCount", len(ownedRBTTokens))
 
-			denomMap, err := w.GetTokenDenomArray(req.Initiator)
-			if err != nil {
-				log.Error("BuildTransactionInfoFromRequest: Failed to get denom array for SC commitment", "err", err, "did", req.Initiator)
-				return nil, 0, fmt.Errorf("BuildTransactionInfoFromRequest: get denom array for SC commitment: %w", err)
-			}
-
 			committedRBTTokens, childTokensKept, burntParentToken, mintTokensBeingBurnt, err := parts.CollectRBTTokens(
-				dc, w, scInfo.Value, ownedRBTTokens, denomMap, networkMode, log,
+				dc, w, scInfo.Value, ownedRBTTokens, networkMode, log,
 			)
 			if err != nil {
 				log.Error("BuildTransactionInfoFromRequest: RBT collection failed for SC commitment", "err", err, "scID", scInfo.SmartContractId, "value", scInfo.Value)

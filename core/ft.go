@@ -86,18 +86,11 @@ func (c *Core) createFTs(reqID string, req types.CreateFTReq) (err error) {
 		c.log.Error(err.Error())
 		return
 	}
-	denomMap, err := c.w.GetTokenDenomArray(req.DID)
-	if err != nil {
-		err = fmt.Errorf("createFTs: Failed to fetch token denom array, err: %v", err)
-		c.log.Error(err.Error())
-		return
-	}
 	rbtTokens, childTokensKept, burntParentToken, mintTokensBeingBurnt, err := parts.CollectRBTTokens(
 		didCrypto,
 		c.w,
 		float64(req.TokenCount),
 		lockedTokens,
-		denomMap,
 		networkMode,
 		c.log,
 	)

@@ -16,22 +16,20 @@ import (
 )
 
 // CollectRBTTokens is a PURE denomination-selection function:
-//   - No DB reads (ownedRBTTokens and denomMap are pre-fetched and passed in by the caller)
+//   - No DB reads (ownedRBTTokens are pre-fetched and passed in by the caller)
 //   - No DB writes (no storeGenesisTx, no LockTokensByID, no CreateRBTToken)
 //   - No pubsub publish (util.PublishTransaction removed)
 //   - IPFS Add/Pin calls remain in the split helpers (IPFS upload before DB persistence)
 //
 // Callers must:
 //  1. Pre-fetch tokens via w.LockTokensForSplit
-//  2. Pre-fetch denomMap via w.GetTokenDenomArray
-//  3. Persist returned childRecords via w.PersistGenesisBatch
-//  4. Burn parentsToBurn tokens in the DB
+//  2. Persist returned childRecords via w.PersistGenesisBatch
+//  3. Burn parentsToBurn tokens in the DB
 func CollectRBTTokens(
 	dc types.DIDCrypto,
 	w *wallet.Wallet,
 	transferAmount float64,
 	ownedRBTTokens []models.Token,
-	denomMap map[types.DenomValue]types.DenomCount,
 	network string,
 	log logger.Logger,
 ) (
@@ -79,7 +77,7 @@ func CollectRBTTokens(
 	}
 
 	// Attempt to collect tokens which wouldn't require any splitting
-	// by looking at the caller-provided denom map.
+	// by looking at the denom map of the locked tokens.
 	var nonSplitTokenTransfer []models.Token = make([]models.Token, 0)
 
 	nonSplitDenomArr, remainingBalanceDenomArr, remainingAmount, err := GetSplitAndNonsplitTokenDenom(internalDenomMap, transferAmount)
