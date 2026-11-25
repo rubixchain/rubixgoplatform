@@ -2,6 +2,7 @@ package parts
 
 import (
 	"math"
+	"sort"
 
 	"github.com/rubixchain/rubixgoplatform/constants"
 	rubixmath "github.com/rubixchain/rubixgoplatform/math"
@@ -47,13 +48,26 @@ func GetSplitAndNonsplitTokenDenom(
 
 	remaining = rubixmath.FloatPrecision(transferAmount)
 
+	// Largest first, deterministic; must mirror SelectTokensFromTokenDenomForLocking so the split candidate is the only leftover.
+	denomsArr := make([]types.DenomValue, 0, len(updatedDenomArr))
 	for denomValue, denomCount := range updatedDenomArr {
+		if denomValue <= 0 || denomCount <= 0 {
+			continue
+		}
+		denomsArr = append(denomsArr, denomValue)
+	}
+	sort.Slice(denomsArr, func(i, j int) bool {
+		return denomsArr[i] > denomsArr[j]
+	})
+
+	for _, denomValue := range denomsArr {
 		if remaining <= 0 {
 			break
 		}
+		denomCount := updatedDenomArr[denomValue]
 
 		maxByTarget := int(rubixmath.ScaledFloatDiv(remaining, denomValue))
-		
+
 		canTake := rubixmath.Min(int(denomCount), maxByTarget)
 
 		if canTake > 0 {

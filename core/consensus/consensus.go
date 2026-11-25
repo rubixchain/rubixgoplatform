@@ -36,18 +36,11 @@ func ReqPledgeToken(
 	//log.Info("ReqPledgeToken: Tokens locked", "lockedTokensCount", len(lockedTokens), "transactionValue", transactionValue)
 	log.Info("The transactionValue in ReqPledgeToken is ", transactionValue)
 
-	denomMap, err := w.GetTokenDenomArray(dc.GetDID())
-	if err != nil {
-		log.Error("ReqPledgeToken: Failed to get denom array", "err", err)
-		return models.PledgeTokenResponse{}, fmt.Errorf("ReqPledgeToken: failed to fetch token denom array: %w", err)
-	}
-
 	pledgeTokenDetails, childTokensKept, burntParentToken, mintTokensBeingBurnt, err := parts.CollectRBTTokens(
 		dc,
 		w,
 		transactionValue,
 		lockedTokens,
-		denomMap,
 		networkMode,
 		log,
 	)

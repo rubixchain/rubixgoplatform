@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -85,18 +86,11 @@ func (c *Core) createFTs(reqID string, req types.CreateFTReq) (err error) {
 		c.log.Error(err.Error())
 		return
 	}
-	denomMap, err := c.w.GetTokenDenomArray(req.DID)
-	if err != nil {
-		err = fmt.Errorf("createFTs: Failed to fetch token denom array, err: %v", err)
-		c.log.Error(err.Error())
-		return
-	}
 	rbtTokens, childTokensKept, burntParentToken, mintTokensBeingBurnt, err := parts.CollectRBTTokens(
 		didCrypto,
 		c.w,
 		float64(req.TokenCount),
 		lockedTokens,
-		denomMap,
 		networkMode,
 		c.log,
 	)
@@ -251,6 +245,14 @@ func (c *Core) createFTs(reqID string, req types.CreateFTReq) (err error) {
 func (c *Core) BatchRBTs(rbtTokens []*models.TokenInfo) (rbtBatches [][]*models.TokenInfo, err error) {
 	var currentBatch []*models.TokenInfo
 	currentSum := 0.0
+
+	// Largest first: with divisible denominations a descending running sum lands exactly on 1.0.
+	sort.SliceStable(rbtTokens, func(i, j int) bool {
+		if rbtTokens[i].TokenValue != rbtTokens[j].TokenValue {
+			return rbtTokens[i].TokenValue > rbtTokens[j].TokenValue
+		}
+		return rbtTokens[i].TokenID < rbtTokens[j].TokenID
+	})
 
 	for _, token := range rbtTokens {
 		currentBatch = append(currentBatch, token)

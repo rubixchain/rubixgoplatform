@@ -16,22 +16,20 @@ import (
 )
 
 // CollectRBTTokens is a PURE denomination-selection function:
-//   - No DB reads (ownedRBTTokens and denomMap are pre-fetched and passed in by the caller)
+//   - No DB reads (ownedRBTTokens are pre-fetched and passed in by the caller)
 //   - No DB writes (no storeGenesisTx, no LockTokensByID, no CreateRBTToken)
 //   - No pubsub publish (util.PublishTransaction removed)
 //   - IPFS Add/Pin calls remain in the split helpers (IPFS upload before DB persistence)
 //
 // Callers must:
 //  1. Pre-fetch tokens via w.LockTokensForSplit
-//  2. Pre-fetch denomMap via w.GetTokenDenomArray
-//  3. Persist returned childRecords via w.PersistGenesisBatch
-//  4. Burn parentsToBurn tokens in the DB
+//  2. Persist returned childRecords via w.PersistGenesisBatch
+//  3. Burn parentsToBurn tokens in the DB
 func CollectRBTTokens(
 	dc types.DIDCrypto,
 	w *wallet.Wallet,
 	transferAmount float64,
 	ownedRBTTokens []models.Token,
-	denomMap map[types.DenomValue]types.DenomCount,
 	network string,
 	log logger.Logger,
 ) (
@@ -64,13 +62,13 @@ func CollectRBTTokens(
 		internalDenomMap[tok.TokenValue] += 1
 	}
 
-	// In-memory balance check from the caller-provided denomMap (no DB read).
-	var totalBalance float64
+	// In-memory balance check over the locked tokens; precision-safe since exact change makes the sum equal the amount.
+	totalBalance := rubixmath.ZeroFloat()
 	for denom, count := range internalDenomMap {
-		totalBalance += float64(denom) * float64(count)
+		totalBalance = rubixmath.AddFloat(totalBalance, rubixmath.FloatPrecision(float64(denom)*float64(count)))
 	}
 	log.Info("CollectRBTTokens: Balance check", "totalBalance", totalBalance, "transferAmount", transferAmount)
-	if totalBalance < transferAmount {
+	if totalBalance < rubixmath.FloatPrecision(transferAmount) {
 		log.Error("CollectRBTTokens: Insufficient balance", "totalBalance", totalBalance, "transferAmount", transferAmount)
 		return nil, nil, nil, nil, fmt.Errorf(
 			"CollectRBTTokens: insufficient balance: current balance %v, transfer amount %v",
@@ -79,7 +77,7 @@ func CollectRBTTokens(
 	}
 
 	// Attempt to collect tokens which wouldn't require any splitting
-	// by looking at the caller-provided denom map.
+	// by looking at the denom map of the locked tokens.
 	var nonSplitTokenTransfer []models.Token = make([]models.Token, 0)
 
 	nonSplitDenomArr, remainingBalanceDenomArr, remainingAmount, err := GetSplitAndNonsplitTokenDenom(internalDenomMap, transferAmount)
